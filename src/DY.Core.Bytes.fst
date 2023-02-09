@@ -225,6 +225,29 @@ val literal_to_bytes_is_publishable:
   (is_publishable pr tr (literal_to_bytes lit))
 let literal_is_to_bytes_publishable pr tr lit = ()
 
+// Lemma for the user
+val bytes_to_literal_to_bytes:
+  b:bytes ->
+  Lemma (
+    match bytes_to_literal b with
+    | None -> True
+    | Some lit -> b == literal_to_bytes lit
+  )
+let bytes_to_literal_to_bytes b = ()
+
+val length_literal_to_bytes:
+  lit:FStar.Seq.seq FStar.UInt8.t ->
+  Lemma (length (literal_to_bytes lit) == FStar.Seq.length lit)
+let length_literal_to_bytes lit = ()
+
+val bytes_invariant_literal_to_bytes:
+  pr:protocol_preds -> tr:trace ->
+  lit:FStar.Seq.seq FStar.UInt8.t ->
+  Lemma
+  (ensures bytes_invariant pr tr (literal_to_bytes lit))
+  [SMTPat (bytes_invariant pr tr (literal_to_bytes lit))]
+let bytes_invariant_literal_to_bytes pr tr lit = ()
+
 (*** Concatenation ***)
 
 val concat: bytes -> bytes -> bytes
@@ -270,6 +293,54 @@ val split_preserves_publishability:
     | Some (b1, b2) -> is_publishable pr tr b1 /\ is_publishable pr tr b2
   ))
 let split_preserves_publishability pr tr b i =
+  ()
+
+// Lemma for the user
+val concat_split:
+  b:bytes -> i:nat ->
+  Lemma (
+    match split b i with
+    | None -> True
+    | Some (left, right) -> b == concat left right
+  )
+let concat_split b i = ()
+
+val concat_length:
+  left:bytes -> right:bytes ->
+  Lemma
+  (length (concat left right) = length left + length right)
+let concat_length left right = ()
+
+val split_length:
+  b:bytes -> i:nat ->
+  Lemma (
+    match split b i with
+    | None -> True
+    | Some (b1, b2) -> length b1 == i /\ i + length b2 == length b
+  )
+let split_length b i = ()
+
+val bytes_invariant_concat:
+  pr:protocol_preds -> tr:trace ->
+  b1:bytes -> b2:bytes ->
+  Lemma
+  (requires bytes_invariant pr tr b1 /\ bytes_invariant pr tr b2)
+  (ensures bytes_invariant pr tr (concat b1 b2))
+  [SMTPat (bytes_invariant pr tr (concat b1 b2))]
+let bytes_invariant_concat pr tr b1 b2 = ()
+
+val bytes_invariant_split:
+  pr:protocol_preds -> tr:trace ->
+  b:bytes -> i:nat ->
+  Lemma
+  (requires bytes_invariant pr tr b)
+  (ensures (
+    match split b i with
+    | None -> True
+    | Some (b1, b2) -> bytes_invariant pr tr b1 /\ bytes_invariant pr tr b2
+  ))
+  [SMTPat (bytes_invariant pr tr b); SMTPat (split b i)]
+let bytes_invariant_split pr tr b i =
   ()
 
 (*** AEAD ***)

@@ -1,13 +1,14 @@
-ifndef FSTAR_HOME
-	FSTAR_HOME = $(dir $(shell which fstar.exe))/..
-endif
+DY_HOME 	?= .
+FSTAR_HOME 	?= $(dir $(shell which fstar.exe))/..
+Z3 		?= $(shell which z3)
+COMPARSE_HOME 	?= $(DY_HOME)/../comparse
 
 include $(FSTAR_HOME)/ulib/gmake/fstar.mk
 include $(FSTAR_HOME)/ulib/ml/Makefile.include
 
 SOURCE_DIR = src
 
-INCLUDE_DIRS = $(SOURCE_DIR)
+INCLUDE_DIRS = $(SOURCE_DIR) $(COMPARSE_HOME)/src
 FSTAR_INCLUDE_DIRS = $(addprefix --include , $(INCLUDE_DIRS))
 
 FSTAR_EXTRACT = --extract '-* +DY'
