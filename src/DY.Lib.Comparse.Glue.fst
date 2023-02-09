@@ -1,4 +1,4 @@
-module DY.Lib.ComparseGlue
+module DY.Lib.Comparse.Glue
 
 open Comparse
 open DY.Core.Trace.Type
