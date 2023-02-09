@@ -1,4 +1,4 @@
-module DY.Label.Lattice
+module DY.Core.Label.Lattice
 
 #set-options "--fuel 1 --ifuel 1"
 

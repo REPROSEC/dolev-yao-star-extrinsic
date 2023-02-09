@@ -1,7 +1,7 @@
-module DY.Label
+module DY.Core.Label
 
-open DY.Label.Type
-open DY.Trace.Type
+open DY.Core.Label.Type
+open DY.Core.Trace.Type
 
 val pre_can_flow:
   pre_pre_label -> pre_pre_label -> prop
@@ -47,19 +47,19 @@ let can_flow tr l1 l2 =
 
 val secret: label
 let secret =
-  DY.Label.Lattice.Leaf Secret
+  DY.Core.Label.Lattice.Leaf Secret
 
 val public: label
 let public =
-  DY.Label.Lattice.Leaf Public
+  DY.Core.Label.Lattice.Leaf Public
 
 val meet: label -> label -> label
 let meet l1 l2 =
-  DY.Label.Lattice.Meet l1 l2
+  DY.Core.Label.Lattice.Meet l1 l2
 
 val join: label -> label -> label
 let join l1 l2 =
-  DY.Label.Lattice.Join l1 l2
+  DY.Core.Label.Lattice.Join l1 l2
 
 val can_flow_transitive:
   tr:trace -> l1:label -> l2:label -> l3:label ->
@@ -78,7 +78,7 @@ val can_flow_later:
   (ensures l1 `can_flow tr2` l2)
   [SMTPat (l1 `can_flow tr1` l2); SMTPat (tr1 <$ tr2)]
 let can_flow_later tr1 tr2 l1 l2 =
-  DY.Label.Lattice.lattice_order_monotone (pre_label_order pre_pre_label_order (is_corrupt tr1)) (pre_label_order pre_pre_label_order (is_corrupt tr2)) l2 l1
+  DY.Core.Label.Lattice.lattice_order_monotone (pre_label_order pre_pre_label_order (is_corrupt tr1)) (pre_label_order pre_pre_label_order (is_corrupt tr2)) l2 l1
 
 val secret_is_bottom:
   tr:trace -> l:label ->
@@ -86,7 +86,7 @@ val secret_is_bottom:
   (ensures l `can_flow tr` secret)
   [SMTPat (l `can_flow tr` secret)]
 let secret_is_bottom tr l =
-  DY.Label.Lattice.bottom_to_bottom (pre_label_order pre_pre_label_order (is_corrupt tr)) Secret l
+  DY.Core.Label.Lattice.bottom_to_bottom (pre_label_order pre_pre_label_order (is_corrupt tr)) Secret l
 
 val public_is_top:
   tr:trace -> l:label ->
@@ -94,7 +94,7 @@ val public_is_top:
   (ensures public `can_flow tr` l)
   [SMTPat (public `can_flow tr` l)]
 let public_is_top tr l =
-  DY.Label.Lattice.top_to_top (pre_label_order pre_pre_label_order (is_corrupt tr)) Public l
+  DY.Core.Label.Lattice.top_to_top (pre_label_order pre_pre_label_order (is_corrupt tr)) Public l
 
 val meet_eq:
   tr:trace -> x:label -> y1:label -> y2:label ->
@@ -102,7 +102,7 @@ val meet_eq:
   (ensures meet y1 y2 `can_flow tr` x <==> (y1 `can_flow tr` x /\ y2 `can_flow tr` x))
   [SMTPat (meet y1 y2 `can_flow tr` x)] //Not sure about this
 let meet_eq tr x y1 y2 =
-  DY.Label.Lattice.meet_eq (pre_label_order pre_pre_label_order (is_corrupt tr)) x y1 y2
+  DY.Core.Label.Lattice.meet_eq (pre_label_order pre_pre_label_order (is_corrupt tr)) x y1 y2
 
 val join_eq:
   tr:trace -> x1:label -> x2:label -> y:label ->
@@ -110,4 +110,4 @@ val join_eq:
   (ensures y `can_flow tr` join x1 x2 <==> (y `can_flow tr` x1 /\ y `can_flow tr` x2))
   [SMTPat (y `can_flow tr` join x1 x2)] //Not sure about this
 let join_eq tr x1 x2 y =
-  DY.Label.Lattice.join_eq (pre_label_order pre_pre_label_order (is_corrupt tr)) x1 x2 y
+  DY.Core.Label.Lattice.join_eq (pre_label_order pre_pre_label_order (is_corrupt tr)) x1 x2 y

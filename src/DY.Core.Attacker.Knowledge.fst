@@ -1,9 +1,9 @@
-module DY.Attacker.Knowledge
+module DY.Core.Attacker.Knowledge
 
-open DY.Bytes.Type
-open DY.Bytes
-open DY.Trace.Type
-open DY.Trace.Invariant
+open DY.Core.Bytes.Type
+open DY.Core.Bytes
+open DY.Core.Trace.Type
+open DY.Core.Trace.Invariant
 
 #set-options "--fuel 1 --ifuel 0"
 

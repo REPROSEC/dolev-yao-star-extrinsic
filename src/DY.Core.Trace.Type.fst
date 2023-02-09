@@ -1,7 +1,7 @@
-module DY.Trace.Type
+module DY.Core.Trace.Type
 
-open DY.Bytes.Type
-open DY.Label.Type
+open DY.Core.Bytes.Type
+open DY.Core.Label.Type
 
 type trace_event =
   | MsgSent: bytes -> trace_event

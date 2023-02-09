@@ -1,8 +1,8 @@
-module DY.Trace.Invariant
+module DY.Core.Trace.Invariant
 
-open DY.Trace.Type
-open DY.Bytes.Type
-open DY.Bytes
+open DY.Core.Trace.Type
+open DY.Core.Bytes.Type
+open DY.Core.Bytes
 
 val trace_invariant: protocol_preds -> trace -> prop
 let rec trace_invariant preds tr =

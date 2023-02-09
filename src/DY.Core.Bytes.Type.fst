@@ -1,6 +1,6 @@
-module DY.Bytes.Type
+module DY.Core.Bytes.Type
 
-open DY.Label.Type
+open DY.Core.Label.Type
 
 type bytes =
   | Literal: FStar.Seq.seq FStar.UInt8.t -> bytes

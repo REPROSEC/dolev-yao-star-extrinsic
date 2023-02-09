@@ -1,10 +1,10 @@
-module DY.Bytes
+module DY.Core.Bytes
 
-open DY.Bytes.Type
-open DY.Trace.Type
-open DY.Label.Type
-open DY.Label
-open DY.Label.Lattice
+open DY.Core.Bytes.Type
+open DY.Core.Trace.Type
+open DY.Core.Label.Type
+open DY.Core.Label
+open DY.Core.Label.Lattice
 
 #set-options "--fuel 1 --ifuel 1"
 

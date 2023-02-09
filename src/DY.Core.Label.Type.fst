@@ -1,6 +1,6 @@
-module DY.Label.Type
+module DY.Core.Label.Type
 
-open DY.Label.Lattice
+open DY.Core.Label.Lattice
 
 type principal = string
 
