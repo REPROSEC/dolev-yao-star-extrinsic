@@ -194,9 +194,13 @@ let rec bytes_invariant_later preds tr1 tr2 msg =
 
 (*** Various predicates ***)
 
+val is_knowable_by: protocol_preds -> label -> trace -> bytes -> prop
+let is_knowable_by pr lab tr b =
+  bytes_invariant pr tr b /\ (get_label b) `can_flow tr` lab
+
 val is_publishable: protocol_preds -> trace -> bytes -> prop
 let is_publishable pr tr b =
-  bytes_invariant pr tr b /\ (get_label b) `can_flow tr` public
+  is_knowable_by pr public tr b
 
 (*** Literal ***)
 

@@ -3,8 +3,37 @@ module DY.Core.Trace.Invariant
 open DY.Core.Trace.Type
 open DY.Core.Bytes.Type
 open DY.Core.Bytes
+open DY.Core.Label.Type
+open DY.Core.Label
 
-val trace_invariant: protocol_preds -> trace -> prop
+noeq
+type trace_predicates (pr:protocol_preds) = {
+  state_pred: trace -> principal -> nat -> bytes -> prop;
+  state_pred_later:
+    tr1:trace -> tr2:trace ->
+    prin:principal -> sess_id:nat -> content:bytes ->
+    Lemma
+    (requires state_pred tr1 prin sess_id content /\ tr1 <$ tr2)
+    (ensures state_pred tr2 prin sess_id content)
+  ;
+  state_pred_knowable:
+    tr:trace ->
+    prin:principal -> sess_id:nat -> content:bytes ->
+    Lemma
+    (requires state_pred tr prin sess_id content)
+    (ensures
+      is_knowable_by pr (principal_state_label prin sess_id) tr content
+    )
+  ;
+}
+
+noeq
+type protocol_predicates = {
+  pr: protocol_preds;
+  trace_preds: trace_predicates pr;
+}
+
+val trace_invariant: protocol_predicates -> trace -> prop
 let rec trace_invariant preds tr =
   match tr with
   | Nil -> True
@@ -12,18 +41,21 @@ let rec trace_invariant preds tr =
     trace_invariant preds tr_init /\ (
       match event with
       | MsgSent msg ->
-        is_publishable preds tr msg
+        is_publishable preds.pr tr msg
+      | SetState prin sess_id content -> (
+        preds.trace_preds.state_pred tr_init prin sess_id content
+      )
       | _ -> True
     )
 
 val msg_sent_on_network_are_publishable:
-  preds:protocol_preds -> tr:trace -> msg:bytes ->
+  preds:protocol_predicates -> tr:trace -> msg:bytes ->
   Lemma
   (requires
     trace_invariant preds tr /\
     msg_sent_on_network tr msg
   )
-  (ensures is_publishable preds tr msg)
+  (ensures is_publishable preds.pr tr msg)
 let rec msg_sent_on_network_are_publishable preds tr msg =
   match tr with
   | Nil -> assert(False)
@@ -37,3 +69,27 @@ let rec msg_sent_on_network_are_publishable preds tr msg =
   | Snoc tr_init _ ->
     assert(tr_init <$ tr);
     msg_sent_on_network_are_publishable preds tr_init msg
+
+val state_is_knowable_by:
+  preds:protocol_predicates -> tr:trace ->
+  prin:principal -> sess_id:nat -> content:bytes ->
+  Lemma
+  (requires
+    trace_invariant preds tr /\
+    state_was_set tr prin sess_id content
+  )
+  (ensures is_knowable_by preds.pr (principal_state_label prin sess_id) tr content)
+let rec state_is_knowable_by preds tr prin sess_id content =
+  match tr with
+  | Nil -> assert(False)
+  | Snoc tr_init (SetState prin' sess_id' content') -> (
+    assert(tr_init <$ tr);
+    if prin = prin' && sess_id = sess_id' && content = content' then (
+      preds.trace_preds.state_pred_knowable tr_init prin sess_id content
+    ) else (
+      state_is_knowable_by preds tr_init prin sess_id content
+    )
+  )
+  | Snoc tr_init _ ->
+    assert(tr_init <$ tr);
+    state_is_knowable_by preds tr_init prin sess_id content

@@ -6,8 +6,8 @@ open DY.Core.Label.Type
 type trace_event =
   | MsgSent: bytes -> trace_event
   | RandGen: trace_event
-  | Corrupt: who:pre_pre_label -> trace_event
-  | SetState: p:principal -> s:nat -> content:bytes -> trace_event
+  | Corrupt: prin:principal -> sess_id:nat -> trace_event
+  | SetState: prin:principal -> sess_id:nat -> content:bytes -> trace_event
 
 type trace =
   | Nil: trace
@@ -124,3 +124,11 @@ let rec event_exists_grows tr1 tr2 e =
 val msg_sent_on_network: trace -> bytes -> prop
 let msg_sent_on_network tr msg =
   event_exists tr (MsgSent msg)
+
+val state_was_set: trace -> principal -> nat -> bytes -> prop
+let state_was_set tr prin sess_id content =
+  event_exists tr (SetState prin sess_id content)
+
+val was_corrupt: trace -> principal -> nat -> prop
+let was_corrupt tr prin sess_id =
+  event_exists tr (Corrupt prin sess_id)

@@ -52,39 +52,39 @@ let send_msg msg =
   add_event (MsgSent msg)
 
 val send_msg_invariant:
-  pr:protocol_preds ->
+  preds:protocol_predicates ->
   msg:bytes -> tr:trace ->
   Lemma
   (requires
-    is_publishable pr tr msg /\
-    trace_invariant pr tr
+    is_publishable preds.pr tr msg /\
+    trace_invariant preds tr
   )
   (ensures (
     let ((), tr_out) = send_msg msg tr in
-    trace_invariant pr tr_out
+    trace_invariant preds tr_out
   ))
-  [SMTPat (send_msg msg tr); SMTPat (trace_invariant pr tr)]
-let send_msg_invariant pr msg tr = ()
+  [SMTPat (send_msg msg tr); SMTPat (trace_invariant preds tr)]
+let send_msg_invariant preds msg tr = ()
 
 (*** Corruption ***)
 
-val corrupt: pre_pre_label -> crypto unit
-let corrupt who =
-  add_event (Corrupt who)
+val corrupt: principal -> nat -> crypto unit
+let corrupt prin sess_id =
+  add_event (Corrupt prin sess_id)
 
 val corrupt_invariant:
-  pr:protocol_preds ->
-  who:pre_pre_label -> tr:trace ->
+  preds:protocol_predicates ->
+  prin:principal -> sess_id:nat -> tr:trace ->
   Lemma
   (requires
-    trace_invariant pr tr
+    trace_invariant preds tr
   )
   (ensures (
-    let ((), tr_out) = corrupt who tr in
-    trace_invariant pr tr_out
+    let ((), tr_out) = corrupt prin sess_id tr in
+    trace_invariant preds tr_out
   ))
-  [SMTPat (corrupt who tr); SMTPat (trace_invariant pr tr)]
-let corrupt_invariant pr msg tr = ()
+  [SMTPat (corrupt prin sess_id tr); SMTPat (trace_invariant preds tr)]
+let corrupt_invariant preds prin sess_id tr = ()
 
 (*** Random number generation ***)
 
@@ -95,29 +95,29 @@ let mk_rand lab len =
   return (Rand lab len time)
 
 val mk_rand_trace_invariant:
-  pr:protocol_preds ->
+  preds:protocol_predicates ->
   lab:label -> len:nat{len <> 0} -> tr:trace ->
   Lemma
-  (requires trace_invariant pr tr)
+  (requires trace_invariant preds tr)
   (ensures (
     let (b, tr_out) = mk_rand lab len tr in
-    trace_invariant pr tr_out
+    trace_invariant preds tr_out
   ))
-  [SMTPat (mk_rand lab len tr); SMTPat (trace_invariant pr tr)]
-let mk_rand_trace_invariant pr lab len tr = ()
+  [SMTPat (mk_rand lab len tr); SMTPat (trace_invariant preds tr)]
+let mk_rand_trace_invariant preds lab len tr = ()
 
 val mk_rand_bytes_invariant:
-  pr:protocol_preds ->
+  preds:protocol_predicates ->
   lab:label -> len:nat{len <> 0} -> tr:trace ->
   Lemma
   (ensures (
     let (b, tr_out) = mk_rand lab len tr in
-    bytes_invariant pr tr_out b
+    bytes_invariant preds.pr tr_out b
   ))
-  // We need a way for the SMT pattern to know the value of `pr`
+  // We need a way for the SMT pattern to know the value of `preds`
   // This is done using `trace_invariant`, although it is not necessary for the theorem to hold,
   // It is certainly around in the context
-  [SMTPat (mk_rand lab len tr); SMTPat (trace_invariant pr tr)]
+  [SMTPat (mk_rand lab len tr); SMTPat (trace_invariant preds tr)]
 let mk_rand_bytes_invariant pr lab len tr =
   ()
 

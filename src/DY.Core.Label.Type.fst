@@ -20,7 +20,6 @@ let get_session l =
   | P _ -> None
   | S _ s -> Some s
 
-[@@"opaque_to_smt"]
 val pre_pre_label_order: order pre_pre_label
 let pre_pre_label_order = {
   rel = (fun x y ->

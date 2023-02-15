@@ -19,9 +19,9 @@ let pre_can_flow_transitive who1 who2 who3 =
 
 val is_corrupt: trace -> pre_pre_label -> prop
 let is_corrupt tr who =
-  exists pre_who.
-    who `pre_can_flow` pre_who /\
-    event_exists tr (Corrupt pre_who)
+  exists prin sess_id.
+    who `pre_can_flow` (S prin sess_id) /\
+    was_corrupt tr prin sess_id
 
 val is_corrupt_later:
   tr1:trace -> tr2:trace ->
@@ -38,7 +38,8 @@ val is_corrupt_order:
   Lemma
   (requires is_corrupt tr who1 /\ who2 `pre_can_flow` who1)
   (ensures is_corrupt tr who2)
-  [SMTPat (is_corrupt tr who1); SMTPat (who2 `pre_can_flow` who1)]
+  // TODO SMT pattern is weird, refactor
+  [SMTPat (is_corrupt tr who1); SMTPat (who1 `pre_pre_label_order.rel` who2)]
 let is_corrupt_order tr who1 who2 = ()
 
 val can_flow: trace -> label -> label -> prop
@@ -60,6 +61,14 @@ let meet l1 l2 =
 val join: label -> label -> label
 let join l1 l2 =
   DY.Core.Label.Lattice.Join l1 l2
+
+val principal_label: principal -> label
+let principal_label prin =
+  DY.Core.Label.Lattice.Leaf (State (P prin))
+
+val principal_state_label: principal -> nat -> label
+let principal_state_label prin sess_id =
+  DY.Core.Label.Lattice.Leaf (State (S prin sess_id))
 
 val can_flow_transitive:
   tr:trace -> l1:label -> l2:label -> l3:label ->
@@ -111,3 +120,11 @@ val join_eq:
   [SMTPat (y `can_flow tr` join x1 x2)] //Not sure about this
 let join_eq tr x1 x2 y =
   DY.Core.Label.Lattice.join_eq (pre_label_order pre_pre_label_order (is_corrupt tr)) x1 x2 y
+
+val principal_state_flow_to_public_eq:
+  tr:trace -> prin:principal -> sess_id:nat ->
+  Lemma
+  (ensures (principal_state_label prin sess_id) `can_flow tr` public <==> was_corrupt tr prin sess_id)
+  [SMTPat ((principal_state_label prin sess_id) `can_flow tr` public)] //Not sure about this
+let principal_state_flow_to_public_eq tr prin sess_id =
+  DY.Core.Label.Lattice.leaf_eq (pre_label_order pre_pre_label_order (is_corrupt tr)) Public (State (S prin sess_id))
