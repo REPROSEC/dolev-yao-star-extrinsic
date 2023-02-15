@@ -11,10 +11,20 @@ open DY.Core.Label.Type
 type crypto a = tr_in:trace -> (a & tr_out:trace{tr_in <$ tr_out})
 
 val (let*): #a:Type -> #b:Type -> x:crypto a -> f:(a -> crypto b) -> crypto b
-let (let*) #a #b x f tr0 =
-  let (x', tr1) = x tr0 in
-  let (y, tr2) = f x' tr1 in
-  (y, tr2)
+let (let*) #a #b x f tr =
+  let (x', tr) = x tr in
+  let (y, tr) = f x' tr in
+  (y, tr)
+
+val (let*?): #a:Type -> #b:Type -> x:crypto (option a) -> f:(a -> crypto (option b)) -> crypto (option b)
+let (let*?) #a #b x f tr0 =
+  let (opt_x', tr) = x tr0 in
+  match opt_x' with
+  | None -> (None, tr)
+  | Some x' -> (
+    let (y, tr) = f x' tr in
+    (y, tr)
+  )
 
 val return: #a:Type -> a -> crypto a
 let return #a x tr =
@@ -167,10 +177,85 @@ let new_session_id prin =
   let* tr = get_trace in
   return (compute_new_session_id prin tr)
 
-val new_state: principal -> bytes -> crypto nat
-let new_state prin content =
-  let* sess_id = new_session_id prin in
-  set_state prin sess_id content;*
-  return sess_id
+val get_state_aux: principal -> nat -> trace -> option bytes
+let rec get_state_aux prin sess_id tr =
+  match tr with
+  | Nil -> None
+  | Snoc tr_init (SetState prin' sess_id' content) -> (
+    if prin = prin' && sess_id = sess_id' then
+      Some content
+    else
+      get_state_aux prin sess_id tr_init
+  )
+  | Snoc tr_init _ ->
+      get_state_aux prin sess_id tr_init
 
-//TODO: invariant preservation
+val get_state: principal -> nat -> crypto (option bytes)
+let get_state prin sess_id =
+  let* tr = get_trace in
+  return (get_state_aux prin sess_id tr)
+
+val set_state_invariant:
+  preds:protocol_predicates ->
+  prin:principal -> sess_id:nat -> content:bytes -> tr:trace ->
+  Lemma
+  (requires
+    preds.trace_preds.state_pred tr prin sess_id content /\
+    trace_invariant preds tr
+  )
+  (ensures (
+    let ((), tr_out) = set_state prin sess_id content tr in
+    trace_invariant preds tr_out
+  ))
+  [SMTPat (set_state prin sess_id content tr); SMTPat (trace_invariant preds tr)]
+let set_state_invariant preds prin sess_id content tr = ()
+
+val get_state_aux_state_invariant:
+  preds:protocol_predicates ->
+  prin:principal -> sess_id:nat -> tr:trace ->
+  Lemma
+  (requires
+    trace_invariant preds tr
+  )
+  (ensures (
+    match get_state_aux prin sess_id tr with
+    | None -> True
+    | Some content -> preds.trace_preds.state_pred tr prin sess_id content
+  ))
+let rec get_state_aux_state_invariant preds prin sess_id tr =
+  match tr with
+  | Nil -> ()
+  | Snoc tr_init (SetState prin' sess_id' content) -> (
+    if prin = prin' && sess_id = sess_id' then (
+      preds.trace_preds.state_pred_later tr_init tr prin sess_id content
+    ) else (
+      get_state_aux_state_invariant preds prin sess_id tr_init;
+      match get_state_aux prin sess_id tr_init with
+      | None -> ()
+      | Some content -> preds.trace_preds.state_pred_later tr_init tr prin sess_id content
+    )
+  )
+  | Snoc tr_init _ ->
+    get_state_aux_state_invariant preds prin sess_id tr_init;
+    match get_state_aux prin sess_id tr_init with
+    | None -> ()
+    | Some content -> preds.trace_preds.state_pred_later tr_init tr prin sess_id content
+
+val get_state_state_invariant:
+  preds:protocol_predicates ->
+  prin:principal -> sess_id:nat -> tr:trace ->
+  Lemma
+  (requires
+    trace_invariant preds tr
+  )
+  (ensures (
+    let (opt_content, tr_out) = get_state prin sess_id tr in
+    tr == tr_out /\ (
+      match opt_content with
+      | None -> True
+      | Some content -> preds.trace_preds.state_pred tr prin sess_id content
+    )
+  ))
+  [SMTPat (get_state prin sess_id tr); SMTPat (trace_invariant preds tr)]
+let get_state_state_invariant preds prin sess_id tr =
+  get_state_aux_state_invariant preds prin sess_id tr
