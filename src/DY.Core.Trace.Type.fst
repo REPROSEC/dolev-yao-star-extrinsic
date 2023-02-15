@@ -7,6 +7,7 @@ type trace_event =
   | MsgSent: bytes -> trace_event
   | RandGen: trace_event
   | Corrupt: who:pre_pre_label -> trace_event
+  | SetState: p:principal -> s:nat -> content:bytes -> trace_event
 
 type trace =
   | Nil: trace
@@ -27,6 +28,20 @@ let rec grows tr1 tr2 =
     grows tr1 tr2_init
 
 let (<$) = grows
+
+val grows_transitive:
+  tr1:trace -> tr2:trace -> tr3:trace ->
+  Lemma
+  (requires tr1 <$ tr2 /\ tr2 <$ tr3)
+  (ensures tr1 <$ tr3)
+  [SMTPat (tr1 <$ tr2); SMTPat (tr1 <$ tr3)]
+let rec grows_transitive tr1 tr2 tr3 =
+  if length tr2 >= length tr3 then
+    ()
+  else (
+    let Snoc tr3_init _ = tr3 in
+    grows_transitive tr1 tr2 tr3_init
+  )
 
 //type stable_trace_pred =
 //  pred:(trace -> prop){forall tr1 tr2. tr1 <$ tr2 /\ pred tr1 ==> pred tr2}

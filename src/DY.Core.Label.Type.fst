@@ -4,12 +4,30 @@ open DY.Core.Label.Lattice
 
 type principal = string
 
-type pre_pre_label = principal
+type pre_pre_label =
+  | P: principal -> pre_pre_label
+  | S: principal -> nat -> pre_pre_label
+
+val get_principal: pre_pre_label -> option principal
+let get_principal l =
+  match l with
+  | P p -> Some p
+  | S p _ -> Some p
+
+val get_session: pre_pre_label -> option nat
+let get_session l =
+  match l with
+  | P _ -> None
+  | S _ s -> Some s
 
 [@@"opaque_to_smt"]
 val pre_pre_label_order: order pre_pre_label
 let pre_pre_label_order = {
-  rel = (fun x y -> x == y);
+  rel = (fun x y ->
+    match y with
+    | P p -> Some p == get_principal x
+    | S p s -> Some p == get_principal x /\ Some s == get_session x
+  );
   refl = (fun x -> ());
   trans = (fun x y z -> ());
 }
