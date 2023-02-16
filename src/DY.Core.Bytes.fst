@@ -406,6 +406,60 @@ let aead_dec_preserves_publishability cpreds tr key nonce msg ad =
   | Some res -> ()
   | None -> ()
 
+val bytes_invariant_aead_enc:
+  cpreds:crypto_predicates -> tr:trace ->
+  key:bytes -> nonce:bytes -> msg:bytes -> ad:bytes ->
+  Lemma
+  (requires
+    bytes_invariant cpreds tr key /\
+    bytes_invariant cpreds tr nonce /\
+    bytes_invariant cpreds tr msg /\
+    bytes_invariant cpreds tr ad /\
+    (get_label nonce) `can_flow tr` public /\
+    (get_label ad) `can_flow tr` public /\
+    (get_label msg) `can_flow tr` (get_label key) /\
+    cpreds.aead_pred tr key nonce msg ad
+  )
+  (ensures bytes_invariant cpreds tr (aead_enc key nonce msg ad))
+  [SMTPat (bytes_invariant cpreds tr (aead_enc key nonce msg ad))]
+let bytes_invariant_aead_enc cpreds tr key nonce msg ad = ()
+
+val get_label_aead_enc:
+  key:bytes -> nonce:bytes -> msg:bytes -> ad:bytes ->
+  Lemma
+  (ensures get_label (aead_enc key nonce msg ad) = public)
+  [SMTPat (get_label (aead_enc key nonce msg ad))]
+let get_label_aead_enc key nonce msg ad = ()
+
+//TODO: is there a good reason for such a high rlimit?
+#push-options "--z3rlimit 50"
+val bytes_invariant_aead_dec:
+  cpreds:crypto_predicates -> tr:trace ->
+  key:bytes -> nonce:bytes -> msg:bytes -> ad:bytes ->
+  Lemma
+  (requires
+    // Actually only need the one on `msg`
+    bytes_invariant cpreds tr key /\
+    bytes_invariant cpreds tr nonce /\
+    bytes_invariant cpreds tr msg /\
+    bytes_invariant cpreds tr ad
+  )
+  (ensures (
+    match aead_dec key nonce msg ad with
+    | None -> True
+    | Some plaintext -> (
+      is_knowable_by cpreds (get_label key) tr plaintext /\
+      (
+        cpreds.aead_pred tr key nonce plaintext ad
+        \/
+        is_publishable cpreds tr key
+      )
+    )
+  ))
+  [SMTPat (aead_dec key nonce msg ad); SMTPat (bytes_invariant cpreds tr msg)]
+let bytes_invariant_aead_dec cpreds tr key nonce msg ad = ()
+#pop-options
+
 (*** Public-key encryption ***)
 
 val pk: bytes -> bytes
