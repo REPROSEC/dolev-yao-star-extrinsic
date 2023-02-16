@@ -259,3 +259,24 @@ val get_state_state_invariant:
   [SMTPat (get_state prin sess_id tr); SMTPat (trace_invariant preds tr)]
 let get_state_state_invariant preds prin sess_id tr =
   get_state_aux_state_invariant preds prin sess_id tr
+
+(*** Event triggering ***)
+
+val trigger_event: principal -> string -> bytes -> crypto unit
+let trigger_event prin tag content =
+  add_event (Event prin tag content)
+
+val trigger_event_trace_invariant:
+  preds:protocol_predicates ->
+  prin:principal -> tag:string -> content:bytes -> tr:trace ->
+  Lemma
+  (requires
+    preds.trace_preds.event_pred tr prin tag content /\
+    trace_invariant preds tr
+  )
+  (ensures (
+    let ((), tr_out) = trigger_event prin tag content tr in
+    trace_invariant preds tr_out
+  ))
+  [SMTPat (trigger_event prin tag content tr); SMTPat (trace_invariant preds tr)]
+let trigger_event_trace_invariant preds prin tag content tr = ()

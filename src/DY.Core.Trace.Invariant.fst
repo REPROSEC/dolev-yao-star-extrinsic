@@ -25,6 +25,14 @@ type trace_predicates (pr:protocol_preds) = {
       is_knowable_by pr (principal_state_label prin sess_id) tr content
     )
   ;
+
+  event_pred: trace -> principal -> string -> bytes -> prop;
+  event_pred_later:
+    tr1:trace -> tr2:trace ->
+    prin:principal -> tag:string -> content:bytes ->
+    Lemma
+    (requires event_pred tr1 prin tag content /\ tr1 <$ tr2)
+    (ensures event_pred tr2 prin tag content)
 }
 
 noeq
@@ -45,8 +53,14 @@ let rec trace_invariant preds tr =
       | SetState prin sess_id content -> (
         preds.trace_preds.state_pred tr_init prin sess_id content
       )
+      | Event prin tag content -> (
+        preds.trace_preds.event_pred tr_init prin tag content
+      )
       | _ -> True
     )
+
+// TODO: the next lemmas have similar proofs
+// maybe refactor?
 
 val msg_sent_on_network_are_publishable:
   preds:protocol_predicates -> tr:trace -> msg:bytes ->
@@ -93,3 +107,28 @@ let rec state_is_knowable_by preds tr prin sess_id content =
   | Snoc tr_init _ ->
     assert(tr_init <$ tr);
     state_is_knowable_by preds tr_init prin sess_id content
+
+// TODO: Does this lemma fits here?
+val event_triggered_implies_pred:
+  preds:protocol_predicates -> tr:trace ->
+  prin:principal -> tag:string -> content:bytes ->
+  Lemma
+  (requires
+    event_triggered tr prin tag content /\
+    trace_invariant preds tr
+  )
+  (ensures preds.trace_preds.event_pred tr prin tag content)
+let rec event_triggered_implies_pred preds tr prin tag content =
+  match tr with
+  | Nil -> assert(False)
+  | Snoc tr_init (Event prin' tag' content') -> (
+    if prin = prin' && tag = tag' && content = content' then (
+      preds.trace_preds.event_pred_later tr_init tr prin tag content
+    ) else (
+      event_triggered_implies_pred preds tr_init prin tag content;
+      preds.trace_preds.event_pred_later tr_init tr prin tag content
+    )
+  )
+  | Snoc tr_init _ ->
+    event_triggered_implies_pred preds tr_init prin tag content;
+    preds.trace_preds.event_pred_later tr_init tr prin tag content

@@ -8,6 +8,7 @@ type trace_event =
   | RandGen: trace_event
   | Corrupt: prin:principal -> sess_id:nat -> trace_event
   | SetState: prin:principal -> sess_id:nat -> content:bytes -> trace_event
+  | Event: prin:principal -> tag:string -> content:bytes -> trace_event
 
 type trace =
   | Nil: trace
@@ -132,3 +133,7 @@ let state_was_set tr prin sess_id content =
 val was_corrupt: trace -> principal -> nat -> prop
 let was_corrupt tr prin sess_id =
   event_exists tr (Corrupt prin sess_id)
+
+val event_triggered: trace -> principal -> string -> bytes -> prop
+let event_triggered tr prin tag content =
+  event_exists tr (Event prin tag content)
