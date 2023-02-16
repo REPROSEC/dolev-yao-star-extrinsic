@@ -7,7 +7,7 @@ open DY.Core.Label.Type
 open DY.Core.Label
 
 noeq
-type trace_predicates (pr:protocol_preds) = {
+type trace_predicates (cpreds:crypto_predicates) = {
   state_pred: trace -> principal -> nat -> bytes -> prop;
   state_pred_later:
     tr1:trace -> tr2:trace ->
@@ -22,7 +22,7 @@ type trace_predicates (pr:protocol_preds) = {
     Lemma
     (requires state_pred tr prin sess_id content)
     (ensures
-      is_knowable_by pr (principal_state_label prin sess_id) tr content
+      is_knowable_by cpreds (principal_state_label prin sess_id) tr content
     )
   ;
 
@@ -37,8 +37,8 @@ type trace_predicates (pr:protocol_preds) = {
 
 noeq
 type protocol_predicates = {
-  pr: protocol_preds;
-  trace_preds: trace_predicates pr;
+  crypto_preds: crypto_predicates;
+  trace_preds: trace_predicates crypto_preds;
 }
 
 val trace_invariant: protocol_predicates -> trace -> prop
@@ -49,7 +49,7 @@ let rec trace_invariant preds tr =
     trace_invariant preds tr_init /\ (
       match event with
       | MsgSent msg ->
-        is_publishable preds.pr tr msg
+        is_publishable preds.crypto_preds tr msg
       | SetState prin sess_id content -> (
         preds.trace_preds.state_pred tr_init prin sess_id content
       )
@@ -69,7 +69,7 @@ val msg_sent_on_network_are_publishable:
     trace_invariant preds tr /\
     msg_sent_on_network tr msg
   )
-  (ensures is_publishable preds.pr tr msg)
+  (ensures is_publishable preds.crypto_preds tr msg)
 let rec msg_sent_on_network_are_publishable preds tr msg =
   match tr with
   | Nil -> assert(False)
@@ -92,7 +92,7 @@ val state_is_knowable_by:
     trace_invariant preds tr /\
     state_was_set tr prin sess_id content
   )
-  (ensures is_knowable_by preds.pr (principal_state_label prin sess_id) tr content)
+  (ensures is_knowable_by preds.crypto_preds (principal_state_label prin sess_id) tr content)
 let rec state_is_knowable_by preds tr prin sess_id content =
   match tr with
   | Nil -> assert(False)

@@ -61,7 +61,7 @@ let get_signkey_label pk =
   | _ -> public
 
 noeq
-type protocol_preds = {
+type crypto_predicates = {
   aead_pred: tr:trace -> key:bytes -> nonce:bytes -> msg:bytes -> ad:bytes -> prop;
   aead_pred_later:
     tr1:trace -> tr2:trace ->
@@ -92,27 +92,27 @@ type protocol_preds = {
   // ...
 }
 
-val bytes_invariant: protocol_preds -> trace -> bytes -> prop
-let rec bytes_invariant pr tr b =
+val bytes_invariant: crypto_predicates -> trace -> bytes -> prop
+let rec bytes_invariant cpreds tr b =
   match b with
   | Literal buf ->
     True
   | Rand label len time ->
     event_at tr RandGen time
   | Concat left right ->
-    bytes_invariant pr tr left /\
-    bytes_invariant pr tr right
+    bytes_invariant cpreds tr left /\
+    bytes_invariant cpreds tr right
   | Aead key nonce msg ad ->
-    bytes_invariant pr tr key /\
-    bytes_invariant pr tr nonce /\
-    bytes_invariant pr tr msg /\
-    bytes_invariant pr tr ad /\
+    bytes_invariant cpreds tr key /\
+    bytes_invariant cpreds tr nonce /\
+    bytes_invariant cpreds tr msg /\
+    bytes_invariant cpreds tr ad /\
     (get_label nonce) `can_flow tr` public /\
     (get_label ad) `can_flow tr` public /\
     (
       (
         // Honest case
-        pr.aead_pred tr key nonce msg ad /\
+        cpreds.aead_pred tr key nonce msg ad /\
         (get_label msg) `can_flow tr` (get_label key)
       ) \/ (
         // Attacker case
@@ -121,17 +121,17 @@ let rec bytes_invariant pr tr b =
       )
     )
   | Pk sk ->
-    bytes_invariant pr tr sk
+    bytes_invariant cpreds tr sk
   | PkEnc pk nonce msg ->
-    bytes_invariant pr tr pk /\
-    bytes_invariant pr tr nonce /\
-    bytes_invariant pr tr msg /\
+    bytes_invariant cpreds tr pk /\
+    bytes_invariant cpreds tr nonce /\
+    bytes_invariant cpreds tr msg /\
     (
       (
         // Honest case
         (get_label msg) `can_flow tr` (get_sk_label pk) /\
         (get_label msg) `can_flow tr` (get_label nonce) /\
-        pr.pkenc_pred tr pk msg
+        cpreds.pkenc_pred tr pk msg
       ) \/ (
         // Attacker case
         (get_label pk) `can_flow tr` public /\
@@ -140,15 +140,15 @@ let rec bytes_invariant pr tr b =
       )
     )
   | Vk sk ->
-    bytes_invariant pr tr sk
+    bytes_invariant cpreds tr sk
   | Sign sk nonce msg ->
-    bytes_invariant pr tr sk /\
-    bytes_invariant pr tr nonce /\
-    bytes_invariant pr tr msg /\
+    bytes_invariant cpreds tr sk /\
+    bytes_invariant cpreds tr nonce /\
+    bytes_invariant cpreds tr msg /\
     (
       (
         // Honest case
-        pr.sign_pred tr (Vk sk) msg
+        cpreds.sign_pred tr (Vk sk) msg
       ) \/ (
         // Attacker case
         (get_label sk) `can_flow tr` public /\
@@ -158,49 +158,49 @@ let rec bytes_invariant pr tr b =
     )
 
 val bytes_invariant_later:
-  preds:protocol_preds ->
+  cpreds:crypto_predicates ->
   tr1:trace -> tr2:trace -> msg:bytes ->
   Lemma
-  (requires bytes_invariant preds tr1 msg /\ tr1 <$ tr2)
-  (ensures bytes_invariant preds tr2 msg)
-  [SMTPat (bytes_invariant preds tr1 msg); SMTPat (tr1 <$ tr2)]
-let rec bytes_invariant_later preds tr1 tr2 msg =
+  (requires bytes_invariant cpreds tr1 msg /\ tr1 <$ tr2)
+  (ensures bytes_invariant cpreds tr2 msg)
+  [SMTPat (bytes_invariant cpreds tr1 msg); SMTPat (tr1 <$ tr2)]
+let rec bytes_invariant_later cpreds tr1 tr2 msg =
   match msg with
   | Literal buf -> ()
   | Rand label len time -> ()
   | Concat left right ->
-    bytes_invariant_later preds tr1 tr2 left;
-    bytes_invariant_later preds tr1 tr2 right
+    bytes_invariant_later cpreds tr1 tr2 left;
+    bytes_invariant_later cpreds tr1 tr2 right
   | Aead key nonce msg ad ->
-    FStar.Classical.move_requires (preds.aead_pred_later tr1 tr2 key nonce msg) ad;
-    bytes_invariant_later preds tr1 tr2 key;
-    bytes_invariant_later preds tr1 tr2 nonce;
-    bytes_invariant_later preds tr1 tr2 msg;
-    bytes_invariant_later preds tr1 tr2 ad
+    FStar.Classical.move_requires (cpreds.aead_pred_later tr1 tr2 key nonce msg) ad;
+    bytes_invariant_later cpreds tr1 tr2 key;
+    bytes_invariant_later cpreds tr1 tr2 nonce;
+    bytes_invariant_later cpreds tr1 tr2 msg;
+    bytes_invariant_later cpreds tr1 tr2 ad
   | Pk sk ->
-    bytes_invariant_later preds tr1 tr2 sk
+    bytes_invariant_later cpreds tr1 tr2 sk
   | PkEnc pk nonce msg ->
-    FStar.Classical.move_requires (preds.pkenc_pred_later tr1 tr2 pk) msg;
-    bytes_invariant_later preds tr1 tr2 pk;
-    bytes_invariant_later preds tr1 tr2 nonce;
-    bytes_invariant_later preds tr1 tr2 msg
+    FStar.Classical.move_requires (cpreds.pkenc_pred_later tr1 tr2 pk) msg;
+    bytes_invariant_later cpreds tr1 tr2 pk;
+    bytes_invariant_later cpreds tr1 tr2 nonce;
+    bytes_invariant_later cpreds tr1 tr2 msg
   | Vk sk ->
-    bytes_invariant_later preds tr1 tr2 sk
+    bytes_invariant_later cpreds tr1 tr2 sk
   | Sign sk nonce msg ->
-    bytes_invariant_later preds tr1 tr2 sk;
-    bytes_invariant_later preds tr1 tr2 nonce;
-    bytes_invariant_later preds tr1 tr2 msg;
-    FStar.Classical.move_requires (preds.sign_pred_later tr1 tr2 (Vk sk)) msg
+    bytes_invariant_later cpreds tr1 tr2 sk;
+    bytes_invariant_later cpreds tr1 tr2 nonce;
+    bytes_invariant_later cpreds tr1 tr2 msg;
+    FStar.Classical.move_requires (cpreds.sign_pred_later tr1 tr2 (Vk sk)) msg
 
 (*** Various predicates ***)
 
-val is_knowable_by: protocol_preds -> label -> trace -> bytes -> prop
-let is_knowable_by pr lab tr b =
-  bytes_invariant pr tr b /\ (get_label b) `can_flow tr` lab
+val is_knowable_by: crypto_predicates -> label -> trace -> bytes -> prop
+let is_knowable_by cpreds lab tr b =
+  bytes_invariant cpreds tr b /\ (get_label b) `can_flow tr` lab
 
-val is_publishable: protocol_preds -> trace -> bytes -> prop
-let is_publishable pr tr b =
-  is_knowable_by pr public tr b
+val is_publishable: crypto_predicates -> trace -> bytes -> prop
+let is_publishable cpreds tr b =
+  is_knowable_by cpreds public tr b
 
 (*** Literal ***)
 
@@ -223,11 +223,11 @@ let literal_to_bytes_to_literal lit = ()
 
 // Lemma for attacker knowledge theorem
 val literal_to_bytes_is_publishable:
-  pr:protocol_preds -> tr:trace ->
+  cpreds:crypto_predicates -> tr:trace ->
   lit:FStar.Seq.seq FStar.UInt8.t ->
   Lemma
-  (is_publishable pr tr (literal_to_bytes lit))
-let literal_is_to_bytes_publishable pr tr lit = ()
+  (is_publishable cpreds tr (literal_to_bytes lit))
+let literal_is_to_bytes_publishable cpreds tr lit = ()
 
 // Lemma for the user
 val bytes_to_literal_to_bytes:
@@ -245,12 +245,12 @@ val length_literal_to_bytes:
 let length_literal_to_bytes lit = ()
 
 val bytes_invariant_literal_to_bytes:
-  pr:protocol_preds -> tr:trace ->
+  cpreds:crypto_predicates -> tr:trace ->
   lit:FStar.Seq.seq FStar.UInt8.t ->
   Lemma
-  (ensures bytes_invariant pr tr (literal_to_bytes lit))
-  [SMTPat (bytes_invariant pr tr (literal_to_bytes lit))]
-let bytes_invariant_literal_to_bytes pr tr lit = ()
+  (ensures bytes_invariant cpreds tr (literal_to_bytes lit))
+  [SMTPat (bytes_invariant cpreds tr (literal_to_bytes lit))]
+let bytes_invariant_literal_to_bytes cpreds tr lit = ()
 
 (*** Concatenation ***)
 
@@ -277,26 +277,26 @@ let split_concat left right = ()
 
 // Lemma for attacker knowledge theorem
 val concat_preserves_publishability:
-  pr:protocol_preds -> tr:trace ->
+  cpreds:crypto_predicates -> tr:trace ->
   b1:bytes -> b2:bytes ->
   Lemma
-  (requires is_publishable pr tr b1 /\ is_publishable pr tr b2)
-  (ensures is_publishable pr tr (concat b1 b2))
-let concat_preserves_publishability pr tr b1 b2 =
+  (requires is_publishable cpreds tr b1 /\ is_publishable cpreds tr b2)
+  (ensures is_publishable cpreds tr (concat b1 b2))
+let concat_preserves_publishability cpreds tr b1 b2 =
   ()
 
 // Lemma for attacker knowledge theorem
 val split_preserves_publishability:
-  pr:protocol_preds -> tr:trace ->
+  cpreds:crypto_predicates -> tr:trace ->
   b:bytes -> i:nat ->
   Lemma
-  (requires is_publishable pr tr b)
+  (requires is_publishable cpreds tr b)
   (ensures (
     match split b i with
     | None -> True
-    | Some (b1, b2) -> is_publishable pr tr b1 /\ is_publishable pr tr b2
+    | Some (b1, b2) -> is_publishable cpreds tr b1 /\ is_publishable cpreds tr b2
   ))
-let split_preserves_publishability pr tr b i =
+let split_preserves_publishability cpreds tr b i =
   ()
 
 // Lemma for the user
@@ -325,26 +325,26 @@ val split_length:
 let split_length b i = ()
 
 val bytes_invariant_concat:
-  pr:protocol_preds -> tr:trace ->
+  cpreds:crypto_predicates -> tr:trace ->
   b1:bytes -> b2:bytes ->
   Lemma
-  (requires bytes_invariant pr tr b1 /\ bytes_invariant pr tr b2)
-  (ensures bytes_invariant pr tr (concat b1 b2))
-  [SMTPat (bytes_invariant pr tr (concat b1 b2))]
-let bytes_invariant_concat pr tr b1 b2 = ()
+  (requires bytes_invariant cpreds tr b1 /\ bytes_invariant cpreds tr b2)
+  (ensures bytes_invariant cpreds tr (concat b1 b2))
+  [SMTPat (bytes_invariant cpreds tr (concat b1 b2))]
+let bytes_invariant_concat cpreds tr b1 b2 = ()
 
 val bytes_invariant_split:
-  pr:protocol_preds -> tr:trace ->
+  cpreds:crypto_predicates -> tr:trace ->
   b:bytes -> i:nat ->
   Lemma
-  (requires bytes_invariant pr tr b)
+  (requires bytes_invariant cpreds tr b)
   (ensures (
     match split b i with
     | None -> True
-    | Some (b1, b2) -> bytes_invariant pr tr b1 /\ bytes_invariant pr tr b2
+    | Some (b1, b2) -> bytes_invariant cpreds tr b1 /\ bytes_invariant cpreds tr b2
   ))
-  [SMTPat (bytes_invariant pr tr b); SMTPat (split b i)]
-let bytes_invariant_split pr tr b i =
+  [SMTPat (bytes_invariant cpreds tr b); SMTPat (split b i)]
+let bytes_invariant_split cpreds tr b i =
   ()
 
 (*** AEAD ***)
@@ -372,35 +372,35 @@ let aead_dec_enc key nonce msg ad = ()
 
 // Lemma for attacker knowledge theorem
 val aead_enc_preserves_publishability:
-  pr:protocol_preds -> tr:trace ->
+  cpreds:crypto_predicates -> tr:trace ->
   key:bytes -> nonce:bytes -> msg:bytes -> ad:bytes ->
   Lemma
   (requires
-    is_publishable pr tr key /\
-    is_publishable pr tr nonce /\
-    is_publishable pr tr msg /\
-    is_publishable pr tr ad
+    is_publishable cpreds tr key /\
+    is_publishable cpreds tr nonce /\
+    is_publishable cpreds tr msg /\
+    is_publishable cpreds tr ad
   )
-  (ensures is_publishable pr tr (aead_enc key nonce msg ad))
-let aead_enc_preserves_publishability pr tr key nonce msg ad = ()
+  (ensures is_publishable cpreds tr (aead_enc key nonce msg ad))
+let aead_enc_preserves_publishability cpreds tr key nonce msg ad = ()
 
 // Lemma for attacker knowledge theorem
 val aead_dec_preserves_publishability:
-  pr:protocol_preds -> tr:trace ->
+  cpreds:crypto_predicates -> tr:trace ->
   key:bytes -> nonce:bytes -> msg:bytes -> ad:bytes ->
   Lemma
   (requires
-    is_publishable pr tr key /\
-    is_publishable pr tr nonce /\
-    is_publishable pr tr msg /\
-    is_publishable pr tr ad
+    is_publishable cpreds tr key /\
+    is_publishable cpreds tr nonce /\
+    is_publishable cpreds tr msg /\
+    is_publishable cpreds tr ad
   )
   (ensures (
     match aead_dec key nonce msg ad with
-    | Some res -> is_publishable pr tr res
+    | Some res -> is_publishable cpreds tr res
     | None -> True
   ))
-let aead_dec_preserves_publishability pr tr key nonce msg ad =
+let aead_dec_preserves_publishability cpreds tr key nonce msg ad =
   // F* needs the match for some reason?
   match aead_dec key nonce msg ad with
   | Some res -> ()
@@ -434,41 +434,41 @@ let pk_dec_enc key nonce msg = ()
 
 // Lemma for attacker knowledge theorem
 val pk_preserves_publishability:
-  pr:protocol_preds -> tr:trace ->
+  cpreds:crypto_predicates -> tr:trace ->
   sk:bytes ->
   Lemma
-  (requires is_publishable pr tr sk)
-  (ensures is_publishable pr tr (pk sk))
-let pk_preserves_publishability pr tr sk = ()
+  (requires is_publishable cpreds tr sk)
+  (ensures is_publishable cpreds tr (pk sk))
+let pk_preserves_publishability cpreds tr sk = ()
 
 // Lemma for attacker knowledge theorem
 val pk_enc_preserves_publishability:
-  pr:protocol_preds -> tr:trace ->
+  cpreds:crypto_predicates -> tr:trace ->
   pk:bytes -> nonce:bytes -> msg:bytes ->
   Lemma
   (requires
-    is_publishable pr tr pk /\
-    is_publishable pr tr nonce /\
-    is_publishable pr tr msg
+    is_publishable cpreds tr pk /\
+    is_publishable cpreds tr nonce /\
+    is_publishable cpreds tr msg
   )
-  (ensures is_publishable pr tr (pk_enc pk nonce msg))
-let pk_enc_preserves_publishability pr tr pk nonce msg = ()
+  (ensures is_publishable cpreds tr (pk_enc pk nonce msg))
+let pk_enc_preserves_publishability cpreds tr pk nonce msg = ()
 
 // Lemma for attacker knowledge theorem
 val pk_dec_preserves_publishability:
-  pr:protocol_preds -> tr:trace ->
+  cpreds:crypto_predicates -> tr:trace ->
   sk:bytes -> msg:bytes ->
   Lemma
   (requires
-    is_publishable pr tr sk /\
-    is_publishable pr tr msg
+    is_publishable cpreds tr sk /\
+    is_publishable cpreds tr msg
   )
   (ensures (
     match pk_dec sk msg with
-    | Some res -> is_publishable pr tr res
+    | Some res -> is_publishable cpreds tr res
     | None -> True
   ))
-let pk_dec_preserves_publishability pr tr sk msg = ()
+let pk_dec_preserves_publishability cpreds tr sk msg = ()
 
 (*** Signature ***)
 
@@ -495,22 +495,22 @@ let verify_sign sk nonce msg = ()
 
 // Lemma for attacker knowledge theorem
 val vk_preserves_publishability:
-  pr:protocol_preds -> tr:trace ->
+  cpreds:crypto_predicates -> tr:trace ->
   sk:bytes ->
   Lemma
-  (requires is_publishable pr tr sk)
-  (ensures is_publishable pr tr (vk sk))
-let vk_preserves_publishability pr tr vk = ()
+  (requires is_publishable cpreds tr sk)
+  (ensures is_publishable cpreds tr (vk sk))
+let vk_preserves_publishability cpreds tr vk = ()
 
 // Lemma for attacker knowledge theorem
 val sign_preserves_publishability:
-  pr:protocol_preds -> tr:trace ->
+  cpreds:crypto_predicates -> tr:trace ->
   sk:bytes -> nonce:bytes -> msg:bytes ->
   Lemma
   (requires
-    is_publishable pr tr sk /\
-    is_publishable pr tr nonce /\
-    is_publishable pr tr msg
+    is_publishable cpreds tr sk /\
+    is_publishable cpreds tr nonce /\
+    is_publishable cpreds tr msg
   )
-  (ensures is_publishable pr tr (sign sk nonce msg))
-let sign_preserves_publishability pr tr sk nonce msg = ()
+  (ensures is_publishable cpreds tr (sign sk nonce msg))
+let sign_preserves_publishability cpreds tr sk nonce msg = ()

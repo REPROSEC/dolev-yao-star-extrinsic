@@ -56,25 +56,25 @@ instance bytes_like_bytes: bytes_like bytes = {
 }
 
 val bytes_invariant_is_pre_compatible:
-  pr:protocol_preds -> tr:trace ->
+  cpreds:crypto_predicates -> tr:trace ->
   Lemma
-  (bytes_pre_is_compatible (bytes_invariant pr tr))
-  [SMTPat (bytes_pre_is_compatible (bytes_invariant pr tr))]
-let bytes_invariant_is_pre_compatible pr tr =
-  bytes_pre_is_compatible_intro #bytes (bytes_invariant pr tr)
+  (bytes_pre_is_compatible (bytes_invariant cpreds tr))
+  [SMTPat (bytes_pre_is_compatible (bytes_invariant cpreds tr))]
+let bytes_invariant_is_pre_compatible cpreds tr =
+  bytes_pre_is_compatible_intro #bytes (bytes_invariant cpreds tr)
     ()
     (fun b1 b2 -> ())
     (fun b i -> ())
     (fun sz n -> ())
 
 val is_publishable_is_pre_compatible:
-  pr:protocol_preds -> tr:trace ->
+  cpreds:crypto_predicates -> tr:trace ->
   Lemma
-  (bytes_pre_is_compatible (is_publishable pr tr))
-  [SMTPat (bytes_pre_is_compatible (is_publishable pr tr))]
-let is_publishable_is_pre_compatible pr tr =
-  bytes_pre_is_compatible_intro #bytes (is_publishable pr tr)
-    (literal_to_bytes_is_publishable pr tr FStar.Seq.empty)
-    (fun b1 b2 -> concat_preserves_publishability pr tr b1 b2)
-    (fun b i -> split_preserves_publishability pr tr b i)
-    (fun sz n -> literal_to_bytes_is_publishable pr tr (FStar.Endianness.n_to_be sz n))
+  (bytes_pre_is_compatible (is_publishable cpreds tr))
+  [SMTPat (bytes_pre_is_compatible (is_publishable cpreds tr))]
+let is_publishable_is_pre_compatible cpreds tr =
+  bytes_pre_is_compatible_intro #bytes (is_publishable cpreds tr)
+    (literal_to_bytes_is_publishable cpreds tr FStar.Seq.empty)
+    (fun b1 b2 -> concat_preserves_publishability cpreds tr b1 b2)
+    (fun b i -> split_preserves_publishability cpreds tr b i)
+    (fun sz n -> literal_to_bytes_is_publishable cpreds tr (FStar.Endianness.n_to_be sz n))

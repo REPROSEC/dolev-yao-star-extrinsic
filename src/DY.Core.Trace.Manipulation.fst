@@ -66,7 +66,7 @@ val send_msg_invariant:
   msg:bytes -> tr:trace ->
   Lemma
   (requires
-    is_publishable preds.pr tr msg /\
+    is_publishable preds.crypto_preds tr msg /\
     trace_invariant preds tr
   )
   (ensures (
@@ -122,14 +122,13 @@ val mk_rand_bytes_invariant:
   Lemma
   (ensures (
     let (b, tr_out) = mk_rand lab len tr in
-    bytes_invariant preds.pr tr_out b
+    bytes_invariant preds.crypto_preds tr_out b
   ))
   // We need a way for the SMT pattern to know the value of `preds`
   // This is done using `trace_invariant`, although it is not necessary for the theorem to hold,
   // It is certainly around in the context
   [SMTPat (mk_rand lab len tr); SMTPat (trace_invariant preds tr)]
-let mk_rand_bytes_invariant pr lab len tr =
-  ()
+let mk_rand_bytes_invariant preds lab len tr = ()
 
 (*** State ***)
 
