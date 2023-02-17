@@ -629,3 +629,59 @@ val sign_preserves_publishability:
   )
   (ensures is_publishable cpreds tr (sign sk nonce msg))
 let sign_preserves_publishability cpreds tr sk nonce msg = ()
+
+val bytes_invariant_vk:
+  cpreds:crypto_predicates -> tr:trace ->
+  sk:bytes ->
+  Lemma
+  (requires bytes_invariant cpreds tr sk)
+  (ensures bytes_invariant cpreds tr (pk sk))
+  [SMTPat (bytes_invariant cpreds tr (pk sk))]
+let bytes_invariant_vk cpreds tr sk = ()
+
+val get_label_vk:
+  sk:bytes ->
+  Lemma
+  (ensures get_label (vk sk) == public)
+  [SMTPat (get_label (vk sk))]
+let get_label_vk sk = ()
+
+val bytes_invariant_sign:
+  cpreds:crypto_predicates -> tr:trace ->
+  sk:bytes -> nonce:bytes -> msg:bytes ->
+  Lemma
+  (requires
+    bytes_invariant cpreds tr sk /\
+    bytes_invariant cpreds tr nonce /\
+    bytes_invariant cpreds tr msg /\
+    bytes_invariant cpreds tr sk /\
+    cpreds.sign_pred tr (vk sk) msg
+  )
+  (ensures bytes_invariant cpreds tr (sign sk nonce msg))
+  [SMTPat (bytes_invariant cpreds tr (sign sk nonce msg))]
+let bytes_invariant_sign cpreds tr sk nonce msg = ()
+
+val get_label_sign:
+  sk:bytes -> nonce:bytes -> msg:bytes ->
+  Lemma
+  (ensures get_label (sign sk nonce msg) == get_label msg)
+  [SMTPat (get_label (sign sk nonce msg))]
+let get_label_sign sk nonce msg = ()
+
+val bytes_invariant_verify:
+  cpreds:crypto_predicates -> tr:trace ->
+  vk:bytes -> msg:bytes -> signature:bytes ->
+  Lemma
+  (requires
+    bytes_invariant cpreds tr vk /\
+    bytes_invariant cpreds tr msg /\
+    bytes_invariant cpreds tr signature /\
+    verify vk msg signature
+  )
+  (ensures
+    cpreds.sign_pred tr vk msg
+    \/
+    (get_signkey_label vk) `can_flow tr` public
+  )
+  [SMTPat (verify vk msg signature); SMTPat (bytes_invariant cpreds tr signature)]
+let bytes_invariant_verify cpreds tr vk msg signature = ()
