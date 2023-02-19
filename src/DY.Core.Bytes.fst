@@ -347,6 +347,34 @@ val bytes_invariant_split:
 let bytes_invariant_split cpreds tr b i =
   ()
 
+val get_label_concat:
+  b1:bytes -> b2:bytes ->
+  Lemma
+  (ensures get_label (concat b1 b2) == meet (get_label b1) (get_label b2))
+  [SMTPat (get_label (concat b1 b2))]
+let get_label_concat b1 b2 = ()
+
+val concat_preserves_knowability:
+  cpreds:crypto_predicates -> lab:label -> tr:trace ->
+  b1:bytes -> b2:bytes ->
+  Lemma
+  (requires is_knowable_by cpreds lab tr b1 /\ is_knowable_by cpreds lab tr b2)
+  (ensures is_knowable_by cpreds lab tr (concat b1 b2))
+  [SMTPat (is_knowable_by cpreds lab tr (concat b1 b2))]
+let concat_preserves_knowability cpreds lab tr b1 b2 = ()
+
+val split_preserves_knowability:
+  cpreds:crypto_predicates -> lab:label -> tr:trace ->
+  b:bytes -> i:nat ->
+  Lemma
+  (requires is_knowable_by cpreds lab tr b)
+  (ensures (
+    match split b i with
+    | None -> True
+    | Some (b1, b2) -> is_knowable_by cpreds lab tr b1 /\ is_knowable_by cpreds lab tr b2
+  ))
+let split_preserves_knowability cpreds lab tr b i = ()
+
 (*** AEAD ***)
 
 val aead_enc: bytes -> bytes -> bytes -> bytes -> bytes

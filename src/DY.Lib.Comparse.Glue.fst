@@ -2,6 +2,7 @@ module DY.Lib.Comparse.Glue
 
 open Comparse
 open DY.Core.Trace.Type
+open DY.Core.Label.Type
 open DY.Core.Bytes.Type
 open DY.Core.Bytes
 
@@ -78,3 +79,15 @@ let is_publishable_is_pre_compatible cpreds tr =
     (fun b1 b2 -> concat_preserves_publishability cpreds tr b1 b2)
     (fun b i -> split_preserves_publishability cpreds tr b i)
     (fun sz n -> literal_to_bytes_is_publishable cpreds tr (FStar.Endianness.n_to_be sz n))
+
+val is_knowable_by_is_pre_compatible:
+  cpreds:crypto_predicates -> lab:label -> tr:trace ->
+  Lemma
+  (bytes_pre_is_compatible (is_knowable_by cpreds lab tr))
+  [SMTPat (bytes_pre_is_compatible (is_knowable_by cpreds lab tr))]
+let is_knowable_by_is_pre_compatible cpreds lab tr =
+  bytes_pre_is_compatible_intro #bytes (is_knowable_by cpreds lab tr)
+    ()
+    (fun b1 b2 -> concat_preserves_knowability cpreds lab tr b1 b2)
+    (fun b i -> split_preserves_knowability cpreds lab tr b i)
+    (fun sz n -> ())
