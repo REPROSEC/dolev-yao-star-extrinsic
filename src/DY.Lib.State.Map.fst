@@ -1,13 +1,7 @@
 module DY.Lib.State.Map
 
 open Comparse
-open DY.Core.Label
-open DY.Core.Label.Type
-open DY.Core.Trace.Type
-open DY.Core.Trace.Invariant
-open DY.Core.Trace.Manipulation
-open DY.Core.Bytes
-open DY.Core.Bytes.Type
+open DY.Core
 open DY.Lib.Comparse.Glue
 open DY.Lib.State.Typed
 

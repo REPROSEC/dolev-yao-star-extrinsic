@@ -1,10 +1,7 @@
 module DY.Lib.Comparse.Glue
 
 open Comparse
-open DY.Core.Trace.Type
-open DY.Core.Label.Type
-open DY.Core.Bytes.Type
-open DY.Core.Bytes
+open DY.Core
 
 instance bytes_like_bytes: bytes_like bytes = {
   length = length;

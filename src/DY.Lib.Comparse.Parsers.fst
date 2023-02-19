@@ -1,6 +1,6 @@
 module DY.Lib.Comparse.Parsers
 
-open DY.Core.Label.Type
+open DY.Core
 open Comparse
 
 (*** Parser for principals ***)
