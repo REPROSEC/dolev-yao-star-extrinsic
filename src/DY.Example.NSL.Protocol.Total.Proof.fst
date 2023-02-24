@@ -1,0 +1,265 @@
+module DY.Example.NSL.Protocol.Total.Proof
+
+open Comparse
+open DY.Core
+open DY.Example.NSL.Protocol.Total
+open DY.Example.NSL.Protocol.Stateful
+
+#set-options "--fuel 0 --ifuel 0"
+
+#push-options "--ifuel 2 --fuel 0"
+let nsl_crypto_preds = {
+  aead_pred = (fun tr key nonce msg ad -> False);
+  aead_pred_later = (fun tr1 tr2 key nonce msg ad -> ());
+
+  pkenc_pred = (fun tr pk msg ->
+    (exists prin. get_sk_label pk = principal_label prin /\ (
+      match parse message msg with
+      | Some (Msg1 msg1) -> (
+        let (alice, bob) = (msg1.alice, prin) in
+        event_triggered tr alice nsl_event_label (serialize nsl_event (Initiate1 alice bob msg1.n_a)) /\
+        get_label msg1.n_a == join (principal_label alice) (principal_label bob)
+      )
+      | Some (Msg2 msg2) -> (
+        let (alice, bob) = (prin, msg2.bob) in
+        event_triggered tr bob nsl_event_label (serialize nsl_event (Respond1 alice bob msg2.n_a msg2.n_b)) /\
+        get_label msg2.n_b == join (principal_label alice) (principal_label bob)
+      )
+      | Some (Msg3 msg3) -> (
+        let (alice, bob) = (msg3.alice, prin) in
+        exists n_a. event_triggered tr alice nsl_event_label (serialize nsl_event (Initiate2 alice bob n_a msg3.n_b))
+      )
+      | None -> False
+    ))
+  );
+  pkenc_pred_later = (fun tr1 tr2 pk msg -> ());
+
+  sign_pred = (fun tr vk msg -> False);
+  sign_pred_later = (fun tr1 tr2 vk msg -> ());
+}
+#pop-options
+
+val compute_message1_proof:
+  tr:trace ->
+  alice:principal -> bob:principal -> pk_b:bytes -> n_a:bytes -> nonce:bytes ->
+  Lemma
+  (requires
+    // From the stateful code
+    event_triggered tr alice nsl_event_label (serialize nsl_event (Initiate1 alice bob n_a)) /\
+    // From random generation
+    get_label n_a == join (principal_label alice) (principal_label bob) /\
+    // From random generation
+    get_label nonce == principal_label alice /\
+    // From PKI invariants
+    get_sk_label pk_b == principal_label bob /\
+    bytes_invariant nsl_crypto_preds tr pk_b /\
+    bytes_invariant nsl_crypto_preds tr n_a /\
+    bytes_invariant nsl_crypto_preds tr nonce
+  )
+  (ensures is_publishable nsl_crypto_preds tr (compute_message1 alice bob pk_b n_a nonce))
+let compute_message1_proof tr alice bob pk_b n_a nonce =
+  // trigger `join_eq` SMTPat
+  assert (join (principal_label alice) (principal_label bob) `can_flow tr` join (principal_label alice) (principal_label bob));
+  let msg = Msg1 {n_a; alice;} in
+  serialize_wf_lemma message (is_knowable_by nsl_crypto_preds (principal_label alice) tr) msg;
+  serialize_wf_lemma message (is_knowable_by nsl_crypto_preds (principal_label bob) tr) msg;
+  parse_serialize_inv_lemma #bytes message msg
+
+(*
+// TODO: Trop fort, enlever (mais je garde dans un coin au cas-où)
+#push-options "--ifuel 1 --fuel 0 --z3rlimit 25"
+val decode_message1_proof_strong:
+  tr:trace ->
+  bob:principal -> msg_cipher:bytes -> sk_b:bytes ->
+  Lemma
+  (requires
+    bytes_invariant nsl_crypto_preds tr msg_cipher /\
+    bytes_invariant nsl_crypto_preds tr sk_b /\
+    get_label sk_b == principal_label bob
+  )
+  (ensures (
+    match decode_message1 bob msg_cipher sk_b with
+    | None -> True
+    | Some msg1 -> (
+      is_publishable nsl_crypto_preds tr msg1.n_a \/ (
+        bytes_invariant nsl_crypto_preds tr msg1.n_a /\
+        event_triggered tr msg1.alice nsl_event_label (serialize nsl_event (Initiate1 msg1.alice bob msg1.n_a)) /\
+        get_label msg1.n_a == join (principal_label msg1.alice) (principal_label bob)
+      )
+    )
+  ))
+let decode_message1_proof_strong tr bob msg_cipher sk_b =
+  match decode_message1 bob msg_cipher sk_b with
+  | None -> ()
+  | Some msg1 ->
+    let Some msg = pk_dec sk_b msg_cipher in
+    FStar.Classical.move_requires (parse_wf_lemma message (is_publishable nsl_crypto_preds tr)) msg;
+    FStar.Classical.move_requires (parse_wf_lemma message (bytes_invariant nsl_crypto_preds tr)) msg;
+    parse_serialize_inv_lemma #bytes message (Msg1 msg1)
+#pop-options
+*)
+
+// If bob successfully decrypt the first message,
+// then n_a is knownable both by alice (in the message) and bob (the principal)
+// This is because:
+// - if the message was encrypted by the attacker, then n_a is publishable hence knowable by alice and bob
+// - if the message was encrypted by an honest principal, this follows from the encryption predicate
+#push-options "--ifuel 1 --fuel 0 --z3rlimit 25"
+val decode_message1_proof:
+  tr:trace ->
+  bob:principal -> msg_cipher:bytes -> sk_b:bytes ->
+  Lemma
+  (requires
+    // From PrivateKeys invariants
+    get_label sk_b == principal_label bob /\
+    bytes_invariant nsl_crypto_preds tr msg_cipher /\
+    bytes_invariant nsl_crypto_preds tr sk_b
+  )
+  (ensures (
+    match decode_message1 bob msg_cipher sk_b with
+    | None -> True
+    | Some msg1 -> (
+      is_knowable_by nsl_crypto_preds (join (principal_label msg1.alice) (principal_label bob)) tr msg1.n_a
+    )
+  ))
+let decode_message1_proof tr bob msg_cipher sk_b =
+  match decode_message1 bob msg_cipher sk_b with
+  | None -> ()
+  | Some msg1 ->
+    let Some msg = pk_dec sk_b msg_cipher in
+    FStar.Classical.move_requires (parse_wf_lemma message (is_publishable nsl_crypto_preds tr)) msg;
+    FStar.Classical.move_requires (parse_wf_lemma message (bytes_invariant nsl_crypto_preds tr)) msg;
+    parse_serialize_inv_lemma #bytes message (Msg1 msg1)
+#pop-options
+
+val compute_message2_proof:
+  tr:trace ->
+  bob:principal -> msg1:message1 -> pk_a:bytes -> n_b:bytes -> nonce:bytes ->
+  Lemma
+  (requires
+    // From the stateful code
+    event_triggered tr bob nsl_event_label (serialize nsl_event (Respond1 msg1.alice bob msg1.n_a n_b)) /\
+    // From decode_message1_proof
+    is_knowable_by nsl_crypto_preds (join (principal_label msg1.alice) (principal_label bob)) tr msg1.n_a /\
+    // From the random generation
+    get_label n_b == join (principal_label msg1.alice) (principal_label bob) /\
+    // From the random generation
+    get_label nonce == principal_label bob /\
+    // From the PKI
+    get_sk_label pk_a == principal_label msg1.alice /\
+    bytes_invariant nsl_crypto_preds tr pk_a /\
+    bytes_invariant nsl_crypto_preds tr n_b /\
+    bytes_invariant nsl_crypto_preds tr nonce
+  )
+  (ensures
+    is_publishable nsl_crypto_preds tr (compute_message2 bob msg1 pk_a n_b nonce)
+  )
+let compute_message2_proof tr bob msg1 pk_a n_b nonce =
+  assert (join (principal_label msg1.alice) (principal_label bob) `can_flow tr` join (principal_label msg1.alice) (principal_label bob));
+  let msg = Msg2 {n_a = msg1.n_a;  n_b; bob;} in
+  serialize_wf_lemma message (is_knowable_by nsl_crypto_preds (principal_label msg1.alice) tr) msg;
+  serialize_wf_lemma message (is_knowable_by nsl_crypto_preds (principal_label bob) tr) msg;
+  parse_serialize_inv_lemma #bytes message msg
+
+// If alice successfully decrypt the second message,
+// then n_b is knownable both by alice (in the message) and bob (the principal)
+// (for the same reasons with decode_message1)
+// Furthermore, either alice or bob are corrupt, or bob triggered the Respond1 event
+// (proved with the encryption predicate)
+#push-options "--ifuel 1 --fuel 0 --z3rlimit 25"
+val decode_message2_proof:
+  tr:trace ->
+  alice:principal -> bob:principal -> msg_cipher:bytes -> sk_a:bytes -> n_a:bytes ->
+  Lemma
+  (requires
+    // From the NSL state invariant
+    get_label n_a = join (principal_label alice) (principal_label bob) /\
+    // From the PrivateKeys invariant
+    get_label sk_a == principal_label alice /\
+    bytes_invariant nsl_crypto_preds tr msg_cipher /\
+    bytes_invariant nsl_crypto_preds tr sk_a
+  )
+  (ensures (
+    match decode_message2 alice bob msg_cipher sk_a n_a with
+    | None -> True
+    | Some msg2 -> (
+      is_knowable_by nsl_crypto_preds (join (principal_label alice) (principal_label bob)) tr msg2.n_b /\ (
+      ((join (principal_label alice) (principal_label bob)) `can_flow tr` public) \/ (
+        event_triggered tr bob nsl_event_label (serialize nsl_event (Respond1 alice bob n_a msg2.n_b))
+      )
+      )
+    )
+  ))
+let decode_message2_proof tr alice bob msg_cipher sk_a n_a =
+  match decode_message2 alice bob msg_cipher sk_a n_a with
+  | None -> ()
+  | Some msg2 -> (
+    let Some msg = pk_dec sk_a msg_cipher in
+    FStar.Classical.move_requires (parse_wf_lemma message (is_publishable nsl_crypto_preds tr)) msg;
+    FStar.Classical.move_requires (parse_wf_lemma message (bytes_invariant nsl_crypto_preds tr)) msg;
+    parse_serialize_inv_lemma #bytes message (Msg2 msg2)
+  )
+#pop-options
+
+val compute_message3_proof:
+  tr:trace ->
+  alice:principal -> bob:principal -> pk_b:bytes -> n_b:bytes -> nonce:bytes ->
+  Lemma
+  (requires
+    // From the stateful code
+    (exists n_a. event_triggered tr alice nsl_event_label (serialize nsl_event (Initiate2 alice bob n_a n_b))) /\
+    // From decode_message2_proof
+    is_knowable_by nsl_crypto_preds (join (principal_label alice) (principal_label bob)) tr n_b /\
+    // From the random generation
+    get_label nonce == principal_label alice /\
+    // From the PKI
+    get_sk_label pk_b == principal_label bob /\
+    bytes_invariant nsl_crypto_preds tr pk_b /\
+    bytes_invariant nsl_crypto_preds tr n_b /\
+    bytes_invariant nsl_crypto_preds tr nonce
+  )
+  (ensures
+    is_publishable nsl_crypto_preds tr (compute_message3 alice bob pk_b n_b nonce)
+  )
+let compute_message3_proof tr alice bob pk_b n_b nonce =
+  assert (join (principal_label alice) (principal_label bob) `can_flow tr` join (principal_label alice) (principal_label bob));
+  let msg = Msg3 {n_b;  alice;} in
+  serialize_wf_lemma message (is_knowable_by nsl_crypto_preds (principal_label alice) tr) msg;
+  serialize_wf_lemma message (is_knowable_by nsl_crypto_preds (principal_label bob) tr) msg;
+  parse_serialize_inv_lemma #bytes message msg
+
+// If bob successfully decrypt the third message,
+// Then either alice or bob are corrupt, or alice triggered the Initiate2 event
+// (proved with the encryption predicate)
+#push-options "--ifuel 1 --fuel 0 --z3rlimit 25"
+val decode_message3_proof:
+  tr:trace ->
+  alice:principal -> bob:principal -> msg_cipher:bytes -> sk_b:bytes -> n_b:bytes ->
+  Lemma
+  (requires
+    // From the NSL state invariant
+    get_label n_b = join (principal_label alice) (principal_label bob) /\
+    // From the PrivateKeys invariant
+    get_label sk_b == principal_label bob /\
+    bytes_invariant nsl_crypto_preds tr msg_cipher /\
+    bytes_invariant nsl_crypto_preds tr sk_b
+  )
+  (ensures (
+    match decode_message3 alice bob msg_cipher sk_b n_b with
+    | None -> True
+    | Some msg3 -> (
+      ((join (principal_label alice) (principal_label bob)) `can_flow tr` public) \/ (
+        (exists n_a. event_triggered tr alice nsl_event_label (serialize nsl_event (Initiate2 alice bob n_a n_b)))
+      )
+    )
+  ))
+let decode_message3_proof tr alice bob msg_cipher sk_b n_b =
+  match decode_message3 alice bob msg_cipher sk_b n_b with
+  | None -> ()
+  | Some msg3 -> (
+    let Some msg = pk_dec sk_b msg_cipher in
+    FStar.Classical.move_requires (parse_wf_lemma message (is_publishable nsl_crypto_preds tr)) msg;
+    FStar.Classical.move_requires (parse_wf_lemma message (bytes_invariant nsl_crypto_preds tr)) msg;
+    parse_serialize_inv_lemma #bytes message (Msg3 msg3)
+  )
+#pop-options

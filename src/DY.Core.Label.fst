@@ -70,6 +70,14 @@ val principal_state_label: principal -> nat -> label
 let principal_state_label prin sess_id =
   DY.Core.Label.Lattice.Leaf (State (S prin sess_id))
 
+val can_flow_reflexive:
+  tr:trace -> l:label ->
+  Lemma
+  (ensures l `can_flow tr` l)
+  [SMTPat (l `can_flow tr` l)]
+let can_flow_reflexive tr l =
+  (label_order (is_corrupt tr)).refl l
+
 val can_flow_transitive:
   tr:trace -> l1:label -> l2:label -> l3:label ->
   Lemma
@@ -128,3 +136,10 @@ val principal_state_flow_to_public_eq:
   [SMTPat ((principal_state_label prin sess_id) `can_flow tr` public)] //Not sure about this
 let principal_state_flow_to_public_eq tr prin sess_id =
   DY.Core.Label.Lattice.leaf_eq (pre_label_order pre_pre_label_order (is_corrupt tr)) Public (State (S prin sess_id))
+
+val principal_flow_to_principal_state:
+  tr:trace -> prin:principal -> sess_id:nat ->
+  Lemma
+  (ensures (principal_label prin) `can_flow tr` (principal_state_label prin sess_id))
+  [SMTPat ((principal_label prin) `can_flow tr` (principal_state_label prin sess_id))]
+let principal_flow_to_principal_state tr prin sess_id = ()

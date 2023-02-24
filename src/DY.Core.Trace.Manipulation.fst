@@ -57,9 +57,11 @@ let get_time =
 
 (*** Sending messages ***)
 
-val send_msg: bytes -> crypto unit
+val send_msg: bytes -> crypto nat
 let send_msg msg =
-  add_event (MsgSent msg)
+  let* time = get_time in
+  add_event (MsgSent msg);*
+  return time
 
 val send_msg_invariant:
   preds:protocol_predicates ->
@@ -70,11 +72,46 @@ val send_msg_invariant:
     trace_invariant preds tr
   )
   (ensures (
-    let ((), tr_out) = send_msg msg tr in
-    trace_invariant preds tr_out
+    let (i, tr_out) = send_msg msg tr in
+    trace_invariant preds tr_out /\
+    event_at tr_out i (MsgSent msg)
   ))
   [SMTPat (send_msg msg tr); SMTPat (trace_invariant preds tr)]
 let send_msg_invariant preds msg tr = ()
+
+val recv_msg: nat -> crypto (option bytes)
+let recv_msg i =
+  let* tr = get_trace in
+  if i < DY.Core.Trace.Type.length tr then
+    match get_event_at tr i with
+    | MsgSent msg -> return (Some msg)
+    | _ -> return None
+  else
+    return None
+
+val recv_msg_invariant:
+  preds:protocol_predicates ->
+  i:nat -> tr:trace ->
+  Lemma
+  (requires trace_invariant preds tr)
+  (ensures (
+    let (opt_msg, tr_out) = recv_msg i tr in
+    tr_out == tr /\ (
+      match opt_msg with
+      | None -> True
+      | Some msg -> is_publishable preds.crypto_preds tr msg
+    )
+  ))
+  [SMTPat (recv_msg i tr);
+   SMTPat (trace_invariant preds tr)
+  ]
+let recv_msg_invariant preds i tr =
+  let (opt_msg, _) = recv_msg i tr in
+  match opt_msg with
+  | None -> ()
+  | Some msg -> (
+    msg_sent_on_network_are_publishable preds tr msg
+  )
 
 (*** Corruption ***)
 
@@ -101,7 +138,7 @@ let corrupt_invariant preds prin sess_id tr = ()
 val mk_rand: lab:label -> len:nat{len <> 0} -> crypto bytes
 let mk_rand lab len =
   let* time = get_time in
-  add_event RandGen;*
+  add_event (RandGen lab len);*
   return (Rand lab len time)
 
 val mk_rand_trace_invariant:
@@ -111,7 +148,8 @@ val mk_rand_trace_invariant:
   (requires trace_invariant preds tr)
   (ensures (
     let (b, tr_out) = mk_rand lab len tr in
-    trace_invariant preds tr_out
+    trace_invariant preds tr_out /\
+    rand_generated_at tr_out (DY.Core.Trace.Type.length tr_out - 1) b
   ))
   [SMTPat (mk_rand lab len tr); SMTPat (trace_invariant preds tr)]
 let mk_rand_trace_invariant preds lab len tr = ()
@@ -129,6 +167,16 @@ val mk_rand_bytes_invariant:
   // It is certainly around in the context
   [SMTPat (mk_rand lab len tr); SMTPat (trace_invariant preds tr)]
 let mk_rand_bytes_invariant preds lab len tr = ()
+
+val mk_rand_get_label:
+  lab:label -> len:nat{len <> 0} -> tr:trace ->
+  Lemma
+  (ensures (
+    let (b, tr_out) = mk_rand lab len tr in
+    get_label b == lab
+  ))
+  [SMTPat (mk_rand lab len tr)]
+let mk_rand_get_label lab len tr = ()
 
 (*** State ***)
 
@@ -199,12 +247,13 @@ val set_state_invariant:
   prin:principal -> sess_id:nat -> content:bytes -> tr:trace ->
   Lemma
   (requires
-    preds.trace_preds.state_pred tr prin sess_id content /\
+    preds.trace_preds.state_pred.pred tr prin sess_id content /\
     trace_invariant preds tr
   )
   (ensures (
     let ((), tr_out) = set_state prin sess_id content tr in
-    trace_invariant preds tr_out
+    trace_invariant preds tr_out /\
+    state_was_set tr_out prin sess_id content
   ))
   [SMTPat (set_state prin sess_id content tr); SMTPat (trace_invariant preds tr)]
 let set_state_invariant preds prin sess_id content tr = ()
@@ -219,26 +268,26 @@ val get_state_aux_state_invariant:
   (ensures (
     match get_state_aux prin sess_id tr with
     | None -> True
-    | Some content -> preds.trace_preds.state_pred tr prin sess_id content
+    | Some content -> preds.trace_preds.state_pred.pred tr prin sess_id content
   ))
 let rec get_state_aux_state_invariant preds prin sess_id tr =
   match tr with
   | Nil -> ()
   | Snoc tr_init (SetState prin' sess_id' content) -> (
     if prin = prin' && sess_id = sess_id' then (
-      preds.trace_preds.state_pred_later tr_init tr prin sess_id content
+      preds.trace_preds.state_pred.pred_later tr_init tr prin sess_id content
     ) else (
       get_state_aux_state_invariant preds prin sess_id tr_init;
       match get_state_aux prin sess_id tr_init with
       | None -> ()
-      | Some content -> preds.trace_preds.state_pred_later tr_init tr prin sess_id content
+      | Some content -> preds.trace_preds.state_pred.pred_later tr_init tr prin sess_id content
     )
   )
   | Snoc tr_init _ ->
     get_state_aux_state_invariant preds prin sess_id tr_init;
     match get_state_aux prin sess_id tr_init with
     | None -> ()
-    | Some content -> preds.trace_preds.state_pred_later tr_init tr prin sess_id content
+    | Some content -> preds.trace_preds.state_pred.pred_later tr_init tr prin sess_id content
 
 val get_state_state_invariant:
   preds:protocol_predicates ->
@@ -252,7 +301,7 @@ val get_state_state_invariant:
     tr == tr_out /\ (
       match opt_content with
       | None -> True
-      | Some content -> preds.trace_preds.state_pred tr prin sess_id content
+      | Some content -> preds.trace_preds.state_pred.pred tr prin sess_id content
     )
   ))
   [SMTPat (get_state prin sess_id tr); SMTPat (trace_invariant preds tr)]

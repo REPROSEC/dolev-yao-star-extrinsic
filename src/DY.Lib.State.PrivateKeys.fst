@@ -10,7 +10,7 @@ open DY.Lib.State.Map
 (*** Private keys types & invariants ***)
 
 type private_key_type =
-  | PkEnc: private_key_type
+  | PkDec: private_key_type
   | Sign: private_key_type
 
 %splice [ps_private_key_type] (gen_parser (`private_key_type))
@@ -36,7 +36,7 @@ val is_private_key_for:
   bytes -> private_key_type -> principal -> prop
 let is_private_key_for cpreds tr sk sk_type who =
     match sk_type with
-    | PkEnc -> (
+    | PkDec -> (
       bytes_invariant cpreds tr sk /\
       get_label sk == principal_label who
     )

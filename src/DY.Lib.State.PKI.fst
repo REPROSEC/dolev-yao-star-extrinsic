@@ -11,7 +11,7 @@ open DY.Lib.State.Map
 
 type public_key_type =
   | PkEnc: public_key_type
-  | Sign: public_key_type
+  | Verify: public_key_type
 
 %splice [ps_public_key_type] (gen_parser (`public_key_type))
 %splice [ps_public_key_type_is_well_formed] (gen_is_well_formed_lemma (`public_key_type))
@@ -48,7 +48,7 @@ let is_public_key_for cpreds tr pk pk_type who =
       is_publishable cpreds tr pk /\
       get_sk_label pk == principal_label who
     )
-    | Sign -> (
+    | Verify -> (
       is_publishable cpreds tr pk /\
       get_signkey_label pk == principal_label who
     )

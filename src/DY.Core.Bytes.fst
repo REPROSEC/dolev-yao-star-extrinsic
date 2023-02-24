@@ -98,7 +98,7 @@ let rec bytes_invariant cpreds tr b =
   | Literal buf ->
     True
   | Rand label len time ->
-    event_at tr RandGen time
+    event_at tr time (RandGen label len)
   | Concat left right ->
     bytes_invariant cpreds tr left /\
     bytes_invariant cpreds tr right
