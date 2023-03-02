@@ -264,6 +264,7 @@ let send_msg3_proof tr global_sess_id alice sess_id =
     compute_message3_proof tr alice bob pk_b n_b nonce
   )
 
+#push-options "--z3rlimit 50"
 val prepare_msg4:
   tr:trace ->
   global_sess_id:nsl_global_sess_ids -> bob:principal -> sess_id:nat -> msg_id:nat ->
@@ -282,32 +283,53 @@ let prepare_msg4 tr global_sess_id bob sess_id msg_id =
   | Some _ -> (
     let (Some msg, tr) = recv_msg msg_id tr in
     let (Some sk_b, tr) = get_private_key bob global_sess_id.private_keys PkDec tr in
-    let (Some st, tr) = get_typed_state nsl_session_label bob sess_id tr in
+    let (Some st, tr) = get_typed_state #nsl_session nsl_session_label bob sess_id tr in
     let st: nsl_session = st in
     let ResponderSentMsg2 alice n_a n_b = st in
-    let (Some msg3, tr) = return (decode_message3 alice bob msg sk_b n_b) tr in
+    let (Some msg3, tr) = return #(option message3) (decode_message3 alice bob msg sk_b n_b) tr in
     parse_serialize_inv_lemma #bytes nsl_event (Respond1 alice bob n_a n_b);
     decode_message3_proof tr alice bob msg sk_b n_b;
     // From the decode_message3 proof, we get the following fact:
-    // exists n_a'. event_triggered tr alice nsl_event_label (serialize nsl_event (Initiate2 alice bob n_a' n_b))
-    // We want to obtain the same fact, with the actual n_a (not the one from the exists, n_a')
-    // We prove it like this:
+    // exists alice' n_a'.
+    //   get_label n_b `can_flow tr` (principal_label alice') /\
+    //   event_triggered tr alice' nsl_event_label (serialize nsl_event (Initiate2 alice' bob n_a' n_b))
+    // We want to obtain the same fact, with the actual n_a (not the one from the exists, n_a'),
+    // and the actual alice!
+    // We prove it like this.
     // We know from the state predicate that the event Respond1 alice bob n_a n_b was triggered
-    // Moreover, Initiate2 alice bob n_a' n_b implies Respond1 alice bob n_a' n_b (modulo corruption)
+    // Moreover, Initiate2 alice' bob n_a' n_b implies Respond1 alice' bob n_a' n_b (modulo corruption)
     // From the event predicate, we know that n_b was generated just before each Respond1 event
-    // Hence the two Respond1 events are equal, and we get n_a == n_a'
+    // Hence the two Respond1 events are equal, and we get n_a == n_a' and alice == alice'
+    // The fact that alice' knows n_b is used to show that if
+    // (join (principal_label alice') (principal_label bob)) `can_flow tr` public
+    // then
+    // (join (principal_label alice) (principal_label bob)) `can_flow tr` public
+    // because we know the label of n_b (which is (join (principal_label alice) (principal_label bob))).
+    // It is useful in the "modulo corruption" part of the proof.
     let msg3: message3 = msg3 in
+
     introduce (~((join (principal_label alice) (principal_label bob)) `can_flow tr` public)) ==> event_triggered tr alice nsl_event_label (serialize nsl_event (Initiate2 alice bob n_a n_b)) with _. (
-      eliminate exists n_a'. event_triggered tr alice nsl_event_label (serialize nsl_event (Initiate2 alice bob n_a' n_b))
+    assert(
+      (
+        (exists alice' n_a'. get_label n_b `can_flow tr` (principal_label alice') /\ event_triggered tr alice' nsl_event_label (serialize nsl_event #(nsl_event_parseable_serializeable bytes) (Initiate2 alice' bob n_a' n_b)))
+        )
+    );
+      eliminate exists alice' n_a'. get_label n_b `can_flow tr` (principal_label alice') /\ event_triggered tr alice' nsl_event_label (serialize nsl_event #(nsl_event_parseable_serializeable bytes) (Initiate2 alice' bob n_a' n_b))
       returns _
       with _. (
-        assert(exists tr_before. tr_before <$ tr /\ nsl_protocol_preds.trace_preds.event_pred tr_before alice nsl_event_label (serialize nsl_event (Initiate2 alice bob n_a' n_b)));
-        parse_serialize_inv_lemma #bytes nsl_event (Initiate2 alice bob n_a' n_b);
+        assert(exists (tr_before:trace). tr_before <$ tr /\ nsl_protocol_preds.trace_preds.event_pred tr_before alice' nsl_event_label (serialize nsl_event (Initiate2 alice' bob n_a' n_b)));
+        parse_serialize_inv_lemma #bytes nsl_event (Initiate2 alice' bob n_a' n_b);
         parse_serialize_inv_lemma #bytes nsl_event (Initiate2 alice bob n_a n_b);
         parse_serialize_inv_lemma #bytes nsl_event (Respond1 alice bob n_a n_b);
-        parse_serialize_inv_lemma #bytes nsl_event (Respond1 alice bob n_a' n_b);
-        assert(event_triggered tr bob nsl_event_label (serialize nsl_event (Respond1 alice bob n_a n_b)) /\ event_triggered tr bob nsl_event_label (serialize nsl_event (Respond1 alice bob n_a' n_b)) ==> n_a == n_a')
+        parse_serialize_inv_lemma #bytes nsl_event (Respond1 alice' bob n_a' n_b);
+        assert((join (principal_label alice) (principal_label bob)) `can_flow tr` (principal_label alice'));
+        assert(~((join (principal_label alice') (principal_label bob)) `can_flow tr` public));
+        assert(event_triggered tr bob nsl_event_label (serialize nsl_event (Respond1 alice bob n_a n_b)));
+        assert(event_triggered tr bob nsl_event_label (serialize nsl_event (Respond1 alice' bob n_a' n_b)));
+        assert(event_triggered tr bob nsl_event_label (serialize nsl_event (Respond1 alice bob n_a n_b)) /\ event_triggered tr bob nsl_event_label (serialize nsl_event (Respond1 alice' bob n_a' n_b)) ==> (alice == alice' /\ n_a == n_a'));
+        ()
       )
     );
     parse_serialize_inv_lemma #bytes nsl_event (Respond2 alice bob n_a n_b)
   )
+#pop-options

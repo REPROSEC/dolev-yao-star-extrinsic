@@ -70,6 +70,14 @@ val principal_state_label: principal -> nat -> label
 let principal_state_label prin sess_id =
   DY.Core.Label.Lattice.Leaf (State (S prin sess_id))
 
+val principal_corrupt: trace -> principal -> prop
+let principal_corrupt tr prin =
+  is_corrupt tr (P prin)
+
+val principal_state_corrupt: trace -> principal -> nat -> prop
+let principal_state_corrupt tr prin sess_id =
+  is_corrupt tr (S prin sess_id)
+
 val can_flow_reflexive:
   tr:trace -> l:label ->
   Lemma
@@ -129,10 +137,18 @@ val join_eq:
 let join_eq tr x1 x2 y =
   DY.Core.Label.Lattice.join_eq (pre_label_order pre_pre_label_order (is_corrupt tr)) x1 x2 y
 
+val principal_flow_to_public_eq:
+  tr:trace -> prin:principal ->
+  Lemma
+  (ensures (principal_label prin) `can_flow tr` public <==> principal_corrupt tr prin)
+  [SMTPat ((principal_label prin) `can_flow tr` public)] //Not sure about this
+let principal_flow_to_public_eq tr prin =
+  DY.Core.Label.Lattice.leaf_eq (pre_label_order pre_pre_label_order (is_corrupt tr)) Public (State (P prin))
+
 val principal_state_flow_to_public_eq:
   tr:trace -> prin:principal -> sess_id:nat ->
   Lemma
-  (ensures (principal_state_label prin sess_id) `can_flow tr` public <==> was_corrupt tr prin sess_id)
+  (ensures (principal_state_label prin sess_id) `can_flow tr` public <==> principal_state_corrupt tr prin sess_id)
   [SMTPat ((principal_state_label prin sess_id) `can_flow tr` public)] //Not sure about this
 let principal_state_flow_to_public_eq tr prin sess_id =
   DY.Core.Label.Lattice.leaf_eq (pre_label_order pre_pre_label_order (is_corrupt tr)) Public (State (S prin sess_id))
@@ -143,3 +159,11 @@ val principal_flow_to_principal_state:
   (ensures (principal_label prin) `can_flow tr` (principal_state_label prin sess_id))
   [SMTPat ((principal_label prin) `can_flow tr` (principal_state_label prin sess_id))]
 let principal_flow_to_principal_state tr prin sess_id = ()
+
+val join_flow_to_public_eq:
+  tr:trace -> x1:label -> x2:label ->
+  Lemma
+  (ensures (join x1 x2) `can_flow tr` public <==> x1 `can_flow tr` public \/ x2 `can_flow tr` public)
+  [SMTPat ((join x1 x2) `can_flow tr` public)] //Not sure about this
+let join_flow_to_public_eq tr x1 x2 =
+  DY.Core.Label.Lattice.leaf_less_join (pre_label_order pre_pre_label_order (is_corrupt tr)) Public x1 x2

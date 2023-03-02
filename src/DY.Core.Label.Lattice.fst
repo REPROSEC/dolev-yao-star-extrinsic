@@ -226,3 +226,17 @@ let rec lattice_order_trans #a ord x y z =
     lattice_order_trans ord x1 y z;
     lattice_order_trans ord x2 y z
 #pop-options
+
+val leaf_less_join:
+  #a:Type -> ord:order a ->
+  x:a -> y1:lattice a -> y2:lattice a ->
+  Lemma
+  (lattice_order ord (Leaf x) (Join y1 y2) <==> lattice_order ord (Leaf x) y1 \/ lattice_order ord (Leaf x) y2)
+let leaf_less_join #a ord x y1 y2 = ()
+
+val leaf_less_meet:
+  #a:Type -> ord:order a ->
+  x:a -> y1:lattice a -> y2:lattice a ->
+  Lemma
+  (lattice_order ord (Leaf x) (Meet y1 y2) <==> lattice_order ord (Leaf x) y1 /\ lattice_order ord (Leaf x) y2)
+let leaf_less_meet #a ord x y1 y2 = ()

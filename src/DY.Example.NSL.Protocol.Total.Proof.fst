@@ -26,8 +26,10 @@ let nsl_crypto_preds = {
         get_label msg2.n_b == join (principal_label alice) (principal_label bob)
       )
       | Some (Msg3 msg3) -> (
-        let (alice, bob) = (msg3.alice, prin) in
-        exists n_a. event_triggered tr alice nsl_event_label (serialize nsl_event (Initiate2 alice bob n_a msg3.n_b))
+        let bob = prin in
+        exists alice n_a.
+          get_label msg3.n_b `can_flow tr` (principal_label alice) /\
+          event_triggered tr alice nsl_event_label (serialize nsl_event (Initiate2 alice bob n_a msg3.n_b))
       )
       | None -> False
     ))
@@ -223,10 +225,13 @@ val compute_message3_proof:
   )
 let compute_message3_proof tr alice bob pk_b n_b nonce =
   assert (join (principal_label alice) (principal_label bob) `can_flow tr` join (principal_label alice) (principal_label bob));
-  let msg = Msg3 {n_b;  alice;} in
+  assert(exists alice n_a. event_triggered tr alice nsl_event_label (serialize nsl_event (Initiate2 alice bob n_a n_b)));
+  let msg = Msg3 {n_b;} in
   serialize_wf_lemma message (is_knowable_by nsl_crypto_preds (principal_label alice) tr) msg;
   serialize_wf_lemma message (is_knowable_by nsl_crypto_preds (principal_label bob) tr) msg;
-  parse_serialize_inv_lemma #bytes message msg
+  parse_serialize_inv_lemma #bytes message msg;
+  let msg3: message3 = {n_b;} in
+  assert(msg3.n_b == n_b)
 
 // If bob successfully decrypt the third message,
 // Then either alice or bob are corrupt, or alice triggered the Initiate2 event
@@ -249,7 +254,9 @@ val decode_message3_proof:
     | None -> True
     | Some msg3 -> (
       ((join (principal_label alice) (principal_label bob)) `can_flow tr` public) \/ (
-        (exists n_a. event_triggered tr alice nsl_event_label (serialize nsl_event (Initiate2 alice bob n_a n_b)))
+        (exists alice n_a.
+          get_label msg3.n_b `can_flow tr` (principal_label alice) /\
+          event_triggered tr alice nsl_event_label (serialize nsl_event (Initiate2 alice bob n_a n_b)))
       )
     )
   ))

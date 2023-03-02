@@ -18,7 +18,7 @@ val initiator_authentication:
     trace_invariant nsl_protocol_preds tr
   )
   (ensures
-    (join (principal_label alice) (principal_label bob)) `can_flow tr` public \/
+    principal_corrupt tr alice \/ principal_corrupt tr bob \/
     event_triggered (prefix tr i) alice nsl_event_label (serialize nsl_event (Initiate2 alice bob n_a n_b))
   )
 let initiator_authentication tr i alice bob n_a n_b =
@@ -33,7 +33,7 @@ val responder_authentication:
     trace_invariant nsl_protocol_preds tr
   )
   (ensures
-    (join (principal_label alice) (principal_label bob)) `can_flow tr` public \/
+    principal_corrupt tr alice \/ principal_corrupt tr bob \/
     event_triggered (prefix tr i) bob nsl_event_label (serialize nsl_event (Respond1 alice bob n_a n_b))
   )
 let responder_authentication tr i alice bob n_a n_b =
@@ -50,7 +50,7 @@ val n_a_secrecy:
       (exists sess_id n_b. typed_state_was_set tr nsl_session_label bob sess_id (ResponderReceivedMsg3 alice n_a n_b <: nsl_session))
     )
   )
-  (ensures (join (principal_label alice) (principal_label bob)) `can_flow tr` public)
+  (ensures principal_corrupt tr alice \/ principal_corrupt tr bob)
 let n_a_secrecy tr alice bob n_a =
   attacker_only_knows_publishable_values nsl_protocol_preds tr n_a;
   introduce (exists sess_id. typed_state_was_set tr nsl_session_label alice sess_id (InitiatorSentMsg1 bob n_a <: nsl_session)) ==> (join (principal_label alice) (principal_label bob)) `can_flow tr` public with _. (
@@ -90,7 +90,7 @@ val n_b_secrecy:
       (exists sess_id n_a. typed_state_was_set tr nsl_session_label alice sess_id (InitiatorSentMsg3 bob n_a n_b <: nsl_session))
     )
   )
-  (ensures (join (principal_label alice) (principal_label bob)) `can_flow tr` public)
+  (ensures principal_corrupt tr alice \/ principal_corrupt tr bob)
 let n_b_secrecy tr alice bob n_b =
   attacker_only_knows_publishable_values nsl_protocol_preds tr n_b;
   introduce (exists sess_id n_a. typed_state_was_set tr nsl_session_label bob sess_id (ResponderSentMsg2 alice n_a n_b <: nsl_session)) ==> (join (principal_label alice) (principal_label bob)) `can_flow tr` public with _. (
