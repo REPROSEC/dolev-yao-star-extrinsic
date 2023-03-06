@@ -202,6 +202,26 @@ val is_publishable: crypto_predicates -> trace -> bytes -> prop
 let is_publishable cpreds tr b =
   is_knowable_by cpreds public tr b
 
+val is_secret: crypto_predicates -> label -> trace -> bytes -> prop
+let is_secret cpreds lab tr b =
+  bytes_invariant cpreds tr b /\ (get_label b) == lab
+
+val is_verification_key: crypto_predicates -> label -> trace -> bytes -> prop
+let is_verification_key cpreds lab tr b =
+  is_publishable cpreds tr b /\ (get_signkey_label b) == lab
+
+val is_signature_key: crypto_predicates -> label -> trace -> bytes -> prop
+let is_signature_key cpreds lab tr b =
+  bytes_invariant cpreds tr b /\ (get_label b) == lab
+
+val is_encryption_key: crypto_predicates -> label -> trace -> bytes -> prop
+let is_encryption_key cpreds lab tr b =
+  is_publishable cpreds tr b /\ (get_sk_label b) == lab
+
+val is_decryption_key: crypto_predicates -> label -> trace -> bytes -> prop
+let is_decryption_key cpreds lab tr b =
+  bytes_invariant cpreds tr b /\ (get_label b) == lab
+
 (*** Literal ***)
 
 val literal_to_bytes: FStar.Seq.seq FStar.UInt8.t -> bytes

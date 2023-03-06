@@ -45,12 +45,10 @@ val is_public_key_for:
 let is_public_key_for cpreds tr pk pk_type who =
     match pk_type with
     | PkEnc -> (
-      is_publishable cpreds tr pk /\
-      get_sk_label pk == principal_label who
+      is_encryption_key cpreds (principal_label who) tr pk
     )
     | Verify -> (
-      is_publishable cpreds tr pk /\
-      get_signkey_label pk == principal_label who
+      is_verification_key cpreds (principal_label who) tr pk
     )
 
 val pki_pred: map_predicate pki_types

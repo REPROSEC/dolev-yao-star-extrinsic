@@ -72,14 +72,14 @@ let nsl_trace_preds: trace_predicates (nsl_crypto_preds) = {
       | Some (Initiate2 alice bob n_a n_b) -> (
         prin == alice /\
         event_triggered tr alice nsl_event_label (serialize nsl_event (Initiate1 alice bob n_a)) /\ (
-          (join (principal_label alice) (principal_label bob)) `can_flow tr` public \/
+          principal_corrupt tr alice \/ principal_corrupt tr bob \/
           event_triggered tr bob nsl_event_label (serialize nsl_event (Respond1 alice bob n_a n_b))
         )
       )
       | Some (Respond2 alice bob n_a n_b) -> (
         prin == bob /\
         event_triggered tr bob nsl_event_label (serialize nsl_event (Respond1 alice bob n_a n_b)) /\ (
-          (join (principal_label alice) (principal_label bob)) `can_flow tr` public \/
+          principal_corrupt tr alice \/ principal_corrupt tr bob \/
           event_triggered tr alice nsl_event_label (serialize nsl_event (Initiate2 alice bob n_a n_b))
         )
       )
@@ -301,9 +301,9 @@ let prepare_msg4 tr global_sess_id bob sess_id msg_id =
     // From the event predicate, we know that n_b was generated just before each Respond1 event
     // Hence the two Respond1 events are equal, and we get n_a == n_a' and alice == alice'
     // The fact that alice' knows n_b is used to show that if
-    // (join (principal_label alice') (principal_label bob)) `can_flow tr` public
+    // principal_corrupt tr alice' \/ principal_corrupt tr bob
     // then
-    // (join (principal_label alice) (principal_label bob)) `can_flow tr` public
+    // principal_corrupt tr alice \/ principal_corrupt tr bob
     // because we know the label of n_b (which is (join (principal_label alice) (principal_label bob))).
     // It is useful in the "modulo corruption" part of the proof.
     let msg3: message3 = msg3 in

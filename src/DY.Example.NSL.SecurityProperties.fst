@@ -53,27 +53,27 @@ val n_a_secrecy:
   (ensures principal_corrupt tr alice \/ principal_corrupt tr bob)
 let n_a_secrecy tr alice bob n_a =
   attacker_only_knows_publishable_values nsl_protocol_preds tr n_a;
-  introduce (exists sess_id. typed_state_was_set tr nsl_session_label alice sess_id (InitiatorSentMsg1 bob n_a <: nsl_session)) ==> (join (principal_label alice) (principal_label bob)) `can_flow tr` public with _. (
+  introduce (exists sess_id. typed_state_was_set tr nsl_session_label alice sess_id (InitiatorSentMsg1 bob n_a <: nsl_session)) ==> (principal_corrupt tr alice \/ principal_corrupt tr bob) with _. (
     parse_serialize_inv_lemma #bytes nsl_event (Initiate1 alice bob n_a)
   );
-  introduce (exists sess_id n_b. typed_state_was_set tr nsl_session_label alice sess_id (InitiatorSentMsg3 bob n_a n_b <: nsl_session)) ==> (join (principal_label alice) (principal_label bob)) `can_flow tr` public with _. (
+  introduce (exists sess_id n_b. typed_state_was_set tr nsl_session_label alice sess_id (InitiatorSentMsg3 bob n_a n_b <: nsl_session)) ==> (principal_corrupt tr alice \/ principal_corrupt tr bob) with _. (
     eliminate exists sess_id n_b. typed_state_was_set tr nsl_session_label alice sess_id (InitiatorSentMsg3 bob n_a n_b <: nsl_session) returns _ with _. (
       parse_serialize_inv_lemma #bytes nsl_event (Initiate2 alice bob n_a n_b);
       parse_serialize_inv_lemma #bytes nsl_event (Initiate1 alice bob n_a);
       assert(event_triggered tr alice nsl_event_label (serialize nsl_event (Initiate1 alice bob n_a)))
     )
   );
-  introduce (exists sess_id n_b. typed_state_was_set tr nsl_session_label bob sess_id (ResponderReceivedMsg3 alice n_a n_b <: nsl_session)) ==> (join (principal_label alice) (principal_label bob)) `can_flow tr` public with _. (
+  introduce (exists sess_id n_b. typed_state_was_set tr nsl_session_label bob sess_id (ResponderReceivedMsg3 alice n_a n_b <: nsl_session)) ==> (principal_corrupt tr alice \/ principal_corrupt tr bob) with _. (
     eliminate exists sess_id n_b. typed_state_was_set tr nsl_session_label bob sess_id (ResponderReceivedMsg3 alice n_a n_b <: nsl_session) returns _ with _. (
       parse_serialize_inv_lemma #bytes nsl_event (Respond2 alice bob n_a n_b);
       parse_serialize_inv_lemma #bytes nsl_event (Initiate2 alice bob n_a n_b);
       parse_serialize_inv_lemma #bytes nsl_event (Initiate1 alice bob n_a);
       assert(
-        (join (principal_label alice) (principal_label bob)) `can_flow tr` public \/
+        principal_corrupt tr alice \/ principal_corrupt tr bob \/
         event_triggered tr alice nsl_event_label (serialize nsl_event (Initiate2 alice bob n_a n_b))
       );
       assert(
-        (join (principal_label alice) (principal_label bob)) `can_flow tr` public \/
+        principal_corrupt tr alice \/ principal_corrupt tr bob \/
         event_triggered tr alice nsl_event_label (serialize nsl_event (Initiate1 alice bob n_a))
       )
     )
@@ -93,24 +93,24 @@ val n_b_secrecy:
   (ensures principal_corrupt tr alice \/ principal_corrupt tr bob)
 let n_b_secrecy tr alice bob n_b =
   attacker_only_knows_publishable_values nsl_protocol_preds tr n_b;
-  introduce (exists sess_id n_a. typed_state_was_set tr nsl_session_label bob sess_id (ResponderSentMsg2 alice n_a n_b <: nsl_session)) ==> (join (principal_label alice) (principal_label bob)) `can_flow tr` public with _. (
+  introduce (exists sess_id n_a. typed_state_was_set tr nsl_session_label bob sess_id (ResponderSentMsg2 alice n_a n_b <: nsl_session)) ==> (principal_corrupt tr alice \/ principal_corrupt tr bob) with _. (
     eliminate exists sess_id n_a. typed_state_was_set tr nsl_session_label bob sess_id (ResponderSentMsg2 alice n_a n_b <: nsl_session) returns _ with _. (
       parse_serialize_inv_lemma #bytes nsl_event (Respond1 alice bob n_a n_b)
     )
   );
-  introduce (exists sess_id n_a. typed_state_was_set tr nsl_session_label bob sess_id (ResponderReceivedMsg3 alice n_a n_b <: nsl_session)) ==> (join (principal_label alice) (principal_label bob)) `can_flow tr` public with _. (
+  introduce (exists sess_id n_a. typed_state_was_set tr nsl_session_label bob sess_id (ResponderReceivedMsg3 alice n_a n_b <: nsl_session)) ==> (principal_corrupt tr alice \/ principal_corrupt tr bob) with _. (
     eliminate exists sess_id n_a. typed_state_was_set tr nsl_session_label bob sess_id (ResponderReceivedMsg3 alice n_a n_b <: nsl_session) returns _ with _. (
       parse_serialize_inv_lemma #bytes nsl_event (Respond2 alice bob n_a n_b);
       parse_serialize_inv_lemma #bytes nsl_event (Respond1 alice bob n_a n_b);
       assert(event_triggered tr bob nsl_event_label (serialize nsl_event (Respond1 alice bob n_a n_b)))
     )
   );
-  introduce (exists sess_id n_a. typed_state_was_set tr nsl_session_label alice sess_id (InitiatorSentMsg3 bob n_a n_b <: nsl_session)) ==> (join (principal_label alice) (principal_label bob)) `can_flow tr` public with _. (
+  introduce (exists sess_id n_a. typed_state_was_set tr nsl_session_label alice sess_id (InitiatorSentMsg3 bob n_a n_b <: nsl_session)) ==> (principal_corrupt tr alice \/ principal_corrupt tr bob) with _. (
     eliminate exists sess_id n_a. typed_state_was_set tr nsl_session_label alice sess_id (InitiatorSentMsg3 bob n_a n_b <: nsl_session) returns _ with _. (
       parse_serialize_inv_lemma #bytes nsl_event (Initiate2 alice bob n_a n_b);
       parse_serialize_inv_lemma #bytes nsl_event (Respond1 alice bob n_a n_b);
       assert(
-        (join (principal_label alice) (principal_label bob)) `can_flow tr` public \/
+        principal_corrupt tr alice \/ principal_corrupt tr bob \/
         event_triggered tr bob nsl_event_label (serialize nsl_event (Respond1 alice bob n_a n_b))
       )
     )
