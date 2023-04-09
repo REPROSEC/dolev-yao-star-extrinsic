@@ -152,10 +152,12 @@ let send_msg1_proof tr global_sess_id alice sess_id =
   match opt_msg_id with
   | None -> ()
   | Some msg_id -> (
-    let (Some st, tr) = get_typed_state #nsl_session nsl_session_label alice sess_id tr in
-    let InitiatorSentMsg1 bob n_a = st in
-    let (Some pk_b, tr) = get_public_key alice global_sess_id.pki PkEnc bob tr in
-    let (nonce, tr) = mk_rand (principal_label alice) 32 tr in
+    let (Some (InitiatorSentMsg1 bob n_a), tr) = get_typed_state #nsl_session nsl_session_label alice sess_id tr in
+    let (Some (pk_b, nonce), tr) = (
+      let*? pk_b = get_public_key alice global_sess_id.pki PkEnc bob in
+      let* nonce = mk_rand (principal_label alice) 32 in
+      return (Some (pk_b, nonce))
+    ) tr in
     parse_serialize_inv_lemma #bytes nsl_event (Initiate1 alice bob n_a);
     compute_message1_proof tr alice bob pk_b n_a nonce
   )
@@ -176,12 +178,18 @@ let prepare_msg2_proof tr global_sess_id bob msg_id =
   match opt_sess_id with
   | None -> ()
   | Some sess_id -> (
-    let (Some msg, tr) = recv_msg msg_id tr in
-    let (Some sk_b, tr) = get_private_key bob global_sess_id.private_keys PkDec tr in
-    let (Some msg1, tr) = return (decode_message1 bob msg sk_b) tr in
+    let (Some (msg, sk_b, msg1), tr) = (
+      let*? msg = recv_msg msg_id in
+      let*? sk_b = get_private_key bob global_sess_id.private_keys PkDec in
+      let*? msg1: message1 = return (decode_message1 bob msg sk_b) in
+      return (Some (msg, sk_b, msg1))
+    ) tr in
     let msg1: message1 = msg1 in
     decode_message1_proof tr bob msg sk_b;
-    let (n_b, tr) = mk_rand (join (principal_label msg1.alice) (principal_label bob)) 32 tr in
+    let (n_b, tr) = (
+      let* n_b = mk_rand (join (principal_label msg1.alice) (principal_label bob)) 32 in
+      return n_b
+    ) tr in
     parse_serialize_inv_lemma #bytes nsl_event (Respond1 msg1.alice bob msg1.n_a n_b)
   )
 
@@ -201,11 +209,12 @@ let send_msg2_proof tr global_sess_id bob sess_id =
   match opt_msg_id with
   | None -> ()
   | Some msg_id -> (
-    let (Some st, tr) = get_typed_state nsl_session_label bob sess_id tr in
-    let st: nsl_session = st in
-    let ResponderSentMsg2 alice n_a n_b = st in
-    let (Some pk_a, tr) = get_public_key bob global_sess_id.pki PkEnc alice tr in
-    let (nonce, tr) = mk_rand (principal_label bob) 32 tr in
+    let (Some (ResponderSentMsg2 alice n_a n_b), tr) = get_typed_state #nsl_session nsl_session_label bob sess_id tr in
+    let (Some (pk_a, nonce), tr) = (
+      let*? pk_a = get_public_key bob global_sess_id.pki PkEnc alice in
+      let* nonce = mk_rand (principal_label bob) 32 in
+      return (Some (pk_a, nonce))
+    ) tr in
     let msg = compute_message2 bob {n_a; alice;} pk_a n_b nonce in
     parse_serialize_inv_lemma #bytes nsl_event (Respond1 alice bob n_a n_b);
     compute_message2_proof tr bob {n_a; alice;} pk_a n_b nonce
@@ -227,13 +236,16 @@ let prepare_msg3_proof tr global_sess_id alice sess_id msg_id =
   match opt_sess_id with
   | None -> ()
   | Some _ -> (
-    let (Some msg, tr) = recv_msg msg_id tr in
-    let (Some sk_a, tr) = get_private_key alice global_sess_id.private_keys PkDec tr in
-    let (Some st, tr) = get_typed_state nsl_session_label alice sess_id tr in
-    let st: nsl_session = st in
-    let InitiatorSentMsg1 bob n_a = st in
-    let (Some msg2, tr) = return (decode_message2 alice bob msg sk_a n_a) tr in
-    let msg2: message2 = msg2 in
+    let (Some (msg, sk_a, InitiatorSentMsg1 bob n_a), tr) = (
+      let*? msg = recv_msg msg_id in
+      let*? sk_a = get_private_key alice global_sess_id.private_keys PkDec in
+      let*? st: nsl_session = get_typed_state nsl_session_label alice sess_id in
+      return (Some (msg, sk_a, st))
+    ) tr in
+    let (Some msg2, tr) = (
+      let*? msg2: message2 = return (decode_message2 alice bob msg sk_a n_a) in
+      return (Some msg2)
+    ) tr in
     parse_serialize_inv_lemma #bytes nsl_event (Initiate1 alice bob n_a);
     decode_message2_proof tr alice bob msg sk_a n_a;
     parse_serialize_inv_lemma #bytes nsl_event (Initiate2 alice bob n_a msg2.n_b)
@@ -255,11 +267,12 @@ let send_msg3_proof tr global_sess_id alice sess_id =
   match opt_msg_id with
   | None -> ()
   | Some msg_id -> (
-    let (Some st, tr) = get_typed_state nsl_session_label alice sess_id tr in
-    let st: nsl_session = st in
-    let InitiatorSentMsg3 bob n_a n_b = st in
-    let (Some pk_b, tr) = get_public_key alice global_sess_id.pki PkEnc bob tr in
-    let (nonce, tr) = mk_rand (principal_label alice) 32 tr in
+    let (Some (InitiatorSentMsg3 bob n_a n_b), tr) = get_typed_state #nsl_session nsl_session_label alice sess_id tr in
+    let (Some (pk_b, nonce), tr) = (
+      let*? pk_b = get_public_key alice global_sess_id.pki PkEnc bob in
+      let* nonce = mk_rand (principal_label alice) 32 in
+      return (Some (pk_b, nonce))
+    ) tr in
     let msg = compute_message3 alice bob pk_b n_b nonce in
     compute_message3_proof tr alice bob pk_b n_b nonce
   )
@@ -281,12 +294,16 @@ let prepare_msg4 tr global_sess_id bob sess_id msg_id =
   match opt_sess_id with
   | None -> ()
   | Some _ -> (
-    let (Some msg, tr) = recv_msg msg_id tr in
-    let (Some sk_b, tr) = get_private_key bob global_sess_id.private_keys PkDec tr in
-    let (Some st, tr) = get_typed_state #nsl_session nsl_session_label bob sess_id tr in
-    let st: nsl_session = st in
-    let ResponderSentMsg2 alice n_a n_b = st in
-    let (Some msg3, tr) = return #(option message3) (decode_message3 alice bob msg sk_b n_b) tr in
+    let (Some (msg, sk_b, ResponderSentMsg2 alice n_a n_b), tr) = (
+      let*? msg = recv_msg msg_id in
+      let*? sk_b = get_private_key bob global_sess_id.private_keys PkDec in
+      let*? st: nsl_session = get_typed_state nsl_session_label bob sess_id in
+      return (Some (msg, sk_b, st))
+    ) tr in
+    let (Some msg3, tr) = (
+      let*? msg3: message3 = return (decode_message3 alice bob msg sk_b n_b) in
+      return (Some msg3)
+    ) tr in
     parse_serialize_inv_lemma #bytes nsl_event (Respond1 alice bob n_a n_b);
     decode_message3_proof tr alice bob msg sk_b n_b;
     // From the decode_message3 proof, we get the following fact:
