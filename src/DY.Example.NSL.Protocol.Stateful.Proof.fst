@@ -158,7 +158,6 @@ let send_msg1_proof tr global_sess_id alice sess_id =
       let* nonce = mk_rand (principal_label alice) 32 in
       return (Some (pk_b, nonce))
     ) tr in
-    parse_serialize_inv_lemma #bytes nsl_event (Initiate1 alice bob n_a);
     compute_message1_proof tr alice bob pk_b n_a nonce
   )
 
@@ -185,12 +184,7 @@ let prepare_msg2_proof tr global_sess_id bob msg_id =
       return (Some (msg, sk_b, msg1))
     ) tr in
     let msg1: message1 = msg1 in
-    decode_message1_proof tr bob msg sk_b;
-    let (n_b, tr) = (
-      let* n_b = mk_rand (join (principal_label msg1.alice) (principal_label bob)) 32 in
-      return n_b
-    ) tr in
-    parse_serialize_inv_lemma #bytes nsl_event (Respond1 msg1.alice bob msg1.n_a n_b)
+    decode_message1_proof tr bob msg sk_b
   )
 
 val send_msg2_proof:
@@ -216,7 +210,6 @@ let send_msg2_proof tr global_sess_id bob sess_id =
       return (Some (pk_a, nonce))
     ) tr in
     let msg = compute_message2 bob {n_a; alice;} pk_a n_b nonce in
-    parse_serialize_inv_lemma #bytes nsl_event (Respond1 alice bob n_a n_b);
     compute_message2_proof tr bob {n_a; alice;} pk_a n_b nonce
   )
 
@@ -246,9 +239,7 @@ let prepare_msg3_proof tr global_sess_id alice sess_id msg_id =
       let*? msg2: message2 = return (decode_message2 alice bob msg sk_a n_a) in
       return (Some msg2)
     ) tr in
-    parse_serialize_inv_lemma #bytes nsl_event (Initiate1 alice bob n_a);
-    decode_message2_proof tr alice bob msg sk_a n_a;
-    parse_serialize_inv_lemma #bytes nsl_event (Initiate2 alice bob n_a msg2.n_b)
+    decode_message2_proof tr alice bob msg sk_a n_a
   )
 
 val send_msg3_proof:
@@ -304,7 +295,6 @@ let prepare_msg4 tr global_sess_id bob sess_id msg_id =
       let*? msg3: message3 = return (decode_message3 alice bob msg sk_b n_b) in
       return (Some msg3)
     ) tr in
-    parse_serialize_inv_lemma #bytes nsl_event (Respond1 alice bob n_a n_b);
     decode_message3_proof tr alice bob msg sk_b n_b;
     // From the decode_message3 proof, we get the following fact:
     // exists alice' n_a'.
@@ -335,10 +325,6 @@ let prepare_msg4 tr global_sess_id bob sess_id msg_id =
       returns _
       with _. (
         assert(exists (tr_before:trace). tr_before <$ tr /\ nsl_protocol_preds.trace_preds.event_pred tr_before alice' nsl_event_label (serialize nsl_event (Initiate2 alice' bob n_a' n_b)));
-        parse_serialize_inv_lemma #bytes nsl_event (Initiate2 alice' bob n_a' n_b);
-        parse_serialize_inv_lemma #bytes nsl_event (Initiate2 alice bob n_a n_b);
-        parse_serialize_inv_lemma #bytes nsl_event (Respond1 alice bob n_a n_b);
-        parse_serialize_inv_lemma #bytes nsl_event (Respond1 alice' bob n_a' n_b);
         assert((join (principal_label alice) (principal_label bob)) `can_flow tr` (principal_label alice'));
         assert(~((join (principal_label alice') (principal_label bob)) `can_flow tr` public));
         assert(event_triggered tr bob nsl_event_label (serialize nsl_event (Respond1 alice bob n_a n_b)));
@@ -346,7 +332,6 @@ let prepare_msg4 tr global_sess_id bob sess_id msg_id =
         assert(event_triggered tr bob nsl_event_label (serialize nsl_event (Respond1 alice bob n_a n_b)) /\ event_triggered tr bob nsl_event_label (serialize nsl_event (Respond1 alice' bob n_a' n_b)) ==> (alice == alice' /\ n_a == n_a'));
         ()
       )
-    );
-    parse_serialize_inv_lemma #bytes nsl_event (Respond2 alice bob n_a n_b)
+    )
   )
 #pop-options

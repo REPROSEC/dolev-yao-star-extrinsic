@@ -61,8 +61,7 @@ let compute_message1_proof tr alice bob pk_b n_a nonce =
   assert (join (principal_label alice) (principal_label bob) `can_flow tr` join (principal_label alice) (principal_label bob));
   let msg = Msg1 {n_a; alice;} in
   serialize_wf_lemma message (is_knowable_by nsl_crypto_preds (principal_label alice) tr) msg;
-  serialize_wf_lemma message (is_knowable_by nsl_crypto_preds (principal_label bob) tr) msg;
-  parse_serialize_inv_lemma #bytes message msg
+  serialize_wf_lemma message (is_knowable_by nsl_crypto_preds (principal_label bob) tr) msg
 
 // If bob successfully decrypt the first message,
 // then n_a is knownable both by alice (in the message) and bob (the principal)
@@ -93,8 +92,7 @@ let decode_message1_proof tr bob msg_cipher sk_b =
   | Some msg1 ->
     let Some msg = pk_dec sk_b msg_cipher in
     FStar.Classical.move_requires (parse_wf_lemma message (is_publishable nsl_crypto_preds tr)) msg;
-    FStar.Classical.move_requires (parse_wf_lemma message (bytes_invariant nsl_crypto_preds tr)) msg;
-    parse_serialize_inv_lemma #bytes message (Msg1 msg1)
+    FStar.Classical.move_requires (parse_wf_lemma message (bytes_invariant nsl_crypto_preds tr)) msg
 #pop-options
 
 val compute_message2_proof:
@@ -120,8 +118,7 @@ let compute_message2_proof tr bob msg1 pk_a n_b nonce =
   assert (join (principal_label msg1.alice) (principal_label bob) `can_flow tr` join (principal_label msg1.alice) (principal_label bob));
   let msg = Msg2 {n_a = msg1.n_a;  n_b; bob;} in
   serialize_wf_lemma message (is_knowable_by nsl_crypto_preds (principal_label msg1.alice) tr) msg;
-  serialize_wf_lemma message (is_knowable_by nsl_crypto_preds (principal_label bob) tr) msg;
-  parse_serialize_inv_lemma #bytes message msg
+  serialize_wf_lemma message (is_knowable_by nsl_crypto_preds (principal_label bob) tr) msg
 
 // If alice successfully decrypt the second message,
 // then n_b is knownable both by alice (in the message) and bob (the principal)
@@ -158,8 +155,7 @@ let decode_message2_proof tr alice bob msg_cipher sk_a n_a =
   | Some msg2 -> (
     let Some msg = pk_dec sk_a msg_cipher in
     FStar.Classical.move_requires (parse_wf_lemma message (is_publishable nsl_crypto_preds tr)) msg;
-    FStar.Classical.move_requires (parse_wf_lemma message (bytes_invariant nsl_crypto_preds tr)) msg;
-    parse_serialize_inv_lemma #bytes message (Msg2 msg2)
+    FStar.Classical.move_requires (parse_wf_lemma message (bytes_invariant nsl_crypto_preds tr)) msg
   )
 #pop-options
 
@@ -186,7 +182,6 @@ let compute_message3_proof tr alice bob pk_b n_b nonce =
   let msg = Msg3 {n_b;} in
   serialize_wf_lemma message (is_knowable_by nsl_crypto_preds (principal_label alice) tr) msg;
   serialize_wf_lemma message (is_knowable_by nsl_crypto_preds (principal_label bob) tr) msg;
-  parse_serialize_inv_lemma #bytes message msg;
   let msg3: message3 = {n_b;} in
   assert(msg3.n_b == n_b)
 
@@ -223,7 +218,6 @@ let decode_message3_proof tr alice bob msg_cipher sk_b n_b =
   | Some msg3 -> (
     let Some msg = pk_dec sk_b msg_cipher in
     FStar.Classical.move_requires (parse_wf_lemma message (is_publishable nsl_crypto_preds tr)) msg;
-    FStar.Classical.move_requires (parse_wf_lemma message (bytes_invariant nsl_crypto_preds tr)) msg;
-    parse_serialize_inv_lemma #bytes message (Msg3 msg3)
+    FStar.Classical.move_requires (parse_wf_lemma message (bytes_invariant nsl_crypto_preds tr)) msg
   )
 #pop-options

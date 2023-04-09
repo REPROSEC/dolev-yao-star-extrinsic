@@ -88,3 +88,13 @@ let is_knowable_by_is_pre_compatible cpreds lab tr =
     (fun b1 b2 -> concat_preserves_knowability cpreds lab tr b1 b2)
     (fun b i -> split_preserves_knowability cpreds lab tr b i)
     (fun sz n -> ())
+
+val parse_serialize_inv_lemma_smtpat:
+  #bytes:Type0 -> {|bl:bytes_like bytes|} ->
+  a:Type -> {|ps_a:parseable_serializeable bytes a|} ->
+  x:a ->
+  Lemma
+  (ensures parse a (serialize #bytes a x) == Some x)
+  [SMTPat (parse #bytes #bl a #ps_a (serialize #bytes a #ps_a x))]
+let parse_serialize_inv_lemma_smtpat #bytes #bl a #ps_a x =
+  parse_serialize_inv_lemma #bytes a #ps_a x
