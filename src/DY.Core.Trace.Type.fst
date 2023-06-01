@@ -153,6 +153,15 @@ val event_triggered: trace -> principal -> string -> bytes -> prop
 let event_triggered tr prin tag content =
   exists i. event_triggered_at tr i prin tag content
 
+val event_triggered_grows:
+  tr1:trace -> tr2:trace ->
+  prin:principal -> tag:string -> content:bytes  ->
+  Lemma
+  (requires event_triggered tr1 prin tag content /\ tr1 <$ tr2)
+  (ensures event_triggered tr2 prin tag content)
+  [SMTPat (event_triggered tr1 prin tag content); SMTPat (tr1 <$ tr2)]
+let event_triggered_grows tr1 tr2 prin tag content = ()
+
 val rand_generated_at: trace -> nat -> bytes -> prop
 let rand_generated_at tr i b =
   match b with

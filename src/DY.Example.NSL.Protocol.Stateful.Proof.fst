@@ -268,6 +268,23 @@ let send_msg3_proof tr global_sess_id alice sess_id =
     compute_message3_proof tr alice bob pk_b n_b nonce
   )
 
+val event_respond1_injective:
+  tr:trace ->
+  alice:principal -> alice':principal -> bob:principal ->
+  n_a:bytes -> n_a':bytes -> n_b:bytes ->
+  Lemma
+  (requires
+    trace_invariant nsl_protocol_preds tr /\
+    event_triggered tr bob nsl_event_label (serialize nsl_event (Respond1 alice bob n_a n_b)) /\
+    event_triggered tr bob nsl_event_label (serialize nsl_event (Respond1 alice' bob n_a' n_b))
+  )
+  (ensures
+    alice == alice' /\
+    n_a == n_a'
+  )
+let event_respond1_injective tr alice alice' bob n_a n_a' n_b = ()
+
+#restart-solver
 #push-options "--z3rlimit 50"
 val prepare_msg4:
   tr:trace ->
@@ -316,21 +333,11 @@ let prepare_msg4 tr global_sess_id bob sess_id msg_id =
     let msg3: message3 = msg3 in
 
     introduce (~((join (principal_label alice) (principal_label bob)) `can_flow tr` public)) ==> event_triggered tr alice nsl_event_label (serialize nsl_event (Initiate2 alice bob n_a n_b)) with _. (
-    assert(
-      (
-        (exists alice' n_a'. get_label n_b `can_flow tr` (principal_label alice') /\ event_triggered tr alice' nsl_event_label (serialize nsl_event #(nsl_event_parseable_serializeable bytes) (Initiate2 alice' bob n_a' n_b)))
-        )
-    );
+      assert(exists alice' n_a'. get_label n_b `can_flow tr` (principal_label alice') /\ event_triggered tr alice' nsl_event_label (serialize nsl_event #(nsl_event_parseable_serializeable bytes) (Initiate2 alice' bob n_a' n_b)));
       eliminate exists alice' n_a'. get_label n_b `can_flow tr` (principal_label alice') /\ event_triggered tr alice' nsl_event_label (serialize nsl_event #(nsl_event_parseable_serializeable bytes) (Initiate2 alice' bob n_a' n_b))
       returns _
       with _. (
-        assert(exists (tr_before:trace). tr_before <$ tr /\ nsl_protocol_preds.trace_preds.event_pred tr_before alice' nsl_event_label (serialize nsl_event (Initiate2 alice' bob n_a' n_b)));
-        assert((join (principal_label alice) (principal_label bob)) `can_flow tr` (principal_label alice'));
-        assert(~((join (principal_label alice') (principal_label bob)) `can_flow tr` public));
-        assert(event_triggered tr bob nsl_event_label (serialize nsl_event (Respond1 alice bob n_a n_b)));
-        assert(event_triggered tr bob nsl_event_label (serialize nsl_event (Respond1 alice' bob n_a' n_b)));
-        assert(event_triggered tr bob nsl_event_label (serialize nsl_event (Respond1 alice bob n_a n_b)) /\ event_triggered tr bob nsl_event_label (serialize nsl_event (Respond1 alice' bob n_a' n_b)) ==> (alice == alice' /\ n_a == n_a'));
-        ()
+        event_respond1_injective tr alice alice' bob n_a n_a' n_b
       )
     )
   )
