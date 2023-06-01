@@ -3,16 +3,24 @@ FSTAR_HOME 	?= $(dir $(shell which fstar.exe))/..
 Z3 		?= $(shell which z3)
 COMPARSE_HOME 	?= $(DY_HOME)/../comparse
 
-include $(FSTAR_HOME)/ulib/gmake/fstar.mk
-include $(FSTAR_HOME)/ulib/ml/Makefile.include
-
 SOURCE_DIR = src
 
 INCLUDE_DIRS = $(SOURCE_DIR) $(COMPARSE_HOME)/src
 FSTAR_INCLUDE_DIRS = $(addprefix --include , $(INCLUDE_DIRS))
 
+ADMIT ?=
+MAYBE_ADMIT = $(if $(ADMIT),--admit_smt_queries true)
+
+FSTAR_EXE ?= $(FSTAR_HOME)/bin/fstar.exe
+FSTAR = $(FSTAR_EXE) $(MAYBE_ADMIT)
+
 FSTAR_EXTRACT = --extract '-* +DY'
-FSTAR_FLAGS = $(FSTAR_INCLUDE_DIRS) --cache_checked_modules --already_cached '+Prims +FStar' --warn_error '+241@247+285' --cache_dir cache --odir obj --cmi
+
+# Allowed warnings:
+# - (Warning 242) Definitions of inner let-rec ... and its enclosing top-level letbinding are not encoded to the solver, you will only be able to reason with their types
+# - (Warning 271) Pattern misses at least one bound variable
+# - (Warning 335) Interface ... is admitted without an implementation 
+FSTAR_FLAGS = $(FSTAR_INCLUDE_DIRS) --cache_checked_modules --already_cached '+Prims +FStar' --warn_error '@0..1000' --warn_error '+242+271-335' --cache_dir cache --odir obj --cmi
 
 .PHONY: all clean
 

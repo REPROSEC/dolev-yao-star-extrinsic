@@ -247,7 +247,7 @@ val literal_to_bytes_is_publishable:
   lit:FStar.Seq.seq FStar.UInt8.t ->
   Lemma
   (is_publishable cpreds tr (literal_to_bytes lit))
-let literal_is_to_bytes_publishable cpreds tr lit = ()
+let literal_to_bytes_is_publishable cpreds tr lit = ()
 
 // Lemma for the user
 val bytes_to_literal_to_bytes:
