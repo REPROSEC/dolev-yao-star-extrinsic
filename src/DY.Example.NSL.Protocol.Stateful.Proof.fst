@@ -284,8 +284,8 @@ val event_respond1_injective:
   )
 let event_respond1_injective tr alice alice' bob n_a n_a' n_b = ()
 
-#restart-solver
 #push-options "--z3rlimit 50"
+#restart-solver
 val prepare_msg4:
   tr:trace ->
   global_sess_id:nsl_global_sess_ids -> bob:principal -> sess_id:nat -> msg_id:nat ->

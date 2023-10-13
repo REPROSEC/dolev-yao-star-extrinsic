@@ -16,7 +16,7 @@ let rec attacker_knows_aux step tr msg =
       msg_sent_on_network tr msg
     ) \/ (
       exists prin sess_id.
-        was_corrupt tr prin sess_id /\
+        principal_state_corrupt tr prin sess_id /\
         state_was_set tr prin sess_id msg
     ) \/ (
       exists lit.
@@ -108,7 +108,7 @@ val corrupted_state_is_publishable:
   tr:trace -> prin:principal -> sess_id:nat -> content:bytes ->
   Lemma
   (requires
-    was_corrupt tr prin sess_id /\
+    principal_state_corrupt tr prin sess_id /\
     state_was_set tr prin sess_id content /\
     trace_invariant preds tr
   )

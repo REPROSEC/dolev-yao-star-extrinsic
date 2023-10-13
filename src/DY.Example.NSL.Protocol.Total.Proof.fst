@@ -91,6 +91,7 @@ let decode_message1_proof tr bob msg_cipher sk_b =
   | None -> ()
   | Some msg1 ->
     let Some msg = pk_dec sk_b msg_cipher in
+    assert(public `can_flow tr` (join (principal_label msg1.alice) (principal_label bob)));
     FStar.Classical.move_requires (parse_wf_lemma message (is_publishable nsl_crypto_preds tr)) msg;
     FStar.Classical.move_requires (parse_wf_lemma message (bytes_invariant nsl_crypto_preds tr)) msg
 #pop-options
@@ -125,7 +126,7 @@ let compute_message2_proof tr bob msg1 pk_a n_b nonce =
 // (for the same reasons with decode_message1)
 // Furthermore, either alice or bob are corrupt, or bob triggered the Respond1 event
 // (proved with the encryption predicate)
-#push-options "--ifuel 1 --fuel 0 --z3rlimit 25 --split_queries always"
+#push-options "--ifuel 1 --fuel 0 --z3rlimit 25"
 val decode_message2_proof:
   tr:trace ->
   alice:principal -> bob:principal -> msg_cipher:bytes -> sk_a:bytes -> n_a:bytes ->
@@ -153,7 +154,10 @@ let decode_message2_proof tr alice bob msg_cipher sk_a n_a =
   match decode_message2 alice bob msg_cipher sk_a n_a with
   | None -> ()
   | Some msg2 -> (
+    assert(public `can_flow tr` (join (principal_label alice) (principal_label bob)));
     let Some msg = pk_dec sk_a msg_cipher in
+    let Some msg2' = parse message msg in
+    let Msg2 msg2' = msg2' in
     FStar.Classical.move_requires (parse_wf_lemma message (is_publishable nsl_crypto_preds tr)) msg;
     FStar.Classical.move_requires (parse_wf_lemma message (bytes_invariant nsl_crypto_preds tr)) msg
   )
