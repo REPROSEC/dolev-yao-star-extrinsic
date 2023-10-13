@@ -166,7 +166,8 @@ val mk_rand_bytes_invariant:
   // This is done using `trace_invariant`, although it is not necessary for the theorem to hold,
   // It is certainly around in the context
   [SMTPat (mk_rand lab len tr); SMTPat (trace_invariant preds tr)]
-let mk_rand_bytes_invariant preds lab len tr = ()
+let mk_rand_bytes_invariant preds lab len tr =
+  normalize_term_spec bytes_invariant
 
 val mk_rand_get_label:
   lab:label -> len:nat{len <> 0} -> tr:trace ->
@@ -176,7 +177,8 @@ val mk_rand_get_label:
     get_label b == lab
   ))
   [SMTPat (mk_rand lab len tr)]
-let mk_rand_get_label lab len tr = ()
+let mk_rand_get_label lab len tr =
+  normalize_term_spec get_label
 
 (*** State ***)
 

@@ -9,6 +9,7 @@ instance bytes_like_bytes: bytes_like bytes = {
   empty = literal_to_bytes FStar.Seq.empty;
   empty_length = (fun () -> length_literal_to_bytes FStar.Seq.empty);
   recognize_empty = (fun b ->
+  literal_to_bytes_to_literal FStar.Seq.empty;
     match bytes_to_literal b with
     | None -> false
     | Some lit ->
@@ -33,6 +34,7 @@ instance bytes_like_bytes: bytes_like bytes = {
   concat_split = (fun b i -> concat_split b i);
 
   to_nat = (fun b ->
+    bytes_to_literal_to_bytes b;
     match bytes_to_literal b with
     | None -> None
     | Some lit ->  (
@@ -84,10 +86,10 @@ val is_knowable_by_is_pre_compatible:
   [SMTPat (bytes_pre_is_compatible (is_knowable_by cpreds lab tr))]
 let is_knowable_by_is_pre_compatible cpreds lab tr =
   bytes_pre_is_compatible_intro #bytes (is_knowable_by cpreds lab tr)
-    ()
+    (literal_to_bytes_is_publishable cpreds tr Seq.empty)
     (fun b1 b2 -> concat_preserves_knowability cpreds lab tr b1 b2)
     (fun b i -> split_preserves_knowability cpreds lab tr b i)
-    (fun sz n -> ())
+    (fun sz n -> (literal_to_bytes_is_publishable cpreds tr (FStar.Endianness.n_to_be sz n)))
 
 val parse_serialize_inv_lemma_smtpat:
   #bytes:Type0 -> {|bl:bytes_like bytes|} ->

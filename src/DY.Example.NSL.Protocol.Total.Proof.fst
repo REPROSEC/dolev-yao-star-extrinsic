@@ -125,7 +125,7 @@ let compute_message2_proof tr bob msg1 pk_a n_b nonce =
 // (for the same reasons with decode_message1)
 // Furthermore, either alice or bob are corrupt, or bob triggered the Respond1 event
 // (proved with the encryption predicate)
-#push-options "--ifuel 1 --fuel 0 --z3rlimit 25"
+#push-options "--ifuel 1 --fuel 0 --z3rlimit 25 --split_queries always"
 val decode_message2_proof:
   tr:trace ->
   alice:principal -> bob:principal -> msg_cipher:bytes -> sk_a:bytes -> n_a:bytes ->

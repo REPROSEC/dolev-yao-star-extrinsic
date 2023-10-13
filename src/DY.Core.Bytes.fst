@@ -8,6 +8,7 @@ open DY.Core.Label.Lattice
 
 #set-options "--fuel 1 --ifuel 1"
 
+[@@"opaque_to_smt"]
 val length: bytes -> nat
 let rec length b =
   match b with
@@ -28,6 +29,7 @@ let rec length b =
   | Sign sk nonce msg ->
     64
 
+[@@"opaque_to_smt"]
 val get_label: bytes -> label
 let rec get_label b =
   match b with
@@ -48,12 +50,14 @@ let rec get_label b =
   | Sign sk nonce msg ->
     get_label msg
 
+[@@"opaque_to_smt"]
 val get_sk_label: bytes -> label
 let get_sk_label pk =
   match pk with
   | Pk sk -> get_label sk
   | _ -> public
 
+[@@"opaque_to_smt"]
 val get_signkey_label: bytes -> label
 let get_signkey_label pk =
   match pk with
@@ -92,6 +96,7 @@ type crypto_predicates = {
   // ...
 }
 
+[@@"opaque_to_smt"]
 val bytes_invariant: crypto_predicates -> trace -> bytes -> prop
 let rec bytes_invariant cpreds tr b =
   match b with
@@ -165,6 +170,7 @@ val bytes_invariant_later:
   (ensures bytes_invariant cpreds tr2 msg)
   [SMTPat (bytes_invariant cpreds tr1 msg); SMTPat (tr1 <$ tr2)]
 let rec bytes_invariant_later cpreds tr1 tr2 msg =
+  normalize_term_spec bytes_invariant;
   match msg with
   | Literal buf -> ()
   | Rand label len time -> ()
@@ -224,10 +230,12 @@ let is_decryption_key cpreds lab tr b =
 
 (*** Literal ***)
 
+[@@"opaque_to_smt"]
 val literal_to_bytes: FStar.Seq.seq FStar.UInt8.t -> bytes
 let literal_to_bytes lit =
   Literal lit
 
+[@@"opaque_to_smt"]
 val bytes_to_literal: bytes -> option (FStar.Seq.seq FStar.UInt8.t)
 let bytes_to_literal msg =
   match msg with
@@ -239,7 +247,9 @@ val literal_to_bytes_to_literal:
   lit:FStar.Seq.seq FStar.UInt8.t ->
   Lemma
   (bytes_to_literal (literal_to_bytes lit) == Some lit)
-let literal_to_bytes_to_literal lit = ()
+let literal_to_bytes_to_literal lit =
+  normalize_term_spec literal_to_bytes;
+  normalize_term_spec bytes_to_literal
 
 // Lemma for attacker knowledge theorem
 val literal_to_bytes_is_publishable:
@@ -247,7 +257,10 @@ val literal_to_bytes_is_publishable:
   lit:FStar.Seq.seq FStar.UInt8.t ->
   Lemma
   (is_publishable cpreds tr (literal_to_bytes lit))
-let literal_to_bytes_is_publishable cpreds tr lit = ()
+let literal_to_bytes_is_publishable cpreds tr lit =
+  normalize_term_spec literal_to_bytes;
+  normalize_term_spec bytes_invariant;
+  normalize_term_spec get_label
 
 // Lemma for the user
 val bytes_to_literal_to_bytes:
@@ -257,12 +270,17 @@ val bytes_to_literal_to_bytes:
     | None -> True
     | Some lit -> b == literal_to_bytes lit
   )
-let bytes_to_literal_to_bytes b = ()
+let bytes_to_literal_to_bytes b =
+  normalize_term_spec literal_to_bytes;
+  normalize_term_spec bytes_to_literal
 
 val length_literal_to_bytes:
   lit:FStar.Seq.seq FStar.UInt8.t ->
   Lemma (length (literal_to_bytes lit) == FStar.Seq.length lit)
-let length_literal_to_bytes lit = ()
+  [SMTPat (length (literal_to_bytes lit))]
+let length_literal_to_bytes lit =
+  normalize_term_spec literal_to_bytes;
+  normalize_term_spec length
 
 val bytes_invariant_literal_to_bytes:
   cpreds:crypto_predicates -> tr:trace ->
@@ -270,14 +288,18 @@ val bytes_invariant_literal_to_bytes:
   Lemma
   (ensures bytes_invariant cpreds tr (literal_to_bytes lit))
   [SMTPat (bytes_invariant cpreds tr (literal_to_bytes lit))]
-let bytes_invariant_literal_to_bytes cpreds tr lit = ()
+let bytes_invariant_literal_to_bytes cpreds tr lit =
+  normalize_term_spec literal_to_bytes;
+  normalize_term_spec bytes_invariant
 
 (*** Concatenation ***)
 
+[@@"opaque_to_smt"]
 val concat: bytes -> bytes -> bytes
 let concat left right =
   Concat left right
 
+[@@"opaque_to_smt"]
 val split: bytes -> nat -> option (bytes & bytes)
 let split b i =
   match b with
@@ -293,7 +315,9 @@ val split_concat:
   left:bytes -> right:bytes ->
   Lemma
   (split (concat left right) (length left) == Some (left, right))
-let split_concat left right = ()
+let split_concat left right =
+  normalize_term_spec split;
+  normalize_term_spec concat
 
 // Lemma for attacker knowledge theorem
 val concat_preserves_publishability:
@@ -303,7 +327,9 @@ val concat_preserves_publishability:
   (requires is_publishable cpreds tr b1 /\ is_publishable cpreds tr b2)
   (ensures is_publishable cpreds tr (concat b1 b2))
 let concat_preserves_publishability cpreds tr b1 b2 =
-  ()
+  normalize_term_spec concat;
+  normalize_term_spec bytes_invariant;
+  normalize_term_spec get_label
 
 // Lemma for attacker knowledge theorem
 val split_preserves_publishability:
@@ -317,7 +343,9 @@ val split_preserves_publishability:
     | Some (b1, b2) -> is_publishable cpreds tr b1 /\ is_publishable cpreds tr b2
   ))
 let split_preserves_publishability cpreds tr b i =
-  ()
+  normalize_term_spec split;
+  normalize_term_spec bytes_invariant;
+  normalize_term_spec get_label
 
 // Lemma for the user
 val concat_split:
@@ -327,13 +355,17 @@ val concat_split:
     | None -> True
     | Some (left, right) -> b == concat left right
   )
-let concat_split b i = ()
+let concat_split b i =
+  normalize_term_spec concat;
+  normalize_term_spec split
 
 val concat_length:
   left:bytes -> right:bytes ->
   Lemma
   (length (concat left right) = length left + length right)
-let concat_length left right = ()
+let concat_length left right =
+  normalize_term_spec concat;
+  normalize_term_spec length
 
 val split_length:
   b:bytes -> i:nat ->
@@ -342,7 +374,9 @@ val split_length:
     | None -> True
     | Some (b1, b2) -> length b1 == i /\ i + length b2 == length b
   )
-let split_length b i = ()
+let split_length b i =
+  normalize_term_spec split;
+  normalize_term_spec length
 
 val bytes_invariant_concat:
   cpreds:crypto_predicates -> tr:trace ->
@@ -351,7 +385,9 @@ val bytes_invariant_concat:
   (requires bytes_invariant cpreds tr b1 /\ bytes_invariant cpreds tr b2)
   (ensures bytes_invariant cpreds tr (concat b1 b2))
   [SMTPat (bytes_invariant cpreds tr (concat b1 b2))]
-let bytes_invariant_concat cpreds tr b1 b2 = ()
+let bytes_invariant_concat cpreds tr b1 b2 =
+  normalize_term_spec concat;
+  normalize_term_spec bytes_invariant
 
 val bytes_invariant_split:
   cpreds:crypto_predicates -> tr:trace ->
@@ -365,14 +401,17 @@ val bytes_invariant_split:
   ))
   [SMTPat (bytes_invariant cpreds tr b); SMTPat (split b i)]
 let bytes_invariant_split cpreds tr b i =
-  ()
+  normalize_term_spec split;
+  normalize_term_spec bytes_invariant
 
 val get_label_concat:
   b1:bytes -> b2:bytes ->
   Lemma
   (ensures get_label (concat b1 b2) == meet (get_label b1) (get_label b2))
   [SMTPat (get_label (concat b1 b2))]
-let get_label_concat b1 b2 = ()
+let get_label_concat b1 b2 =
+  normalize_term_spec concat;
+  normalize_term_spec get_label
 
 val concat_preserves_knowability:
   cpreds:crypto_predicates -> lab:label -> tr:trace ->
@@ -381,7 +420,10 @@ val concat_preserves_knowability:
   (requires is_knowable_by cpreds lab tr b1 /\ is_knowable_by cpreds lab tr b2)
   (ensures is_knowable_by cpreds lab tr (concat b1 b2))
   [SMTPat (is_knowable_by cpreds lab tr (concat b1 b2))]
-let concat_preserves_knowability cpreds lab tr b1 b2 = ()
+let concat_preserves_knowability cpreds lab tr b1 b2 =
+  normalize_term_spec concat;
+  normalize_term_spec bytes_invariant;
+  normalize_term_spec get_label
 
 val split_preserves_knowability:
   cpreds:crypto_predicates -> lab:label -> tr:trace ->
@@ -393,14 +435,19 @@ val split_preserves_knowability:
     | None -> True
     | Some (b1, b2) -> is_knowable_by cpreds lab tr b1 /\ is_knowable_by cpreds lab tr b2
   ))
-let split_preserves_knowability cpreds lab tr b i = ()
+let split_preserves_knowability cpreds lab tr b i =
+  normalize_term_spec split;
+  normalize_term_spec bytes_invariant;
+  normalize_term_spec get_label
 
 (*** AEAD ***)
 
+[@@"opaque_to_smt"]
 val aead_enc: bytes -> bytes -> bytes -> bytes -> bytes
 let aead_enc key nonce msg ad =
   Aead key nonce msg ad
 
+[@@"opaque_to_smt"]
 val aead_dec: bytes -> bytes -> bytes -> bytes -> option bytes
 let aead_dec key nonce msg ad =
   match msg with
@@ -416,7 +463,9 @@ val aead_dec_enc:
   key:bytes -> nonce:bytes -> msg:bytes -> ad:bytes ->
   Lemma
   (aead_dec key nonce (aead_enc key nonce msg ad) ad == Some msg)
-let aead_dec_enc key nonce msg ad = ()
+let aead_dec_enc key nonce msg ad =
+  normalize_term_spec aead_enc;
+  normalize_term_spec aead_dec
 
 // Lemma for attacker knowledge theorem
 val aead_enc_preserves_publishability:
@@ -430,7 +479,10 @@ val aead_enc_preserves_publishability:
     is_publishable cpreds tr ad
   )
   (ensures is_publishable cpreds tr (aead_enc key nonce msg ad))
-let aead_enc_preserves_publishability cpreds tr key nonce msg ad = ()
+let aead_enc_preserves_publishability cpreds tr key nonce msg ad =
+  normalize_term_spec aead_enc;
+  normalize_term_spec bytes_invariant;
+  normalize_term_spec get_label
 
 // Lemma for attacker knowledge theorem
 val aead_dec_preserves_publishability:
@@ -449,6 +501,8 @@ val aead_dec_preserves_publishability:
     | None -> True
   ))
 let aead_dec_preserves_publishability cpreds tr key nonce msg ad =
+  normalize_term_spec aead_dec;
+  normalize_term_spec bytes_invariant;
   // F* needs the match for some reason?
   match aead_dec key nonce msg ad with
   | Some res -> ()
@@ -470,17 +524,21 @@ val bytes_invariant_aead_enc:
   )
   (ensures bytes_invariant cpreds tr (aead_enc key nonce msg ad))
   [SMTPat (bytes_invariant cpreds tr (aead_enc key nonce msg ad))]
-let bytes_invariant_aead_enc cpreds tr key nonce msg ad = ()
+let bytes_invariant_aead_enc cpreds tr key nonce msg ad =
+  normalize_term_spec aead_enc;
+  normalize_term_spec bytes_invariant
 
 val get_label_aead_enc:
   key:bytes -> nonce:bytes -> msg:bytes -> ad:bytes ->
   Lemma
   (ensures get_label (aead_enc key nonce msg ad) = public)
   [SMTPat (get_label (aead_enc key nonce msg ad))]
-let get_label_aead_enc key nonce msg ad = ()
+let get_label_aead_enc key nonce msg ad =
+  normalize_term_spec aead_enc;
+  normalize_term_spec get_label
 
 //TODO: is there a good reason for such a high rlimit?
-#push-options "--z3rlimit 50"
+#push-options "--z3rlimit 200 --fuel 0"
 val bytes_invariant_aead_dec:
   cpreds:crypto_predicates -> tr:trace ->
   key:bytes -> nonce:bytes -> msg:bytes -> ad:bytes ->
@@ -505,18 +563,24 @@ val bytes_invariant_aead_dec:
     )
   ))
   [SMTPat (aead_dec key nonce msg ad); SMTPat (bytes_invariant cpreds tr msg)]
-let bytes_invariant_aead_dec cpreds tr key nonce msg ad = ()
+let bytes_invariant_aead_dec cpreds tr key nonce msg ad =
+  normalize_term_spec aead_dec;
+  normalize_term_spec bytes_invariant;
+  normalize_term_spec get_label
 #pop-options
 
 (*** Public-key encryption ***)
 
+[@@"opaque_to_smt"]
 val pk: bytes -> bytes
 let pk sk = Pk sk
 
+[@@"opaque_to_smt"]
 val pk_enc: bytes -> bytes -> bytes -> bytes
 let pk_enc pk nonce msg =
   PkEnc pk nonce msg
 
+[@@"opaque_to_smt"]
 val pk_dec: bytes -> bytes -> option bytes
 let pk_dec sk msg =
   match msg with
@@ -532,7 +596,10 @@ val pk_dec_enc:
   sk:bytes -> nonce:bytes -> msg:bytes ->
   Lemma
   (pk_dec sk (pk_enc (pk sk) nonce msg) == Some msg)
-let pk_dec_enc key nonce msg = ()
+let pk_dec_enc key nonce msg =
+  normalize_term_spec pk_dec;
+  normalize_term_spec pk_enc;
+  normalize_term_spec pk
 
 // Lemma for attacker knowledge theorem
 val pk_preserves_publishability:
@@ -541,7 +608,10 @@ val pk_preserves_publishability:
   Lemma
   (requires is_publishable cpreds tr sk)
   (ensures is_publishable cpreds tr (pk sk))
-let pk_preserves_publishability cpreds tr sk = ()
+let pk_preserves_publishability cpreds tr sk =
+  normalize_term_spec pk;
+  normalize_term_spec bytes_invariant;
+  normalize_term_spec get_label
 
 // Lemma for attacker knowledge theorem
 val pk_enc_preserves_publishability:
@@ -554,7 +624,10 @@ val pk_enc_preserves_publishability:
     is_publishable cpreds tr msg
   )
   (ensures is_publishable cpreds tr (pk_enc pk nonce msg))
-let pk_enc_preserves_publishability cpreds tr pk nonce msg = ()
+let pk_enc_preserves_publishability cpreds tr pk nonce msg =
+  normalize_term_spec pk_enc;
+  normalize_term_spec bytes_invariant;
+  normalize_term_spec get_label
 
 // Lemma for attacker knowledge theorem
 val pk_dec_preserves_publishability:
@@ -570,7 +643,11 @@ val pk_dec_preserves_publishability:
     | Some res -> is_publishable cpreds tr res
     | None -> True
   ))
-let pk_dec_preserves_publishability cpreds tr sk msg = ()
+let pk_dec_preserves_publishability cpreds tr sk msg =
+  normalize_term_spec pk_dec;
+  normalize_term_spec get_sk_label;
+  normalize_term_spec bytes_invariant;
+  normalize_term_spec get_label
 
 val bytes_invariant_pk:
   cpreds:crypto_predicates -> tr:trace ->
@@ -579,14 +656,27 @@ val bytes_invariant_pk:
   (requires bytes_invariant cpreds tr sk)
   (ensures bytes_invariant cpreds tr (pk sk))
   [SMTPat (bytes_invariant cpreds tr (pk sk))]
-let bytes_invariant_pk cpreds tr sk = ()
+let bytes_invariant_pk cpreds tr sk =
+  normalize_term_spec pk;
+  normalize_term_spec bytes_invariant
 
 val get_label_pk:
   sk:bytes ->
   Lemma
   (ensures get_label (pk sk) == public)
   [SMTPat (get_label (pk sk))]
-let get_label_pk sk = ()
+let get_label_pk sk =
+  normalize_term_spec pk;
+  normalize_term_spec get_label
+
+val get_sk_label_pk:
+  sk:bytes ->
+  Lemma
+  (ensures get_sk_label (pk sk) == get_label sk)
+  [SMTPat (get_sk_label (pk sk))]
+let get_sk_label_pk sk =
+  normalize_term_spec pk;
+  normalize_term_spec get_sk_label
 
 val bytes_invariant_pk_enc:
   cpreds:crypto_predicates -> tr:trace ->
@@ -602,14 +692,18 @@ val bytes_invariant_pk_enc:
   )
   (ensures bytes_invariant cpreds tr (pk_enc pk nonce msg))
   [SMTPat (bytes_invariant cpreds tr (pk_enc pk nonce msg))]
-let bytes_invariant_pk_enc cpreds tr pk nonce msg = ()
+let bytes_invariant_pk_enc cpreds tr pk nonce msg =
+  normalize_term_spec pk_enc;
+  normalize_term_spec bytes_invariant
 
 val get_label_pk_enc:
   pk:bytes -> nonce:bytes -> msg:bytes ->
   Lemma
   (ensures get_label (pk_enc pk nonce msg) == public)
   [SMTPat (get_label (pk_enc pk nonce msg))]
-let get_label_pk_enc pk nonce msg = ()
+let get_label_pk_enc pk nonce msg =
+  normalize_term_spec pk_enc;
+  normalize_term_spec get_label
 
 val bytes_invariant_pk_dec:
   cpreds:crypto_predicates -> tr:trace ->
@@ -631,17 +725,25 @@ val bytes_invariant_pk_dec:
       )
   ))
   [SMTPat (pk_dec sk msg); SMTPat (bytes_invariant cpreds tr msg)]
-let bytes_invariant_pk_dec cpreds tr sk msg = ()
+let bytes_invariant_pk_dec cpreds tr sk msg =
+  normalize_term_spec pk_dec;
+  normalize_term_spec pk;
+  normalize_term_spec get_sk_label;
+  normalize_term_spec get_label;
+  normalize_term_spec bytes_invariant
 
 (*** Signature ***)
 
+[@@"opaque_to_smt"]
 val vk: bytes -> bytes
 let vk sk = Vk sk
 
+[@@"opaque_to_smt"]
 val sign: bytes -> bytes -> bytes -> bytes
 let sign sk nonce msg =
   Sign sk nonce msg
 
+[@@"opaque_to_smt"]
 val verify: bytes -> bytes -> bytes -> bool
 let verify vk msg signature =
   match signature with
@@ -653,8 +755,11 @@ let verify vk msg signature =
 val verify_sign:
   sk:bytes -> nonce:bytes -> msg:bytes ->
   Lemma
-  (verify (vk sk) msg (Sign sk nonce msg))
-let verify_sign sk nonce msg = ()
+  (verify (vk sk) msg (sign sk nonce msg))
+let verify_sign sk nonce msg =
+  normalize_term_spec vk;
+  normalize_term_spec verify;
+  normalize_term_spec sign
 
 // Lemma for attacker knowledge theorem
 val vk_preserves_publishability:
@@ -663,7 +768,10 @@ val vk_preserves_publishability:
   Lemma
   (requires is_publishable cpreds tr sk)
   (ensures is_publishable cpreds tr (vk sk))
-let vk_preserves_publishability cpreds tr vk = ()
+let vk_preserves_publishability cpreds tr sk =
+  normalize_term_spec vk;
+  normalize_term_spec bytes_invariant;
+  normalize_term_spec get_label
 
 // Lemma for attacker knowledge theorem
 val sign_preserves_publishability:
@@ -676,7 +784,10 @@ val sign_preserves_publishability:
     is_publishable cpreds tr msg
   )
   (ensures is_publishable cpreds tr (sign sk nonce msg))
-let sign_preserves_publishability cpreds tr sk nonce msg = ()
+let sign_preserves_publishability cpreds tr sk nonce msg =
+  normalize_term_spec sign;
+  normalize_term_spec bytes_invariant;
+  normalize_term_spec get_label
 
 val bytes_invariant_vk:
   cpreds:crypto_predicates -> tr:trace ->
@@ -685,14 +796,27 @@ val bytes_invariant_vk:
   (requires bytes_invariant cpreds tr sk)
   (ensures bytes_invariant cpreds tr (pk sk))
   [SMTPat (bytes_invariant cpreds tr (pk sk))]
-let bytes_invariant_vk cpreds tr sk = ()
+let bytes_invariant_vk cpreds tr sk =
+  normalize_term_spec vk;
+  normalize_term_spec bytes_invariant
 
 val get_label_vk:
   sk:bytes ->
   Lemma
   (ensures get_label (vk sk) == public)
   [SMTPat (get_label (vk sk))]
-let get_label_vk sk = ()
+let get_label_vk sk =
+  normalize_term_spec vk;
+  normalize_term_spec get_label
+
+val get_signkey_label_vk:
+  sk:bytes ->
+  Lemma
+  (ensures get_signkey_label (vk sk) == get_label sk)
+  [SMTPat (get_signkey_label (vk sk))]
+let get_signkey_label_vk sk =
+  normalize_term_spec vk;
+  normalize_term_spec get_signkey_label
 
 val bytes_invariant_sign:
   cpreds:crypto_predicates -> tr:trace ->
@@ -707,14 +831,19 @@ val bytes_invariant_sign:
   )
   (ensures bytes_invariant cpreds tr (sign sk nonce msg))
   [SMTPat (bytes_invariant cpreds tr (sign sk nonce msg))]
-let bytes_invariant_sign cpreds tr sk nonce msg = ()
+let bytes_invariant_sign cpreds tr sk nonce msg =
+  normalize_term_spec sign;
+  normalize_term_spec vk;
+  normalize_term_spec bytes_invariant
 
 val get_label_sign:
   sk:bytes -> nonce:bytes -> msg:bytes ->
   Lemma
   (ensures get_label (sign sk nonce msg) == get_label msg)
   [SMTPat (get_label (sign sk nonce msg))]
-let get_label_sign sk nonce msg = ()
+let get_label_sign sk nonce msg =
+  normalize_term_spec sign;
+  normalize_term_spec get_label
 
 val bytes_invariant_verify:
   cpreds:crypto_predicates -> tr:trace ->
@@ -732,4 +861,8 @@ val bytes_invariant_verify:
     (get_signkey_label vk) `can_flow tr` public
   )
   [SMTPat (verify vk msg signature); SMTPat (bytes_invariant cpreds tr signature)]
-let bytes_invariant_verify cpreds tr vk msg signature = ()
+let bytes_invariant_verify cpreds tr vk msg signature =
+  normalize_term_spec verify;
+  normalize_term_spec get_signkey_label;
+  normalize_term_spec bytes_invariant;
+  normalize_term_spec get_label
