@@ -84,6 +84,12 @@ let rec attacker_knows_aux step tr msg =
         attacker_knows_aux (step-1) tr sk /\
         attacker_knows_aux (step-1) tr nonce /\
         attacker_knows_aux (step-1) tr buf
+    ) \/
+    // Hash
+    (
+      exists buf.
+        msg == hash buf /\
+        attacker_knows_aux (step-1) tr buf
     )
   )
 
@@ -143,6 +149,7 @@ let rec attacker_only_knows_publishable_values_aux preds step tr msg =
     FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (pk_dec_preserves_publishability preds.crypto_preds tr));
     FStar.Classical.forall_intro   (FStar.Classical.move_requires   (vk_preserves_publishability preds.crypto_preds tr));
     FStar.Classical.forall_intro_3 (FStar.Classical.move_requires_3 (sign_preserves_publishability preds.crypto_preds tr));
+    FStar.Classical.forall_intro   (FStar.Classical.move_requires   (hash_preserves_publishability preds.crypto_preds tr));
     ()
   )
 #pop-options

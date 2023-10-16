@@ -28,6 +28,8 @@ let rec length b =
     32
   | Sign sk nonce msg ->
     64
+  | Hash msg ->
+    32
 
 [@@"opaque_to_smt"]
 val get_label: bytes -> label
@@ -48,6 +50,8 @@ let rec get_label b =
   | Vk sk ->
     public
   | Sign sk nonce msg ->
+    get_label msg
+  | Hash msg ->
     get_label msg
 
 [@@"opaque_to_smt"]
@@ -161,6 +165,8 @@ let rec bytes_invariant cpreds tr b =
         (get_label msg) `can_flow tr` public
       )
     )
+  | Hash msg ->
+    bytes_invariant cpreds tr msg
 
 val bytes_invariant_later:
   cpreds:crypto_predicates ->
@@ -197,6 +203,8 @@ let rec bytes_invariant_later cpreds tr1 tr2 msg =
     bytes_invariant_later cpreds tr1 tr2 nonce;
     bytes_invariant_later cpreds tr1 tr2 msg;
     FStar.Classical.move_requires (cpreds.sign_pred_later tr1 tr2 (Vk sk)) msg
+  | Hash msg ->
+    bytes_invariant_later cpreds tr1 tr2 msg
 
 (*** Various predicates ***)
 
@@ -866,3 +874,50 @@ let bytes_invariant_verify cpreds tr vk msg signature =
   normalize_term_spec get_signkey_label;
   normalize_term_spec bytes_invariant;
   normalize_term_spec get_label
+
+(*** Hash ***)
+
+[@@"opaque_to_smt"]
+val hash: bytes -> bytes
+let hash msg = Hash msg
+
+// Lemma for attacker knowledge theorem
+val hash_preserves_publishability:
+  cpreds:crypto_predicates -> tr:trace ->
+  msg:bytes ->
+  Lemma
+  (requires is_publishable cpreds tr msg)
+  (ensures is_publishable cpreds tr (hash msg))
+let hash_preserves_publishability cpreds tr msg =
+  normalize_term_spec hash;
+  normalize_term_spec bytes_invariant;
+  normalize_term_spec get_label
+
+// Lemmas for the user
+val bytes_invariant_hash:
+  cpreds:crypto_predicates -> tr:trace ->
+  msg:bytes ->
+  Lemma
+  (requires bytes_invariant cpreds tr msg)
+  (ensures bytes_invariant cpreds tr (hash msg))
+  [SMTPat (hash msg); SMTPat (bytes_invariant cpreds tr msg)]
+let bytes_invariant_hash cpreds tr msg =
+  normalize_term_spec hash;
+  normalize_term_spec bytes_invariant
+
+val get_label_hash:
+  msg:bytes ->
+  Lemma (get_label (hash msg) == get_label msg)
+  [SMTPat (get_label (hash msg))]
+let get_label_hash msg =
+  normalize_term_spec hash;
+  normalize_term_spec get_label
+
+val hash_injective:
+  msg1:bytes -> msg2:bytes ->
+  Lemma
+  (requires hash msg1 == hash msg2)
+  (ensures msg1 == msg2)
+  // No SMTPat, call this manually because it's an important argument of the proof?
+let hash_injective msg1 msg2 =
+  normalize_term_spec hash

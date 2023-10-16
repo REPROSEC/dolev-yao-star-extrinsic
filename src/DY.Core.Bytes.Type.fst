@@ -19,4 +19,7 @@ type bytes =
   | Vk: sk:bytes -> bytes
   | Sign: sk:bytes -> nonce:bytes -> msg:bytes -> bytes
 
+  // Hash
+  | Hash: msg:bytes -> bytes
+
   // ...
