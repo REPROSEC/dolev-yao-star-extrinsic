@@ -32,32 +32,32 @@ let private_keys_types = {
 }
 
 val is_private_key_for:
-  crypto_predicates -> trace ->
+  crypto_invariants -> trace ->
   bytes -> private_key_type -> principal -> prop
-let is_private_key_for cpreds tr sk sk_type who =
+let is_private_key_for cinvs tr sk sk_type who =
     match sk_type with
     | PkDec -> (
-      bytes_invariant cpreds tr sk /\
+      bytes_invariant cinvs tr sk /\
       get_label sk == principal_label who
     )
     | Sign -> (
-      bytes_invariant cpreds tr sk /\
+      bytes_invariant cinvs tr sk /\
       get_label sk == principal_label who
     )
 
 val private_keys_pred: map_predicate private_keys_types
 let private_keys_pred = {
-  pred = (fun cpreds tr prin sess_id (key:private_keys_types.key) value ->
-    is_private_key_for cpreds tr value.private_key key prin
+  pred = (fun cinvs tr prin sess_id (key:private_keys_types.key) value ->
+    is_private_key_for cinvs tr value.private_key key prin
   );
-  pred_later = (fun cpreds tr1 tr2 prin sess_id key value -> ());
-  pred_knowable = (fun cpreds tr prin sess_id key value -> ());
+  pred_later = (fun cinvs tr1 tr2 prin sess_id key value -> ());
+  pred_knowable = (fun cinvs tr prin sess_id key value -> ());
 }
 
 val private_keys_label: string
 let private_keys_label = "DY.Lib.State.PrivateKeys"
 
-val has_private_keys_invariant: protocol_predicates -> prop
+val has_private_keys_invariant: protocol_invariants -> prop
 let has_private_keys_invariant pr =
   has_map_session_invariant private_keys_pred private_keys_label pr
 
@@ -77,46 +77,46 @@ let get_private_key prin sess_id sk_type =
   return (Some res.private_key)
 
 val initialize_private_keys_invariant:
-  preds:protocol_predicates ->
+  invs:protocol_invariants ->
   prin:principal -> tr:trace ->
   Lemma
   (requires
-    trace_invariant preds tr /\
-    has_private_keys_invariant preds
+    trace_invariant invs tr /\
+    has_private_keys_invariant invs
   )
   (ensures (
     let (_, tr_out) = initialize_private_keys prin tr in
-    trace_invariant preds tr_out
+    trace_invariant invs tr_out
   ))
   [SMTPat (initialize_private_keys prin tr);
-   SMTPat (has_private_keys_invariant preds);
-   SMTPat (trace_invariant preds tr)]
-let initialize_private_keys_invariant preds prin tr = ()
+   SMTPat (has_private_keys_invariant invs);
+   SMTPat (trace_invariant invs tr)]
+let initialize_private_keys_invariant invs prin tr = ()
 
 val generate_private_key_invariant:
-  preds:protocol_predicates ->
+  invs:protocol_invariants ->
   prin:principal -> sess_id:nat -> sk_type:private_key_type -> tr:trace ->
   Lemma
   (requires
-    trace_invariant preds tr /\
-    has_private_keys_invariant preds
+    trace_invariant invs tr /\
+    has_private_keys_invariant invs
   )
   (ensures (
     let (_, tr_out) = generate_private_key prin sess_id sk_type tr in
-    trace_invariant preds tr_out
+    trace_invariant invs tr_out
   ))
   [SMTPat (generate_private_key prin sess_id sk_type tr);
-   SMTPat (has_private_keys_invariant preds);
-   SMTPat (trace_invariant preds tr)]
-let generate_private_key_invariant preds prin sess_id sk_type tr = ()
+   SMTPat (has_private_keys_invariant invs);
+   SMTPat (trace_invariant invs tr)]
+let generate_private_key_invariant invs prin sess_id sk_type tr = ()
 
 val get_private_key_invariant:
-  preds:protocol_predicates ->
+  invs:protocol_invariants ->
   prin:principal -> sess_id:nat -> pk_type:private_key_type -> tr:trace ->
   Lemma
   (requires
-    trace_invariant preds tr /\
-    has_private_keys_invariant preds
+    trace_invariant invs tr /\
+    has_private_keys_invariant invs
   )
   (ensures (
     let (opt_private_key, tr_out) = get_private_key prin sess_id pk_type tr in
@@ -124,10 +124,10 @@ val get_private_key_invariant:
       match opt_private_key with
       | None -> True
       | Some private_key ->
-        is_private_key_for preds.crypto_preds tr private_key pk_type prin
+        is_private_key_for invs.crypto_invs tr private_key pk_type prin
     )
   ))
   [SMTPat (get_private_key prin sess_id pk_type tr);
-   SMTPat (has_private_keys_invariant preds);
-   SMTPat (trace_invariant preds tr)]
-let get_private_key_invariant preds prin sess_id pk_type tr = ()
+   SMTPat (has_private_keys_invariant invs);
+   SMTPat (trace_invariant invs tr)]
+let get_private_key_invariant invs prin sess_id pk_type tr = ()

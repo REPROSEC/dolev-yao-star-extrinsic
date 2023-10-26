@@ -15,7 +15,7 @@ val initiator_authentication:
   Lemma
   (requires
     event_triggered_at tr i bob nsl_event_label (serialize nsl_event (Respond2 alice bob n_a n_b)) /\
-    trace_invariant nsl_protocol_preds tr
+    trace_invariant nsl_protocol_invs tr
   )
   (ensures
     principal_corrupt tr alice \/ principal_corrupt tr bob \/
@@ -29,7 +29,7 @@ val responder_authentication:
   Lemma
   (requires
     event_triggered_at tr i alice nsl_event_label (serialize nsl_event (Initiate2 alice bob n_a n_b)) /\
-    trace_invariant nsl_protocol_preds tr
+    trace_invariant nsl_protocol_invs tr
   )
   (ensures
     principal_corrupt tr alice \/ principal_corrupt tr bob \/
@@ -42,7 +42,7 @@ val n_a_secrecy:
   Lemma
   (requires
     attacker_knows tr n_a /\
-    trace_invariant nsl_protocol_preds tr /\ (
+    trace_invariant nsl_protocol_invs tr /\ (
       (exists sess_id. typed_state_was_set tr nsl_session_label alice sess_id (InitiatorSentMsg1 bob n_a <: nsl_session)) \/
       (exists sess_id n_b. typed_state_was_set tr nsl_session_label alice sess_id (InitiatorSentMsg3 bob n_a n_b <: nsl_session)) \/
       (exists sess_id n_b. typed_state_was_set tr nsl_session_label bob sess_id (ResponderReceivedMsg3 alice n_a n_b <: nsl_session))
@@ -50,14 +50,14 @@ val n_a_secrecy:
   )
   (ensures principal_corrupt tr alice \/ principal_corrupt tr bob)
 let n_a_secrecy tr alice bob n_a =
-  attacker_only_knows_publishable_values nsl_protocol_preds tr n_a
+  attacker_only_knows_publishable_values nsl_protocol_invs tr n_a
 
 val n_b_secrecy:
   tr:trace -> alice:principal -> bob:principal -> n_b:bytes ->
   Lemma
   (requires
     attacker_knows tr n_b /\
-    trace_invariant nsl_protocol_preds tr /\ (
+    trace_invariant nsl_protocol_invs tr /\ (
       (exists sess_id n_a. typed_state_was_set tr nsl_session_label bob sess_id (ResponderSentMsg2 alice n_a n_b <: nsl_session)) \/
       (exists sess_id n_a. typed_state_was_set tr nsl_session_label bob sess_id (ResponderReceivedMsg3 alice n_a n_b <: nsl_session)) \/
       (exists sess_id n_a. typed_state_was_set tr nsl_session_label alice sess_id (InitiatorSentMsg3 bob n_a n_b <: nsl_session))
@@ -65,4 +65,4 @@ val n_b_secrecy:
   )
   (ensures principal_corrupt tr alice \/ principal_corrupt tr bob)
 let n_b_secrecy tr alice bob n_b =
-  attacker_only_knows_publishable_values nsl_protocol_preds tr n_b
+  attacker_only_knows_publishable_values nsl_protocol_invs tr n_b

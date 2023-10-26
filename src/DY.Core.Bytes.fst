@@ -69,7 +69,7 @@ let get_signkey_label pk =
   | _ -> public
 
 noeq
-type crypto_predicates = {
+type crypto_invariants = {
   aead_pred: tr:trace -> key:bytes -> nonce:bytes -> msg:bytes -> ad:bytes -> prop;
   aead_pred_later:
     tr1:trace -> tr2:trace ->
@@ -101,27 +101,27 @@ type crypto_predicates = {
 }
 
 [@@"opaque_to_smt"]
-val bytes_invariant: crypto_predicates -> trace -> bytes -> prop
-let rec bytes_invariant cpreds tr b =
+val bytes_invariant: crypto_invariants -> trace -> bytes -> prop
+let rec bytes_invariant cinvs tr b =
   match b with
   | Literal buf ->
     True
   | Rand label len time ->
     event_at tr time (RandGen label len)
   | Concat left right ->
-    bytes_invariant cpreds tr left /\
-    bytes_invariant cpreds tr right
+    bytes_invariant cinvs tr left /\
+    bytes_invariant cinvs tr right
   | Aead key nonce msg ad ->
-    bytes_invariant cpreds tr key /\
-    bytes_invariant cpreds tr nonce /\
-    bytes_invariant cpreds tr msg /\
-    bytes_invariant cpreds tr ad /\
+    bytes_invariant cinvs tr key /\
+    bytes_invariant cinvs tr nonce /\
+    bytes_invariant cinvs tr msg /\
+    bytes_invariant cinvs tr ad /\
     (get_label nonce) `can_flow tr` public /\
     (get_label ad) `can_flow tr` public /\
     (
       (
         // Honest case
-        cpreds.aead_pred tr key nonce msg ad /\
+        cinvs.aead_pred tr key nonce msg ad /\
         (get_label msg) `can_flow tr` (get_label key)
       ) \/ (
         // Attacker case
@@ -130,17 +130,17 @@ let rec bytes_invariant cpreds tr b =
       )
     )
   | Pk sk ->
-    bytes_invariant cpreds tr sk
+    bytes_invariant cinvs tr sk
   | PkEnc pk nonce msg ->
-    bytes_invariant cpreds tr pk /\
-    bytes_invariant cpreds tr nonce /\
-    bytes_invariant cpreds tr msg /\
+    bytes_invariant cinvs tr pk /\
+    bytes_invariant cinvs tr nonce /\
+    bytes_invariant cinvs tr msg /\
     (
       (
         // Honest case
         (get_label msg) `can_flow tr` (get_sk_label pk) /\
         (get_label msg) `can_flow tr` (get_label nonce) /\
-        cpreds.pkenc_pred tr pk msg
+        cinvs.pkenc_pred tr pk msg
       ) \/ (
         // Attacker case
         (get_label pk) `can_flow tr` public /\
@@ -149,15 +149,15 @@ let rec bytes_invariant cpreds tr b =
       )
     )
   | Vk sk ->
-    bytes_invariant cpreds tr sk
+    bytes_invariant cinvs tr sk
   | Sign sk nonce msg ->
-    bytes_invariant cpreds tr sk /\
-    bytes_invariant cpreds tr nonce /\
-    bytes_invariant cpreds tr msg /\
+    bytes_invariant cinvs tr sk /\
+    bytes_invariant cinvs tr nonce /\
+    bytes_invariant cinvs tr msg /\
     (
       (
         // Honest case
-        cpreds.sign_pred tr (Vk sk) msg
+        cinvs.sign_pred tr (Vk sk) msg
       ) \/ (
         // Attacker case
         (get_label sk) `can_flow tr` public /\
@@ -166,75 +166,75 @@ let rec bytes_invariant cpreds tr b =
       )
     )
   | Hash msg ->
-    bytes_invariant cpreds tr msg
+    bytes_invariant cinvs tr msg
 
 val bytes_invariant_later:
-  cpreds:crypto_predicates ->
+  cinvs:crypto_invariants ->
   tr1:trace -> tr2:trace -> msg:bytes ->
   Lemma
-  (requires bytes_invariant cpreds tr1 msg /\ tr1 <$ tr2)
-  (ensures bytes_invariant cpreds tr2 msg)
-  [SMTPat (bytes_invariant cpreds tr1 msg); SMTPat (tr1 <$ tr2)]
-let rec bytes_invariant_later cpreds tr1 tr2 msg =
+  (requires bytes_invariant cinvs tr1 msg /\ tr1 <$ tr2)
+  (ensures bytes_invariant cinvs tr2 msg)
+  [SMTPat (bytes_invariant cinvs tr1 msg); SMTPat (tr1 <$ tr2)]
+let rec bytes_invariant_later cinvs tr1 tr2 msg =
   normalize_term_spec bytes_invariant;
   match msg with
   | Literal buf -> ()
   | Rand label len time -> ()
   | Concat left right ->
-    bytes_invariant_later cpreds tr1 tr2 left;
-    bytes_invariant_later cpreds tr1 tr2 right
+    bytes_invariant_later cinvs tr1 tr2 left;
+    bytes_invariant_later cinvs tr1 tr2 right
   | Aead key nonce msg ad ->
-    FStar.Classical.move_requires (cpreds.aead_pred_later tr1 tr2 key nonce msg) ad;
-    bytes_invariant_later cpreds tr1 tr2 key;
-    bytes_invariant_later cpreds tr1 tr2 nonce;
-    bytes_invariant_later cpreds tr1 tr2 msg;
-    bytes_invariant_later cpreds tr1 tr2 ad
+    FStar.Classical.move_requires (cinvs.aead_pred_later tr1 tr2 key nonce msg) ad;
+    bytes_invariant_later cinvs tr1 tr2 key;
+    bytes_invariant_later cinvs tr1 tr2 nonce;
+    bytes_invariant_later cinvs tr1 tr2 msg;
+    bytes_invariant_later cinvs tr1 tr2 ad
   | Pk sk ->
-    bytes_invariant_later cpreds tr1 tr2 sk
+    bytes_invariant_later cinvs tr1 tr2 sk
   | PkEnc pk nonce msg ->
-    FStar.Classical.move_requires (cpreds.pkenc_pred_later tr1 tr2 pk) msg;
-    bytes_invariant_later cpreds tr1 tr2 pk;
-    bytes_invariant_later cpreds tr1 tr2 nonce;
-    bytes_invariant_later cpreds tr1 tr2 msg
+    FStar.Classical.move_requires (cinvs.pkenc_pred_later tr1 tr2 pk) msg;
+    bytes_invariant_later cinvs tr1 tr2 pk;
+    bytes_invariant_later cinvs tr1 tr2 nonce;
+    bytes_invariant_later cinvs tr1 tr2 msg
   | Vk sk ->
-    bytes_invariant_later cpreds tr1 tr2 sk
+    bytes_invariant_later cinvs tr1 tr2 sk
   | Sign sk nonce msg ->
-    bytes_invariant_later cpreds tr1 tr2 sk;
-    bytes_invariant_later cpreds tr1 tr2 nonce;
-    bytes_invariant_later cpreds tr1 tr2 msg;
-    FStar.Classical.move_requires (cpreds.sign_pred_later tr1 tr2 (Vk sk)) msg
+    bytes_invariant_later cinvs tr1 tr2 sk;
+    bytes_invariant_later cinvs tr1 tr2 nonce;
+    bytes_invariant_later cinvs tr1 tr2 msg;
+    FStar.Classical.move_requires (cinvs.sign_pred_later tr1 tr2 (Vk sk)) msg
   | Hash msg ->
-    bytes_invariant_later cpreds tr1 tr2 msg
+    bytes_invariant_later cinvs tr1 tr2 msg
 
 (*** Various predicates ***)
 
-val is_knowable_by: crypto_predicates -> label -> trace -> bytes -> prop
-let is_knowable_by cpreds lab tr b =
-  bytes_invariant cpreds tr b /\ (get_label b) `can_flow tr` lab
+val is_knowable_by: crypto_invariants -> label -> trace -> bytes -> prop
+let is_knowable_by cinvs lab tr b =
+  bytes_invariant cinvs tr b /\ (get_label b) `can_flow tr` lab
 
-val is_publishable: crypto_predicates -> trace -> bytes -> prop
-let is_publishable cpreds tr b =
-  is_knowable_by cpreds public tr b
+val is_publishable: crypto_invariants -> trace -> bytes -> prop
+let is_publishable cinvs tr b =
+  is_knowable_by cinvs public tr b
 
-val is_secret: crypto_predicates -> label -> trace -> bytes -> prop
-let is_secret cpreds lab tr b =
-  bytes_invariant cpreds tr b /\ (get_label b) == lab
+val is_secret: crypto_invariants -> label -> trace -> bytes -> prop
+let is_secret cinvs lab tr b =
+  bytes_invariant cinvs tr b /\ (get_label b) == lab
 
-val is_verification_key: crypto_predicates -> label -> trace -> bytes -> prop
-let is_verification_key cpreds lab tr b =
-  is_publishable cpreds tr b /\ (get_signkey_label b) == lab
+val is_verification_key: crypto_invariants -> label -> trace -> bytes -> prop
+let is_verification_key cinvs lab tr b =
+  is_publishable cinvs tr b /\ (get_signkey_label b) == lab
 
-val is_signature_key: crypto_predicates -> label -> trace -> bytes -> prop
-let is_signature_key cpreds lab tr b =
-  bytes_invariant cpreds tr b /\ (get_label b) == lab
+val is_signature_key: crypto_invariants -> label -> trace -> bytes -> prop
+let is_signature_key cinvs lab tr b =
+  bytes_invariant cinvs tr b /\ (get_label b) == lab
 
-val is_encryption_key: crypto_predicates -> label -> trace -> bytes -> prop
-let is_encryption_key cpreds lab tr b =
-  is_publishable cpreds tr b /\ (get_sk_label b) == lab
+val is_encryption_key: crypto_invariants -> label -> trace -> bytes -> prop
+let is_encryption_key cinvs lab tr b =
+  is_publishable cinvs tr b /\ (get_sk_label b) == lab
 
-val is_decryption_key: crypto_predicates -> label -> trace -> bytes -> prop
-let is_decryption_key cpreds lab tr b =
-  bytes_invariant cpreds tr b /\ (get_label b) == lab
+val is_decryption_key: crypto_invariants -> label -> trace -> bytes -> prop
+let is_decryption_key cinvs lab tr b =
+  bytes_invariant cinvs tr b /\ (get_label b) == lab
 
 (*** Literal ***)
 
@@ -261,11 +261,11 @@ let literal_to_bytes_to_literal lit =
 
 // Lemma for attacker knowledge theorem
 val literal_to_bytes_is_publishable:
-  cpreds:crypto_predicates -> tr:trace ->
+  cinvs:crypto_invariants -> tr:trace ->
   lit:FStar.Seq.seq FStar.UInt8.t ->
   Lemma
-  (is_publishable cpreds tr (literal_to_bytes lit))
-let literal_to_bytes_is_publishable cpreds tr lit =
+  (is_publishable cinvs tr (literal_to_bytes lit))
+let literal_to_bytes_is_publishable cinvs tr lit =
   normalize_term_spec literal_to_bytes;
   normalize_term_spec bytes_invariant;
   normalize_term_spec get_label
@@ -291,12 +291,12 @@ let length_literal_to_bytes lit =
   normalize_term_spec length
 
 val bytes_invariant_literal_to_bytes:
-  cpreds:crypto_predicates -> tr:trace ->
+  cinvs:crypto_invariants -> tr:trace ->
   lit:FStar.Seq.seq FStar.UInt8.t ->
   Lemma
-  (ensures bytes_invariant cpreds tr (literal_to_bytes lit))
-  [SMTPat (bytes_invariant cpreds tr (literal_to_bytes lit))]
-let bytes_invariant_literal_to_bytes cpreds tr lit =
+  (ensures bytes_invariant cinvs tr (literal_to_bytes lit))
+  [SMTPat (bytes_invariant cinvs tr (literal_to_bytes lit))]
+let bytes_invariant_literal_to_bytes cinvs tr lit =
   normalize_term_spec literal_to_bytes;
   normalize_term_spec bytes_invariant
 
@@ -329,28 +329,28 @@ let split_concat left right =
 
 // Lemma for attacker knowledge theorem
 val concat_preserves_publishability:
-  cpreds:crypto_predicates -> tr:trace ->
+  cinvs:crypto_invariants -> tr:trace ->
   b1:bytes -> b2:bytes ->
   Lemma
-  (requires is_publishable cpreds tr b1 /\ is_publishable cpreds tr b2)
-  (ensures is_publishable cpreds tr (concat b1 b2))
-let concat_preserves_publishability cpreds tr b1 b2 =
+  (requires is_publishable cinvs tr b1 /\ is_publishable cinvs tr b2)
+  (ensures is_publishable cinvs tr (concat b1 b2))
+let concat_preserves_publishability cinvs tr b1 b2 =
   normalize_term_spec concat;
   normalize_term_spec bytes_invariant;
   normalize_term_spec get_label
 
 // Lemma for attacker knowledge theorem
 val split_preserves_publishability:
-  cpreds:crypto_predicates -> tr:trace ->
+  cinvs:crypto_invariants -> tr:trace ->
   b:bytes -> i:nat ->
   Lemma
-  (requires is_publishable cpreds tr b)
+  (requires is_publishable cinvs tr b)
   (ensures (
     match split b i with
     | None -> True
-    | Some (b1, b2) -> is_publishable cpreds tr b1 /\ is_publishable cpreds tr b2
+    | Some (b1, b2) -> is_publishable cinvs tr b1 /\ is_publishable cinvs tr b2
   ))
-let split_preserves_publishability cpreds tr b i =
+let split_preserves_publishability cinvs tr b i =
   normalize_term_spec split;
   normalize_term_spec bytes_invariant;
   normalize_term_spec get_label
@@ -387,28 +387,28 @@ let split_length b i =
   normalize_term_spec length
 
 val bytes_invariant_concat:
-  cpreds:crypto_predicates -> tr:trace ->
+  cinvs:crypto_invariants -> tr:trace ->
   b1:bytes -> b2:bytes ->
   Lemma
-  (requires bytes_invariant cpreds tr b1 /\ bytes_invariant cpreds tr b2)
-  (ensures bytes_invariant cpreds tr (concat b1 b2))
-  [SMTPat (bytes_invariant cpreds tr (concat b1 b2))]
-let bytes_invariant_concat cpreds tr b1 b2 =
+  (requires bytes_invariant cinvs tr b1 /\ bytes_invariant cinvs tr b2)
+  (ensures bytes_invariant cinvs tr (concat b1 b2))
+  [SMTPat (bytes_invariant cinvs tr (concat b1 b2))]
+let bytes_invariant_concat cinvs tr b1 b2 =
   normalize_term_spec concat;
   normalize_term_spec bytes_invariant
 
 val bytes_invariant_split:
-  cpreds:crypto_predicates -> tr:trace ->
+  cinvs:crypto_invariants -> tr:trace ->
   b:bytes -> i:nat ->
   Lemma
-  (requires bytes_invariant cpreds tr b)
+  (requires bytes_invariant cinvs tr b)
   (ensures (
     match split b i with
     | None -> True
-    | Some (b1, b2) -> bytes_invariant cpreds tr b1 /\ bytes_invariant cpreds tr b2
+    | Some (b1, b2) -> bytes_invariant cinvs tr b1 /\ bytes_invariant cinvs tr b2
   ))
-  [SMTPat (bytes_invariant cpreds tr b); SMTPat (split b i)]
-let bytes_invariant_split cpreds tr b i =
+  [SMTPat (bytes_invariant cinvs tr b); SMTPat (split b i)]
+let bytes_invariant_split cinvs tr b i =
   normalize_term_spec split;
   normalize_term_spec bytes_invariant
 
@@ -422,28 +422,28 @@ let get_label_concat b1 b2 =
   normalize_term_spec get_label
 
 val concat_preserves_knowability:
-  cpreds:crypto_predicates -> lab:label -> tr:trace ->
+  cinvs:crypto_invariants -> lab:label -> tr:trace ->
   b1:bytes -> b2:bytes ->
   Lemma
-  (requires is_knowable_by cpreds lab tr b1 /\ is_knowable_by cpreds lab tr b2)
-  (ensures is_knowable_by cpreds lab tr (concat b1 b2))
-  [SMTPat (is_knowable_by cpreds lab tr (concat b1 b2))]
-let concat_preserves_knowability cpreds lab tr b1 b2 =
+  (requires is_knowable_by cinvs lab tr b1 /\ is_knowable_by cinvs lab tr b2)
+  (ensures is_knowable_by cinvs lab tr (concat b1 b2))
+  [SMTPat (is_knowable_by cinvs lab tr (concat b1 b2))]
+let concat_preserves_knowability cinvs lab tr b1 b2 =
   normalize_term_spec concat;
   normalize_term_spec bytes_invariant;
   normalize_term_spec get_label
 
 val split_preserves_knowability:
-  cpreds:crypto_predicates -> lab:label -> tr:trace ->
+  cinvs:crypto_invariants -> lab:label -> tr:trace ->
   b:bytes -> i:nat ->
   Lemma
-  (requires is_knowable_by cpreds lab tr b)
+  (requires is_knowable_by cinvs lab tr b)
   (ensures (
     match split b i with
     | None -> True
-    | Some (b1, b2) -> is_knowable_by cpreds lab tr b1 /\ is_knowable_by cpreds lab tr b2
+    | Some (b1, b2) -> is_knowable_by cinvs lab tr b1 /\ is_knowable_by cinvs lab tr b2
   ))
-let split_preserves_knowability cpreds lab tr b i =
+let split_preserves_knowability cinvs lab tr b i =
   normalize_term_spec split;
   normalize_term_spec bytes_invariant;
   normalize_term_spec get_label
@@ -477,38 +477,38 @@ let aead_dec_enc key nonce msg ad =
 
 // Lemma for attacker knowledge theorem
 val aead_enc_preserves_publishability:
-  cpreds:crypto_predicates -> tr:trace ->
+  cinvs:crypto_invariants -> tr:trace ->
   key:bytes -> nonce:bytes -> msg:bytes -> ad:bytes ->
   Lemma
   (requires
-    is_publishable cpreds tr key /\
-    is_publishable cpreds tr nonce /\
-    is_publishable cpreds tr msg /\
-    is_publishable cpreds tr ad
+    is_publishable cinvs tr key /\
+    is_publishable cinvs tr nonce /\
+    is_publishable cinvs tr msg /\
+    is_publishable cinvs tr ad
   )
-  (ensures is_publishable cpreds tr (aead_enc key nonce msg ad))
-let aead_enc_preserves_publishability cpreds tr key nonce msg ad =
+  (ensures is_publishable cinvs tr (aead_enc key nonce msg ad))
+let aead_enc_preserves_publishability cinvs tr key nonce msg ad =
   normalize_term_spec aead_enc;
   normalize_term_spec bytes_invariant;
   normalize_term_spec get_label
 
 // Lemma for attacker knowledge theorem
 val aead_dec_preserves_publishability:
-  cpreds:crypto_predicates -> tr:trace ->
+  cinvs:crypto_invariants -> tr:trace ->
   key:bytes -> nonce:bytes -> msg:bytes -> ad:bytes ->
   Lemma
   (requires
-    is_publishable cpreds tr key /\
-    is_publishable cpreds tr nonce /\
-    is_publishable cpreds tr msg /\
-    is_publishable cpreds tr ad
+    is_publishable cinvs tr key /\
+    is_publishable cinvs tr nonce /\
+    is_publishable cinvs tr msg /\
+    is_publishable cinvs tr ad
   )
   (ensures (
     match aead_dec key nonce msg ad with
-    | Some res -> is_publishable cpreds tr res
+    | Some res -> is_publishable cinvs tr res
     | None -> True
   ))
-let aead_dec_preserves_publishability cpreds tr key nonce msg ad =
+let aead_dec_preserves_publishability cinvs tr key nonce msg ad =
   normalize_term_spec aead_dec;
   normalize_term_spec bytes_invariant;
   // F* needs the match for some reason?
@@ -517,22 +517,22 @@ let aead_dec_preserves_publishability cpreds tr key nonce msg ad =
   | None -> ()
 
 val bytes_invariant_aead_enc:
-  cpreds:crypto_predicates -> tr:trace ->
+  cinvs:crypto_invariants -> tr:trace ->
   key:bytes -> nonce:bytes -> msg:bytes -> ad:bytes ->
   Lemma
   (requires
-    bytes_invariant cpreds tr key /\
-    bytes_invariant cpreds tr nonce /\
-    bytes_invariant cpreds tr msg /\
-    bytes_invariant cpreds tr ad /\
+    bytes_invariant cinvs tr key /\
+    bytes_invariant cinvs tr nonce /\
+    bytes_invariant cinvs tr msg /\
+    bytes_invariant cinvs tr ad /\
     (get_label nonce) `can_flow tr` public /\
     (get_label ad) `can_flow tr` public /\
     (get_label msg) `can_flow tr` (get_label key) /\
-    cpreds.aead_pred tr key nonce msg ad
+    cinvs.aead_pred tr key nonce msg ad
   )
-  (ensures bytes_invariant cpreds tr (aead_enc key nonce msg ad))
-  [SMTPat (bytes_invariant cpreds tr (aead_enc key nonce msg ad))]
-let bytes_invariant_aead_enc cpreds tr key nonce msg ad =
+  (ensures bytes_invariant cinvs tr (aead_enc key nonce msg ad))
+  [SMTPat (bytes_invariant cinvs tr (aead_enc key nonce msg ad))]
+let bytes_invariant_aead_enc cinvs tr key nonce msg ad =
   normalize_term_spec aead_enc;
   normalize_term_spec bytes_invariant
 
@@ -548,30 +548,30 @@ let get_label_aead_enc key nonce msg ad =
 //TODO: is there a good reason for such a high rlimit?
 #push-options "--z3rlimit 200 --fuel 0"
 val bytes_invariant_aead_dec:
-  cpreds:crypto_predicates -> tr:trace ->
+  cinvs:crypto_invariants -> tr:trace ->
   key:bytes -> nonce:bytes -> msg:bytes -> ad:bytes ->
   Lemma
   (requires
     // Actually only need the one on `msg`
-    bytes_invariant cpreds tr key /\
-    bytes_invariant cpreds tr nonce /\
-    bytes_invariant cpreds tr msg /\
-    bytes_invariant cpreds tr ad
+    bytes_invariant cinvs tr key /\
+    bytes_invariant cinvs tr nonce /\
+    bytes_invariant cinvs tr msg /\
+    bytes_invariant cinvs tr ad
   )
   (ensures (
     match aead_dec key nonce msg ad with
     | None -> True
     | Some plaintext -> (
-      is_knowable_by cpreds (get_label key) tr plaintext /\
+      is_knowable_by cinvs (get_label key) tr plaintext /\
       (
-        cpreds.aead_pred tr key nonce plaintext ad
+        cinvs.aead_pred tr key nonce plaintext ad
         \/
-        is_publishable cpreds tr key
+        is_publishable cinvs tr key
       )
     )
   ))
-  [SMTPat (aead_dec key nonce msg ad); SMTPat (bytes_invariant cpreds tr msg)]
-let bytes_invariant_aead_dec cpreds tr key nonce msg ad =
+  [SMTPat (aead_dec key nonce msg ad); SMTPat (bytes_invariant cinvs tr msg)]
+let bytes_invariant_aead_dec cinvs tr key nonce msg ad =
   normalize_term_spec aead_dec;
   normalize_term_spec bytes_invariant;
   normalize_term_spec get_label
@@ -611,60 +611,60 @@ let pk_dec_enc key nonce msg =
 
 // Lemma for attacker knowledge theorem
 val pk_preserves_publishability:
-  cpreds:crypto_predicates -> tr:trace ->
+  cinvs:crypto_invariants -> tr:trace ->
   sk:bytes ->
   Lemma
-  (requires is_publishable cpreds tr sk)
-  (ensures is_publishable cpreds tr (pk sk))
-let pk_preserves_publishability cpreds tr sk =
+  (requires is_publishable cinvs tr sk)
+  (ensures is_publishable cinvs tr (pk sk))
+let pk_preserves_publishability cinvs tr sk =
   normalize_term_spec pk;
   normalize_term_spec bytes_invariant;
   normalize_term_spec get_label
 
 // Lemma for attacker knowledge theorem
 val pk_enc_preserves_publishability:
-  cpreds:crypto_predicates -> tr:trace ->
+  cinvs:crypto_invariants -> tr:trace ->
   pk:bytes -> nonce:bytes -> msg:bytes ->
   Lemma
   (requires
-    is_publishable cpreds tr pk /\
-    is_publishable cpreds tr nonce /\
-    is_publishable cpreds tr msg
+    is_publishable cinvs tr pk /\
+    is_publishable cinvs tr nonce /\
+    is_publishable cinvs tr msg
   )
-  (ensures is_publishable cpreds tr (pk_enc pk nonce msg))
-let pk_enc_preserves_publishability cpreds tr pk nonce msg =
+  (ensures is_publishable cinvs tr (pk_enc pk nonce msg))
+let pk_enc_preserves_publishability cinvs tr pk nonce msg =
   normalize_term_spec pk_enc;
   normalize_term_spec bytes_invariant;
   normalize_term_spec get_label
 
 // Lemma for attacker knowledge theorem
 val pk_dec_preserves_publishability:
-  cpreds:crypto_predicates -> tr:trace ->
+  cinvs:crypto_invariants -> tr:trace ->
   sk:bytes -> msg:bytes ->
   Lemma
   (requires
-    is_publishable cpreds tr sk /\
-    is_publishable cpreds tr msg
+    is_publishable cinvs tr sk /\
+    is_publishable cinvs tr msg
   )
   (ensures (
     match pk_dec sk msg with
-    | Some res -> is_publishable cpreds tr res
+    | Some res -> is_publishable cinvs tr res
     | None -> True
   ))
-let pk_dec_preserves_publishability cpreds tr sk msg =
+let pk_dec_preserves_publishability cinvs tr sk msg =
   normalize_term_spec pk_dec;
   normalize_term_spec get_sk_label;
   normalize_term_spec bytes_invariant;
   normalize_term_spec get_label
 
 val bytes_invariant_pk:
-  cpreds:crypto_predicates -> tr:trace ->
+  cinvs:crypto_invariants -> tr:trace ->
   sk:bytes ->
   Lemma
-  (requires bytes_invariant cpreds tr sk)
-  (ensures bytes_invariant cpreds tr (pk sk))
-  [SMTPat (bytes_invariant cpreds tr (pk sk))]
-let bytes_invariant_pk cpreds tr sk =
+  (requires bytes_invariant cinvs tr sk)
+  (ensures bytes_invariant cinvs tr (pk sk))
+  [SMTPat (bytes_invariant cinvs tr (pk sk))]
+let bytes_invariant_pk cinvs tr sk =
   normalize_term_spec pk;
   normalize_term_spec bytes_invariant
 
@@ -687,20 +687,20 @@ let get_sk_label_pk sk =
   normalize_term_spec get_sk_label
 
 val bytes_invariant_pk_enc:
-  cpreds:crypto_predicates -> tr:trace ->
+  cinvs:crypto_invariants -> tr:trace ->
   pk:bytes -> nonce:bytes -> msg:bytes ->
   Lemma
   (requires
-    bytes_invariant cpreds tr pk /\
-    bytes_invariant cpreds tr nonce /\
-    bytes_invariant cpreds tr msg /\
+    bytes_invariant cinvs tr pk /\
+    bytes_invariant cinvs tr nonce /\
+    bytes_invariant cinvs tr msg /\
     (get_label msg) `can_flow tr` (get_sk_label pk) /\
     (get_label msg) `can_flow tr` (get_label nonce) /\
-    cpreds.pkenc_pred tr pk msg
+    cinvs.pkenc_pred tr pk msg
   )
-  (ensures bytes_invariant cpreds tr (pk_enc pk nonce msg))
-  [SMTPat (bytes_invariant cpreds tr (pk_enc pk nonce msg))]
-let bytes_invariant_pk_enc cpreds tr pk nonce msg =
+  (ensures bytes_invariant cinvs tr (pk_enc pk nonce msg))
+  [SMTPat (bytes_invariant cinvs tr (pk_enc pk nonce msg))]
+let bytes_invariant_pk_enc cinvs tr pk nonce msg =
   normalize_term_spec pk_enc;
   normalize_term_spec bytes_invariant
 
@@ -714,26 +714,26 @@ let get_label_pk_enc pk nonce msg =
   normalize_term_spec get_label
 
 val bytes_invariant_pk_dec:
-  cpreds:crypto_predicates -> tr:trace ->
+  cinvs:crypto_invariants -> tr:trace ->
   sk:bytes -> msg:bytes ->
   Lemma
   (requires
-    bytes_invariant cpreds tr sk /\
-    bytes_invariant cpreds tr msg
+    bytes_invariant cinvs tr sk /\
+    bytes_invariant cinvs tr msg
   )
   (ensures (
     match pk_dec sk msg with
     | None -> True
     | Some plaintext ->
-      is_knowable_by cpreds (get_label sk) tr plaintext /\
+      is_knowable_by cinvs (get_label sk) tr plaintext /\
       (
-        cpreds.pkenc_pred tr (pk sk) plaintext
+        cinvs.pkenc_pred tr (pk sk) plaintext
         \/
-        is_publishable cpreds tr plaintext
+        is_publishable cinvs tr plaintext
       )
   ))
-  [SMTPat (pk_dec sk msg); SMTPat (bytes_invariant cpreds tr msg)]
-let bytes_invariant_pk_dec cpreds tr sk msg =
+  [SMTPat (pk_dec sk msg); SMTPat (bytes_invariant cinvs tr msg)]
+let bytes_invariant_pk_dec cinvs tr sk msg =
   normalize_term_spec pk_dec;
   normalize_term_spec pk;
   normalize_term_spec get_sk_label;
@@ -771,40 +771,40 @@ let verify_sign sk nonce msg =
 
 // Lemma for attacker knowledge theorem
 val vk_preserves_publishability:
-  cpreds:crypto_predicates -> tr:trace ->
+  cinvs:crypto_invariants -> tr:trace ->
   sk:bytes ->
   Lemma
-  (requires is_publishable cpreds tr sk)
-  (ensures is_publishable cpreds tr (vk sk))
-let vk_preserves_publishability cpreds tr sk =
+  (requires is_publishable cinvs tr sk)
+  (ensures is_publishable cinvs tr (vk sk))
+let vk_preserves_publishability cinvs tr sk =
   normalize_term_spec vk;
   normalize_term_spec bytes_invariant;
   normalize_term_spec get_label
 
 // Lemma for attacker knowledge theorem
 val sign_preserves_publishability:
-  cpreds:crypto_predicates -> tr:trace ->
+  cinvs:crypto_invariants -> tr:trace ->
   sk:bytes -> nonce:bytes -> msg:bytes ->
   Lemma
   (requires
-    is_publishable cpreds tr sk /\
-    is_publishable cpreds tr nonce /\
-    is_publishable cpreds tr msg
+    is_publishable cinvs tr sk /\
+    is_publishable cinvs tr nonce /\
+    is_publishable cinvs tr msg
   )
-  (ensures is_publishable cpreds tr (sign sk nonce msg))
-let sign_preserves_publishability cpreds tr sk nonce msg =
+  (ensures is_publishable cinvs tr (sign sk nonce msg))
+let sign_preserves_publishability cinvs tr sk nonce msg =
   normalize_term_spec sign;
   normalize_term_spec bytes_invariant;
   normalize_term_spec get_label
 
 val bytes_invariant_vk:
-  cpreds:crypto_predicates -> tr:trace ->
+  cinvs:crypto_invariants -> tr:trace ->
   sk:bytes ->
   Lemma
-  (requires bytes_invariant cpreds tr sk)
-  (ensures bytes_invariant cpreds tr (pk sk))
-  [SMTPat (bytes_invariant cpreds tr (pk sk))]
-let bytes_invariant_vk cpreds tr sk =
+  (requires bytes_invariant cinvs tr sk)
+  (ensures bytes_invariant cinvs tr (pk sk))
+  [SMTPat (bytes_invariant cinvs tr (pk sk))]
+let bytes_invariant_vk cinvs tr sk =
   normalize_term_spec vk;
   normalize_term_spec bytes_invariant
 
@@ -827,19 +827,19 @@ let get_signkey_label_vk sk =
   normalize_term_spec get_signkey_label
 
 val bytes_invariant_sign:
-  cpreds:crypto_predicates -> tr:trace ->
+  cinvs:crypto_invariants -> tr:trace ->
   sk:bytes -> nonce:bytes -> msg:bytes ->
   Lemma
   (requires
-    bytes_invariant cpreds tr sk /\
-    bytes_invariant cpreds tr nonce /\
-    bytes_invariant cpreds tr msg /\
-    bytes_invariant cpreds tr sk /\
-    cpreds.sign_pred tr (vk sk) msg
+    bytes_invariant cinvs tr sk /\
+    bytes_invariant cinvs tr nonce /\
+    bytes_invariant cinvs tr msg /\
+    bytes_invariant cinvs tr sk /\
+    cinvs.sign_pred tr (vk sk) msg
   )
-  (ensures bytes_invariant cpreds tr (sign sk nonce msg))
-  [SMTPat (bytes_invariant cpreds tr (sign sk nonce msg))]
-let bytes_invariant_sign cpreds tr sk nonce msg =
+  (ensures bytes_invariant cinvs tr (sign sk nonce msg))
+  [SMTPat (bytes_invariant cinvs tr (sign sk nonce msg))]
+let bytes_invariant_sign cinvs tr sk nonce msg =
   normalize_term_spec sign;
   normalize_term_spec vk;
   normalize_term_spec bytes_invariant
@@ -854,22 +854,22 @@ let get_label_sign sk nonce msg =
   normalize_term_spec get_label
 
 val bytes_invariant_verify:
-  cpreds:crypto_predicates -> tr:trace ->
+  cinvs:crypto_invariants -> tr:trace ->
   vk:bytes -> msg:bytes -> signature:bytes ->
   Lemma
   (requires
-    bytes_invariant cpreds tr vk /\
-    bytes_invariant cpreds tr msg /\
-    bytes_invariant cpreds tr signature /\
+    bytes_invariant cinvs tr vk /\
+    bytes_invariant cinvs tr msg /\
+    bytes_invariant cinvs tr signature /\
     verify vk msg signature
   )
   (ensures
-    cpreds.sign_pred tr vk msg
+    cinvs.sign_pred tr vk msg
     \/
     (get_signkey_label vk) `can_flow tr` public
   )
-  [SMTPat (verify vk msg signature); SMTPat (bytes_invariant cpreds tr signature)]
-let bytes_invariant_verify cpreds tr vk msg signature =
+  [SMTPat (verify vk msg signature); SMTPat (bytes_invariant cinvs tr signature)]
+let bytes_invariant_verify cinvs tr vk msg signature =
   normalize_term_spec verify;
   normalize_term_spec get_signkey_label;
   normalize_term_spec bytes_invariant;
@@ -883,25 +883,25 @@ let hash msg = Hash msg
 
 // Lemma for attacker knowledge theorem
 val hash_preserves_publishability:
-  cpreds:crypto_predicates -> tr:trace ->
+  cinvs:crypto_invariants -> tr:trace ->
   msg:bytes ->
   Lemma
-  (requires is_publishable cpreds tr msg)
-  (ensures is_publishable cpreds tr (hash msg))
-let hash_preserves_publishability cpreds tr msg =
+  (requires is_publishable cinvs tr msg)
+  (ensures is_publishable cinvs tr (hash msg))
+let hash_preserves_publishability cinvs tr msg =
   normalize_term_spec hash;
   normalize_term_spec bytes_invariant;
   normalize_term_spec get_label
 
 // Lemmas for the user
 val bytes_invariant_hash:
-  cpreds:crypto_predicates -> tr:trace ->
+  cinvs:crypto_invariants -> tr:trace ->
   msg:bytes ->
   Lemma
-  (requires bytes_invariant cpreds tr msg)
-  (ensures bytes_invariant cpreds tr (hash msg))
-  [SMTPat (hash msg); SMTPat (bytes_invariant cpreds tr msg)]
-let bytes_invariant_hash cpreds tr msg =
+  (requires bytes_invariant cinvs tr msg)
+  (ensures bytes_invariant cinvs tr (hash msg))
+  [SMTPat (hash msg); SMTPat (bytes_invariant cinvs tr msg)]
+let bytes_invariant_hash cinvs tr msg =
   normalize_term_spec hash;
   normalize_term_spec bytes_invariant
 
