@@ -69,21 +69,6 @@ val prefix_grows:
   //[SMTPat ((prefix tr i) <$ tr)]
 let prefix_grows tr i = ()
 
-//type stable_trace_pred =
-//  pred:(trace -> prop){forall tr1 tr2. tr1 <$ tr2 /\ pred tr1 ==> pred tr2}
-//
-//val mk_stable_trace_pred:
-//  pred:(trace -> prop) ->
-//  pf:(tr1:trace -> tr2:trace -> Lemma (requires tr1 <$ tr2 /\ pred tr1) (ensures pred tr2)) ->
-//  stable_trace_pred
-//let mk_stable_trace_pred pred pf =
-//  introduce forall tr1 tr2. tr1 <$ tr2 /\ pred tr1 ==> pred tr2 with (
-//    introduce _ ==> _ with _. (
-//      pf tr1 tr2
-//    )
-//  );
-//  pred
-
 val get_event_at: tr:trace -> i:nat{i < length tr} -> trace_event
 let rec get_event_at tr i =
   if i+1 = length tr then
