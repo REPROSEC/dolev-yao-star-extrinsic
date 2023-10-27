@@ -595,8 +595,6 @@ let get_label_aead_enc cusages key nonce msg ad =
   normalize_term_spec aead_enc;
   normalize_term_spec get_label
 
-//TODO: is there a good reason for such a high rlimit?
-#push-options "--z3rlimit 400 --fuel 0"
 val bytes_invariant_aead_dec:
   cinvs:crypto_invariants -> tr:trace ->
   key:bytes -> nonce:bytes -> msg:bytes -> ad:bytes ->
@@ -627,8 +625,10 @@ val bytes_invariant_aead_dec:
 let bytes_invariant_aead_dec cinvs tr key nonce msg ad =
   normalize_term_spec aead_dec;
   normalize_term_spec bytes_invariant;
-  normalize_term_spec get_label
-#pop-options
+  normalize_term_spec get_label;
+  match aead_dec key nonce msg ad with
+  | None -> ()
+  | Some msg -> ()
 
 (*** Public-key encryption ***)
 
