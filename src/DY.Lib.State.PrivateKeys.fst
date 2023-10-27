@@ -3,15 +3,16 @@ module DY.Lib.State.PrivateKeys
 open Comparse
 open DY.Core
 open DY.Lib.Comparse.Glue
+open DY.Lib.Comparse.Parsers
 open DY.Lib.State.Map
 
 #set-options "--fuel 1 --ifuel 1"
 
 (*** Private keys types & invariants ***)
 
-type private_key_type =
-  | PkDec: private_key_type
-  | Sign: private_key_type
+type private_key_type (bytes:Type0) {|bytes_like bytes|} =
+  | PkDec: [@@@with_parser #bytes ps_string] usage:string -> private_key_type bytes
+  | Sign: [@@@with_parser #bytes ps_string] usage:string -> private_key_type bytes
 
 %splice [ps_private_key_type] (gen_parser (`private_key_type))
 %splice [ps_private_key_type_is_well_formed] (gen_is_well_formed_lemma (`private_key_type))
@@ -25,7 +26,7 @@ type private_key_value (bytes:Type0) {|bytes_like bytes|} = {
 
 val private_keys_types: map_types bytes
 let private_keys_types = {
-  key = private_key_type;
+  key = private_key_type bytes;
   ps_key = ps_private_key_type;
   value = private_key_value bytes;
   ps_value = ps_private_key_value;
@@ -33,16 +34,14 @@ let private_keys_types = {
 
 val is_private_key_for:
   crypto_invariants -> trace ->
-  bytes -> private_key_type -> principal -> prop
+  bytes -> private_key_type bytes -> principal -> prop
 let is_private_key_for cinvs tr sk sk_type who =
     match sk_type with
-    | PkDec -> (
-      bytes_invariant cinvs tr sk /\
-      get_label sk == principal_label who
+    | PkDec usg -> (
+      is_decryption_key cinvs usg (principal_label who) tr sk
     )
-    | Sign -> (
-      bytes_invariant cinvs tr sk /\
-      get_label sk == principal_label who
+    | Sign usg -> (
+      is_signature_key cinvs usg (principal_label who) tr sk
     )
 
 val private_keys_pred: map_predicate private_keys_types
@@ -61,17 +60,25 @@ val has_private_keys_invariant: protocol_invariants -> prop
 let has_private_keys_invariant pr =
   has_map_session_invariant private_keys_pred private_keys_label pr
 
+val private_key_type_to_usage:
+  private_key_type bytes ->
+  usage
+let private_key_type_to_usage sk_type =
+  match sk_type with
+  | PkDec usg -> PkdecKey usg
+  | Sign usg -> SigKey usg
+
 (*** Private Keys API ***)
 
 val initialize_private_keys: prin:principal -> crypto nat
 let initialize_private_keys = initialize_map private_keys_types private_keys_label
 
-val generate_private_key: principal -> nat -> private_key_type -> crypto (option unit)
+val generate_private_key: principal -> nat -> private_key_type bytes -> crypto (option unit)
 let generate_private_key prin sess_id sk_type =
-  let* sk = mk_rand (principal_label prin) 64 in //TODO
+  let* sk = mk_rand (private_key_type_to_usage sk_type) (principal_label prin) 64 in //TODO
   add_key_value private_keys_types private_keys_label prin sess_id sk_type ({private_key = sk;})
 
-val get_private_key: principal -> nat -> private_key_type -> crypto (option bytes)
+val get_private_key: principal -> nat -> private_key_type bytes -> crypto (option bytes)
 let get_private_key prin sess_id sk_type =
   let*? res = find_value private_keys_types private_keys_label prin sess_id sk_type in
   return (Some res.private_key)
@@ -95,7 +102,7 @@ let initialize_private_keys_invariant invs prin tr = ()
 
 val generate_private_key_invariant:
   invs:protocol_invariants ->
-  prin:principal -> sess_id:nat -> sk_type:private_key_type -> tr:trace ->
+  prin:principal -> sess_id:nat -> sk_type:private_key_type bytes -> tr:trace ->
   Lemma
   (requires
     trace_invariant invs tr /\
@@ -112,7 +119,7 @@ let generate_private_key_invariant invs prin sess_id sk_type tr = ()
 
 val get_private_key_invariant:
   invs:protocol_invariants ->
-  prin:principal -> sess_id:nat -> pk_type:private_key_type -> tr:trace ->
+  prin:principal -> sess_id:nat -> pk_type:private_key_type bytes -> tr:trace ->
   Lemma
   (requires
     trace_invariant invs tr /\

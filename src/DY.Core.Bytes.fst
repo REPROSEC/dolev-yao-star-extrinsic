@@ -14,7 +14,7 @@ let rec length b =
   match b with
   | Literal buf ->
     Seq.length buf
-  | Rand label len time ->
+  | Rand usg label len time ->
     len
   | Concat left right ->
     length left + length right
@@ -31,16 +31,28 @@ let rec length b =
   | Hash msg ->
     32
 
+noeq type crypto_usages = {
+  __nothing: unit;
+}
+
 [@@"opaque_to_smt"]
-val get_label: bytes -> label
-let rec get_label b =
+val get_usage: crypto_usages -> bytes -> usage
+let get_usage cusages b =
+  match b with
+  | Rand usg label len time ->
+    usg
+  | _ -> Unknown
+
+[@@"opaque_to_smt"]
+val get_label: crypto_usages -> bytes -> label
+let rec get_label cusages b =
   match b with
   | Literal buf ->
     public
-  | Rand label len time ->
+  | Rand usg label len time ->
     label
   | Concat left right ->
-    meet (get_label left) (get_label right)
+    meet (get_label cusages left) (get_label cusages right)
   | Aead key nonce msg ad ->
     public
   | Pk sk ->
@@ -50,48 +62,62 @@ let rec get_label b =
   | Vk sk ->
     public
   | Sign sk nonce msg ->
-    get_label msg
+    get_label cusages msg
   | Hash msg ->
-    get_label msg
+    get_label cusages msg
 
 [@@"opaque_to_smt"]
-val get_sk_label: bytes -> label
-let get_sk_label pk =
+val get_sk_label: crypto_usages -> bytes -> label
+let get_sk_label cusages pk =
   match pk with
-  | Pk sk -> get_label sk
+  | Pk sk -> get_label cusages sk
   | _ -> public
 
 [@@"opaque_to_smt"]
-val get_signkey_label: bytes -> label
-let get_signkey_label pk =
+val get_sk_usage: crypto_usages -> bytes -> usage
+let get_sk_usage cusages pk =
   match pk with
-  | Vk sk -> get_label sk
+  | Pk sk -> get_usage cusages sk
+  | _ -> Unknown
+
+[@@"opaque_to_smt"]
+val get_signkey_label: crypto_usages -> bytes -> label
+let get_signkey_label cusages pk =
+  match pk with
+  | Vk sk -> get_label cusages sk
   | _ -> public
+
+[@@"opaque_to_smt"]
+val get_signkey_usage: crypto_usages -> bytes -> usage
+let get_signkey_usage cusages pk =
+  match pk with
+  | Vk sk -> get_usage cusages sk
+  | _ -> Unknown
 
 noeq
-type crypto_invariants = {
-  aead_pred: tr:trace -> key:bytes -> nonce:bytes -> msg:bytes -> ad:bytes -> prop;
+type crypto_predicates (cusages:crypto_usages) = {
+  aead_pred: tr:trace -> key:bytes{AeadKey? (get_usage cusages key)} -> nonce:bytes -> msg:bytes -> ad:bytes -> prop;
   aead_pred_later:
     tr1:trace -> tr2:trace ->
-    key:bytes -> nonce:bytes -> msg:bytes -> ad:bytes ->
+    key:bytes{AeadKey? (get_usage cusages key)} -> nonce:bytes -> msg:bytes -> ad:bytes ->
     Lemma
     (requires aead_pred tr1 key nonce msg ad /\ tr1 <$ tr2)
     (ensures aead_pred tr2 key nonce msg ad)
   ;
 
-  pkenc_pred: tr:trace -> pk:bytes -> msg:bytes -> prop;
+  pkenc_pred: tr:trace -> pk:bytes{PkdecKey? (get_sk_usage cusages pk)} -> msg:bytes -> prop;
   pkenc_pred_later:
     tr1:trace -> tr2:trace ->
-    pk:bytes -> msg:bytes ->
+    pk:bytes{PkdecKey? (get_sk_usage cusages pk)} -> msg:bytes ->
     Lemma
     (requires pkenc_pred tr1 pk msg /\ tr1 <$ tr2)
     (ensures pkenc_pred tr2 pk msg)
   ;
 
-  sign_pred: tr:trace -> vk:bytes -> msg:bytes -> prop;
+  sign_pred: tr:trace -> vk:bytes{SigKey? (get_signkey_usage cusages vk)} -> msg:bytes -> prop;
   sign_pred_later:
     tr1:trace -> tr2:trace ->
-    vk:bytes -> msg:bytes ->
+    vk:bytes{SigKey? (get_signkey_usage cusages vk)} -> msg:bytes ->
     Lemma
     (requires sign_pred tr1 vk msg /\ tr1 <$ tr2)
     (ensures sign_pred tr2 vk msg)
@@ -100,14 +126,19 @@ type crypto_invariants = {
   // ...
 }
 
+noeq type crypto_invariants = {
+  usages: crypto_usages;
+  preds: crypto_predicates usages;
+}
+
 [@@"opaque_to_smt"]
 val bytes_invariant: crypto_invariants -> trace -> bytes -> prop
 let rec bytes_invariant cinvs tr b =
   match b with
   | Literal buf ->
     True
-  | Rand label len time ->
-    event_at tr time (RandGen label len)
+  | Rand usage label len time ->
+    event_at tr time (RandGen usage label len)
   | Concat left right ->
     bytes_invariant cinvs tr left /\
     bytes_invariant cinvs tr right
@@ -116,17 +147,18 @@ let rec bytes_invariant cinvs tr b =
     bytes_invariant cinvs tr nonce /\
     bytes_invariant cinvs tr msg /\
     bytes_invariant cinvs tr ad /\
-    (get_label nonce) `can_flow tr` public /\
-    (get_label ad) `can_flow tr` public /\
+    (get_label cinvs.usages nonce) `can_flow tr` public /\
+    (get_label cinvs.usages ad) `can_flow tr` public /\
     (
       (
         // Honest case
-        cinvs.aead_pred tr key nonce msg ad /\
-        (get_label msg) `can_flow tr` (get_label key)
+        AeadKey? (get_usage cinvs.usages key) /\
+        cinvs.preds.aead_pred tr key nonce msg ad /\
+        (get_label cinvs.usages msg) `can_flow tr` (get_label cinvs.usages key)
       ) \/ (
         // Attacker case
-        (get_label key) `can_flow tr` public /\
-        (get_label msg) `can_flow tr` public
+        (get_label cinvs.usages key) `can_flow tr` public /\
+        (get_label cinvs.usages msg) `can_flow tr` public
       )
     )
   | Pk sk ->
@@ -138,14 +170,15 @@ let rec bytes_invariant cinvs tr b =
     (
       (
         // Honest case
-        (get_label msg) `can_flow tr` (get_sk_label pk) /\
-        (get_label msg) `can_flow tr` (get_label nonce) /\
-        cinvs.pkenc_pred tr pk msg
+        PkdecKey? (get_sk_usage cinvs.usages pk) /\
+        (get_label cinvs.usages msg) `can_flow tr` (get_sk_label cinvs.usages pk) /\
+        (get_label cinvs.usages msg) `can_flow tr` (get_label cinvs.usages nonce) /\
+        cinvs.preds.pkenc_pred tr pk msg
       ) \/ (
         // Attacker case
-        (get_label pk) `can_flow tr` public /\
-        (get_label nonce) `can_flow tr` public /\
-        (get_label msg) `can_flow tr` public
+        (get_label cinvs.usages pk) `can_flow tr` public /\
+        (get_label cinvs.usages nonce) `can_flow tr` public /\
+        (get_label cinvs.usages msg) `can_flow tr` public
       )
     )
   | Vk sk ->
@@ -157,12 +190,13 @@ let rec bytes_invariant cinvs tr b =
     (
       (
         // Honest case
-        cinvs.sign_pred tr (Vk sk) msg
+        SigKey? (get_signkey_usage cinvs.usages (Vk sk)) /\
+        cinvs.preds.sign_pred tr (Vk sk) msg
       ) \/ (
         // Attacker case
-        (get_label sk) `can_flow tr` public /\
-        (get_label nonce) `can_flow tr` public /\
-        (get_label msg) `can_flow tr` public
+        (get_label cinvs.usages sk) `can_flow tr` public /\
+        (get_label cinvs.usages nonce) `can_flow tr` public /\
+        (get_label cinvs.usages msg) `can_flow tr` public
       )
     )
   | Hash msg ->
@@ -179,30 +213,39 @@ let rec bytes_invariant_later cinvs tr1 tr2 msg =
   normalize_term_spec bytes_invariant;
   match msg with
   | Literal buf -> ()
-  | Rand label len time -> ()
+  | Rand usage label len time -> ()
   | Concat left right ->
     bytes_invariant_later cinvs tr1 tr2 left;
     bytes_invariant_later cinvs tr1 tr2 right
-  | Aead key nonce msg ad ->
-    FStar.Classical.move_requires (cinvs.aead_pred_later tr1 tr2 key nonce msg) ad;
+  | Aead key nonce msg ad -> (
     bytes_invariant_later cinvs tr1 tr2 key;
     bytes_invariant_later cinvs tr1 tr2 nonce;
     bytes_invariant_later cinvs tr1 tr2 msg;
-    bytes_invariant_later cinvs tr1 tr2 ad
+    bytes_invariant_later cinvs tr1 tr2 ad;
+    match get_usage cinvs.usages key with
+    | AeadKey _ -> FStar.Classical.move_requires (cinvs.preds.aead_pred_later tr1 tr2 key nonce msg) ad
+    | _ -> ()
+  )
   | Pk sk ->
     bytes_invariant_later cinvs tr1 tr2 sk
-  | PkEnc pk nonce msg ->
-    FStar.Classical.move_requires (cinvs.pkenc_pred_later tr1 tr2 pk) msg;
+  | PkEnc pk nonce msg -> (
     bytes_invariant_later cinvs tr1 tr2 pk;
     bytes_invariant_later cinvs tr1 tr2 nonce;
-    bytes_invariant_later cinvs tr1 tr2 msg
+    bytes_invariant_later cinvs tr1 tr2 msg;
+    match get_sk_usage cinvs.usages pk with
+    | PkdecKey _ -> FStar.Classical.move_requires (cinvs.preds.pkenc_pred_later tr1 tr2 pk) msg
+    | _ -> ()
+  )
   | Vk sk ->
     bytes_invariant_later cinvs tr1 tr2 sk
-  | Sign sk nonce msg ->
+  | Sign sk nonce msg -> (
     bytes_invariant_later cinvs tr1 tr2 sk;
     bytes_invariant_later cinvs tr1 tr2 nonce;
     bytes_invariant_later cinvs tr1 tr2 msg;
-    FStar.Classical.move_requires (cinvs.sign_pred_later tr1 tr2 (Vk sk)) msg
+    match get_signkey_usage cinvs.usages (Vk sk) with
+    | SigKey _ -> FStar.Classical.move_requires (cinvs.preds.sign_pred_later tr1 tr2 (Vk sk)) msg
+    | _ -> ()
+  )
   | Hash msg ->
     bytes_invariant_later cinvs tr1 tr2 msg
 
@@ -210,7 +253,7 @@ let rec bytes_invariant_later cinvs tr1 tr2 msg =
 
 val is_knowable_by: crypto_invariants -> label -> trace -> bytes -> prop
 let is_knowable_by cinvs lab tr b =
-  bytes_invariant cinvs tr b /\ (get_label b) `can_flow tr` lab
+  bytes_invariant cinvs tr b /\ (get_label cinvs.usages b) `can_flow tr` lab
 
 val is_publishable: crypto_invariants -> trace -> bytes -> prop
 let is_publishable cinvs tr b =
@@ -218,23 +261,27 @@ let is_publishable cinvs tr b =
 
 val is_secret: crypto_invariants -> label -> trace -> bytes -> prop
 let is_secret cinvs lab tr b =
-  bytes_invariant cinvs tr b /\ (get_label b) == lab
+  bytes_invariant cinvs tr b /\ (get_label cinvs.usages b) == lab
 
-val is_verification_key: crypto_invariants -> label -> trace -> bytes -> prop
-let is_verification_key cinvs lab tr b =
-  is_publishable cinvs tr b /\ (get_signkey_label b) == lab
+val is_verification_key: crypto_invariants -> string -> label -> trace -> bytes -> prop
+let is_verification_key cinvs usg lab tr b =
+  is_publishable cinvs tr b /\ (get_signkey_label cinvs.usages b) == lab /\
+  get_signkey_usage cinvs.usages b == SigKey usg
 
-val is_signature_key: crypto_invariants -> label -> trace -> bytes -> prop
-let is_signature_key cinvs lab tr b =
-  bytes_invariant cinvs tr b /\ (get_label b) == lab
+val is_signature_key: crypto_invariants -> string -> label -> trace -> bytes -> prop
+let is_signature_key cinvs usg lab tr b =
+  is_secret cinvs lab tr b /\
+  get_usage cinvs.usages b == SigKey usg
 
-val is_encryption_key: crypto_invariants -> label -> trace -> bytes -> prop
-let is_encryption_key cinvs lab tr b =
-  is_publishable cinvs tr b /\ (get_sk_label b) == lab
+val is_encryption_key: crypto_invariants -> string -> label -> trace -> bytes -> prop
+let is_encryption_key cinvs usg lab tr b =
+  is_publishable cinvs tr b /\ (get_sk_label cinvs.usages b) == lab /\
+  get_sk_usage cinvs.usages b == PkdecKey usg
 
-val is_decryption_key: crypto_invariants -> label -> trace -> bytes -> prop
-let is_decryption_key cinvs lab tr b =
-  bytes_invariant cinvs tr b /\ (get_label b) == lab
+val is_decryption_key: crypto_invariants -> string -> label -> trace -> bytes -> prop
+let is_decryption_key cinvs usg lab tr b =
+  is_secret cinvs lab tr b /\
+  get_usage cinvs.usages b == PkdecKey usg
 
 (*** Literal ***)
 
@@ -413,11 +460,12 @@ let bytes_invariant_split cinvs tr b i =
   normalize_term_spec bytes_invariant
 
 val get_label_concat:
+  cusages:crypto_usages ->
   b1:bytes -> b2:bytes ->
   Lemma
-  (ensures get_label (concat b1 b2) == meet (get_label b1) (get_label b2))
-  [SMTPat (get_label (concat b1 b2))]
-let get_label_concat b1 b2 =
+  (ensures get_label cusages (concat b1 b2) == meet (get_label cusages b1) (get_label cusages b2))
+  [SMTPat (get_label cusages (concat b1 b2))]
+let get_label_concat cusages b1 b2 =
   normalize_term_spec concat;
   normalize_term_spec get_label
 
@@ -525,10 +573,11 @@ val bytes_invariant_aead_enc:
     bytes_invariant cinvs tr nonce /\
     bytes_invariant cinvs tr msg /\
     bytes_invariant cinvs tr ad /\
-    (get_label nonce) `can_flow tr` public /\
-    (get_label ad) `can_flow tr` public /\
-    (get_label msg) `can_flow tr` (get_label key) /\
-    cinvs.aead_pred tr key nonce msg ad
+    (get_label cinvs.usages nonce) `can_flow tr` public /\
+    (get_label cinvs.usages ad) `can_flow tr` public /\
+    (get_label cinvs.usages msg) `can_flow tr` (get_label cinvs.usages key) /\
+    AeadKey? (get_usage cinvs.usages key) /\
+    cinvs.preds.aead_pred tr key nonce msg ad
   )
   (ensures bytes_invariant cinvs tr (aead_enc key nonce msg ad))
   [SMTPat (bytes_invariant cinvs tr (aead_enc key nonce msg ad))]
@@ -537,16 +586,17 @@ let bytes_invariant_aead_enc cinvs tr key nonce msg ad =
   normalize_term_spec bytes_invariant
 
 val get_label_aead_enc:
+  cusages:crypto_usages ->
   key:bytes -> nonce:bytes -> msg:bytes -> ad:bytes ->
   Lemma
-  (ensures get_label (aead_enc key nonce msg ad) = public)
-  [SMTPat (get_label (aead_enc key nonce msg ad))]
-let get_label_aead_enc key nonce msg ad =
+  (ensures get_label cusages (aead_enc key nonce msg ad) = public)
+  [SMTPat (get_label cusages (aead_enc key nonce msg ad))]
+let get_label_aead_enc cusages key nonce msg ad =
   normalize_term_spec aead_enc;
   normalize_term_spec get_label
 
 //TODO: is there a good reason for such a high rlimit?
-#push-options "--z3rlimit 200 --fuel 0"
+#push-options "--z3rlimit 400 --fuel 0"
 val bytes_invariant_aead_dec:
   cinvs:crypto_invariants -> tr:trace ->
   key:bytes -> nonce:bytes -> msg:bytes -> ad:bytes ->
@@ -562,11 +612,14 @@ val bytes_invariant_aead_dec:
     match aead_dec key nonce msg ad with
     | None -> True
     | Some plaintext -> (
-      is_knowable_by cinvs (get_label key) tr plaintext /\
+      is_knowable_by cinvs (get_label cinvs.usages key) tr plaintext /\
       (
-        cinvs.aead_pred tr key nonce plaintext ad
-        \/
-        is_publishable cinvs tr key
+        (
+          AeadKey? (get_usage cinvs.usages key) ==>
+          cinvs.preds.aead_pred tr key nonce plaintext ad
+        ) \/ (
+          is_publishable cinvs tr key
+        )
       )
     )
   ))
@@ -669,22 +722,34 @@ let bytes_invariant_pk cinvs tr sk =
   normalize_term_spec bytes_invariant
 
 val get_label_pk:
+  cusages:crypto_usages ->
   sk:bytes ->
   Lemma
-  (ensures get_label (pk sk) == public)
-  [SMTPat (get_label (pk sk))]
-let get_label_pk sk =
+  (ensures get_label cusages (pk sk) == public)
+  [SMTPat (get_label cusages (pk sk))]
+let get_label_pk cusages sk =
   normalize_term_spec pk;
   normalize_term_spec get_label
 
 val get_sk_label_pk:
+  cusages:crypto_usages ->
   sk:bytes ->
   Lemma
-  (ensures get_sk_label (pk sk) == get_label sk)
-  [SMTPat (get_sk_label (pk sk))]
-let get_sk_label_pk sk =
+  (ensures get_sk_label cusages (pk sk) == get_label cusages sk)
+  [SMTPat (get_sk_label cusages (pk sk))]
+let get_sk_label_pk cusages sk =
   normalize_term_spec pk;
   normalize_term_spec get_sk_label
+
+val get_sk_usage_pk:
+  cusages:crypto_usages ->
+  sk:bytes ->
+  Lemma
+  (ensures get_sk_usage cusages (pk sk) == get_usage cusages sk)
+  [SMTPat (get_sk_usage cusages (pk sk))]
+let get_sk_usage_pk cusages sk =
+  normalize_term_spec pk;
+  normalize_term_spec get_sk_usage
 
 val bytes_invariant_pk_enc:
   cinvs:crypto_invariants -> tr:trace ->
@@ -694,9 +759,10 @@ val bytes_invariant_pk_enc:
     bytes_invariant cinvs tr pk /\
     bytes_invariant cinvs tr nonce /\
     bytes_invariant cinvs tr msg /\
-    (get_label msg) `can_flow tr` (get_sk_label pk) /\
-    (get_label msg) `can_flow tr` (get_label nonce) /\
-    cinvs.pkenc_pred tr pk msg
+    (get_label cinvs.usages msg) `can_flow tr` (get_sk_label cinvs.usages pk) /\
+    (get_label cinvs.usages msg) `can_flow tr` (get_label cinvs.usages nonce) /\
+    PkdecKey? (get_sk_usage cinvs.usages pk) /\
+    cinvs.preds.pkenc_pred tr pk msg
   )
   (ensures bytes_invariant cinvs tr (pk_enc pk nonce msg))
   [SMTPat (bytes_invariant cinvs tr (pk_enc pk nonce msg))]
@@ -705,11 +771,12 @@ let bytes_invariant_pk_enc cinvs tr pk nonce msg =
   normalize_term_spec bytes_invariant
 
 val get_label_pk_enc:
+  cusages:crypto_usages ->
   pk:bytes -> nonce:bytes -> msg:bytes ->
   Lemma
-  (ensures get_label (pk_enc pk nonce msg) == public)
-  [SMTPat (get_label (pk_enc pk nonce msg))]
-let get_label_pk_enc pk nonce msg =
+  (ensures get_label cusages (pk_enc pk nonce msg) == public)
+  [SMTPat (get_label cusages (pk_enc pk nonce msg))]
+let get_label_pk_enc cusages pk nonce msg =
   normalize_term_spec pk_enc;
   normalize_term_spec get_label
 
@@ -725,11 +792,14 @@ val bytes_invariant_pk_dec:
     match pk_dec sk msg with
     | None -> True
     | Some plaintext ->
-      is_knowable_by cinvs (get_label sk) tr plaintext /\
+      is_knowable_by cinvs (get_label cinvs.usages sk) tr plaintext /\
       (
-        cinvs.pkenc_pred tr (pk sk) plaintext
-        \/
-        is_publishable cinvs tr plaintext
+        (
+          PkdecKey? (get_sk_usage cinvs.usages (pk sk)) ==>
+          cinvs.preds.pkenc_pred tr (pk sk) plaintext
+        ) \/ (
+          is_publishable cinvs tr plaintext
+        )
       )
   ))
   [SMTPat (pk_dec sk msg); SMTPat (bytes_invariant cinvs tr msg)]
@@ -809,22 +879,34 @@ let bytes_invariant_vk cinvs tr sk =
   normalize_term_spec bytes_invariant
 
 val get_label_vk:
+  cusages:crypto_usages ->
   sk:bytes ->
   Lemma
-  (ensures get_label (vk sk) == public)
-  [SMTPat (get_label (vk sk))]
-let get_label_vk sk =
+  (ensures get_label cusages (vk sk) == public)
+  [SMTPat (get_label cusages (vk sk))]
+let get_label_vk cusages sk =
   normalize_term_spec vk;
   normalize_term_spec get_label
 
 val get_signkey_label_vk:
+  cusages:crypto_usages ->
   sk:bytes ->
   Lemma
-  (ensures get_signkey_label (vk sk) == get_label sk)
-  [SMTPat (get_signkey_label (vk sk))]
-let get_signkey_label_vk sk =
+  (ensures get_signkey_label cusages (vk sk) == get_label cusages sk)
+  [SMTPat (get_signkey_label cusages (vk sk))]
+let get_signkey_label_vk cusages sk =
   normalize_term_spec vk;
   normalize_term_spec get_signkey_label
+
+val get_signkey_usage_vk:
+  cusages:crypto_usages ->
+  sk:bytes ->
+  Lemma
+  (ensures get_signkey_usage cusages (vk sk) == get_usage cusages sk)
+  [SMTPat (get_signkey_usage cusages (vk sk))]
+let get_signkey_usage_vk cusages sk =
+  normalize_term_spec vk;
+  normalize_term_spec get_signkey_usage
 
 val bytes_invariant_sign:
   cinvs:crypto_invariants -> tr:trace ->
@@ -835,7 +917,8 @@ val bytes_invariant_sign:
     bytes_invariant cinvs tr nonce /\
     bytes_invariant cinvs tr msg /\
     bytes_invariant cinvs tr sk /\
-    cinvs.sign_pred tr (vk sk) msg
+    SigKey? (get_usage cinvs.usages sk) /\
+    cinvs.preds.sign_pred tr (vk sk) msg
   )
   (ensures bytes_invariant cinvs tr (sign sk nonce msg))
   [SMTPat (bytes_invariant cinvs tr (sign sk nonce msg))]
@@ -845,11 +928,12 @@ let bytes_invariant_sign cinvs tr sk nonce msg =
   normalize_term_spec bytes_invariant
 
 val get_label_sign:
+  cusages:crypto_usages ->
   sk:bytes -> nonce:bytes -> msg:bytes ->
   Lemma
-  (ensures get_label (sign sk nonce msg) == get_label msg)
-  [SMTPat (get_label (sign sk nonce msg))]
-let get_label_sign sk nonce msg =
+  (ensures get_label cusages (sign sk nonce msg) == get_label cusages msg)
+  [SMTPat (get_label cusages (sign sk nonce msg))]
+let get_label_sign cusages sk nonce msg =
   normalize_term_spec sign;
   normalize_term_spec get_label
 
@@ -864,9 +948,12 @@ val bytes_invariant_verify:
     verify vk msg signature
   )
   (ensures
-    cinvs.sign_pred tr vk msg
-    \/
-    (get_signkey_label vk) `can_flow tr` public
+    (
+      SigKey? (get_signkey_usage cinvs.usages vk) ==>
+      cinvs.preds.sign_pred tr vk msg
+    ) \/ (
+      (get_signkey_label cinvs.usages vk) `can_flow tr` public
+    )
   )
   [SMTPat (verify vk msg signature); SMTPat (bytes_invariant cinvs tr signature)]
 let bytes_invariant_verify cinvs tr vk msg signature =
@@ -906,10 +993,11 @@ let bytes_invariant_hash cinvs tr msg =
   normalize_term_spec bytes_invariant
 
 val get_label_hash:
+  cusages:crypto_usages ->
   msg:bytes ->
-  Lemma (get_label (hash msg) == get_label msg)
-  [SMTPat (get_label (hash msg))]
-let get_label_hash msg =
+  Lemma (get_label cusages (hash msg) == get_label cusages msg)
+  [SMTPat (get_label cusages (hash msg))]
+let get_label_hash cusages msg =
   normalize_term_spec hash;
   normalize_term_spec get_label
 

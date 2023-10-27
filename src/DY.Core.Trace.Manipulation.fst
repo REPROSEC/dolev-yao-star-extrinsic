@@ -6,6 +6,8 @@ open DY.Core.Bytes.Type
 open DY.Core.Bytes
 open DY.Core.Label.Type
 
+#set-options "--fuel 1 --ifuel 1"
+
 (*** Trace monad ***)
 
 type crypto a = tr_in:trace -> (a & tr_out:trace{tr_in <$ tr_out})
@@ -135,50 +137,65 @@ let corrupt_invariant invs prin sess_id tr = ()
 
 (*** Random number generation ***)
 
-val mk_rand: lab:label -> len:nat{len <> 0} -> crypto bytes
-let mk_rand lab len =
+val mk_rand: usg:usage -> lab:label -> len:nat{len <> 0} -> crypto bytes
+let mk_rand usg lab len =
   let* time = get_time in
-  add_event (RandGen lab len);*
-  return (Rand lab len time)
+  add_event (RandGen usg lab len);*
+  return (Rand usg lab len time)
 
+#push-options "--z3rlimit 25"
 val mk_rand_trace_invariant:
   invs:protocol_invariants ->
-  lab:label -> len:nat{len <> 0} -> tr:trace ->
+  usg:usage -> lab:label -> len:nat{len <> 0} -> tr:trace ->
   Lemma
   (requires trace_invariant invs tr)
   (ensures (
-    let (b, tr_out) = mk_rand lab len tr in
+    let (b, tr_out) = mk_rand usg lab len tr in
     trace_invariant invs tr_out /\
     rand_generated_at tr_out (DY.Core.Trace.Type.length tr_out - 1) b
   ))
-  [SMTPat (mk_rand lab len tr); SMTPat (trace_invariant invs tr)]
-let mk_rand_trace_invariant invs lab len tr = ()
+  [SMTPat (mk_rand usg lab len tr); SMTPat (trace_invariant invs tr)]
+let mk_rand_trace_invariant invs usg lab len tr = ()
+#pop-options
 
 val mk_rand_bytes_invariant:
   invs:protocol_invariants ->
-  lab:label -> len:nat{len <> 0} -> tr:trace ->
+  usg:usage -> lab:label -> len:nat{len <> 0} -> tr:trace ->
   Lemma
   (ensures (
-    let (b, tr_out) = mk_rand lab len tr in
+    let (b, tr_out) = mk_rand usg lab len tr in
     bytes_invariant invs.crypto_invs tr_out b
   ))
   // We need a way for the SMT pattern to know the value of `invs`
   // This is done using `trace_invariant`, although it is not necessary for the theorem to hold,
   // It is certainly around in the context
-  [SMTPat (mk_rand lab len tr); SMTPat (trace_invariant invs tr)]
-let mk_rand_bytes_invariant invs lab len tr =
+  [SMTPat (mk_rand usg lab len tr); SMTPat (trace_invariant invs tr)]
+let mk_rand_bytes_invariant invs usg lab len tr =
   normalize_term_spec bytes_invariant
 
 val mk_rand_get_label:
-  lab:label -> len:nat{len <> 0} -> tr:trace ->
+  invs:protocol_invariants ->
+  usg:usage -> lab:label -> len:nat{len <> 0} -> tr:trace ->
   Lemma
   (ensures (
-    let (b, tr_out) = mk_rand lab len tr in
-    get_label b == lab
+    let (b, tr_out) = mk_rand usg lab len tr in
+    get_label invs.crypto_invs.usages b == lab
   ))
-  [SMTPat (mk_rand lab len tr)]
-let mk_rand_get_label lab len tr =
+  [SMTPat (mk_rand usg lab len tr); SMTPat (trace_invariant invs tr)]
+let mk_rand_get_label invs usg lab len tr =
   normalize_term_spec get_label
+
+val mk_rand_get_usage:
+  invs:protocol_invariants ->
+  usg:usage -> lab:label -> len:nat{len <> 0} -> tr:trace ->
+  Lemma
+  (ensures (
+    let (b, tr_out) = mk_rand usg lab len tr in
+    get_usage invs.crypto_invs.usages b == usg
+  ))
+  [SMTPat (mk_rand usg lab len tr); SMTPat (trace_invariant invs tr)]
+let mk_rand_get_usage invs usg lab len tr =
+  normalize_term_spec get_usage
 
 (*** State ***)
 

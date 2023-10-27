@@ -3,21 +3,22 @@ module DY.Lib.State.PKI
 open Comparse
 open DY.Core
 open DY.Lib.Comparse.Glue
+open DY.Lib.Comparse.Parsers
 open DY.Lib.State.Map
 
 #set-options "--fuel 1 --ifuel 1"
 
 (*** PKI types & invariants ***)
 
-type public_key_type =
-  | PkEnc: public_key_type
-  | Verify: public_key_type
+type public_key_type (bytes:Type0) {|bytes_like bytes|} =
+  | PkEnc: [@@@ with_parser #bytes ps_string] usage:string -> public_key_type bytes
+  | Verify: [@@@ with_parser #bytes ps_string] usage:string -> public_key_type bytes
 
 %splice [ps_public_key_type] (gen_parser (`public_key_type))
 %splice [ps_public_key_type_is_well_formed] (gen_is_well_formed_lemma (`public_key_type))
 
 type pki_key (bytes:Type0) {|bytes_like bytes|} = {
-  ty:public_key_type;
+  ty:public_key_type bytes;
   who:principal;
 }
 
@@ -41,14 +42,14 @@ let pki_types = {
 
 val is_public_key_for:
   crypto_invariants -> trace ->
-  bytes -> public_key_type -> principal -> prop
+  bytes -> public_key_type bytes -> principal -> prop
 let is_public_key_for cinvs tr pk pk_type who =
     match pk_type with
-    | PkEnc -> (
-      is_encryption_key cinvs (principal_label who) tr pk
+    | PkEnc usg -> (
+      is_encryption_key cinvs usg (principal_label who) tr pk
     )
-    | Verify -> (
-      is_verification_key cinvs (principal_label who) tr pk
+    | Verify usg -> (
+      is_verification_key cinvs usg (principal_label who) tr pk
     )
 
 val pki_pred: map_predicate pki_types
@@ -72,11 +73,11 @@ let has_pki_invariant pr =
 val initialize_pki: prin:principal -> crypto nat
 let initialize_pki = initialize_map pki_types pki_label
 
-val install_public_key: principal -> nat -> public_key_type -> principal -> bytes -> crypto (option unit)
+val install_public_key: principal -> nat -> public_key_type bytes -> principal -> bytes -> crypto (option unit)
 let install_public_key prin sess_id pk_type who pk =
   add_key_value pki_types pki_label prin sess_id ({ty = pk_type; who;}) ({public_key = pk;})
 
-val get_public_key: principal -> nat -> public_key_type -> principal -> crypto (option bytes)
+val get_public_key: principal -> nat -> public_key_type bytes -> principal -> crypto (option bytes)
 let get_public_key prin sess_id pk_type who =
   let*? res = find_value pki_types pki_label prin sess_id ({ty = pk_type; who;}) in
   return (Some res.public_key)
@@ -100,7 +101,7 @@ let initialize_pki_invariant invs prin tr = ()
 
 val install_public_key_invariant:
   invs:protocol_invariants ->
-  prin:principal -> sess_id:nat -> pk_type:public_key_type -> who:principal -> pk:bytes -> tr:trace ->
+  prin:principal -> sess_id:nat -> pk_type:public_key_type bytes -> who:principal -> pk:bytes -> tr:trace ->
   Lemma
   (requires
     is_public_key_for invs.crypto_invs tr pk pk_type who /\
@@ -118,7 +119,7 @@ let install_public_key_invariant invs prin sess_id pk_type who pk tr = ()
 
 val get_public_key_invariant:
   invs:protocol_invariants ->
-  prin:principal -> sess_id:nat -> pk_type:public_key_type -> who:principal -> tr:trace ->
+  prin:principal -> sess_id:nat -> pk_type:public_key_type bytes -> who:principal -> tr:trace ->
   Lemma
   (requires
     trace_invariant invs tr /\

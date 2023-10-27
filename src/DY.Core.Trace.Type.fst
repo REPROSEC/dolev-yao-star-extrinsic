@@ -5,7 +5,7 @@ open DY.Core.Label.Type
 
 type trace_event =
   | MsgSent: bytes -> trace_event
-  | RandGen: lab:label -> len:nat{len <> 0} -> trace_event
+  | RandGen: usg:usage -> lab:label -> len:nat{len <> 0} -> trace_event
   | Corrupt: prin:principal -> sess_id:nat -> trace_event
   | SetState: prin:principal -> sess_id:nat -> content:bytes -> trace_event
   | Event: prin:principal -> tag:string -> content:bytes -> trace_event
@@ -150,6 +150,6 @@ let event_triggered_grows tr1 tr2 prin tag content = ()
 val rand_generated_at: trace -> nat -> bytes -> prop
 let rand_generated_at tr i b =
   match b with
-  | Rand lab len time ->
-    time == i /\ event_at tr i (RandGen lab len)
+  | Rand usg lab len time ->
+    time == i /\ event_at tr i (RandGen usg lab len)
   | _ -> False

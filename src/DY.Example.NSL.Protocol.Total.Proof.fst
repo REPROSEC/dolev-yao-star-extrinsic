@@ -7,28 +7,33 @@ open DY.Example.NSL.Protocol.Stateful
 
 #set-options "--fuel 0 --ifuel 0"
 
+let nsl_crypto_usages: crypto_usages = {
+  __nothing = ();
+}
+
 #push-options "--ifuel 2 --fuel 0"
-let nsl_crypto_invs = {
+let nsl_crypto_preds: crypto_predicates nsl_crypto_usages = {
   aead_pred = (fun tr key nonce msg ad -> False);
   aead_pred_later = (fun tr1 tr2 key nonce msg ad -> ());
 
   pkenc_pred = (fun tr pk msg ->
-    (exists prin. get_sk_label pk = principal_label prin /\ (
+    get_sk_usage nsl_crypto_usages pk == PkdecKey "NSL.PublicKey" /\
+    (exists prin. get_sk_label nsl_crypto_usages pk = principal_label prin /\ (
       match parse message msg with
       | Some (Msg1 msg1) -> (
         let (alice, bob) = (msg1.alice, prin) in
         event_triggered tr alice nsl_event_label (serialize nsl_event (Initiate1 alice bob msg1.n_a)) /\
-        get_label msg1.n_a == join (principal_label alice) (principal_label bob)
+        get_label nsl_crypto_usages msg1.n_a == join (principal_label alice) (principal_label bob)
       )
       | Some (Msg2 msg2) -> (
         let (alice, bob) = (prin, msg2.bob) in
         event_triggered tr bob nsl_event_label (serialize nsl_event (Respond1 alice bob msg2.n_a msg2.n_b)) /\
-        get_label msg2.n_b == join (principal_label alice) (principal_label bob)
+        get_label nsl_crypto_usages msg2.n_b == join (principal_label alice) (principal_label bob)
       )
       | Some (Msg3 msg3) -> (
         let bob = prin in
         exists alice n_a.
-          get_label msg3.n_b `can_flow tr` (principal_label alice) /\
+          get_label nsl_crypto_usages msg3.n_b `can_flow tr` (principal_label alice) /\
           event_triggered tr alice nsl_event_label (serialize nsl_event (Initiate2 alice bob n_a msg3.n_b))
       )
       | None -> False
@@ -40,6 +45,11 @@ let nsl_crypto_invs = {
   sign_pred_later = (fun tr1 tr2 vk msg -> ());
 }
 #pop-options
+
+let nsl_crypto_invs = {
+  usages = nsl_crypto_usages;
+  preds = nsl_crypto_preds;
+}
 
 val compute_message1_proof:
   tr:trace ->
@@ -53,7 +63,7 @@ val compute_message1_proof:
     // From random generation
     is_secret nsl_crypto_invs (principal_label alice) tr nonce /\
     // From PKI invariants
-    is_encryption_key nsl_crypto_invs (principal_label bob) tr pk_b
+    is_encryption_key nsl_crypto_invs "NSL.PublicKey" (principal_label bob) tr pk_b
   )
   (ensures is_publishable nsl_crypto_invs tr (compute_message1 alice bob pk_b n_a nonce))
 let compute_message1_proof tr alice bob pk_b n_a nonce =
@@ -75,7 +85,7 @@ val decode_message1_proof:
   Lemma
   (requires
     // From PrivateKeys invariants
-    is_decryption_key nsl_crypto_invs (principal_label bob) tr sk_b /\
+    is_decryption_key nsl_crypto_invs "NSL.PublicKey" (principal_label bob) tr sk_b /\
     // From the network
     bytes_invariant nsl_crypto_invs tr msg_cipher
   )
@@ -110,7 +120,7 @@ val compute_message2_proof:
     // From the random generation
     is_secret nsl_crypto_invs (principal_label bob) tr nonce /\
     // From the PKI
-    is_encryption_key nsl_crypto_invs (principal_label msg1.alice) tr pk_a
+    is_encryption_key nsl_crypto_invs "NSL.PublicKey" (principal_label msg1.alice) tr pk_a
   )
   (ensures
     is_publishable nsl_crypto_invs tr (compute_message2 bob msg1 pk_a n_b nonce)
@@ -135,7 +145,7 @@ val decode_message2_proof:
     // From the NSL state invariant
     is_secret nsl_crypto_invs (join (principal_label alice) (principal_label bob)) tr n_a /\
     // From the PrivateKeys invariant
-    is_decryption_key nsl_crypto_invs (principal_label alice) tr sk_a /\
+    is_decryption_key nsl_crypto_invs "NSL.PublicKey" (principal_label alice) tr sk_a /\
     // From the network
     bytes_invariant nsl_crypto_invs tr msg_cipher
   )
@@ -175,7 +185,7 @@ val compute_message3_proof:
     // From the random generation
     is_secret nsl_crypto_invs (principal_label alice) tr nonce /\
     // From the PKI
-    is_encryption_key nsl_crypto_invs (principal_label bob) tr pk_b
+    is_encryption_key nsl_crypto_invs "NSL.PublicKey" (principal_label bob) tr pk_b
   )
   (ensures
     is_publishable nsl_crypto_invs tr (compute_message3 alice bob pk_b n_b nonce)
@@ -199,9 +209,9 @@ val decode_message3_proof:
   Lemma
   (requires
     // From the NSL state invariant
-    get_label n_b = join (principal_label alice) (principal_label bob) /\
+    get_label nsl_crypto_usages n_b = join (principal_label alice) (principal_label bob) /\
     // From the PrivateKeys invariant
-    is_decryption_key nsl_crypto_invs (principal_label bob) tr sk_b /\
+    is_decryption_key nsl_crypto_invs "NSL.PublicKey" (principal_label bob) tr sk_b /\
     // From the network
     bytes_invariant nsl_crypto_invs tr msg_cipher
   )
@@ -211,7 +221,7 @@ val decode_message3_proof:
     | Some msg3 -> (
       (principal_corrupt tr alice \/ principal_corrupt tr bob) \/ (
         (exists alice n_a.
-          get_label msg3.n_b `can_flow tr` (principal_label alice) /\
+          get_label nsl_crypto_usages msg3.n_b `can_flow tr` (principal_label alice) /\
           event_triggered tr alice nsl_event_label (serialize nsl_event (Initiate2 alice bob n_a n_b)))
       )
     )

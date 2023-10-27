@@ -2,9 +2,15 @@ module DY.Core.Bytes.Type
 
 open DY.Core.Label.Type
 
+type usage_ (bytes:Type0) =
+  | SigKey: label:string -> usage_ bytes
+  | PkdecKey: label:string -> usage_ bytes
+  | AeadKey: label:string -> usage_ bytes
+  | Unknown: usage_ bytes // baked-in None
+
 type bytes =
   | Literal: FStar.Seq.seq FStar.UInt8.t -> bytes
-  | Rand: label:label -> len:nat{len <> 0} -> time:nat -> bytes //TODO
+  | Rand: usage:usage_ bytes -> label:label -> len:nat{len <> 0} -> time:nat -> bytes
 
   | Concat: left:bytes -> right:bytes -> bytes
 
@@ -23,3 +29,5 @@ type bytes =
   | Hash: msg:bytes -> bytes
 
   // ...
+
+type usage = usage_ bytes
