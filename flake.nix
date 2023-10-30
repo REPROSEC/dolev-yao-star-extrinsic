@@ -34,7 +34,7 @@
     };
     checks.${system} = {
       dolev-yao-star-build = dolev-yao-star;
-      # dolev-yao-star-tests = dolev-yao-star.tests;
+      dolev-yao-star-tests = dolev-yao-star.tests;
     };
   };
 }
