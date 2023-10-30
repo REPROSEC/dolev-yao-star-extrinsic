@@ -35,6 +35,11 @@ noeq type crypto_usages = {
   __nothing: unit;
 }
 
+val default_crypto_usages: crypto_usages
+let default_crypto_usages = {
+  __nothing = ();
+}
+
 [@@"opaque_to_smt"]
 val get_usage: crypto_usages -> bytes -> GTot usage
 let get_usage cusages b =
@@ -124,6 +129,20 @@ type crypto_predicates (cusages:crypto_usages) = {
   ;
 
   // ...
+}
+
+val default_crypto_predicates:
+  cusages:crypto_usages ->
+  crypto_predicates cusages
+let default_crypto_predicates cusages = {
+  aead_pred = (fun tr key nonce msg ad -> False);
+  aead_pred_later = (fun tr1 tr2 key nonce msg ad -> ());
+
+  pkenc_pred = (fun tr pk msg -> False);
+  pkenc_pred_later = (fun tr1 tr2 pk msg -> ());
+
+  sign_pred = (fun tr vk msg -> False);
+  sign_pred_later = (fun tr1 tr2 vk msg -> ());
 }
 
 noeq type crypto_invariants = {

@@ -7,14 +7,13 @@ open DY.Example.NSL.Protocol.Stateful
 
 #set-options "--fuel 0 --ifuel 0"
 
-let nsl_crypto_usages: crypto_usages = {
-  __nothing = ();
-}
+val nsl_crypto_usages: crypto_usages
+let nsl_crypto_usages = default_crypto_usages
 
 #push-options "--ifuel 2 --fuel 0"
-let nsl_crypto_preds: crypto_predicates nsl_crypto_usages = {
-  aead_pred = (fun tr key nonce msg ad -> False);
-  aead_pred_later = (fun tr1 tr2 key nonce msg ad -> ());
+val nsl_crypto_preds: crypto_predicates nsl_crypto_usages
+let nsl_crypto_preds = {
+  default_crypto_predicates nsl_crypto_usages with
 
   pkenc_pred = (fun tr pk msg ->
     get_sk_usage nsl_crypto_usages pk == PkdecKey "NSL.PublicKey" /\
@@ -40,9 +39,6 @@ let nsl_crypto_preds: crypto_predicates nsl_crypto_usages = {
     ))
   );
   pkenc_pred_later = (fun tr1 tr2 pk msg -> ());
-
-  sign_pred = (fun tr vk msg -> False);
-  sign_pred_later = (fun tr1 tr2 vk msg -> ());
 }
 #pop-options
 
