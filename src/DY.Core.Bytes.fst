@@ -36,7 +36,7 @@ noeq type crypto_usages = {
 }
 
 [@@"opaque_to_smt"]
-val get_usage: crypto_usages -> bytes -> usage
+val get_usage: crypto_usages -> bytes -> GTot usage
 let get_usage cusages b =
   match b with
   | Rand usg label len time ->
@@ -44,7 +44,7 @@ let get_usage cusages b =
   | _ -> Unknown
 
 [@@"opaque_to_smt"]
-val get_label: crypto_usages -> bytes -> label
+val get_label: crypto_usages -> bytes -> GTot label
 let rec get_label cusages b =
   match b with
   | Literal buf ->
@@ -67,28 +67,28 @@ let rec get_label cusages b =
     get_label cusages msg
 
 [@@"opaque_to_smt"]
-val get_sk_label: crypto_usages -> bytes -> label
+val get_sk_label: crypto_usages -> bytes -> GTot label
 let get_sk_label cusages pk =
   match pk with
   | Pk sk -> get_label cusages sk
   | _ -> public
 
 [@@"opaque_to_smt"]
-val get_sk_usage: crypto_usages -> bytes -> usage
+val get_sk_usage: crypto_usages -> bytes -> GTot usage
 let get_sk_usage cusages pk =
   match pk with
   | Pk sk -> get_usage cusages sk
   | _ -> Unknown
 
 [@@"opaque_to_smt"]
-val get_signkey_label: crypto_usages -> bytes -> label
+val get_signkey_label: crypto_usages -> bytes -> GTot label
 let get_signkey_label cusages pk =
   match pk with
   | Vk sk -> get_label cusages sk
   | _ -> public
 
 [@@"opaque_to_smt"]
-val get_signkey_usage: crypto_usages -> bytes -> usage
+val get_signkey_usage: crypto_usages -> bytes -> GTot usage
 let get_signkey_usage cusages pk =
   match pk with
   | Vk sk -> get_usage cusages sk
