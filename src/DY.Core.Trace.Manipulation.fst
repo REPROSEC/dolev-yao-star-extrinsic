@@ -18,6 +18,12 @@ let (let*) #a #b x f tr =
   let (y, tr) = f x' tr in
   (y, tr)
 
+val (let?): #a:Type -> #b:Type -> x:option a -> (y:a -> Pure (option b) (requires x == Some y) (ensures fun _ -> True)) -> option b
+let (let?) #a #b x f =
+  match x with
+  | None -> None
+  | Some x -> f x
+
 val (let*?): #a:Type -> #b:Type -> x:crypto (option a) -> f:(a -> crypto (option b)) -> crypto (option b)
 let (let*?) #a #b x f tr0 =
   let (opt_x', tr) = x tr0 in
@@ -35,6 +41,11 @@ let return #a x tr =
 val get_trace: crypto trace
 let get_trace tr =
   (tr, tr)
+
+val guard: b:bool -> option unit
+let guard b =
+  if b then Some ()
+  else None
 
 (*** Generic trace manipulation ***)
 

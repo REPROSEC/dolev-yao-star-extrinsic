@@ -13,17 +13,6 @@ open DY.Lib
 // [2] Gavin Lowe. "Breaking and fixing the Needham-Schroeder Public-Key
 //     Protocol using FDR". TACAS, pp 147-166, 1996.
 
-val (let?): #a:Type -> #b:Type -> x:option a -> (y:a -> Pure (option b) (requires x == Some y) (ensures fun _ -> True)) -> option b
-let (let?) #a #b x f =
-  match x with
-  | None -> None
-  | Some x -> f x
-
-val guard: b:bool -> option unit
-let guard b =
-  if b then Some ()
-  else None
-
 (*** Message 1 ***)
 
 [@@ with_bytes bytes]
