@@ -25,7 +25,7 @@ type private_key_value (bytes:Type0) {|bytes_like bytes|} = {
 %splice [ps_private_key_value] (gen_parser (`private_key_value))
 %splice [ps_private_key_value_is_well_formed] (gen_is_well_formed_lemma (`private_key_value))
 
-val private_keys_types: map_types bytes
+val private_keys_types: map_types
 let private_keys_types = {
   key = private_key_type;
   ps_key = ps_private_key_type;

@@ -34,7 +34,7 @@ type pki_value (bytes:Type0) {|bytes_like bytes|} = {
 %splice [ps_pki_value] (gen_parser (`pki_value))
 %splice [ps_pki_value_is_well_formed] (gen_is_well_formed_lemma (`pki_value))
 
-val pki_types: map_types bytes
+val pki_types: map_types
 let pki_types = {
   key = pki_key;
   ps_key = ps_pki_key;

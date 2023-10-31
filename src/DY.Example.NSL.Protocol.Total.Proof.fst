@@ -5,7 +5,7 @@ open DY.Core
 open DY.Example.NSL.Protocol.Total
 open DY.Example.NSL.Protocol.Stateful
 
-#set-options "--fuel 0 --ifuel 0"
+#set-options "--fuel 0 --ifuel 0 --z3cliopt 'smt.qi.eager_threshold=100'"
 
 val nsl_crypto_usages: crypto_usages
 let nsl_crypto_usages = default_crypto_usages
@@ -97,7 +97,6 @@ let decode_message1_proof tr bob msg_cipher sk_b =
   | None -> ()
   | Some msg1 ->
     let Some msg = pk_dec sk_b msg_cipher in
-    assert(public `can_flow tr` (join (principal_label msg1.alice) (principal_label bob)));
     FStar.Classical.move_requires (parse_wf_lemma message (is_publishable nsl_crypto_invs tr)) msg;
     FStar.Classical.move_requires (parse_wf_lemma message (bytes_invariant nsl_crypto_invs tr)) msg
 #pop-options
@@ -160,10 +159,7 @@ let decode_message2_proof tr alice bob msg_cipher sk_a n_a =
   match decode_message2 alice bob msg_cipher sk_a n_a with
   | None -> ()
   | Some msg2 -> (
-    assert(public `can_flow tr` (join (principal_label alice) (principal_label bob)));
     let Some msg = pk_dec sk_a msg_cipher in
-    let Some msg2' = parse message msg in
-    let Msg2 msg2' = msg2' in
     FStar.Classical.move_requires (parse_wf_lemma message (is_publishable nsl_crypto_invs tr)) msg;
     FStar.Classical.move_requires (parse_wf_lemma message (bytes_invariant nsl_crypto_invs tr)) msg
   )

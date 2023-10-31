@@ -10,11 +10,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1697457170,
-        "narHash": "sha256-QYUxAKj8GvMaBl62BWre3k88Cw/2O5QHRJ6EP7EOXdg=",
+        "lastModified": 1698760012,
+        "narHash": "sha256-V48V79pq2mKUCzv8tp6zvaiKe+gF7W0cM4syiqZyHr8=",
         "owner": "TWal",
         "repo": "comparse",
-        "rev": "3ed238ea994963430f97da3b5275cc95b19ec6cd",
+        "rev": "d07037cd1582973528c3c2cc9c6917915823b90c",
         "type": "github"
       },
       "original": {

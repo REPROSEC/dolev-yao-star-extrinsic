@@ -26,44 +26,43 @@ let guard b =
 
 (*** Message 1 ***)
 
-type message1_ (bytes:Type0) {|bytes_like bytes|} = {
+[@@ with_bytes bytes]
+type message1 = {
   n_a: bytes;
   alice: principal;
 }
 
-%splice [ps_message1_] (gen_parser (`message1_))
-%splice [ps_message1__is_well_formed] (gen_is_well_formed_lemma (`message1_))
+%splice [ps_message1] (gen_parser (`message1))
+%splice [ps_message1_is_well_formed] (gen_is_well_formed_lemma (`message1))
 
-type message2_ (bytes:Type0) {|bytes_like bytes|} = {
+[@@ with_bytes bytes]
+type message2 = {
   n_a: bytes;
   n_b: bytes;
   bob: principal;
 }
 
-%splice [ps_message2_] (gen_parser (`message2_))
-%splice [ps_message2__is_well_formed] (gen_is_well_formed_lemma (`message2_))
+%splice [ps_message2] (gen_parser (`message2))
+%splice [ps_message2_is_well_formed] (gen_is_well_formed_lemma (`message2))
 
-type message3_ (bytes:Type0) {|bytes_like bytes|} = {
+[@@ with_bytes bytes]
+type message3 = {
   n_b: bytes;
 }
 
-%splice [ps_message3_] (gen_parser (`message3_))
-%splice [ps_message3__is_well_formed] (gen_is_well_formed_lemma (`message3_))
+%splice [ps_message3] (gen_parser (`message3))
+%splice [ps_message3_is_well_formed] (gen_is_well_formed_lemma (`message3))
 
-type message_ (bytes:Type0) {|bytes_like bytes|} =
-  | Msg1: message1_ bytes -> message_ bytes
-  | Msg2: message2_ bytes -> message_ bytes
-  | Msg3: message3_ bytes -> message_ bytes
+[@@ with_bytes bytes]
+type message =
+  | Msg1: message1 -> message
+  | Msg2: message2 -> message
+  | Msg3: message3 -> message
 
-%splice [ps_message_] (gen_parser (`message_))
-%splice [ps_message__is_well_formed] (gen_is_well_formed_lemma (`message_))
+%splice [ps_message] (gen_parser (`message))
+%splice [ps_message_is_well_formed] (gen_is_well_formed_lemma (`message))
 
-instance parseable_serializeable_message_ (bytes:Type0) {|bytes_like bytes|}: parseable_serializeable bytes (message_ bytes) = mk_parseable_serializeable (ps_message_)
-
-type message = message_ bytes
-type message1 = message1_ bytes
-type message2 = message2_ bytes
-type message3 = message3_ bytes
+instance parseable_serializeable_message: parseable_serializeable bytes message = mk_parseable_serializeable ps_message
 
 val compute_message1: principal -> principal -> bytes -> bytes -> bytes -> bytes
 let compute_message1 alice bob pk_b n_a nonce =

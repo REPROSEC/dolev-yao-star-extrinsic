@@ -333,8 +333,8 @@ let prepare_msg4 tr global_sess_id bob sess_id msg_id =
     let msg3: message3 = msg3 in
 
     introduce (~((join (principal_label alice) (principal_label bob)) `can_flow tr` public)) ==> event_triggered tr alice nsl_event_label (serialize nsl_event (Initiate2 alice bob n_a n_b)) with _. (
-      assert(exists alice' n_a'. get_label nsl_crypto_usages n_b `can_flow tr` (principal_label alice') /\ event_triggered tr alice' nsl_event_label (serialize nsl_event #(nsl_event_parseable_serializeable bytes) (Initiate2 alice' bob n_a' n_b)));
-      eliminate exists alice' n_a'. get_label nsl_crypto_usages n_b `can_flow tr` (principal_label alice') /\ event_triggered tr alice' nsl_event_label (serialize nsl_event #(nsl_event_parseable_serializeable bytes) (Initiate2 alice' bob n_a' n_b))
+      assert(exists alice' n_a'. get_label nsl_crypto_usages n_b `can_flow tr` (principal_label alice') /\ event_triggered tr alice' nsl_event_label (serialize nsl_event #(nsl_event_parseable_serializeable) (Initiate2 alice' bob n_a' n_b)));
+      eliminate exists alice' n_a'. get_label nsl_crypto_usages n_b `can_flow tr` (principal_label alice') /\ event_triggered tr alice' nsl_event_label (serialize nsl_event #(nsl_event_parseable_serializeable) (Initiate2 alice' bob n_a' n_b))
       returns _
       with _. (
         event_respond1_injective tr alice alice' bob n_a n_a' n_b

@@ -5,36 +5,34 @@ open DY.Core
 open DY.Lib
 open DY.Example.NSL.Protocol.Total
 
-type nsl_session_ (bytes:Type0) {|bytes_like bytes|} =
-  | InitiatorSentMsg1: b:principal -> n_a:bytes -> nsl_session_ bytes
-  | ResponderSentMsg2: a:principal -> n_a:bytes -> n_b:bytes -> nsl_session_ bytes
-  | InitiatorSentMsg3: b:principal -> n_a:bytes -> n_b:bytes -> nsl_session_ bytes
-  | ResponderReceivedMsg3: a:principal -> n_a:bytes -> n_b:bytes -> nsl_session_ bytes
+[@@ with_bytes bytes]
+type nsl_session =
+  | InitiatorSentMsg1: b:principal -> n_a:bytes -> nsl_session
+  | ResponderSentMsg2: a:principal -> n_a:bytes -> n_b:bytes -> nsl_session
+  | InitiatorSentMsg3: b:principal -> n_a:bytes -> n_b:bytes -> nsl_session
+  | ResponderReceivedMsg3: a:principal -> n_a:bytes -> n_b:bytes -> nsl_session
 
-%splice [ps_nsl_session_] (gen_parser (`nsl_session_))
-%splice [ps_nsl_session__is_well_formed] (gen_is_well_formed_lemma (`nsl_session_))
+%splice [ps_nsl_session] (gen_parser (`nsl_session))
+%splice [ps_nsl_session_is_well_formed] (gen_is_well_formed_lemma (`nsl_session))
 
-type nsl_session = nsl_session_ bytes
-
-instance nsl_session_parseable_serializeable (bytes:Type0) {|bytes_like bytes|}: parseable_serializeable bytes (nsl_session_ bytes)
- = mk_parseable_serializeable ps_nsl_session_
+instance nsl_session_parseable_serializeable: parseable_serializeable bytes nsl_session
+ = mk_parseable_serializeable ps_nsl_session
 
 val nsl_session_label: string
 let nsl_session_label = "NSL.Session"
 
-type nsl_event_ (bytes:Type0) {|bytes_like bytes|} =
-  | Initiate1: a:principal -> b:principal -> n_a:bytes -> nsl_event_ bytes
-  | Respond1: a:principal -> b:principal -> n_a:bytes -> n_b:bytes -> nsl_event_ bytes
-  | Initiate2: a:principal -> b:principal -> n_a:bytes -> n_b:bytes -> nsl_event_ bytes
-  | Respond2: a:principal -> b:principal -> n_a:bytes -> n_b:bytes -> nsl_event_ bytes
+[@@ with_bytes bytes]
+type nsl_event =
+  | Initiate1: a:principal -> b:principal -> n_a:bytes -> nsl_event
+  | Respond1: a:principal -> b:principal -> n_a:bytes -> n_b:bytes -> nsl_event
+  | Initiate2: a:principal -> b:principal -> n_a:bytes -> n_b:bytes -> nsl_event
+  | Respond2: a:principal -> b:principal -> n_a:bytes -> n_b:bytes -> nsl_event
 
-%splice [ps_nsl_event_] (gen_parser (`nsl_event_))
-%splice [ps_nsl_event__is_well_formed] (gen_is_well_formed_lemma (`nsl_event_))
+%splice [ps_nsl_event] (gen_parser (`nsl_event))
+%splice [ps_nsl_event_is_well_formed] (gen_is_well_formed_lemma (`nsl_event))
 
-type nsl_event = nsl_event_ bytes
-
-instance nsl_event_parseable_serializeable (bytes:Type0) {|bytes_like bytes|}: parseable_serializeable bytes (nsl_event_ bytes)
- = mk_parseable_serializeable ps_nsl_event_
+instance nsl_event_parseable_serializeable: parseable_serializeable bytes nsl_event
+ = mk_parseable_serializeable ps_nsl_event
 
 val nsl_event_label: string
 let nsl_event_label = "NSL.Event"

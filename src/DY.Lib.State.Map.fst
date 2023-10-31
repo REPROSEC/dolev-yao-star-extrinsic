@@ -9,14 +9,14 @@ open DY.Lib.State.Typed
 
 (*** Map state & invariants ***)
 
-noeq type map_types (bytes:Type0) {|bytes_like bytes|} = {
+noeq type map_types = {
   key: eqtype;
   ps_key: parser_serializer bytes key;
   value: Type0;
   ps_value: parser_serializer bytes value;
 }
 
-noeq type map_predicate (mt:map_types bytes) = {
+noeq type map_predicate (mt:map_types) = {
   pred: crypto_invariants -> trace -> principal -> nat -> mt.key -> mt.value -> prop;
   pred_later: cinvs:crypto_invariants -> tr1:trace -> tr2:trace -> prin:principal -> sess_id:nat -> key:mt.key -> value:mt.value -> Lemma
     (requires pred cinvs tr1 prin sess_id key value /\ tr1 <$ tr2)
@@ -28,43 +28,41 @@ noeq type map_predicate (mt:map_types bytes) = {
   ;
 }
 
-noeq type map_elem_ (bytes:Type0) {|bytes_like bytes|} (mt:map_types bytes) = {
+[@@ with_bytes bytes]
+noeq type map_elem (mt:map_types) = {
   [@@@ with_parser #bytes mt.ps_key]
   key: mt.key;
   [@@@ with_parser #bytes mt.ps_value]
   value: mt.value;
 }
 
-%splice [ps_map_elem_] (gen_parser (`map_elem_))
-%splice [ps_map_elem__is_well_formed] (gen_is_well_formed_lemma (`map_elem_))
+%splice [ps_map_elem] (gen_parser (`map_elem))
+%splice [ps_map_elem_is_well_formed] (gen_is_well_formed_lemma (`map_elem))
 
-type map_elem = map_elem_ bytes
-
-noeq type map_ (bytes:Type0) {|bytes_like bytes|} (mt:map_types bytes) = {
-  [@@@ with_parser #bytes (ps_list (ps_map_elem_ mt))]
-  key_values: list (map_elem_ bytes mt)
+[@@ with_bytes bytes]
+noeq type map (mt:map_types) = {
+  [@@@ with_parser #bytes (ps_list (ps_map_elem mt))]
+  key_values: list (map_elem mt)
 }
 
-%splice [ps_map_] (gen_parser (`map_))
-%splice [ps_map__is_well_formed] (gen_is_well_formed_lemma (`map_))
+%splice [ps_map] (gen_parser (`map))
+%splice [ps_map_is_well_formed] (gen_is_well_formed_lemma (`map))
 
-type map = map_ bytes
+instance parseable_serializeable_map (mt:map_types) : parseable_serializeable bytes (map mt) = mk_parseable_serializeable (ps_map mt)
 
-instance parseable_serializeable_map_ (bytes:Type0) {|bytes_like bytes|} (mt:map_types bytes) : parseable_serializeable bytes (map_ bytes mt) = mk_parseable_serializeable (ps_map_ mt)
-
-val map_elem_invariant: #mt:map_types bytes -> cinvs:crypto_invariants -> map_predicate mt -> trace -> principal -> nat -> map_elem mt -> prop
+val map_elem_invariant: #mt:map_types -> cinvs:crypto_invariants -> map_predicate mt -> trace -> principal -> nat -> map_elem mt -> prop
 let map_elem_invariant #mt cinvs mpred tr prin sess_id x =
   mpred.pred cinvs tr prin sess_id x.key x.value
 
 val map_invariant:
-  #mt:map_types bytes -> cinvs:crypto_invariants ->
+  #mt:map_types -> cinvs:crypto_invariants ->
   map_predicate mt -> trace -> principal -> nat -> map mt ->
   prop
 let map_invariant #mt cinvs mpred tr prin sess_id st =
   for_allP (map_elem_invariant cinvs mpred tr prin sess_id) st.key_values
 
 val map_invariant_eq:
-  #mt:map_types bytes -> cinvs:crypto_invariants ->
+  #mt:map_types -> cinvs:crypto_invariants ->
   mpred:map_predicate mt -> tr:trace -> prin:principal -> sess_id:nat -> st:map mt ->
   Lemma
   (map_invariant cinvs mpred tr prin sess_id st <==> (forall x. List.Tot.memP x st.key_values ==> map_elem_invariant cinvs mpred tr prin sess_id x))
@@ -72,7 +70,7 @@ let map_invariant_eq #mt cinvs mpred tr prin sess_id st =
   for_allP_eq (map_elem_invariant cinvs mpred tr prin sess_id) st.key_values
 
 val map_session_invariant:
-  #mt:map_types bytes ->
+  #mt:map_types ->
   mpred:map_predicate mt ->
   typed_session_pred (map mt)
 let map_session_invariant #mt mpred = {
@@ -85,8 +83,8 @@ let map_session_invariant #mt mpred = {
   pred_knowable = (fun cinvs tr prin sess_id content ->
     let pre = (is_knowable_by cinvs (principal_state_label prin sess_id) tr) in
     map_invariant_eq cinvs mpred tr prin sess_id content;
-    for_allP_eq (is_well_formed_prefix (ps_map_elem_ mt) pre) content.key_values;
-    introduce forall x. map_elem_invariant cinvs mpred tr prin sess_id x ==> is_well_formed_prefix (ps_map_elem_ mt) pre x
+    for_allP_eq (is_well_formed_prefix (ps_map_elem mt) pre) content.key_values;
+    introduce forall x. map_elem_invariant cinvs mpred tr prin sess_id x ==> is_well_formed_prefix (ps_map_elem mt) pre x
     with (
       introduce _ ==> _ with _. (
         mpred.pred_knowable cinvs tr prin sess_id x.key x.value
@@ -95,14 +93,14 @@ let map_session_invariant #mt mpred = {
   );
 }
 
-val has_map_session_invariant: #mt:map_types bytes -> mpred:map_predicate mt -> string -> protocol_invariants -> prop
+val has_map_session_invariant: #mt:map_types -> mpred:map_predicate mt -> string -> protocol_invariants -> prop
 let has_map_session_invariant #mt mpred label pr =
   has_typed_session_pred pr label (map_session_invariant mpred)
 
 (*** Map API ***)
 
 val initialize_map:
-  mt:map_types bytes -> label:string -> prin:principal ->
+  mt:map_types -> label:string -> prin:principal ->
   crypto nat
 let initialize_map mt label prin =
   let* sess_id = new_session_id prin in
@@ -111,7 +109,7 @@ let initialize_map mt label prin =
   return sess_id
 
 val add_key_value:
-  mt:map_types bytes -> label:string ->
+  mt:map_types -> label:string ->
   prin:principal -> sess_id:nat ->
   key:mt.key -> value:mt.value ->
   crypto (option unit)
@@ -122,7 +120,7 @@ let add_key_value mt label prin sess_id key value =
   return (Some ())
 
 #push-options "--fuel 1 --ifuel 1"
-val find_value_aux: #mt:map_types bytes -> key:mt.key -> l:list (map_elem mt) -> Pure (option mt.value)
+val find_value_aux: #mt:map_types -> key:mt.key -> l:list (map_elem mt) -> Pure (option mt.value)
   (requires True)
   (ensures fun res ->
     match res with
@@ -142,7 +140,7 @@ let rec find_value_aux #mt key l =
 #pop-options
 
 val find_value:
-  mt:map_types bytes -> label:string ->
+  mt:map_types -> label:string ->
   prin:principal -> sess_id:nat ->
   key:mt.key ->
   crypto (option mt.value)
@@ -153,7 +151,7 @@ let find_value mt label prin sess_id key =
 #push-options "--fuel 1"
 val initialize_map_invariant:
   invs:protocol_invariants ->
-  mt:map_types bytes -> mpred:map_predicate mt -> label:string ->
+  mt:map_types -> mpred:map_predicate mt -> label:string ->
   prin:principal ->
   tr:trace ->
   Lemma
@@ -175,7 +173,7 @@ let initialize_map_invariant invs mt mpred label prin tr = ()
 #push-options "--fuel 1"
 val add_key_value_invariant:
   invs:protocol_invariants ->
-  mt:map_types bytes -> mpred:map_predicate mt -> label:string ->
+  mt:map_types -> mpred:map_predicate mt -> label:string ->
   prin:principal -> sess_id:nat ->
   key:mt.key -> value:mt.value ->
   tr:trace ->
@@ -202,7 +200,7 @@ let add_key_value_invariant invs mt mpred label prin sess_id key value tr =
 
 val find_value_invariant:
   invs:protocol_invariants ->
-  mt:map_types bytes -> mpred:map_predicate mt -> label:string ->
+  mt:map_types -> mpred:map_predicate mt -> label:string ->
   prin:principal -> sess_id:nat ->
   key:mt.key ->
   tr:trace ->
