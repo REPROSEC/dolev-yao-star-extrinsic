@@ -20,6 +20,7 @@ let rec length tr =
   | Nil -> 0
   | Snoc init last -> length init + 1
 
+[@@ "opaque_to_smt"]
 val prefix: tr:trace -> i:nat{i <= length tr} -> trace
 let rec prefix tr i =
   if length tr = i then
@@ -28,6 +29,7 @@ let rec prefix tr i =
     let Snoc tr_init _ = tr in
     prefix tr_init i
 
+[@@ "opaque_to_smt"]
 val grows: trace -> trace -> prop
 let grows tr1 tr2 =
   length tr1 <= length tr2 /\
@@ -42,6 +44,8 @@ val grows_transitive:
   (ensures tr1 <$ tr3)
   [SMTPat (tr1 <$ tr2); SMTPat (tr1 <$ tr3)]
 let rec grows_transitive tr1 tr2 tr3 =
+  reveal_opaque (`%grows) (grows);
+  norm_spec [zeta; delta_only [`%prefix]] (prefix);
   if length tr2 >= length tr3 then
     ()
   else (
@@ -55,6 +59,7 @@ val length_prefix:
   (ensures length (prefix tr i) == i)
   [SMTPat (length (prefix tr i))]
 let rec length_prefix tr i =
+  norm_spec [zeta; delta_only [`%prefix]] (prefix);
   if length tr = i then ()
   else
     let Snoc tr_init _ = tr in
@@ -67,7 +72,9 @@ val prefix_grows:
   //TODO: is this SMTPat dangerous? Should we restrict it to the "safe" on below?
   [SMTPat (prefix tr i)]
   //[SMTPat ((prefix tr i) <$ tr)]
-let prefix_grows tr i = ()
+let prefix_grows tr i =
+  reveal_opaque (`%grows) (grows);
+  norm_spec [zeta; delta_only [`%prefix]] (prefix)
 
 val get_event_at: tr:trace -> i:nat{i < length tr} -> trace_event
 let rec get_event_at tr i =
@@ -97,6 +104,8 @@ val length_grows:
   (ensures length tr1 <= length tr2)
   [SMTPat (tr1 <$ tr2)]
 let rec length_grows tr1 tr2 =
+  reveal_opaque (`%grows) (grows);
+  norm_spec [zeta; delta_only [`%prefix]] (prefix);
   if length tr1 >= length tr2 then ()
   else (
     let Snoc tr2_init _ = tr2 in
@@ -111,6 +120,8 @@ val event_at_grows:
   (ensures event_at tr2 i e)
   [SMTPat (event_at tr1 i e); SMTPat (tr1 <$ tr2)]
 let rec event_at_grows tr1 tr2 i e =
+  reveal_opaque (`%grows) (grows);
+  norm_spec [zeta; delta_only [`%prefix]] (prefix);
   if i >= length tr1 then ()
   else if length tr1 >= length tr2 then ()
   else (

@@ -53,6 +53,7 @@ val has_typed_session_pred:
 let has_typed_session_pred #a #ps_a invs label spred =
   has_session_pred invs label (typed_session_pred_to_session_pred spred)
 
+[@@ "opaque_to_smt"]
 val typed_state_was_set:
   #a:Type -> {|parseable_serializeable bytes a|} ->
   trace -> string -> principal -> nat -> a ->
@@ -60,12 +61,14 @@ val typed_state_was_set:
 let typed_state_was_set #a #ps_a tr label prin sess_id content =
   labeled_state_was_set tr label prin sess_id (serialize _ content)
 
+[@@ "opaque_to_smt"]
 val set_typed_state:
   #a:Type -> {|parseable_serializeable bytes a|} ->
   string -> principal -> nat -> a -> crypto unit
 let set_typed_state label prin sess_id content =
   set_labeled_state label prin sess_id (serialize _ content)
 
+[@@ "opaque_to_smt"]
 val get_typed_state:
   #a:Type -> {|parseable_serializeable bytes a|} ->
   string -> principal -> nat -> crypto (option a)
@@ -95,6 +98,8 @@ val set_typed_state_invariant:
    SMTPat (trace_invariant invs tr);
    SMTPat (has_typed_session_pred invs label spred)]
 let set_typed_state_invariant #a #ps_a invs label spred prin sess_id content tr =
+  reveal_opaque (`%set_typed_state) (set_typed_state #a);
+  reveal_opaque (`%typed_state_was_set) (typed_state_was_set #a);
   parse_serialize_inv_lemma #bytes a content
 
 val get_typed_state_invariant:
@@ -120,7 +125,8 @@ val get_typed_state_invariant:
   [SMTPat (get_typed_state #a label prin sess_id tr);
    SMTPat (trace_invariant invs tr);
    SMTPat (has_typed_session_pred invs label spred)]
-let get_typed_state_invariant #a #ps_a invs label spred prin sess_id tr = ()
+let get_typed_state_invariant #a #ps_a invs label spred prin sess_id tr =
+  reveal_opaque (`%get_typed_state) (get_typed_state #a)
 
 val typed_state_was_set_implies_pred:
   #a:Type -> {|parseable_serializeable bytes a|} ->
@@ -140,4 +146,4 @@ val typed_state_was_set_implies_pred:
   ]
 let typed_state_was_set_implies_pred #a #ps_a invs tr label spred prin sess_id content =
   parse_serialize_inv_lemma #bytes a content;
-  ()
+  reveal_opaque (`%typed_state_was_set) (typed_state_was_set #a)

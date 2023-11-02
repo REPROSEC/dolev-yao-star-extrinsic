@@ -146,6 +146,7 @@ let mk_state_predicate cinvs lpreds =
 
 (*** Predicates on trace ***)
 
+[@@ "opaque_to_smt"]
 val labeled_state_was_set: trace -> string -> principal -> nat -> bytes -> prop
 let labeled_state_was_set tr label prin sess_id content =
   let full_content = {label; content;} in
@@ -154,12 +155,14 @@ let labeled_state_was_set tr label prin sess_id content =
 
 (*** API for labeled sessions ***)
 
+[@@ "opaque_to_smt"]
 val set_labeled_state: string -> principal -> nat -> bytes -> crypto unit
 let set_labeled_state label prin sess_id content =
   let full_content = {label; content;} in
   let full_content_bytes = serialize (session bytes) full_content in
   set_state prin sess_id full_content_bytes
 
+[@@ "opaque_to_smt"]
 val get_labeled_state: string -> principal -> nat -> crypto (option bytes)
 let get_labeled_state lab prin sess_id =
   let*? full_content_bytes = get_state prin sess_id in
@@ -189,6 +192,8 @@ val set_labeled_state_invariant:
 
    SMTPat (has_session_pred invs label spred)]
 let set_labeled_state_invariant invs label spred prin sess_id content tr =
+  reveal_opaque (`%set_labeled_state) (set_labeled_state);
+  reveal_opaque (`%labeled_state_was_set) (labeled_state_was_set);
   assert_norm (forall tr prin sess_id session. protocol_invariants_to_global_pred invs (tr, prin, sess_id, session) <==> invs.trace_invs.state_pred.pred tr prin sess_id session);
   let full_content = {label; content;} in
   parse_serialize_inv_lemma #bytes (session bytes) full_content
@@ -216,6 +221,7 @@ val get_labeled_state_invariant:
    SMTPat (trace_invariant invs tr);
    SMTPat (has_session_pred invs label spred)]
 let get_labeled_state_invariant invs label spred prin sess_id tr =
+  reveal_opaque (`%get_labeled_state) (get_labeled_state);
   assert_norm (forall tr prin sess_id session. protocol_invariants_to_global_pred invs (tr, prin, sess_id, session) <==> invs.trace_invs.state_pred.pred tr prin sess_id session)
 
 (*** Theorem ***)
@@ -236,6 +242,7 @@ val labeled_state_was_set_implies_pred:
    SMTPat (has_session_pred invs label spred);
   ]
 let labeled_state_was_set_implies_pred invs tr label spred prin sess_id content =
+  reveal_opaque (`%labeled_state_was_set) (labeled_state_was_set);
   let full_content = {label; content;} in
   parse_serialize_inv_lemma #bytes (session bytes) full_content;
   let full_content_bytes: bytes = serialize (session bytes) full_content in

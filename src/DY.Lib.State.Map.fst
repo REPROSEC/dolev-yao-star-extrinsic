@@ -99,6 +99,7 @@ let has_map_session_invariant #mt mpred label pr =
 
 (*** Map API ***)
 
+[@@ "opaque_to_smt"]
 val initialize_map:
   mt:map_types -> label:string -> prin:principal ->
   crypto nat
@@ -108,6 +109,7 @@ let initialize_map mt label prin =
   set_typed_state label prin sess_id session;*
   return sess_id
 
+[@@ "opaque_to_smt"]
 val add_key_value:
   mt:map_types -> label:string ->
   prin:principal -> sess_id:nat ->
@@ -139,6 +141,7 @@ let rec find_value_aux #mt key l =
       | None -> None
 #pop-options
 
+[@@ "opaque_to_smt"]
 val find_value:
   mt:map_types -> label:string ->
   prin:principal -> sess_id:nat ->
@@ -167,7 +170,8 @@ val initialize_map_invariant:
    SMTPat (has_map_session_invariant mpred label invs);
    SMTPat (trace_invariant invs tr)
   ]
-let initialize_map_invariant invs mt mpred label prin tr = ()
+let initialize_map_invariant invs mt mpred label prin tr =
+  reveal_opaque (`%initialize_map) (initialize_map)
 #pop-options
 
 #push-options "--fuel 1"
@@ -192,6 +196,7 @@ val add_key_value_invariant:
    SMTPat (trace_invariant invs tr)
   ]
 let add_key_value_invariant invs mt mpred label prin sess_id key value tr =
+  reveal_opaque (`%add_key_value) (add_key_value);
   let (opt_the_map, tr) = get_typed_state #(map mt) label prin sess_id tr in
   match opt_the_map with
   | None -> ()
@@ -211,7 +216,7 @@ val find_value_invariant:
   )
   (ensures (
     let (opt_value, tr_out) = find_value mt label prin sess_id key tr in
-    trace_invariant invs tr_out /\ (
+    tr_out == tr /\ (
       match opt_value with
       | None -> True
       | Some value -> (
@@ -224,6 +229,7 @@ val find_value_invariant:
    SMTPat (trace_invariant invs tr);
   ]
 let find_value_invariant invs mt mpred label prin sess_id key tr =
+  reveal_opaque (`%find_value) (find_value);
   let (opt_the_map, tr) = get_typed_state #(map mt) label prin sess_id tr in
   match opt_the_map with
   | None -> ()

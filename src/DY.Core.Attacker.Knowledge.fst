@@ -93,6 +93,7 @@ let rec attacker_knows_aux step tr msg =
     )
   )
 
+[@@ "opaque_to_smt"]
 val attacker_knows: trace -> bytes -> prop
 let attacker_knows tr msg =
   exists step. attacker_knows_aux step tr msg
@@ -164,6 +165,7 @@ val attacker_only_knows_publishable_values:
   )
   (ensures is_publishable invs.crypto_invs tr msg)
 let attacker_only_knows_publishable_values invs tr msg =
+  reveal_opaque (`%attacker_knows) (attacker_knows);
   eliminate exists step. attacker_knows_aux step tr msg
   returns is_publishable invs.crypto_invs tr msg
   with _. (

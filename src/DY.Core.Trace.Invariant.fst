@@ -40,23 +40,47 @@ type protocol_invariants = {
   trace_invs: trace_invariants crypto_invs;
 }
 
+val trace_event_invariant: protocol_invariants -> trace -> trace_event -> prop
+let trace_event_invariant invs tr event =
+  match event with
+  | MsgSent msg ->
+    is_publishable invs.crypto_invs tr msg
+  | SetState prin sess_id content -> (
+    invs.trace_invs.state_pred.pred tr prin sess_id content
+  )
+  | Event prin tag content -> (
+    invs.trace_invs.event_pred tr prin tag content
+  )
+  | _ -> True
+
+[@@ "opaque_to_smt"]
 val trace_invariant: protocol_invariants -> trace -> prop
 let rec trace_invariant invs tr =
   match tr with
   | Nil -> True
   | Snoc tr_init event ->
-    trace_invariant invs tr_init /\ (
-      match event with
-      | MsgSent msg ->
-        is_publishable invs.crypto_invs tr msg
-      | SetState prin sess_id content -> (
-        invs.trace_invs.state_pred.pred tr_init prin sess_id content
-      )
-      | Event prin tag content -> (
-        invs.trace_invs.event_pred tr_init prin tag content
-      )
-      | _ -> True
-    )
+    trace_event_invariant invs tr_init event /\
+    trace_invariant invs tr_init
+
+val event_at_implies_trace_event_invariant:
+  invs:protocol_invariants ->
+  tr:trace -> i:nat -> event:trace_event ->
+  Lemma
+  (requires
+    event_at tr i event /\
+    trace_invariant invs tr
+  )
+  (ensures
+    trace_event_invariant invs (prefix tr i) event
+  )
+let rec event_at_implies_trace_event_invariant invs tr i event =
+  norm_spec [zeta; delta_only [`%trace_invariant]] (trace_invariant);
+  norm_spec [zeta; delta_only [`%prefix]] (prefix);
+  if i+1 = DY.Core.Trace.Type.length tr then ()
+  else (
+    let Snoc tr_init _ = tr in
+    event_at_implies_trace_event_invariant invs tr_init i event
+  )
 
 // TODO: the next lemmas have similar proofs
 // maybe refactor?
@@ -70,20 +94,12 @@ val msg_sent_on_network_are_publishable:
     msg_sent_on_network tr msg
   )
   (ensures is_publishable invs.crypto_invs tr msg)
-let rec msg_sent_on_network_are_publishable invs tr msg =
-  match tr with
-  | Nil -> assert(False)
-  | Snoc tr_init (MsgSent msg') -> (
-    assert(tr_init <$ tr);
-    if msg = msg' then ()
-    else (
-      msg_sent_on_network_are_publishable invs tr_init msg
-    )
+let msg_sent_on_network_are_publishable invs tr msg =
+  eliminate exists i. event_at tr i (MsgSent msg)
+  returns is_publishable invs.crypto_invs tr msg
+  with _. (
+    event_at_implies_trace_event_invariant invs tr i (MsgSent msg)
   )
-  | Snoc tr_init _ ->
-    assert(tr_init <$ tr);
-    msg_sent_on_network_are_publishable invs tr_init msg
-
 
 val state_was_set_implies_pred:
   invs:protocol_invariants -> tr:trace ->
@@ -97,22 +113,13 @@ val state_was_set_implies_pred:
   [SMTPat (state_was_set tr prin sess_id content);
    SMTPat (trace_invariant invs tr);
   ]
-let rec state_was_set_implies_pred invs tr prin sess_id content =
-  match tr with
-  | Nil -> assert(False)
-  | Snoc tr_init (SetState prin' sess_id' content') -> (
-    assert(tr_init <$ tr);
-    if prin = prin' && sess_id = sess_id' && content = content' then (
-      invs.trace_invs.state_pred.pred_later tr_init tr prin sess_id content
-    ) else (
-      state_was_set_implies_pred invs tr_init prin sess_id content;
-      invs.trace_invs.state_pred.pred_later tr_init tr prin sess_id content
-    )
+let state_was_set_implies_pred invs tr prin sess_id content =
+  eliminate exists i. event_at tr i (SetState prin sess_id content)
+  returns invs.trace_invs.state_pred.pred tr prin sess_id content
+  with _. (
+    event_at_implies_trace_event_invariant invs tr i (SetState prin sess_id content);
+    invs.trace_invs.state_pred.pred_later (prefix tr i) tr prin sess_id content
   )
-  | Snoc tr_init _ ->
-    assert(tr_init <$ tr);
-    state_was_set_implies_pred invs tr_init prin sess_id content;
-    invs.trace_invs.state_pred.pred_later tr_init tr prin sess_id content
 
 // Lemma for attacker theorem
 val state_is_knowable_by:
@@ -139,9 +146,5 @@ val event_triggered_at_implies_pred:
   [SMTPat (event_triggered_at tr i prin tag content);
    SMTPat (trace_invariant invs tr);
   ]
-let rec event_triggered_at_implies_pred invs tr i prin tag content =
-  if i+1 = DY.Core.Trace.Type.length tr then ()
-  else (
-    let Snoc tr_init _ = tr in
-    event_triggered_at_implies_pred invs tr_init i prin tag content
-  )
+let event_triggered_at_implies_pred invs tr i prin tag content =
+  event_at_implies_trace_event_invariant invs tr i (Event prin tag content)

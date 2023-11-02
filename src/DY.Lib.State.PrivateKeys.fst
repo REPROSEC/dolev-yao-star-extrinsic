@@ -71,14 +71,17 @@ let private_key_type_to_usage sk_type =
 
 (*** Private Keys API ***)
 
+[@@ "opaque_to_smt"]
 val initialize_private_keys: prin:principal -> crypto nat
 let initialize_private_keys = initialize_map private_keys_types private_keys_label
 
+[@@ "opaque_to_smt"]
 val generate_private_key: principal -> nat -> private_key_type -> crypto (option unit)
 let generate_private_key prin sess_id sk_type =
   let* sk = mk_rand (private_key_type_to_usage sk_type) (principal_label prin) 64 in //TODO
   add_key_value private_keys_types private_keys_label prin sess_id sk_type ({private_key = sk;})
 
+[@@ "opaque_to_smt"]
 val get_private_key: principal -> nat -> private_key_type -> crypto (option bytes)
 let get_private_key prin sess_id sk_type =
   let*? res = find_value private_keys_types private_keys_label prin sess_id sk_type in
@@ -99,7 +102,8 @@ val initialize_private_keys_invariant:
   [SMTPat (initialize_private_keys prin tr);
    SMTPat (has_private_keys_invariant invs);
    SMTPat (trace_invariant invs tr)]
-let initialize_private_keys_invariant invs prin tr = ()
+let initialize_private_keys_invariant invs prin tr =
+  reveal_opaque (`%initialize_private_keys) (initialize_private_keys)
 
 val generate_private_key_invariant:
   invs:protocol_invariants ->
@@ -116,7 +120,8 @@ val generate_private_key_invariant:
   [SMTPat (generate_private_key prin sess_id sk_type tr);
    SMTPat (has_private_keys_invariant invs);
    SMTPat (trace_invariant invs tr)]
-let generate_private_key_invariant invs prin sess_id sk_type tr = ()
+let generate_private_key_invariant invs prin sess_id sk_type tr =
+  reveal_opaque (`%generate_private_key) (generate_private_key)
 
 val get_private_key_invariant:
   invs:protocol_invariants ->
@@ -138,4 +143,5 @@ val get_private_key_invariant:
   [SMTPat (get_private_key prin sess_id pk_type tr);
    SMTPat (has_private_keys_invariant invs);
    SMTPat (trace_invariant invs tr)]
-let get_private_key_invariant invs prin sess_id pk_type tr = ()
+let get_private_key_invariant invs prin sess_id pk_type tr =
+  reveal_opaque (`%get_private_key) (get_private_key)

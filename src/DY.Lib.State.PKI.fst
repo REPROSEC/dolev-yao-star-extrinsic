@@ -72,13 +72,16 @@ let has_pki_invariant pr =
 
 (*** PKI API ***)
 
+[@@ "opaque_to_smt"]
 val initialize_pki: prin:principal -> crypto nat
 let initialize_pki = initialize_map pki_types pki_label
 
+[@@ "opaque_to_smt"]
 val install_public_key: principal -> nat -> public_key_type -> principal -> bytes -> crypto (option unit)
 let install_public_key prin sess_id pk_type who pk =
   add_key_value pki_types pki_label prin sess_id ({ty = pk_type; who;}) ({public_key = pk;})
 
+[@@ "opaque_to_smt"]
 val get_public_key: principal -> nat -> public_key_type -> principal -> crypto (option bytes)
 let get_public_key prin sess_id pk_type who =
   let*? res = find_value pki_types pki_label prin sess_id ({ty = pk_type; who;}) in
@@ -99,7 +102,8 @@ val initialize_pki_invariant:
   [SMTPat (initialize_pki prin tr);
    SMTPat (has_pki_invariant invs);
    SMTPat (trace_invariant invs tr)]
-let initialize_pki_invariant invs prin tr = ()
+let initialize_pki_invariant invs prin tr =
+  reveal_opaque (`%initialize_pki) (initialize_pki)
 
 val install_public_key_invariant:
   invs:protocol_invariants ->
@@ -117,7 +121,8 @@ val install_public_key_invariant:
   [SMTPat (install_public_key prin sess_id pk_type who pk tr);
    SMTPat (has_pki_invariant invs);
    SMTPat (trace_invariant invs tr)]
-let install_public_key_invariant invs prin sess_id pk_type who pk tr = ()
+let install_public_key_invariant invs prin sess_id pk_type who pk tr =
+  reveal_opaque (`%install_public_key) (install_public_key)
 
 val get_public_key_invariant:
   invs:protocol_invariants ->
@@ -139,4 +144,5 @@ val get_public_key_invariant:
   [SMTPat (get_public_key prin sess_id pk_type who tr);
    SMTPat (has_pki_invariant invs);
    SMTPat (trace_invariant invs tr)]
-let get_public_key_invariant invs prin sess_id pk_type who tr = ()
+let get_public_key_invariant invs prin sess_id pk_type who tr =
+  reveal_opaque (`%get_public_key) (get_public_key)
