@@ -23,7 +23,7 @@ type state_predicate (cinvs:crypto_invariants) = {
     Lemma
     (requires pred tr prin sess_id content)
     (ensures
-      is_knowable_by cinvs (principal_state_label prin sess_id) tr content
+      is_knowable_by (principal_state_label prin sess_id) tr content
     )
   ;
 }
@@ -34,17 +34,22 @@ type trace_invariants (cinvs:crypto_invariants) = {
   event_pred: trace -> principal -> string -> bytes -> prop;
 }
 
-noeq
-type protocol_invariants = {
+class protocol_invariants = {
+  [@@@FStar.Tactics.Typeclasses.tcinstance]
   crypto_invs: crypto_invariants;
   trace_invs: trace_invariants crypto_invs;
 }
 
-val trace_event_invariant: protocol_invariants -> trace -> trace_event -> prop
-let trace_event_invariant invs tr event =
+let state_pred {|invs:protocol_invariants|} = invs.trace_invs.state_pred.pred
+let state_pred_later {|invs:protocol_invariants|} = invs.trace_invs.state_pred.pred_later
+let state_pred_knowable {|invs:protocol_invariants|} = invs.trace_invs.state_pred.pred_knowable
+let event_pred {|invs:protocol_invariants|} = invs.trace_invs.event_pred
+
+val trace_event_invariant: {|protocol_invariants|} -> trace -> trace_event -> prop
+let trace_event_invariant #invs tr event =
   match event with
   | MsgSent msg ->
-    is_publishable invs.crypto_invs tr msg
+    is_publishable tr msg
   | SetState prin sess_id content -> (
     invs.trace_invs.state_pred.pred tr prin sess_id content
   )
@@ -54,32 +59,32 @@ let trace_event_invariant invs tr event =
   | _ -> True
 
 [@@ "opaque_to_smt"]
-val trace_invariant: protocol_invariants -> trace -> prop
-let rec trace_invariant invs tr =
+val trace_invariant: {|protocol_invariants|} -> trace -> prop
+let rec trace_invariant #invs tr =
   match tr with
   | Nil -> True
   | Snoc tr_init event ->
-    trace_event_invariant invs tr_init event /\
-    trace_invariant invs tr_init
+    trace_event_invariant tr_init event /\
+    trace_invariant tr_init
 
 val event_at_implies_trace_event_invariant:
-  invs:protocol_invariants ->
+  {|protocol_invariants|} ->
   tr:trace -> i:nat -> event:trace_event ->
   Lemma
   (requires
     event_at tr i event /\
-    trace_invariant invs tr
+    trace_invariant tr
   )
   (ensures
-    trace_event_invariant invs (prefix tr i) event
+    trace_event_invariant (prefix tr i) event
   )
-let rec event_at_implies_trace_event_invariant invs tr i event =
+let rec event_at_implies_trace_event_invariant #invs tr i event =
   norm_spec [zeta; delta_only [`%trace_invariant]] (trace_invariant);
   norm_spec [zeta; delta_only [`%prefix]] (prefix);
   if i+1 = DY.Core.Trace.Type.length tr then ()
   else (
     let Snoc tr_init _ = tr in
-    event_at_implies_trace_event_invariant invs tr_init i event
+    event_at_implies_trace_event_invariant tr_init i event
   )
 
 // TODO: the next lemmas have similar proofs
@@ -87,64 +92,64 @@ let rec event_at_implies_trace_event_invariant invs tr i event =
 
 // Lemma for attacker theorem
 val msg_sent_on_network_are_publishable:
-  invs:protocol_invariants -> tr:trace -> msg:bytes ->
+  {|protocol_invariants|} -> tr:trace -> msg:bytes ->
   Lemma
   (requires
-    trace_invariant invs tr /\
+    trace_invariant tr /\
     msg_sent_on_network tr msg
   )
-  (ensures is_publishable invs.crypto_invs tr msg)
-let msg_sent_on_network_are_publishable invs tr msg =
+  (ensures is_publishable tr msg)
+let msg_sent_on_network_are_publishable #invs tr msg =
   eliminate exists i. event_at tr i (MsgSent msg)
-  returns is_publishable invs.crypto_invs tr msg
+  returns is_publishable tr msg
   with _. (
-    event_at_implies_trace_event_invariant invs tr i (MsgSent msg)
+    event_at_implies_trace_event_invariant tr i (MsgSent msg)
   )
 
 val state_was_set_implies_pred:
-  invs:protocol_invariants -> tr:trace ->
+  {|protocol_invariants|} -> tr:trace ->
   prin:principal -> sess_id:nat -> content:bytes ->
   Lemma
   (requires
-    trace_invariant invs tr /\
+    trace_invariant tr /\
     state_was_set tr prin sess_id content
   )
-  (ensures invs.trace_invs.state_pred.pred tr prin sess_id content)
+  (ensures state_pred tr prin sess_id content)
   [SMTPat (state_was_set tr prin sess_id content);
-   SMTPat (trace_invariant invs tr);
+   SMTPat (trace_invariant tr);
   ]
-let state_was_set_implies_pred invs tr prin sess_id content =
+let state_was_set_implies_pred #invs tr prin sess_id content =
   eliminate exists i. event_at tr i (SetState prin sess_id content)
   returns invs.trace_invs.state_pred.pred tr prin sess_id content
   with _. (
-    event_at_implies_trace_event_invariant invs tr i (SetState prin sess_id content);
+    event_at_implies_trace_event_invariant tr i (SetState prin sess_id content);
     invs.trace_invs.state_pred.pred_later (prefix tr i) tr prin sess_id content
   )
 
 // Lemma for attacker theorem
 val state_is_knowable_by:
-  invs:protocol_invariants -> tr:trace ->
+  {|protocol_invariants|} -> tr:trace ->
   prin:principal -> sess_id:nat -> content:bytes ->
   Lemma
   (requires
-    trace_invariant invs tr /\
+    trace_invariant tr /\
     state_was_set tr prin sess_id content
   )
-  (ensures is_knowable_by invs.crypto_invs (principal_state_label prin sess_id) tr content)
-let state_is_knowable_by invs tr prin sess_id content =
-  invs.trace_invs.state_pred.pred_knowable tr prin sess_id content
+  (ensures is_knowable_by (principal_state_label prin sess_id) tr content)
+let state_is_knowable_by #invs tr prin sess_id content =
+  state_pred_knowable tr prin sess_id content
 
 val event_triggered_at_implies_pred:
-  invs:protocol_invariants -> tr:trace ->
+  {|protocol_invariants|} -> tr:trace ->
   i:nat -> prin:principal -> tag:string -> content:bytes ->
   Lemma
   (requires
     event_triggered_at tr i prin tag content /\
-    trace_invariant invs tr
+    trace_invariant tr
   )
-  (ensures invs.trace_invs.event_pred (prefix tr i) prin tag content)
+  (ensures event_pred (prefix tr i) prin tag content)
   [SMTPat (event_triggered_at tr i prin tag content);
-   SMTPat (trace_invariant invs tr);
+   SMTPat (trace_invariant tr);
   ]
-let event_triggered_at_implies_pred invs tr i prin tag content =
-  event_at_implies_trace_event_invariant invs tr i (Event prin tag content)
+let event_triggered_at_implies_pred #invs tr i prin tag content =
+  event_at_implies_trace_event_invariant tr i (Event prin tag content)

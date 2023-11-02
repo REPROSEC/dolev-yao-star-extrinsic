@@ -56,40 +56,40 @@ instance bytes_like_bytes: bytes_like bytes = {
 }
 
 val bytes_invariant_is_pre_compatible:
-  cinvs:crypto_invariants -> tr:trace ->
+  {|crypto_invariants|} -> tr:trace ->
   Lemma
-  (bytes_pre_is_compatible (bytes_invariant cinvs tr))
-  [SMTPat (bytes_pre_is_compatible (bytes_invariant cinvs tr))]
-let bytes_invariant_is_pre_compatible cinvs tr =
-  bytes_pre_is_compatible_intro #bytes (bytes_invariant cinvs tr)
+  (bytes_pre_is_compatible (bytes_invariant tr))
+  [SMTPat (bytes_pre_is_compatible (bytes_invariant tr))]
+let bytes_invariant_is_pre_compatible #cinvs tr =
+  bytes_pre_is_compatible_intro #bytes (bytes_invariant tr)
     ()
     (fun b1 b2 -> ())
     (fun b i -> ())
     (fun sz n -> ())
 
 val is_publishable_is_pre_compatible:
-  cinvs:crypto_invariants -> tr:trace ->
+  {|crypto_invariants|} -> tr:trace ->
   Lemma
-  (bytes_pre_is_compatible (is_publishable cinvs tr))
-  [SMTPat (bytes_pre_is_compatible (is_publishable cinvs tr))]
-let is_publishable_is_pre_compatible cinvs tr =
-  bytes_pre_is_compatible_intro #bytes (is_publishable cinvs tr)
-    (literal_to_bytes_is_publishable cinvs tr FStar.Seq.empty)
-    (fun b1 b2 -> concat_preserves_publishability cinvs tr b1 b2)
-    (fun b i -> split_preserves_publishability cinvs tr b i)
-    (fun sz n -> literal_to_bytes_is_publishable cinvs tr (FStar.Endianness.n_to_be sz n))
+  (bytes_pre_is_compatible (is_publishable tr))
+  [SMTPat (bytes_pre_is_compatible (is_publishable tr))]
+let is_publishable_is_pre_compatible #cinvs tr =
+  bytes_pre_is_compatible_intro #bytes (is_publishable tr)
+    (literal_to_bytes_is_publishable tr FStar.Seq.empty)
+    (fun b1 b2 -> concat_preserves_publishability tr b1 b2)
+    (fun b i -> split_preserves_publishability tr b i)
+    (fun sz n -> literal_to_bytes_is_publishable tr (FStar.Endianness.n_to_be sz n))
 
 val is_knowable_by_is_pre_compatible:
-  cinvs:crypto_invariants -> lab:label -> tr:trace ->
+  {|crypto_invariants|} -> lab:label -> tr:trace ->
   Lemma
-  (bytes_pre_is_compatible (is_knowable_by cinvs lab tr))
-  [SMTPat (bytes_pre_is_compatible (is_knowable_by cinvs lab tr))]
-let is_knowable_by_is_pre_compatible cinvs lab tr =
-  bytes_pre_is_compatible_intro #bytes (is_knowable_by cinvs lab tr)
-    (literal_to_bytes_is_publishable cinvs tr Seq.empty)
-    (fun b1 b2 -> concat_preserves_knowability cinvs lab tr b1 b2)
-    (fun b i -> split_preserves_knowability cinvs lab tr b i)
-    (fun sz n -> (literal_to_bytes_is_publishable cinvs tr (FStar.Endianness.n_to_be sz n)))
+  (bytes_pre_is_compatible (is_knowable_by lab tr))
+  [SMTPat (bytes_pre_is_compatible (is_knowable_by lab tr))]
+let is_knowable_by_is_pre_compatible #cinvs lab tr =
+  bytes_pre_is_compatible_intro #bytes (is_knowable_by lab tr)
+    (literal_to_bytes_is_publishable tr Seq.empty)
+    (fun b1 b2 -> concat_preserves_knowability lab tr b1 b2)
+    (fun b i -> split_preserves_knowability lab tr b i)
+    (fun sz n -> (literal_to_bytes_is_publishable tr (FStar.Endianness.n_to_be sz n)))
 
 val parse_serialize_inv_lemma_smtpat:
   #bytes:Type0 -> {|bl:bytes_like bytes|} ->

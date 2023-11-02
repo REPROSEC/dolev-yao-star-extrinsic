@@ -12,34 +12,34 @@ open DY.Example.NSL.Protocol.Stateful
 (*** Trace predicates ***)
 
 let nsl_session_pred: typed_session_pred nsl_session = {
-  pred = (fun cinvs tr prin sess_id st ->
+  pred = (fun #cinvs tr prin sess_id st ->
     match st with
     | InitiatorSentMsg1 bob n_a -> (
       let alice = prin in
-      is_knowable_by cinvs (join (principal_label alice) (principal_label bob)) tr n_a /\
+      is_knowable_by (join (principal_label alice) (principal_label bob)) tr n_a /\
       event_triggered tr alice nsl_event_label (serialize nsl_event (Initiate1 alice bob n_a))
     )
     | ResponderSentMsg2 alice n_a n_b -> (
       let bob = prin in
-      is_knowable_by cinvs (join (principal_label alice) (principal_label bob)) tr n_a /\
-      is_knowable_by cinvs (join (principal_label alice) (principal_label bob)) tr n_b /\
+      is_knowable_by (join (principal_label alice) (principal_label bob)) tr n_a /\
+      is_knowable_by (join (principal_label alice) (principal_label bob)) tr n_b /\
       event_triggered tr bob nsl_event_label (serialize nsl_event (Respond1 alice bob n_a n_b))
     )
     | InitiatorSentMsg3 bob n_a n_b  -> (
       let alice = prin in
-      is_knowable_by cinvs (join (principal_label alice) (principal_label bob)) tr n_a /\
-      is_knowable_by cinvs (join (principal_label alice) (principal_label bob)) tr n_b /\
+      is_knowable_by (join (principal_label alice) (principal_label bob)) tr n_a /\
+      is_knowable_by (join (principal_label alice) (principal_label bob)) tr n_b /\
       event_triggered tr alice nsl_event_label (serialize nsl_event (Initiate2 alice bob n_a n_b))
     )
     | ResponderReceivedMsg3 alice n_a n_b -> (
       let bob = prin in
-      is_knowable_by cinvs (join (principal_label alice) (principal_label bob)) tr n_a /\
-      is_knowable_by cinvs (join (principal_label alice) (principal_label bob)) tr n_b /\
+      is_knowable_by (join (principal_label alice) (principal_label bob)) tr n_a /\
+      is_knowable_by (join (principal_label alice) (principal_label bob)) tr n_b /\
       event_triggered tr bob nsl_event_label (serialize nsl_event (Respond2 alice bob n_a n_b))
     )
   );
-  pred_later = (fun cinvs tr1 tr2 prin sess_id st -> ());
-  pred_knowable = (fun cinvs tr prin sess_id st -> ());
+  pred_later = (fun #cinvs tr1 tr2 prin sess_id st -> ());
+  pred_knowable = (fun #cinvs tr prin sess_id st -> ());
 }
 
 let all_sessions = [
@@ -59,13 +59,13 @@ let nsl_trace_invs: trace_invariants (nsl_crypto_invs) = {
       match parse nsl_event evt with
       | Some (Initiate1 alice bob n_a) -> (
         prin == alice /\
-        get_label nsl_crypto_usages n_a == join (principal_label alice) (principal_label bob) /\
+        get_label n_a == join (principal_label alice) (principal_label bob) /\
         0 < DY.Core.Trace.Type.length tr /\
         rand_generated_at tr (DY.Core.Trace.Type.length tr - 1) n_a
       )
       | Some (Respond1 alice bob n_a n_b) -> (
         prin == bob /\
-        get_label nsl_crypto_usages n_b == join (principal_label alice) (principal_label bob) /\
+        get_label n_b == join (principal_label alice) (principal_label bob) /\
         0 < DY.Core.Trace.Type.length tr /\
         rand_generated_at tr (DY.Core.Trace.Type.length tr - 1) n_b
       )
@@ -88,7 +88,7 @@ let nsl_trace_invs: trace_invariants (nsl_crypto_invs) = {
   );
 }
 
-let nsl_protocol_invs: protocol_invariants = {
+instance nsl_protocol_invs: protocol_invariants = {
   crypto_invs = nsl_crypto_invs;
   trace_invs = nsl_trace_invs;
 }
@@ -128,10 +128,10 @@ val prepare_msg1_proof:
   tr:trace ->
   alice:principal -> bob:principal ->
   Lemma
-  (requires trace_invariant nsl_protocol_invs tr)
+  (requires trace_invariant tr)
   (ensures (
     let (sess_id, tr_out) = prepare_msg1 alice bob tr in
-    trace_invariant nsl_protocol_invs tr
+    trace_invariant tr
   ))
 let prepare_msg1_proof tr alice bob =
   ()
@@ -140,12 +140,12 @@ val send_msg1_proof:
   tr:trace ->
   global_sess_id:nsl_global_sess_ids -> alice:principal -> sess_id:nat ->
   Lemma
-  (requires trace_invariant nsl_protocol_invs tr)
+  (requires trace_invariant tr)
   (ensures (
     let (opt_msg_id, tr_out) = send_msg1 global_sess_id alice sess_id tr in
     match opt_msg_id with
     | None -> True
-    | Some msg_id -> trace_invariant nsl_protocol_invs tr_out
+    | Some msg_id -> trace_invariant tr_out
   ))
 let send_msg1_proof tr global_sess_id alice sess_id =
   let (opt_msg_id, tr_out) = send_msg1 global_sess_id alice sess_id tr in
@@ -165,12 +165,12 @@ val prepare_msg2_proof:
   tr:trace ->
   global_sess_id:nsl_global_sess_ids -> bob:principal -> msg_id:nat ->
   Lemma
-  (requires trace_invariant nsl_protocol_invs tr)
+  (requires trace_invariant tr)
   (ensures (
     let (opt_sess_id, tr_out) = prepare_msg2 global_sess_id bob msg_id tr in
     match opt_sess_id with
     | None -> True
-    | Some sess_id -> trace_invariant nsl_protocol_invs tr_out
+    | Some sess_id -> trace_invariant tr_out
   ))
 let prepare_msg2_proof tr global_sess_id bob msg_id =
   let (opt_sess_id, tr_out) = prepare_msg2 global_sess_id bob msg_id tr in
@@ -191,12 +191,12 @@ val send_msg2_proof:
   tr:trace ->
   global_sess_id:nsl_global_sess_ids -> bob:principal -> sess_id:nat ->
   Lemma
-  (requires trace_invariant nsl_protocol_invs tr)
+  (requires trace_invariant tr)
   (ensures (
     let (opt_msg_id, tr_out) = send_msg2 global_sess_id bob sess_id tr in
     match opt_msg_id with
     | None -> True
-    | Some msg_id -> trace_invariant nsl_protocol_invs tr_out
+    | Some msg_id -> trace_invariant tr_out
   ))
 let send_msg2_proof tr global_sess_id bob sess_id =
   let (opt_msg_id, tr_out) = send_msg2 global_sess_id bob sess_id tr in
@@ -217,12 +217,12 @@ val prepare_msg3_proof:
   tr:trace ->
   global_sess_id:nsl_global_sess_ids -> alice:principal -> sess_id:nat -> msg_id:nat ->
   Lemma
-  (requires trace_invariant nsl_protocol_invs tr)
+  (requires trace_invariant tr)
   (ensures (
     let (opt_sess_id, tr_out) = prepare_msg3 global_sess_id alice sess_id msg_id tr in
     match opt_sess_id with
     | None -> True
-    | Some sess_id -> trace_invariant nsl_protocol_invs tr_out
+    | Some sess_id -> trace_invariant tr_out
   ))
 let prepare_msg3_proof tr global_sess_id alice sess_id msg_id =
   let (opt_sess_id, tr_out) = prepare_msg3 global_sess_id alice sess_id msg_id tr in
@@ -246,12 +246,12 @@ val send_msg3_proof:
   tr:trace ->
   global_sess_id:nsl_global_sess_ids -> alice:principal -> sess_id:nat ->
   Lemma
-  (requires trace_invariant nsl_protocol_invs tr)
+  (requires trace_invariant tr)
   (ensures (
     let (opt_msg_id, tr_out) = send_msg3 global_sess_id alice sess_id tr in
     match opt_msg_id with
     | None -> True
-    | Some msg_id -> trace_invariant nsl_protocol_invs tr_out
+    | Some msg_id -> trace_invariant tr_out
   ))
 let send_msg3_proof tr global_sess_id alice sess_id =
   let (opt_msg_id, tr_out) = send_msg3 global_sess_id alice sess_id tr in
@@ -274,7 +274,7 @@ val event_respond1_injective:
   n_a:bytes -> n_a':bytes -> n_b:bytes ->
   Lemma
   (requires
-    trace_invariant nsl_protocol_invs tr /\
+    trace_invariant tr /\
     event_triggered tr bob nsl_event_label (serialize nsl_event (Respond1 alice bob n_a n_b)) /\
     event_triggered tr bob nsl_event_label (serialize nsl_event (Respond1 alice' bob n_a' n_b))
   )
@@ -290,12 +290,12 @@ val prepare_msg4:
   tr:trace ->
   global_sess_id:nsl_global_sess_ids -> bob:principal -> sess_id:nat -> msg_id:nat ->
   Lemma
-  (requires trace_invariant nsl_protocol_invs tr)
+  (requires trace_invariant tr)
   (ensures (
     let (opt_sess_id, tr_out) = prepare_msg4 global_sess_id bob sess_id msg_id tr in
     match opt_sess_id with
     | None -> True
-    | Some sess_id -> trace_invariant nsl_protocol_invs tr_out
+    | Some sess_id -> trace_invariant tr_out
   ))
 let prepare_msg4 tr global_sess_id bob sess_id msg_id =
   let (opt_sess_id, tr_out) = prepare_msg4 global_sess_id bob sess_id msg_id tr in
@@ -333,8 +333,8 @@ let prepare_msg4 tr global_sess_id bob sess_id msg_id =
     let msg3: message3 = msg3 in
 
     introduce (~((join (principal_label alice) (principal_label bob)) `can_flow tr` public)) ==> event_triggered tr alice nsl_event_label (serialize nsl_event (Initiate2 alice bob n_a n_b)) with _. (
-      assert(exists alice' n_a'. get_label nsl_crypto_usages n_b `can_flow tr` (principal_label alice') /\ event_triggered tr alice' nsl_event_label (serialize nsl_event #(nsl_event_parseable_serializeable) (Initiate2 alice' bob n_a' n_b)));
-      eliminate exists alice' n_a'. get_label nsl_crypto_usages n_b `can_flow tr` (principal_label alice') /\ event_triggered tr alice' nsl_event_label (serialize nsl_event #(nsl_event_parseable_serializeable) (Initiate2 alice' bob n_a' n_b))
+      assert(exists alice' n_a'. get_label n_b `can_flow tr` (principal_label alice') /\ event_triggered tr alice' nsl_event_label (serialize nsl_event #(nsl_event_parseable_serializeable) (Initiate2 alice' bob n_a' n_b)));
+      eliminate exists alice' n_a'. get_label n_b `can_flow tr` (principal_label alice') /\ event_triggered tr alice' nsl_event_label (serialize nsl_event #(nsl_event_parseable_serializeable) (Initiate2 alice' bob n_a' n_b))
       returns _
       with _. (
         event_respond1_injective tr alice alice' bob n_a n_a' n_b

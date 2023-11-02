@@ -7,20 +7,20 @@ open DY.Lib.State.Labeled
 
 noeq
 type typed_session_pred (a:Type) {|parseable_serializeable bytes a|} = {
-  pred: crypto_invariants -> trace -> principal -> nat -> a -> prop;
+  pred: {|crypto_invariants|} -> trace -> principal -> nat -> a -> prop;
   pred_later:
-    cinvs:crypto_invariants ->
+    {|crypto_invariants|} ->
     tr1:trace -> tr2:trace ->
     prin:principal -> sess_id:nat -> content:a ->
     Lemma
-    (requires pred cinvs tr1 prin sess_id content /\ tr1 <$ tr2)
-    (ensures pred cinvs tr2 prin sess_id content)
+    (requires pred tr1 prin sess_id content /\ tr1 <$ tr2)
+    (ensures pred tr2 prin sess_id content)
   ;
   pred_knowable:
-    cinvs:crypto_invariants ->tr:trace -> prin:principal -> sess_id:nat -> content:a ->
+    {|crypto_invariants|} ->tr:trace -> prin:principal -> sess_id:nat -> content:a ->
     Lemma
-    (requires pred cinvs tr prin sess_id content)
-    (ensures is_well_formed _ (is_knowable_by cinvs (principal_state_label prin sess_id) tr) content)
+    (requires pred tr prin sess_id content)
+    (ensures is_well_formed _ (is_knowable_by (principal_state_label prin sess_id) tr) content)
   ;
 }
 
@@ -29,20 +29,20 @@ val typed_session_pred_to_session_pred:
   typed_session_pred a -> session_pred
 let typed_session_pred_to_session_pred #a #ps_a tspred =
   {
-    pred = (fun cinvs tr prin sess_id content_bytes ->
+    pred = (fun #cinvs tr prin sess_id content_bytes ->
       match parse a content_bytes with
       | None -> False
-      | Some content -> tspred.pred cinvs tr prin sess_id content
+      | Some content -> tspred.pred tr prin sess_id content
     );
-    pred_later = (fun cinvs tr1 tr2 prin sess_id content_bytes ->
+    pred_later = (fun #cinvs tr1 tr2 prin sess_id content_bytes ->
       let Some content = parse a content_bytes in
-      tspred.pred_later cinvs tr1 tr2 prin sess_id content
+      tspred.pred_later tr1 tr2 prin sess_id content
     );
-    pred_knowable = (fun cinvs tr prin sess_id content_bytes ->
+    pred_knowable = (fun #cinvs tr prin sess_id content_bytes ->
       let Some content = parse a content_bytes in
-      tspred.pred_knowable cinvs tr prin sess_id content;
+      tspred.pred_knowable tr prin sess_id content;
       serialize_parse_inv_lemma a content_bytes;
-      serialize_wf_lemma a (is_knowable_by cinvs (principal_state_label prin sess_id) tr) content
+      serialize_wf_lemma a (is_knowable_by (principal_state_label prin sess_id) tr) content
     );
   }
 
@@ -80,36 +80,36 @@ let get_typed_state #a label prin sess_id =
 
 val set_typed_state_invariant:
   #a:Type -> {|parseable_serializeable bytes a|} ->
-  invs:protocol_invariants ->
+  {|invs:protocol_invariants|} ->
   label:string -> spred:typed_session_pred a ->
   prin:principal -> sess_id:nat -> content:a -> tr:trace ->
   Lemma
   (requires
-    spred.pred invs.crypto_invs tr prin sess_id content /\
-    trace_invariant invs tr /\
+    spred.pred tr prin sess_id content /\
+    trace_invariant tr /\
     has_typed_session_pred invs label spred
   )
   (ensures (
     let ((), tr_out) = set_typed_state label prin sess_id content tr in
-    trace_invariant invs tr_out /\
+    trace_invariant tr_out /\
     typed_state_was_set tr_out label prin sess_id content
   ))
   [SMTPat (set_typed_state label prin sess_id content tr);
-   SMTPat (trace_invariant invs tr);
+   SMTPat (trace_invariant tr);
    SMTPat (has_typed_session_pred invs label spred)]
-let set_typed_state_invariant #a #ps_a invs label spred prin sess_id content tr =
+let set_typed_state_invariant #a #ps_a #invs label spred prin sess_id content tr =
   reveal_opaque (`%set_typed_state) (set_typed_state #a);
   reveal_opaque (`%typed_state_was_set) (typed_state_was_set #a);
   parse_serialize_inv_lemma #bytes a content
 
 val get_typed_state_invariant:
   #a:Type -> {|parseable_serializeable bytes a|} ->
-  invs:protocol_invariants ->
+  {|invs:protocol_invariants|} ->
   label:string -> spred:typed_session_pred a ->
   prin:principal -> sess_id:nat -> tr:trace ->
   Lemma
   (requires
-    trace_invariant invs tr /\
+    trace_invariant tr /\
     has_typed_session_pred invs label spred
   )
   (ensures (
@@ -118,14 +118,14 @@ val get_typed_state_invariant:
       match opt_content with
       | None -> True
       | Some content -> (
-        spred.pred invs.crypto_invs tr prin sess_id content
+        spred.pred tr prin sess_id content
       )
     )
   ))
   [SMTPat (get_typed_state #a label prin sess_id tr);
-   SMTPat (trace_invariant invs tr);
+   SMTPat (trace_invariant tr);
    SMTPat (has_typed_session_pred invs label spred)]
-let get_typed_state_invariant #a #ps_a invs label spred prin sess_id tr =
+let get_typed_state_invariant #a #ps_a #invs label spred prin sess_id tr =
   reveal_opaque (`%get_typed_state) (get_typed_state #a)
 
 val typed_state_was_set_implies_pred:
@@ -136,12 +136,12 @@ val typed_state_was_set_implies_pred:
   Lemma
   (requires
     typed_state_was_set tr label prin sess_id content /\
-    trace_invariant invs tr /\
+    trace_invariant tr /\
     has_typed_session_pred invs label spred
   )
-  (ensures spred.pred invs.crypto_invs tr prin sess_id content)
+  (ensures spred.pred tr prin sess_id content)
   [SMTPat (typed_state_was_set tr label prin sess_id content);
-   SMTPat (trace_invariant invs tr);
+   SMTPat (trace_invariant tr);
    SMTPat (has_typed_session_pred invs label spred);
   ]
 let typed_state_was_set_implies_pred #a #ps_a invs tr label spred prin sess_id content =

@@ -43,24 +43,24 @@ let pki_types = {
 }
 
 val is_public_key_for:
-  crypto_invariants -> trace ->
+  {|crypto_invariants|} -> trace ->
   bytes -> public_key_type -> principal -> prop
-let is_public_key_for cinvs tr pk pk_type who =
-    match pk_type with
-    | PkEnc usg -> (
-      is_encryption_key cinvs usg (principal_label who) tr pk
-    )
-    | Verify usg -> (
-      is_verification_key cinvs usg (principal_label who) tr pk
-    )
+let is_public_key_for #cinvs tr pk pk_type who =
+  match pk_type with
+  | PkEnc usg -> (
+    is_encryption_key usg (principal_label who) tr pk
+  )
+  | Verify usg -> (
+    is_verification_key usg (principal_label who) tr pk
+  )
 
 val pki_pred: map_predicate pki_types
 let pki_pred = {
-  pred = (fun cinvs tr prin sess_id (key:pki_types.key) value ->
-    is_public_key_for cinvs tr value.public_key key.ty key.who
+  pred = (fun #cinvs tr prin sess_id (key:pki_types.key) value ->
+    is_public_key_for tr value.public_key key.ty key.who
   );
-  pred_later = (fun cinvs tr1 tr2 prin sess_id key value -> ());
-  pred_knowable = (fun cinvs tr prin sess_id key value -> ());
+  pred_later = (fun #cinvs tr1 tr2 prin sess_id key value -> ());
+  pred_knowable = (fun #cinvs tr prin sess_id key value -> ());
 }
 
 val pki_label: string
@@ -88,48 +88,48 @@ let get_public_key prin sess_id pk_type who =
   return (Some res.public_key)
 
 val initialize_pki_invariant:
-  invs:protocol_invariants ->
+  {|invs:protocol_invariants|} ->
   prin:principal -> tr:trace ->
   Lemma
   (requires
-    trace_invariant invs tr /\
+    trace_invariant tr /\
     has_pki_invariant invs
   )
   (ensures (
     let (_, tr_out) = initialize_pki prin tr in
-    trace_invariant invs tr_out
+    trace_invariant tr_out
   ))
   [SMTPat (initialize_pki prin tr);
    SMTPat (has_pki_invariant invs);
-   SMTPat (trace_invariant invs tr)]
-let initialize_pki_invariant invs prin tr =
+   SMTPat (trace_invariant tr)]
+let initialize_pki_invariant #invs prin tr =
   reveal_opaque (`%initialize_pki) (initialize_pki)
 
 val install_public_key_invariant:
-  invs:protocol_invariants ->
+  {|invs:protocol_invariants|} ->
   prin:principal -> sess_id:nat -> pk_type:public_key_type -> who:principal -> pk:bytes -> tr:trace ->
   Lemma
   (requires
-    is_public_key_for invs.crypto_invs tr pk pk_type who /\
-    trace_invariant invs tr /\
+    is_public_key_for tr pk pk_type who /\
+    trace_invariant tr /\
     has_pki_invariant invs
   )
   (ensures (
     let (_, tr_out) = install_public_key prin sess_id pk_type who pk tr in
-    trace_invariant invs tr_out
+    trace_invariant tr_out
   ))
   [SMTPat (install_public_key prin sess_id pk_type who pk tr);
    SMTPat (has_pki_invariant invs);
-   SMTPat (trace_invariant invs tr)]
-let install_public_key_invariant invs prin sess_id pk_type who pk tr =
+   SMTPat (trace_invariant tr)]
+let install_public_key_invariant #invs prin sess_id pk_type who pk tr =
   reveal_opaque (`%install_public_key) (install_public_key)
 
 val get_public_key_invariant:
-  invs:protocol_invariants ->
+  {|invs:protocol_invariants|} ->
   prin:principal -> sess_id:nat -> pk_type:public_key_type -> who:principal -> tr:trace ->
   Lemma
   (requires
-    trace_invariant invs tr /\
+    trace_invariant tr /\
     has_pki_invariant invs
   )
   (ensures (
@@ -138,11 +138,11 @@ val get_public_key_invariant:
       match opt_public_key with
       | None -> True
       | Some public_key ->
-        is_public_key_for invs.crypto_invs tr public_key pk_type who
+        is_public_key_for tr public_key pk_type who
     )
   ))
   [SMTPat (get_public_key prin sess_id pk_type who tr);
    SMTPat (has_pki_invariant invs);
-   SMTPat (trace_invariant invs tr)]
-let get_public_key_invariant invs prin sess_id pk_type who tr =
+   SMTPat (trace_invariant tr)]
+let get_public_key_invariant #invs prin sess_id pk_type who tr =
   reveal_opaque (`%get_public_key) (get_public_key)
