@@ -87,9 +87,6 @@ let rec event_at_implies_trace_event_invariant #invs tr i event =
     event_at_implies_trace_event_invariant tr_init i event
   )
 
-// TODO: the next lemmas have similar proofs
-// maybe refactor?
-
 // Lemma for attacker theorem
 val msg_sent_on_network_are_publishable:
   {|protocol_invariants|} -> tr:trace -> msg:bytes ->
