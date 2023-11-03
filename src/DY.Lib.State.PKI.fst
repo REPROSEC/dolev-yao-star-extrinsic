@@ -54,21 +54,21 @@ let is_public_key_for #cinvs tr pk pk_type who =
     is_verification_key usg (principal_label who) tr pk
   )
 
-val pki_pred: map_predicate pki_types
-let pki_pred = {
-  pred = (fun #cinvs tr prin sess_id (key:pki_types.key) value ->
+val pki_pred: {|crypto_invariants|} -> map_predicate pki_types
+let pki_pred #cinvs = {
+  pred = (fun tr prin sess_id (key:pki_types.key) value ->
     is_public_key_for tr value.public_key key.ty key.who
   );
-  pred_later = (fun #cinvs tr1 tr2 prin sess_id key value -> ());
-  pred_knowable = (fun #cinvs tr prin sess_id key value -> ());
+  pred_later = (fun tr1 tr2 prin sess_id key value -> ());
+  pred_knowable = (fun tr prin sess_id key value -> ());
 }
 
 val pki_label: string
 let pki_label = "DY.Lib.State.PKI"
 
 val has_pki_invariant: protocol_invariants -> prop
-let has_pki_invariant pr =
-  has_map_session_invariant pki_pred pki_label pr
+let has_pki_invariant invs =
+  has_map_session_invariant invs pki_label pki_pred
 
 (*** PKI API ***)
 

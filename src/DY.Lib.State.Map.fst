@@ -16,13 +16,13 @@ noeq type map_types = {
   ps_value: parser_serializer bytes value;
 }
 
-noeq type map_predicate (mt:map_types) = {
-  pred: {|crypto_invariants|} -> trace -> principal -> nat -> mt.key -> mt.value -> prop;
-  pred_later: {|crypto_invariants|} -> tr1:trace -> tr2:trace -> prin:principal -> sess_id:nat -> key:mt.key -> value:mt.value -> Lemma
+noeq type map_predicate {|crypto_invariants|} (mt:map_types) = {
+  pred: trace -> principal -> nat -> mt.key -> mt.value -> prop;
+  pred_later: tr1:trace -> tr2:trace -> prin:principal -> sess_id:nat -> key:mt.key -> value:mt.value -> Lemma
     (requires pred tr1 prin sess_id key value /\ tr1 <$ tr2)
     (ensures pred tr2 prin sess_id key value)
   ;
-  pred_knowable: {|crypto_invariants|} -> tr:trace -> prin:principal -> sess_id:nat -> key:mt.key -> value:mt.value -> Lemma
+  pred_knowable: tr:trace -> prin:principal -> sess_id:nat -> key:mt.key -> value:mt.value -> Lemma
     (requires pred tr prin sess_id key value)
     (ensures is_well_formed_prefix mt.ps_key (is_knowable_by (principal_state_label prin sess_id) tr) key /\ is_well_formed_prefix mt.ps_value (is_knowable_by (principal_state_label prin sess_id) tr) value)
   ;
@@ -70,17 +70,18 @@ let map_invariant_eq #cinvs #mt mpred tr prin sess_id st =
   for_allP_eq (map_elem_invariant mpred tr prin sess_id) st.key_values
 
 val map_session_invariant:
+  {|crypto_invariants|} ->
   #mt:map_types ->
   mpred:map_predicate mt ->
   typed_session_pred (map mt)
-let map_session_invariant #mt mpred = {
-  pred = (fun #cinvs tr prin sess_id content -> map_invariant mpred tr prin sess_id content);
-  pred_later = (fun #cinvs tr1 tr2 prin sess_id content ->
+let map_session_invariant #cinvs #mt mpred = {
+  pred = (fun tr prin sess_id content -> map_invariant mpred tr prin sess_id content);
+  pred_later = (fun tr1 tr2 prin sess_id content ->
     map_invariant_eq mpred tr1 prin sess_id content;
     map_invariant_eq mpred tr2 prin sess_id content;
     FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (mpred.pred_later tr1 tr2 prin sess_id))
   );
-  pred_knowable = (fun #cinvs tr prin sess_id content ->
+  pred_knowable = (fun tr prin sess_id content ->
     let pre = (is_knowable_by (principal_state_label prin sess_id) tr) in
     map_invariant_eq mpred tr prin sess_id content;
     for_allP_eq (is_well_formed_prefix (ps_map_elem mt) pre) content.key_values;
@@ -93,8 +94,8 @@ let map_session_invariant #mt mpred = {
   );
 }
 
-val has_map_session_invariant: #mt:map_types -> mpred:map_predicate mt -> string -> protocol_invariants -> prop
-let has_map_session_invariant #mt mpred label invs =
+val has_map_session_invariant: #mt:map_types -> protocol_invariants -> string -> mpred:map_predicate mt -> prop
+let has_map_session_invariant #mt invs label mpred =
   has_typed_session_pred invs label (map_session_invariant mpred)
 
 (*** Map API ***)
@@ -160,14 +161,14 @@ val initialize_map_invariant:
   Lemma
   (requires
     trace_invariant tr /\
-    has_map_session_invariant mpred label invs
+    has_map_session_invariant invs label mpred
   )
   (ensures (
     let (_, tr_out) = initialize_map mt label prin tr in
     trace_invariant tr_out
   ))
   [SMTPat (initialize_map mt label prin tr);
-   SMTPat (has_map_session_invariant mpred label invs);
+   SMTPat (has_map_session_invariant invs label mpred);
    SMTPat (trace_invariant tr)
   ]
 let initialize_map_invariant #invs mt mpred label prin tr =
@@ -185,14 +186,14 @@ val add_key_value_invariant:
   (requires
     mpred.pred tr prin sess_id key value /\
     trace_invariant tr /\
-    has_map_session_invariant mpred label invs
+    has_map_session_invariant invs label mpred
   )
   (ensures (
     let (_, tr_out) = add_key_value mt label prin sess_id key value tr in
     trace_invariant tr_out
   ))
   [SMTPat (add_key_value mt label prin sess_id key value tr);
-   SMTPat (has_map_session_invariant mpred label invs);
+   SMTPat (has_map_session_invariant invs label mpred);
    SMTPat (trace_invariant tr)
   ]
 let add_key_value_invariant #invs mt mpred label prin sess_id key value tr =
@@ -212,7 +213,7 @@ val find_value_invariant:
   Lemma
   (requires
     trace_invariant tr /\
-    has_map_session_invariant mpred label invs
+    has_map_session_invariant invs label mpred
   )
   (ensures (
     let (opt_value, tr_out) = find_value mt label prin sess_id key tr in
@@ -225,7 +226,7 @@ val find_value_invariant:
     )
   ))
   [SMTPat (find_value mt label prin sess_id key tr);
-   SMTPat (has_map_session_invariant mpred label invs);
+   SMTPat (has_map_session_invariant invs label mpred);
    SMTPat (trace_invariant tr);
   ]
 let find_value_invariant #invs mt mpred label prin sess_id key tr =

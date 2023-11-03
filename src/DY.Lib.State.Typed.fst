@@ -6,10 +6,9 @@ open DY.Lib.Comparse.Glue
 open DY.Lib.State.Labeled
 
 noeq
-type typed_session_pred (a:Type) {|parseable_serializeable bytes a|} = {
-  pred: {|crypto_invariants|} -> trace -> principal -> nat -> a -> prop;
+type typed_session_pred {|crypto_invariants|} (a:Type) {|parseable_serializeable bytes a|} = {
+  pred: trace -> principal -> nat -> a -> prop;
   pred_later:
-    {|crypto_invariants|} ->
     tr1:trace -> tr2:trace ->
     prin:principal -> sess_id:nat -> content:a ->
     Lemma
@@ -17,7 +16,7 @@ type typed_session_pred (a:Type) {|parseable_serializeable bytes a|} = {
     (ensures pred tr2 prin sess_id content)
   ;
   pred_knowable:
-    {|crypto_invariants|} ->tr:trace -> prin:principal -> sess_id:nat -> content:a ->
+    tr:trace -> prin:principal -> sess_id:nat -> content:a ->
     Lemma
     (requires pred tr prin sess_id content)
     (ensures is_well_formed _ (is_knowable_by (principal_state_label prin sess_id) tr) content)
@@ -25,20 +24,21 @@ type typed_session_pred (a:Type) {|parseable_serializeable bytes a|} = {
 }
 
 val typed_session_pred_to_session_pred:
+  {|crypto_invariants|} ->
   #a:Type -> {|parseable_serializeable bytes a|} ->
   typed_session_pred a -> session_pred
-let typed_session_pred_to_session_pred #a #ps_a tspred =
+let typed_session_pred_to_session_pred #cinvs #a #ps_a tspred =
   {
-    pred = (fun #cinvs tr prin sess_id content_bytes ->
+    pred = (fun tr prin sess_id content_bytes ->
       match parse a content_bytes with
       | None -> False
       | Some content -> tspred.pred tr prin sess_id content
     );
-    pred_later = (fun #cinvs tr1 tr2 prin sess_id content_bytes ->
+    pred_later = (fun tr1 tr2 prin sess_id content_bytes ->
       let Some content = parse a content_bytes in
       tspred.pred_later tr1 tr2 prin sess_id content
     );
-    pred_knowable = (fun #cinvs tr prin sess_id content_bytes ->
+    pred_knowable = (fun tr prin sess_id content_bytes ->
       let Some content = parse a content_bytes in
       tspred.pred_knowable tr prin sess_id content;
       serialize_parse_inv_lemma a content_bytes;

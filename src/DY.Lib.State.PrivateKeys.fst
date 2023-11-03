@@ -45,21 +45,21 @@ let is_private_key_for #cinvs tr sk sk_type who =
     is_signature_key usg (principal_label who) tr sk
   )
 
-val private_keys_pred: map_predicate private_keys_types
-let private_keys_pred = {
-  pred = (fun #cinvs tr prin sess_id (key:private_keys_types.key) value ->
+val private_keys_pred: {|crypto_invariants|} -> map_predicate private_keys_types
+let private_keys_pred #cinvs = {
+  pred = (fun tr prin sess_id (key:private_keys_types.key) value ->
     is_private_key_for tr value.private_key key prin
   );
-  pred_later = (fun #cinvs tr1 tr2 prin sess_id key value -> ());
-  pred_knowable = (fun #cinvs tr prin sess_id key value -> ());
+  pred_later = (fun tr1 tr2 prin sess_id key value -> ());
+  pred_knowable = (fun tr prin sess_id key value -> ());
 }
 
 val private_keys_label: string
 let private_keys_label = "DY.Lib.State.PrivateKeys"
 
 val has_private_keys_invariant: protocol_invariants -> prop
-let has_private_keys_invariant pr =
-  has_map_session_invariant private_keys_pred private_keys_label pr
+let has_private_keys_invariant invs =
+  has_map_session_invariant invs private_keys_label private_keys_pred
 
 val private_key_type_to_usage:
   private_key_type ->

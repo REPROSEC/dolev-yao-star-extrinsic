@@ -12,7 +12,7 @@ open DY.Example.NSL.Protocol.Stateful
 (*** Trace predicates ***)
 
 let nsl_session_pred: typed_session_pred nsl_session = {
-  pred = (fun #cinvs tr prin sess_id st ->
+  pred = (fun tr prin sess_id st ->
     match st with
     | InitiatorSentMsg1 bob n_a -> (
       let alice = prin in
@@ -38,8 +38,8 @@ let nsl_session_pred: typed_session_pred nsl_session = {
       event_triggered tr bob nsl_event_label (serialize nsl_event (Respond2 alice bob n_a n_b))
     )
   );
-  pred_later = (fun #cinvs tr1 tr2 prin sess_id st -> ());
-  pred_knowable = (fun #cinvs tr prin sess_id st -> ());
+  pred_later = (fun tr1 tr2 prin sess_id st -> ());
+  pred_knowable = (fun tr prin sess_id st -> ());
 }
 
 let all_sessions = [

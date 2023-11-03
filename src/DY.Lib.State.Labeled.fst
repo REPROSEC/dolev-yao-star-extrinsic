@@ -10,7 +10,8 @@ open DY.Lib.Comparse.Parsers
 
 (*** Session predicates ***)
 
-type session (bytes:Type0) {|bytes_like bytes|} = {
+[@@ with_bytes bytes]
+type session = {
   [@@@ with_parser #bytes ps_string]
   label: string;
   content: bytes;
@@ -19,29 +20,12 @@ type session (bytes:Type0) {|bytes_like bytes|} = {
 %splice [ps_session] (gen_parser (`session))
 %splice [ps_session_is_well_formed] (gen_is_well_formed_lemma (`session))
 
-instance parseable_serializeable_session (bytes:Type0) {|bytes_like bytes|}: parseable_serializeable bytes (session bytes) = mk_parseable_serializeable (ps_session)
-
-let split_session_pred_func: split_predicate_input_values = {
-  labeled_data_t = trace & principal & nat & bytes;
-  label_t = string;
-  encoded_label_t = string;
-  raw_data_t = trace & principal & nat & bytes;
-
-  decode_labeled_data = (fun (tr, prin, sess_id, sess_content) -> (
-    match parse (session bytes) sess_content with
-    | Some ({label; content}) -> Some (label, (tr, prin, sess_id, content))
-    | None -> None
-  ));
-
-  encode_label = (fun s -> s);
-  encode_label_inj = (fun l1 l2 -> ());
-}
+instance parseable_serializeable_session: parseable_serializeable bytes session = mk_parseable_serializeable (ps_session)
 
 noeq
-type session_pred = {
-  pred: {|crypto_invariants|} -> trace -> principal -> nat -> bytes -> prop;
+type session_pred {|crypto_invariants|} = {
+  pred: trace -> principal -> nat -> bytes -> prop;
   pred_later:
-    {|crypto_invariants|} ->
     tr1:trace -> tr2:trace ->
     prin:principal -> sess_id:nat -> content:bytes ->
     Lemma
@@ -49,7 +33,6 @@ type session_pred = {
     (ensures pred tr2 prin sess_id content)
   ;
   pred_knowable:
-    {|crypto_invariants|} ->
     tr:trace -> prin:principal -> sess_id:nat -> content:bytes ->
     Lemma
     (requires pred tr prin sess_id content)
@@ -57,29 +40,45 @@ type session_pred = {
   ;
 }
 
-val session_pred_to_local_pred:
-  {|crypto_invariants|} -> session_pred ->
-  local_pred split_session_pred_func
-let session_pred_to_local_pred #cinvs sess_pred (tr, prin, sess_id, content) =
-  sess_pred.pred tr prin sess_id content
+let split_session_pred_func {|crypto_invariants|} : split_predicate_input_values = {
+  labeled_data_t = trace & principal & nat & bytes;
+  label_t = string;
+  encoded_label_t = string;
+  raw_data_t = trace & principal & nat & bytes;
 
-val protocol_invariants_to_global_pred: protocol_invariants -> global_pred split_session_pred_func
-let protocol_invariants_to_global_pred invs (tr, prin, sess_id, content) =
-  invs.trace_invs.state_pred.pred tr prin sess_id content
+  decode_labeled_data = (fun (tr, prin, sess_id, sess_content) -> (
+    match parse session sess_content with
+    | Some ({label; content}) -> Some (label, (tr, prin, sess_id, content))
+    | None -> None
+  ));
+
+  encode_label = (fun s -> s);
+  encode_label_inj = (fun l1 l2 -> ());
+
+  local_pred = session_pred;
+  global_pred = trace -> principal -> nat -> bytes -> prop;
+
+  apply_local_pred = (fun spred (tr, prin, sess_id, content) ->
+    spred.pred tr prin sess_id content
+  );
+  apply_global_pred = (fun spred (tr, prin, sess_id, content) ->
+    spred tr prin sess_id content
+  );
+  mk_global_pred = (fun spred -> fun tr prin sess_id content ->
+    spred (tr, prin, sess_id, content)
+  );
+  apply_mk_global_pred = (fun spred x -> ());
+}
 
 val has_session_pred: protocol_invariants -> string -> session_pred -> prop
 let has_session_pred invs label spred =
-  has_local_pred split_session_pred_func (protocol_invariants_to_global_pred invs) label (session_pred_to_local_pred spred)
+  has_local_pred split_session_pred_func (state_pred) label spred
 
 (*** Global session predicate builder ***)
 
-val label_session_pred_to_label_local_pred: {|crypto_invariants|} -> string & session_pred -> string & local_pred split_session_pred_func
-let label_session_pred_to_label_local_pred #cinvs (label, spred) =
-  (label, session_pred_to_local_pred spred)
-
 val mk_global_session_pred: {|crypto_invariants|} -> list (string & session_pred) -> trace -> principal -> nat -> bytes -> prop
-let mk_global_session_pred #cinvs l tr prin sess_id content =
-  mk_global_pred split_session_pred_func (List.Tot.map (label_session_pred_to_label_local_pred) l) (tr, prin, sess_id, content)
+let mk_global_session_pred #cinvs l =
+  mk_global_pred split_session_pred_func l
 
 val mk_global_session_pred_correct: invs:protocol_invariants -> lpreds:list (string & session_pred) -> label:string -> spred:session_pred -> Lemma
   (requires
@@ -89,28 +88,26 @@ val mk_global_session_pred_correct: invs:protocol_invariants -> lpreds:list (str
   )
   (ensures has_session_pred invs label spred)
 let mk_global_session_pred_correct invs lpreds label spred =
-  memP_map (label_session_pred_to_label_local_pred) lpreds (label, spred);
-  FStar.Classical.forall_intro_2 (DY.Misc.index_map (label_session_pred_to_label_local_pred));
-  FStar.Classical.forall_intro_2 (DY.Misc.index_map (fst #string #(session_pred)));
-  FStar.Classical.forall_intro_2 (DY.Misc.index_map (fst #string #(local_pred split_session_pred_func)));
-  List.Tot.index_extensionality (List.Tot.map fst lpreds) (List.Tot.map fst (List.Tot.map (label_session_pred_to_label_local_pred) lpreds));
-  mk_global_pred_correct split_session_pred_func (List.Tot.map (label_session_pred_to_label_local_pred) lpreds) label (session_pred_to_local_pred spred)
+  mk_global_pred_correct split_session_pred_func lpreds label spred
 
 val mk_global_session_pred_later:
   cinvs:crypto_invariants -> lpreds:list (string & session_pred) ->
-  tr1:trace -> tr2:trace -> prin:principal -> sess_id:nat -> content:bytes -> Lemma
-  (requires mk_global_session_pred lpreds tr1 prin sess_id content /\ tr1 <$ tr2)
-  (ensures mk_global_session_pred lpreds tr2 prin sess_id content)
-let rec mk_global_session_pred_later cinvs lpreds tr1 tr2 prin sess_id content =
-  match lpreds with
-  | [] -> ()
-  | (_, lpred)::tpreds ->
-    FStar.Classical.move_requires (mk_global_session_pred_later cinvs tpreds tr1 tr2 prin sess_id) content;
-    FStar.Classical.forall_intro (FStar.Classical.move_requires (lpred.pred_later tr1 tr2 prin sess_id));
-    // Why F*, why???
-    match parse (session bytes) content with
-    | None -> ()
-    | Some _ -> ()
+  tr1:trace -> tr2:trace -> prin:principal -> sess_id:nat -> full_content:bytes -> Lemma
+  (requires mk_global_session_pred lpreds tr1 prin sess_id full_content /\ tr1 <$ tr2)
+  (ensures mk_global_session_pred lpreds tr2 prin sess_id full_content)
+let mk_global_session_pred_later cinvs lpreds tr1 tr2 prin sess_id full_content =
+  mk_global_pred_eq split_session_pred_func lpreds (tr1, prin, sess_id, full_content);
+  eliminate exists lab lpred raw_data.
+    List.Tot.memP (lab, lpred) lpreds /\
+    split_session_pred_func.apply_local_pred lpred raw_data /\
+    split_session_pred_func.decode_labeled_data (tr1, prin, sess_id, full_content) == Some (split_session_pred_func.encode_label lab, raw_data)
+  returns mk_global_session_pred lpreds tr2 prin sess_id full_content
+  with _. (
+    let Some (_, (_, _, _, content)) = split_session_pred_func.decode_labeled_data (tr1, prin, sess_id, full_content) in
+    lpred.pred_later tr1 tr2 prin sess_id content;
+    mk_global_pred_eq split_session_pred_func lpreds (tr2, prin, sess_id, full_content);
+    assert(split_session_pred_func.apply_local_pred lpred (tr2, prin, sess_id, content))
+  )
 
 val mk_global_session_pred_knowable:
   cinvs:crypto_invariants -> lpreds:list (string & session_pred) ->
@@ -118,23 +115,19 @@ val mk_global_session_pred_knowable:
   Lemma
   (requires mk_global_session_pred lpreds tr prin sess_id full_content)
   (ensures is_knowable_by (principal_state_label prin sess_id) tr full_content)
-let rec mk_global_session_pred_knowable cinvs lpreds tr prin sess_id full_content =
-  match lpreds with
-  | [] -> ()
-  | (current_label, current_lpred)::tpreds ->
-    FStar.Classical.move_requires (mk_global_session_pred_knowable cinvs tpreds tr prin sess_id) full_content;
-    match parse (session bytes) full_content with
-    | None -> ()
-    | Some ({label; content}) -> (
-      if label = current_label then (
-        introduce current_lpred.pred tr prin sess_id content ==> is_knowable_by #cinvs (principal_state_label prin sess_id) tr full_content
-        with _. (
-          current_lpred.pred_knowable tr prin sess_id content;
-          serialize_parse_inv_lemma (session bytes) full_content;
-          serialize_wf_lemma (session bytes) (is_knowable_by (principal_state_label prin sess_id) tr) ({label; content})
-        )
-      ) else ()
-    )
+let mk_global_session_pred_knowable cinvs lpreds tr prin sess_id full_content =
+  mk_global_pred_eq split_session_pred_func lpreds (tr, prin, sess_id, full_content);
+  eliminate exists lab lpred raw_data.
+    List.Tot.memP (lab, lpred) lpreds /\
+    split_session_pred_func.apply_local_pred lpred raw_data /\
+    split_session_pred_func.decode_labeled_data (tr, prin, sess_id, full_content) == Some (split_session_pred_func.encode_label lab, raw_data)
+  returns is_knowable_by (principal_state_label prin sess_id) tr full_content
+  with _. (
+    let Some (label, (_, _, _, content)) = split_session_pred_func.decode_labeled_data (tr, prin, sess_id, full_content) in
+    lpred.pred_knowable tr prin sess_id content;
+    serialize_parse_inv_lemma session full_content;
+    serialize_wf_lemma session (is_knowable_by (principal_state_label prin sess_id) tr) ({label; content})
+  )
 
 val mk_state_predicate: cinvs:crypto_invariants -> list (string & session_pred) -> state_predicate cinvs
 let mk_state_predicate cinvs lpreds =
@@ -150,7 +143,7 @@ let mk_state_predicate cinvs lpreds =
 val labeled_state_was_set: trace -> string -> principal -> nat -> bytes -> prop
 let labeled_state_was_set tr label prin sess_id content =
   let full_content = {label; content;} in
-  let full_content_bytes = serialize (session bytes) full_content in
+  let full_content_bytes = serialize session full_content in
   state_was_set tr prin sess_id full_content_bytes
 
 (*** API for labeled sessions ***)
@@ -159,14 +152,14 @@ let labeled_state_was_set tr label prin sess_id content =
 val set_labeled_state: string -> principal -> nat -> bytes -> crypto unit
 let set_labeled_state label prin sess_id content =
   let full_content = {label; content;} in
-  let full_content_bytes = serialize (session bytes) full_content in
+  let full_content_bytes = serialize session full_content in
   set_state prin sess_id full_content_bytes
 
 [@@ "opaque_to_smt"]
 val get_labeled_state: string -> principal -> nat -> crypto (option bytes)
 let get_labeled_state lab prin sess_id =
   let*? full_content_bytes = get_state prin sess_id in
-  match parse (session bytes) full_content_bytes with
+  match parse session full_content_bytes with
     | None -> return None
     | Some ({label; content;}) ->
       if label = lab then return (Some content)
@@ -189,14 +182,13 @@ val set_labeled_state_invariant:
   ))
   [SMTPat (set_labeled_state label prin sess_id content tr);
    SMTPat (trace_invariant tr);
-
    SMTPat (has_session_pred invs label spred)]
 let set_labeled_state_invariant invs label spred prin sess_id content tr =
   reveal_opaque (`%set_labeled_state) (set_labeled_state);
   reveal_opaque (`%labeled_state_was_set) (labeled_state_was_set);
-  assert_norm (forall tr prin sess_id session. protocol_invariants_to_global_pred invs (tr, prin, sess_id, session) <==> invs.trace_invs.state_pred.pred tr prin sess_id session);
   let full_content = {label; content;} in
-  parse_serialize_inv_lemma #bytes (session bytes) full_content
+  parse_serialize_inv_lemma #bytes session full_content;
+  local_eq_global_lemma split_session_pred_func state_pred label spred (tr, prin, sess_id, serialize _ full_content) (tr, prin, sess_id, content)
 
 val get_labeled_state_invariant:
   invs:protocol_invariants ->
@@ -222,7 +214,12 @@ val get_labeled_state_invariant:
    SMTPat (has_session_pred invs label spred)]
 let get_labeled_state_invariant invs label spred prin sess_id tr =
   reveal_opaque (`%get_labeled_state) (get_labeled_state);
-  assert_norm (forall tr prin sess_id session. protocol_invariants_to_global_pred invs (tr, prin, sess_id, session) <==> invs.trace_invs.state_pred.pred tr prin sess_id session)
+  let (opt_content, tr_out) = get_labeled_state label prin sess_id tr in
+  match opt_content with
+  | None -> ()
+  | Some content ->
+    let (Some full_content_bytes, tr) = get_state prin sess_id tr in
+    local_eq_global_lemma split_session_pred_func state_pred label spred (tr, prin, sess_id, full_content_bytes) (tr, prin, sess_id, content)
 
 (*** Theorem ***)
 
@@ -244,9 +241,6 @@ val labeled_state_was_set_implies_pred:
 let labeled_state_was_set_implies_pred invs tr label spred prin sess_id content =
   reveal_opaque (`%labeled_state_was_set) (labeled_state_was_set);
   let full_content = {label; content;} in
-  parse_serialize_inv_lemma #bytes (session bytes) full_content;
-  let full_content_bytes: bytes = serialize (session bytes) full_content in
-  // F* needs this??
-  match split_session_pred_func.decode_labeled_data (tr, prin, sess_id, full_content_bytes) with
-  | Some (_, (_, _, _, content)) -> ()
-  | None -> ()
+  parse_serialize_inv_lemma #bytes session full_content;
+  let full_content_bytes: bytes = serialize session full_content in
+  local_eq_global_lemma split_session_pred_func state_pred label spred (tr, prin, sess_id, full_content_bytes) (tr, prin, sess_id, content)
