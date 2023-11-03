@@ -43,9 +43,9 @@ val n_a_secrecy:
   (requires
     attacker_knows tr n_a /\
     trace_invariant tr /\ (
-      (exists sess_id. typed_state_was_set tr nsl_session_label alice sess_id (InitiatorSentMsg1 bob n_a <: nsl_session)) \/
-      (exists sess_id n_b. typed_state_was_set tr nsl_session_label alice sess_id (InitiatorSentMsg3 bob n_a n_b <: nsl_session)) \/
-      (exists sess_id n_b. typed_state_was_set tr nsl_session_label bob sess_id (ResponderReceivedMsg3 alice n_a n_b <: nsl_session))
+      (exists sess_id. typed_state_was_set tr nsl_session_label alice sess_id (InitiatorSentMsg1 bob n_a)) \/
+      (exists sess_id n_b. typed_state_was_set tr nsl_session_label alice sess_id (InitiatorSentMsg3 bob n_a n_b)) \/
+      (exists sess_id n_b. typed_state_was_set tr nsl_session_label bob sess_id (ResponderReceivedMsg3 alice n_a n_b))
     )
   )
   (ensures principal_corrupt tr alice \/ principal_corrupt tr bob)
@@ -58,9 +58,9 @@ val n_b_secrecy:
   (requires
     attacker_knows tr n_b /\
     trace_invariant tr /\ (
-      (exists sess_id n_a. typed_state_was_set tr nsl_session_label bob sess_id (ResponderSentMsg2 alice n_a n_b <: nsl_session)) \/
-      (exists sess_id n_a. typed_state_was_set tr nsl_session_label bob sess_id (ResponderReceivedMsg3 alice n_a n_b <: nsl_session)) \/
-      (exists sess_id n_a. typed_state_was_set tr nsl_session_label alice sess_id (InitiatorSentMsg3 bob n_a n_b <: nsl_session))
+      (exists sess_id n_a. typed_state_was_set tr nsl_session_label bob sess_id (ResponderSentMsg2 alice n_a n_b)) \/
+      (exists sess_id n_a. typed_state_was_set tr nsl_session_label bob sess_id (ResponderReceivedMsg3 alice n_a n_b)) \/
+      (exists sess_id n_a. typed_state_was_set tr nsl_session_label alice sess_id (InitiatorSentMsg3 bob n_a n_b))
     )
   )
   (ensures principal_corrupt tr alice \/ principal_corrupt tr bob)
