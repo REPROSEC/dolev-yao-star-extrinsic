@@ -81,6 +81,22 @@ let get_time =
   let* tr = get_trace in
   return (DY.Core.Trace.Type.length tr)
 
+val add_event_invariant:
+  {|protocol_invariants|} ->
+  e:trace_event -> tr:trace ->
+  Lemma
+  (requires
+    trace_event_invariant tr e /\
+    trace_invariant tr
+  )
+  (ensures (
+    let ((), tr_out) = add_event e tr in
+    trace_invariant tr_out /\
+    event_exists tr_out e
+  ))
+let add_event_invariant #invs e tr =
+  norm_spec [zeta; delta_only [`%trace_invariant]] (trace_invariant)
+
 (*** Sending messages ***)
 
 [@@ "opaque_to_smt"]
@@ -105,7 +121,7 @@ val send_msg_invariant:
   ))
   [SMTPat (send_msg msg tr); SMTPat (trace_invariant tr)]
 let send_msg_invariant #invs msg tr =
-  norm_spec [zeta; delta_only [`%trace_invariant]] (trace_invariant);
+  add_event_invariant (MsgSent msg) tr;
   reveal_opaque (`%send_msg) (send_msg)
 
 [@@ "opaque_to_smt"]
@@ -164,7 +180,7 @@ val corrupt_invariant:
   ))
   [SMTPat (corrupt prin sess_id tr); SMTPat (trace_invariant tr)]
 let corrupt_invariant #invs prin sess_id tr =
-  norm_spec [zeta; delta_only [`%trace_invariant]] (trace_invariant);
+  add_event_invariant (Corrupt prin sess_id) tr;
   normalize_term_spec corrupt
 
 (*** Random number generation ***)
@@ -190,7 +206,7 @@ val mk_rand_trace_invariant:
   ))
   [SMTPat (mk_rand usg lab len tr); SMTPat (trace_invariant tr)]
 let mk_rand_trace_invariant #invs usg lab len tr =
-  norm_spec [zeta; delta_only [`%trace_invariant]] (trace_invariant);
+  add_event_invariant (RandGen usg lab len) tr;
   reveal_opaque (`%mk_rand) (mk_rand)
 #pop-options
 
@@ -332,7 +348,7 @@ val set_state_invariant:
   ))
   [SMTPat (set_state prin sess_id content tr); SMTPat (trace_invariant tr)]
 let set_state_invariant #invs prin sess_id content tr =
-  norm_spec [zeta; delta_only [`%trace_invariant]] (trace_invariant);
+  add_event_invariant (SetState prin sess_id content) tr;
   normalize_term_spec set_state
 #pop-options
 
@@ -412,5 +428,5 @@ val trigger_event_trace_invariant:
   ))
   [SMTPat (trigger_event prin tag content tr); SMTPat (trace_invariant tr)]
 let trigger_event_trace_invariant #invs prin tag content tr =
-  norm_spec [zeta; delta_only [`%trace_invariant]] (trace_invariant);
+  add_event_invariant (Event prin tag content) tr;
   normalize_term_spec trigger_event
