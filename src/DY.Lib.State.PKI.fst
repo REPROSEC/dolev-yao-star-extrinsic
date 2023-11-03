@@ -68,7 +68,7 @@ let pki_label = "DY.Lib.State.PKI"
 
 val has_pki_invariant: protocol_invariants -> prop
 let has_pki_invariant invs =
-  has_map_session_invariant invs pki_label pki_pred
+  has_map_session_invariant invs (pki_label, pki_pred)
 
 (*** PKI API ***)
 

@@ -94,9 +94,9 @@ let map_session_invariant #cinvs #mt mpred = {
   );
 }
 
-val has_map_session_invariant: #mt:map_types -> protocol_invariants -> string -> mpred:map_predicate mt -> prop
-let has_map_session_invariant #mt invs label mpred =
-  has_typed_session_pred invs label (map_session_invariant mpred)
+val has_map_session_invariant: #mt:map_types -> protocol_invariants -> (string & map_predicate mt) -> prop
+let has_map_session_invariant #mt invs (label, mpred) =
+  has_typed_session_pred invs (label, (map_session_invariant mpred))
 
 (*** Map API ***)
 
@@ -161,14 +161,14 @@ val initialize_map_invariant:
   Lemma
   (requires
     trace_invariant tr /\
-    has_map_session_invariant invs label mpred
+    has_map_session_invariant invs (label, mpred)
   )
   (ensures (
     let (_, tr_out) = initialize_map mt label prin tr in
     trace_invariant tr_out
   ))
   [SMTPat (initialize_map mt label prin tr);
-   SMTPat (has_map_session_invariant invs label mpred);
+   SMTPat (has_map_session_invariant invs (label, mpred));
    SMTPat (trace_invariant tr)
   ]
 let initialize_map_invariant #invs mt mpred label prin tr =
@@ -186,14 +186,14 @@ val add_key_value_invariant:
   (requires
     mpred.pred tr prin sess_id key value /\
     trace_invariant tr /\
-    has_map_session_invariant invs label mpred
+    has_map_session_invariant invs (label, mpred)
   )
   (ensures (
     let (_, tr_out) = add_key_value mt label prin sess_id key value tr in
     trace_invariant tr_out
   ))
   [SMTPat (add_key_value mt label prin sess_id key value tr);
-   SMTPat (has_map_session_invariant invs label mpred);
+   SMTPat (has_map_session_invariant invs (label, mpred));
    SMTPat (trace_invariant tr)
   ]
 let add_key_value_invariant #invs mt mpred label prin sess_id key value tr =
@@ -213,7 +213,7 @@ val find_value_invariant:
   Lemma
   (requires
     trace_invariant tr /\
-    has_map_session_invariant invs label mpred
+    has_map_session_invariant invs (label, mpred)
   )
   (ensures (
     let (opt_value, tr_out) = find_value mt label prin sess_id key tr in
@@ -226,7 +226,7 @@ val find_value_invariant:
     )
   ))
   [SMTPat (find_value mt label prin sess_id key tr);
-   SMTPat (has_map_session_invariant invs label mpred);
+   SMTPat (has_map_session_invariant invs (label, mpred));
    SMTPat (trace_invariant tr);
   ]
 let find_value_invariant #invs mt mpred label prin sess_id key tr =

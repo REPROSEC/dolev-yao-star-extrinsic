@@ -70,9 +70,9 @@ let split_session_pred_func {|crypto_invariants|} : split_predicate_input_values
   apply_mk_global_pred = (fun spred x -> ());
 }
 
-val has_session_pred: protocol_invariants -> string -> session_pred -> prop
-let has_session_pred invs label spred =
-  has_local_pred split_session_pred_func (state_pred) label spred
+val has_session_pred: protocol_invariants -> (string & session_pred) -> prop
+let has_session_pred invs (label, spred) =
+  has_local_pred split_session_pred_func (state_pred) (label, spred)
 
 (*** Global session predicate builder ***)
 
@@ -80,15 +80,15 @@ val mk_global_session_pred: {|crypto_invariants|} -> list (string & session_pred
 let mk_global_session_pred #cinvs l =
   mk_global_pred split_session_pred_func l
 
-val mk_global_session_pred_correct: invs:protocol_invariants -> lpreds:list (string & session_pred) -> label:string -> spred:session_pred -> Lemma
+val mk_global_session_pred_correct: invs:protocol_invariants -> lpreds:list (string & session_pred) -> Lemma
   (requires
     invs.trace_invs.state_pred.pred == mk_global_session_pred lpreds /\
-    List.Tot.no_repeats_p (List.Tot.map fst lpreds) /\
-    List.Tot.memP (label, spred) lpreds
+    List.Tot.no_repeats_p (List.Tot.map fst lpreds)
   )
-  (ensures has_session_pred invs label spred)
-let mk_global_session_pred_correct invs lpreds label spred =
-  mk_global_pred_correct split_session_pred_func lpreds label spred
+  (ensures for_allP (has_session_pred invs) lpreds)
+let mk_global_session_pred_correct invs lpreds =
+  for_allP_eq (has_session_pred invs) lpreds;
+  FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (mk_global_pred_correct split_session_pred_func lpreds))
 
 val mk_global_session_pred_later:
   cinvs:crypto_invariants -> lpreds:list (string & session_pred) ->
@@ -173,7 +173,7 @@ val set_labeled_state_invariant:
   (requires
     spred.pred tr prin sess_id content /\
     trace_invariant tr /\
-    has_session_pred invs label spred
+    has_session_pred invs (label, spred)
   )
   (ensures (
     let ((), tr_out) = set_labeled_state label prin sess_id content tr in
@@ -182,7 +182,7 @@ val set_labeled_state_invariant:
   ))
   [SMTPat (set_labeled_state label prin sess_id content tr);
    SMTPat (trace_invariant tr);
-   SMTPat (has_session_pred invs label spred)]
+   SMTPat (has_session_pred invs (label, spred))]
 let set_labeled_state_invariant invs label spred prin sess_id content tr =
   reveal_opaque (`%set_labeled_state) (set_labeled_state);
   reveal_opaque (`%labeled_state_was_set) (labeled_state_was_set);
@@ -197,7 +197,7 @@ val get_labeled_state_invariant:
   Lemma
   (requires
     trace_invariant tr /\
-    has_session_pred invs label spred
+    has_session_pred invs (label, spred)
   )
   (ensures (
     let (opt_content, tr_out) = get_labeled_state label prin sess_id tr in
@@ -211,7 +211,7 @@ val get_labeled_state_invariant:
   ))
   [SMTPat (get_labeled_state label prin sess_id tr);
    SMTPat (trace_invariant tr);
-   SMTPat (has_session_pred invs label spred)]
+   SMTPat (has_session_pred invs (label, spred))]
 let get_labeled_state_invariant invs label spred prin sess_id tr =
   reveal_opaque (`%get_labeled_state) (get_labeled_state);
   let (opt_content, tr_out) = get_labeled_state label prin sess_id tr in
@@ -231,12 +231,12 @@ val labeled_state_was_set_implies_pred:
   (requires
     labeled_state_was_set tr label prin sess_id content /\
     trace_invariant tr /\
-    has_session_pred invs label spred
+    has_session_pred invs (label, spred)
   )
   (ensures spred.pred tr prin sess_id content)
   [SMTPat (labeled_state_was_set tr label prin sess_id content);
    SMTPat (trace_invariant tr);
-   SMTPat (has_session_pred invs label spred);
+   SMTPat (has_session_pred invs (label, spred));
   ]
 let labeled_state_was_set_implies_pred invs tr label spred prin sess_id content =
   reveal_opaque (`%labeled_state_was_set) (labeled_state_was_set);

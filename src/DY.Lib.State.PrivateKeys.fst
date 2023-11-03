@@ -59,7 +59,7 @@ let private_keys_label = "DY.Lib.State.PrivateKeys"
 
 val has_private_keys_invariant: protocol_invariants -> prop
 let has_private_keys_invariant invs =
-  has_map_session_invariant invs private_keys_label private_keys_pred
+  has_map_session_invariant invs (private_keys_label, private_keys_pred)
 
 val private_key_type_to_usage:
   private_key_type ->

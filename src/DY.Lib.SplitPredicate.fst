@@ -32,8 +32,8 @@ type bare_global_pred (func:split_predicate_input_values) =
 type bare_local_pred (func:split_predicate_input_values) =
   func.raw_data_t -> prop
 
-val has_local_pred: func:split_predicate_input_values -> func.global_pred -> func.label_t -> func.local_pred -> prop
-let has_local_pred func gpred the_label lpred =
+val has_local_pred: func:split_predicate_input_values -> func.global_pred -> (func.label_t & func.local_pred) -> prop
+let has_local_pred func gpred (the_label, lpred) =
   forall labeled_data.
     match func.decode_labeled_data labeled_data with
     | Some (label, raw_data) ->
@@ -116,12 +116,12 @@ val mk_global_pred_correct_aux:
     disjointP (List.Tot.map fst lpreds1) (List.Tot.map fst lpreds2) /\
     List.Tot.memP (the_label, lpred) lpreds1
   )
-  (ensures has_local_pred func (func.mk_global_pred gpred) the_label lpred)
+  (ensures has_local_pred func (func.mk_global_pred gpred) (the_label, lpred))
 let rec mk_global_pred_correct_aux func gpred lpreds1 lpreds2 the_label lpred =
   match lpreds1 with
   | [] -> ()
   | (h_lab, h_spred)::t -> (
-    eliminate h_lab == the_label \/ h_lab =!= the_label returns has_local_pred func (func.mk_global_pred gpred) the_label lpred with _. (
+    eliminate h_lab == the_label \/ h_lab =!= the_label returns has_local_pred func (func.mk_global_pred gpred) (the_label, lpred) with _. (
       introduce forall labeled_data. (
         match func.decode_labeled_data labeled_data with
         | Some (label, raw_data) ->
@@ -159,7 +159,7 @@ val mk_global_pred_correct:
     List.Tot.no_repeats_p (List.Tot.map fst lpreds) /\
     List.Tot.memP (the_label, lpred) lpreds
   )
-  (ensures has_local_pred func (mk_global_pred func lpreds) the_label lpred)
+  (ensures has_local_pred func (mk_global_pred func lpreds) (the_label, lpred))
 let mk_global_pred_correct func lpreds the_label lpred =
   disjointP_nil (List.Tot.map fst lpreds);
   mk_global_pred_correct_aux func (mk_global_pred_aux func lpreds) lpreds [] the_label lpred
@@ -206,7 +206,7 @@ val local_eq_global_lemma:
   Lemma
   (requires
     func.decode_labeled_data labeled_data == Some (func.encode_label the_label, raw_data) /\
-    has_local_pred func gpred the_label lpred
+    has_local_pred func gpred (the_label, lpred)
   )
   (ensures func.apply_global_pred gpred labeled_data <==> func.apply_local_pred lpred raw_data)
 let local_eq_global_lemma func gpred the_label lpred labeled_data raw_data = ()

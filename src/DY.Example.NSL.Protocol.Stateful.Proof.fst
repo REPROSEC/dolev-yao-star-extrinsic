@@ -93,34 +93,20 @@ instance nsl_protocol_invs: protocol_invariants = {
   trace_invs = nsl_trace_invs;
 }
 
-inline_for_extraction noextract
-val session_memP_tactic: unit -> FStar.Tactics.Tac unit
-let session_memP_tactic () =
-  FStar.Tactics.norm [delta_only [`%List.Tot.Base.memP; `%all_sessions]; iota; zeta]
+val all_sessions_has_all_sessions: unit -> Lemma (norm [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP (has_session_pred nsl_protocol_invs) all_sessions))
+let all_sessions_has_all_sessions () =
+  assert_norm(List.Tot.no_repeats_p (List.Tot.map fst (all_sessions)));
+  mk_global_session_pred_correct nsl_protocol_invs all_sessions;
+  norm_spec [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP (has_session_pred nsl_protocol_invs) all_sessions)
 
 val full_nsl_session_pred_has_pki_invariant: squash (has_pki_invariant nsl_protocol_invs)
-let full_nsl_session_pred_has_pki_invariant =
-  let lab = pki_label in
-  let spred = typed_session_pred_to_session_pred (map_session_invariant pki_pred) in
-  assert_norm(List.Tot.no_repeats_p (List.Tot.map fst (all_sessions)));
-  assert(List.Tot.memP (lab, spred) (all_sessions)) by (session_memP_tactic());
-  mk_global_session_pred_correct nsl_protocol_invs (all_sessions) lab spred
+let full_nsl_session_pred_has_pki_invariant = all_sessions_has_all_sessions ()
 
 val full_nsl_session_pred_has_private_keys_invariant: squash (has_private_keys_invariant nsl_protocol_invs)
-let full_nsl_session_pred_has_private_keys_invariant =
-  let lab = private_keys_label in
-  let spred = typed_session_pred_to_session_pred (map_session_invariant private_keys_pred) in
-  assert_norm(List.Tot.no_repeats_p (List.Tot.map fst (all_sessions)));
-  assert(List.Tot.memP (lab, spred) (all_sessions)) by (session_memP_tactic());
-  mk_global_session_pred_correct nsl_protocol_invs (all_sessions) lab spred
+let full_nsl_session_pred_has_private_keys_invariant = all_sessions_has_all_sessions ()
 
-val full_nsl_session_pred_has_nsl_invariant: squash (has_typed_session_pred nsl_protocol_invs nsl_session_label nsl_session_pred)
-let full_nsl_session_pred_has_nsl_invariant =
-  let lab = nsl_session_label in
-  let spred = typed_session_pred_to_session_pred nsl_session_pred in
-  assert_norm(List.Tot.no_repeats_p (List.Tot.map fst (all_sessions)));
-  assert(List.Tot.memP (lab, spred) (all_sessions)) by (session_memP_tactic());
-  mk_global_session_pred_correct nsl_protocol_invs (all_sessions) lab spred
+val full_nsl_session_pred_has_nsl_invariant: squash (has_typed_session_pred nsl_protocol_invs (nsl_session_label, nsl_session_pred))
+let full_nsl_session_pred_has_nsl_invariant = all_sessions_has_all_sessions ()
 
 (*** Proof ***)
 
