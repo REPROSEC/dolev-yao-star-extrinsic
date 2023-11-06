@@ -31,11 +31,10 @@ type nsl_event =
 %splice [ps_nsl_event] (gen_parser (`nsl_event))
 %splice [ps_nsl_event_is_well_formed] (gen_is_well_formed_lemma (`nsl_event))
 
-instance nsl_event_parseable_serializeable: parseable_serializeable bytes nsl_event
- = mk_parseable_serializeable ps_nsl_event
-
-val nsl_event_label: string
-let nsl_event_label = "NSL.Event"
+instance event_nsl_event: event nsl_event = {
+  tag = "NSL.Event";
+  format = mk_parseable_serializeable ps_nsl_event;
+}
 
 type nsl_global_sess_ids = {
   pki: nat;
@@ -45,7 +44,7 @@ type nsl_global_sess_ids = {
 val prepare_msg1: principal -> principal -> crypto nat
 let prepare_msg1 alice bob =
   let* n_a = mk_rand Unknown (join (principal_label alice) (principal_label bob)) 32 in
-  trigger_event alice nsl_event_label (serialize nsl_event (Initiate1 alice bob n_a));*
+  trigger_event alice (Initiate1 alice bob n_a);*
   let* sess_id = new_session_id alice in
   set_typed_state nsl_session_label alice sess_id (InitiatorSentMsg1 bob n_a <: nsl_session);*
   return sess_id
@@ -69,7 +68,7 @@ let prepare_msg2 global_sess_id bob msg_id =
   let*? sk_b = get_private_key bob global_sess_id.private_keys (PkDec "NSL.PublicKey") in
   let*? msg1: message1 = return (decode_message1 bob msg sk_b) in
   let* n_b = mk_rand Unknown (join (principal_label msg1.alice) (principal_label bob)) 32 in
-  trigger_event bob nsl_event_label (serialize nsl_event (Respond1 msg1.alice bob msg1.n_a n_b));*
+  trigger_event bob (Respond1 msg1.alice bob msg1.n_a n_b);*
   let* sess_id = new_session_id bob in
   set_typed_state nsl_session_label bob sess_id (ResponderSentMsg2 msg1.alice msg1.n_a n_b <: nsl_session);*
   return (Some sess_id)
@@ -95,7 +94,7 @@ let prepare_msg3 global_sess_id alice sess_id msg_id =
   match st with
   | InitiatorSentMsg1 bob n_a -> (
     let*? msg2: message2 = return (decode_message2 alice bob msg sk_a n_a) in
-    trigger_event alice nsl_event_label (serialize nsl_event (Initiate2 alice bob n_a msg2.n_b));*
+    trigger_event alice (Initiate2 alice bob n_a msg2.n_b);*
     set_typed_state nsl_session_label alice sess_id (InitiatorSentMsg3 bob n_a msg2.n_b <: nsl_session);*
     return (Some ())
   )
@@ -122,7 +121,7 @@ let prepare_msg4 global_sess_id bob sess_id msg_id =
   match st with
   | ResponderSentMsg2 alice n_a n_b -> (
     let*? msg3: message3 = return (decode_message3 alice bob msg sk_b n_b) in
-    trigger_event bob nsl_event_label (serialize nsl_event (Respond2 alice bob n_a n_b));*
+    trigger_event bob (Respond2 alice bob n_a n_b);*
     set_typed_state nsl_session_label bob sess_id (ResponderReceivedMsg3 alice n_a n_b <: nsl_session);*
     return (Some ())
   )

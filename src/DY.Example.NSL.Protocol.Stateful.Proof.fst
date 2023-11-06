@@ -17,30 +17,60 @@ let nsl_session_pred: typed_session_pred nsl_session = {
     | InitiatorSentMsg1 bob n_a -> (
       let alice = prin in
       is_knowable_by (join (principal_label alice) (principal_label bob)) tr n_a /\
-      event_triggered tr alice nsl_event_label (serialize nsl_event (Initiate1 alice bob n_a))
+      event_triggered tr alice (Initiate1 alice bob n_a)
     )
     | ResponderSentMsg2 alice n_a n_b -> (
       let bob = prin in
       is_knowable_by (join (principal_label alice) (principal_label bob)) tr n_a /\
       is_knowable_by (join (principal_label alice) (principal_label bob)) tr n_b /\
-      event_triggered tr bob nsl_event_label (serialize nsl_event (Respond1 alice bob n_a n_b))
+      event_triggered tr bob (Respond1 alice bob n_a n_b)
     )
     | InitiatorSentMsg3 bob n_a n_b  -> (
       let alice = prin in
       is_knowable_by (join (principal_label alice) (principal_label bob)) tr n_a /\
       is_knowable_by (join (principal_label alice) (principal_label bob)) tr n_b /\
-      event_triggered tr alice nsl_event_label (serialize nsl_event (Initiate2 alice bob n_a n_b))
+      event_triggered tr alice (Initiate2 alice bob n_a n_b)
     )
     | ResponderReceivedMsg3 alice n_a n_b -> (
       let bob = prin in
       is_knowable_by (join (principal_label alice) (principal_label bob)) tr n_a /\
       is_knowable_by (join (principal_label alice) (principal_label bob)) tr n_b /\
-      event_triggered tr bob nsl_event_label (serialize nsl_event (Respond2 alice bob n_a n_b))
+      event_triggered tr bob (Respond2 alice bob n_a n_b)
     )
   );
   pred_later = (fun tr1 tr2 prin sess_id st -> ());
   pred_knowable = (fun tr prin sess_id st -> ());
 }
+
+let nsl_event_pred: event_predicate nsl_event =
+  fun tr prin e ->
+    match e with
+    | Initiate1 alice bob n_a -> (
+      prin == alice /\
+      get_label n_a == join (principal_label alice) (principal_label bob) /\
+      0 < DY.Core.Trace.Type.length tr /\
+      rand_generated_at tr (DY.Core.Trace.Type.length tr - 1) n_a
+    )
+    | Respond1 alice bob n_a n_b -> (
+      prin == bob /\
+      get_label n_b == join (principal_label alice) (principal_label bob) /\
+      0 < DY.Core.Trace.Type.length tr /\
+      rand_generated_at tr (DY.Core.Trace.Type.length tr - 1) n_b
+    )
+    | Initiate2 alice bob n_a n_b -> (
+      prin == alice /\
+      event_triggered tr alice (Initiate1 alice bob n_a) /\ (
+        principal_corrupt tr alice \/ principal_corrupt tr bob \/
+        event_triggered tr bob (Respond1 alice bob n_a n_b)
+      )
+    )
+    | Respond2 alice bob n_a n_b -> (
+      prin == bob /\
+      event_triggered tr bob (Respond1 alice bob n_a n_b) /\ (
+        principal_corrupt tr alice \/ principal_corrupt tr bob \/
+        event_triggered tr alice (Initiate2 alice bob n_a n_b)
+      )
+    )
 
 let all_sessions = [
   (pki_label, typed_session_pred_to_session_pred (map_session_invariant pki_pred));
@@ -48,44 +78,13 @@ let all_sessions = [
   (nsl_session_label, typed_session_pred_to_session_pred nsl_session_pred);
 ]
 
-val full_nsl_session_pred: state_predicate nsl_crypto_invs
-let full_nsl_session_pred =
-  mk_state_predicate nsl_crypto_invs all_sessions
+let all_events = [
+  (event_nsl_event.tag, compile_event_pred nsl_event_pred)
+]
 
 let nsl_trace_invs: trace_invariants (nsl_crypto_invs) = {
-  state_pred = full_nsl_session_pred;
-  event_pred = (fun tr prin evt_label evt ->
-    evt_label == nsl_event_label /\ (
-      match parse nsl_event evt with
-      | Some (Initiate1 alice bob n_a) -> (
-        prin == alice /\
-        get_label n_a == join (principal_label alice) (principal_label bob) /\
-        0 < DY.Core.Trace.Type.length tr /\
-        rand_generated_at tr (DY.Core.Trace.Type.length tr - 1) n_a
-      )
-      | Some (Respond1 alice bob n_a n_b) -> (
-        prin == bob /\
-        get_label n_b == join (principal_label alice) (principal_label bob) /\
-        0 < DY.Core.Trace.Type.length tr /\
-        rand_generated_at tr (DY.Core.Trace.Type.length tr - 1) n_b
-      )
-      | Some (Initiate2 alice bob n_a n_b) -> (
-        prin == alice /\
-        event_triggered tr alice nsl_event_label (serialize nsl_event (Initiate1 alice bob n_a)) /\ (
-          principal_corrupt tr alice \/ principal_corrupt tr bob \/
-          event_triggered tr bob nsl_event_label (serialize nsl_event (Respond1 alice bob n_a n_b))
-        )
-      )
-      | Some (Respond2 alice bob n_a n_b) -> (
-        prin == bob /\
-        event_triggered tr bob nsl_event_label (serialize nsl_event (Respond1 alice bob n_a n_b)) /\ (
-          principal_corrupt tr alice \/ principal_corrupt tr bob \/
-          event_triggered tr alice nsl_event_label (serialize nsl_event (Initiate2 alice bob n_a n_b))
-        )
-      )
-      | None -> False
-    )
-  );
+  state_pred = mk_state_predicate nsl_crypto_invs all_sessions;
+  event_pred = mk_event_pred all_events;
 }
 
 instance nsl_protocol_invs: protocol_invariants = {
@@ -107,6 +106,17 @@ let full_nsl_session_pred_has_private_keys_invariant = all_sessions_has_all_sess
 
 val full_nsl_session_pred_has_nsl_invariant: squash (has_typed_session_pred nsl_protocol_invs (nsl_session_label, nsl_session_pred))
 let full_nsl_session_pred_has_nsl_invariant = all_sessions_has_all_sessions ()
+
+val all_events_has_all_events: unit -> Lemma (norm [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP (has_compiled_event_pred nsl_protocol_invs) all_events))
+let all_events_has_all_events () =
+  assert_norm(List.Tot.no_repeats_p (List.Tot.map fst (all_events)));
+  mk_event_pred_correct nsl_protocol_invs all_events;
+  norm_spec [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP (has_compiled_event_pred nsl_protocol_invs) all_events);
+  let dumb_lemma (x:prop) (y:prop): Lemma (requires x /\ x == y) (ensures y) = () in
+  dumb_lemma (for_allP (has_compiled_event_pred nsl_protocol_invs) all_events) (norm [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP (has_compiled_event_pred nsl_protocol_invs) all_events))
+
+val full_nsl_event_pred_has_nsl_invariant: squash (has_event_pred nsl_protocol_invs nsl_event_pred)
+let full_nsl_event_pred_has_nsl_invariant = all_events_has_all_events ()
 
 (*** Proof ***)
 
@@ -261,8 +271,8 @@ val event_respond1_injective:
   Lemma
   (requires
     trace_invariant tr /\
-    event_triggered tr bob nsl_event_label (serialize nsl_event (Respond1 alice bob n_a n_b)) /\
-    event_triggered tr bob nsl_event_label (serialize nsl_event (Respond1 alice' bob n_a' n_b))
+    event_triggered tr bob (Respond1 alice bob n_a n_b) /\
+    event_triggered tr bob (Respond1 alice' bob n_a' n_b)
   )
   (ensures
     alice == alice' /\
@@ -318,9 +328,9 @@ let prepare_msg4 tr global_sess_id bob sess_id msg_id =
     // It is useful in the "modulo corruption" part of the proof.
     let msg3: message3 = msg3 in
 
-    introduce (~((join (principal_label alice) (principal_label bob)) `can_flow tr` public)) ==> event_triggered tr alice nsl_event_label (serialize nsl_event (Initiate2 alice bob n_a n_b)) with _. (
-      assert(exists alice' n_a'. get_label n_b `can_flow tr` (principal_label alice') /\ event_triggered tr alice' nsl_event_label (serialize nsl_event #(nsl_event_parseable_serializeable) (Initiate2 alice' bob n_a' n_b)));
-      eliminate exists alice' n_a'. get_label n_b `can_flow tr` (principal_label alice') /\ event_triggered tr alice' nsl_event_label (serialize nsl_event #(nsl_event_parseable_serializeable) (Initiate2 alice' bob n_a' n_b))
+    introduce (~((join (principal_label alice) (principal_label bob)) `can_flow tr` public)) ==> event_triggered tr alice (Initiate2 alice bob n_a n_b) with _. (
+      assert(exists alice' n_a'. get_label n_b `can_flow tr` (principal_label alice') /\ event_triggered tr alice' (Initiate2 alice' bob n_a' n_b));
+      eliminate exists alice' n_a'. get_label n_b `can_flow tr` (principal_label alice') /\ event_triggered tr alice' (Initiate2 alice' bob n_a' n_b)
       returns _
       with _. (
         event_respond1_injective tr alice alice' bob n_a n_a' n_b

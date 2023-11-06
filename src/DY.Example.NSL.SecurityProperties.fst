@@ -14,12 +14,12 @@ val initiator_authentication:
   alice:principal -> bob:principal -> n_a:bytes -> n_b:bytes ->
   Lemma
   (requires
-    event_triggered_at tr i bob nsl_event_label (serialize nsl_event (Respond2 alice bob n_a n_b)) /\
+    event_triggered_at tr i bob (Respond2 alice bob n_a n_b) /\
     trace_invariant tr
   )
   (ensures
     principal_corrupt tr alice \/ principal_corrupt tr bob \/
-    event_triggered (prefix tr i) alice nsl_event_label (serialize nsl_event (Initiate2 alice bob n_a n_b))
+    event_triggered (prefix tr i) alice (Initiate2 alice bob n_a n_b)
   )
 let initiator_authentication tr i alice bob n_a n_b = ()
 
@@ -28,12 +28,12 @@ val responder_authentication:
   alice:principal -> bob:principal -> n_a:bytes -> n_b:bytes ->
   Lemma
   (requires
-    event_triggered_at tr i alice nsl_event_label (serialize nsl_event (Initiate2 alice bob n_a n_b)) /\
+    event_triggered_at tr i alice (Initiate2 alice bob n_a n_b) /\
     trace_invariant tr
   )
   (ensures
     principal_corrupt tr alice \/ principal_corrupt tr bob \/
-    event_triggered (prefix tr i) bob nsl_event_label (serialize nsl_event (Respond1 alice bob n_a n_b))
+    event_triggered (prefix tr i) bob (Respond1 alice bob n_a n_b)
   )
 let responder_authentication tr i alice bob n_a n_b = ()
 

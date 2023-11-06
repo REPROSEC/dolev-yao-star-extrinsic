@@ -2,6 +2,7 @@ module DY.Example.NSL.Protocol.Total.Proof
 
 open Comparse
 open DY.Core
+open DY.Lib
 open DY.Example.NSL.Protocol.Total
 open DY.Example.NSL.Protocol.Stateful
 
@@ -21,19 +22,19 @@ let nsl_crypto_preds = {
       match parse message msg with
       | Some (Msg1 msg1) -> (
         let (alice, bob) = (msg1.alice, prin) in
-        event_triggered tr alice nsl_event_label (serialize nsl_event (Initiate1 alice bob msg1.n_a)) /\
+        event_triggered tr alice (Initiate1 alice bob msg1.n_a) /\
         get_label msg1.n_a == join (principal_label alice) (principal_label bob)
       )
       | Some (Msg2 msg2) -> (
         let (alice, bob) = (prin, msg2.bob) in
-        event_triggered tr bob nsl_event_label (serialize nsl_event (Respond1 alice bob msg2.n_a msg2.n_b)) /\
+        event_triggered tr bob (Respond1 alice bob msg2.n_a msg2.n_b) /\
         get_label msg2.n_b == join (principal_label alice) (principal_label bob)
       )
       | Some (Msg3 msg3) -> (
         let bob = prin in
         exists alice n_a.
           get_label msg3.n_b `can_flow tr` (principal_label alice) /\
-          event_triggered tr alice nsl_event_label (serialize nsl_event (Initiate2 alice bob n_a msg3.n_b))
+          event_triggered tr alice (Initiate2 alice bob n_a msg3.n_b)
       )
       | None -> False
     ))
@@ -53,7 +54,7 @@ val compute_message1_proof:
   Lemma
   (requires
     // From the stateful code
-    event_triggered tr alice nsl_event_label (serialize nsl_event (Initiate1 alice bob n_a)) /\
+    event_triggered tr alice (Initiate1 alice bob n_a) /\
     // From random generation
     is_secret (join (principal_label alice) (principal_label bob)) tr n_a  /\
     // From random generation
@@ -107,7 +108,7 @@ val compute_message2_proof:
   Lemma
   (requires
     // From the stateful code
-    event_triggered tr bob nsl_event_label (serialize nsl_event (Respond1 msg1.alice bob msg1.n_a n_b)) /\
+    event_triggered tr bob (Respond1 msg1.alice bob msg1.n_a n_b) /\
     // From decode_message1_proof
     is_knowable_by (join (principal_label msg1.alice) (principal_label bob)) tr msg1.n_a /\
     // From the random generation
@@ -150,7 +151,7 @@ val decode_message2_proof:
     | Some msg2 -> (
       is_knowable_by (join (principal_label alice) (principal_label bob)) tr msg2.n_b /\ (
       (principal_corrupt tr alice \/ principal_corrupt tr bob) \/ (
-        event_triggered tr bob nsl_event_label (serialize nsl_event (Respond1 alice bob n_a msg2.n_b))
+        event_triggered tr bob (Respond1 alice bob n_a msg2.n_b)
       )
       )
     )
@@ -171,7 +172,7 @@ val compute_message3_proof:
   Lemma
   (requires
     // From the stateful code
-    (exists n_a. event_triggered tr alice nsl_event_label (serialize nsl_event (Initiate2 alice bob n_a n_b))) /\
+    (exists n_a. event_triggered tr alice (Initiate2 alice bob n_a n_b)) /\
     // From decode_message2_proof
     is_knowable_by (join (principal_label alice) (principal_label bob)) tr n_b /\
     // From the random generation
@@ -184,7 +185,7 @@ val compute_message3_proof:
   )
 let compute_message3_proof tr alice bob pk_b n_b nonce =
   assert (join (principal_label alice) (principal_label bob) `can_flow tr` join (principal_label alice) (principal_label bob));
-  assert(exists alice n_a. event_triggered tr alice nsl_event_label (serialize nsl_event (Initiate2 alice bob n_a n_b)));
+  assert(exists alice n_a. event_triggered tr alice (Initiate2 alice bob n_a n_b));
   let msg = Msg3 {n_b;} in
   serialize_wf_lemma message (is_knowable_by (principal_label alice) tr) msg;
   serialize_wf_lemma message (is_knowable_by (principal_label bob) tr) msg;
@@ -214,7 +215,7 @@ val decode_message3_proof:
       (principal_corrupt tr alice \/ principal_corrupt tr bob) \/ (
         (exists alice n_a.
           get_label msg3.n_b `can_flow tr` (principal_label alice) /\
-          event_triggered tr alice nsl_event_label (serialize nsl_event (Initiate2 alice bob n_a n_b)))
+          event_triggered tr alice (Initiate2 alice bob n_a n_b))
       )
     )
   ))

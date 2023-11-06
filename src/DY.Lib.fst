@@ -8,3 +8,4 @@ include DY.Lib.State.Map
 include DY.Lib.State.PKI
 include DY.Lib.State.PrivateKeys
 include DY.Lib.State.Typed
+include DY.Lib.Event.Typed
