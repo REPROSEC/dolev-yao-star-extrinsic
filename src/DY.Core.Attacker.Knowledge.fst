@@ -15,9 +15,8 @@ let rec attacker_knows_aux step tr msg =
     (
       msg_sent_on_network tr msg
     ) \/ (
-      exists prin sess_id.
-        principal_state_corrupt tr prin sess_id /\
-        state_was_set tr prin sess_id msg
+      exists prin.
+        state_was_corrupt tr prin msg
     ) \/ (
       exists lit.
         msg == literal_to_bytes lit
@@ -112,16 +111,19 @@ let move_requires_4 #a #b #c #d #p #q pf x y z w =
 
 val corrupted_state_is_publishable:
   {|protocol_invariants|} ->
-  tr:trace -> prin:principal -> sess_id:nat -> content:bytes ->
+  tr:trace -> prin:principal -> content:bytes ->
   Lemma
   (requires
-    principal_state_corrupt tr prin sess_id /\
-    state_was_set tr prin sess_id content /\
+    state_was_corrupt tr prin content /\
     trace_invariant tr
   )
   (ensures is_publishable tr content)
-let corrupted_state_is_publishable #invs tr prin sess_id content =
-  state_is_knowable_by tr prin sess_id content
+let corrupted_state_is_publishable #invs tr prin content =
+  eliminate exists sess_id i. event_exists tr (Corrupt prin sess_id i) /\ event_at tr i (SetState prin sess_id content)
+  returns is_publishable tr content
+  with _. (
+    state_is_knowable_by tr prin sess_id content
+  )
 
 #push-options "--z3rlimit 25"
 val attacker_only_knows_publishable_values_aux:
@@ -137,7 +139,7 @@ let rec attacker_only_knows_publishable_values_aux #invs step tr msg =
   if step = 0 then (
     FStar.Classical.forall_intro   (FStar.Classical.move_requires   (msg_sent_on_network_are_publishable tr));
     FStar.Classical.forall_intro   (FStar.Classical.move_requires   (msg_sent_on_network_are_publishable tr));
-    FStar.Classical.forall_intro_3 (FStar.Classical.move_requires_3 (corrupted_state_is_publishable tr));
+    FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (corrupted_state_is_publishable tr));
     FStar.Classical.forall_intro   (FStar.Classical.move_requires   (literal_to_bytes_is_publishable tr))
   ) else (
     FStar.Classical.forall_intro   (FStar.Classical.move_requires   (attacker_only_knows_publishable_values_aux (step-1) tr));

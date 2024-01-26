@@ -8,22 +8,22 @@ open DY.Core.Label
 
 noeq
 type state_predicate (cinvs:crypto_invariants) = {
-  pred: trace -> principal -> nat -> bytes -> prop;
+  pred: trace -> principal -> bytes -> prop;
   // TODO: Do we want the later lemma?
   pred_later:
     tr1:trace -> tr2:trace ->
-    prin:principal -> sess_id:nat -> content:bytes ->
+    prin:principal -> content:bytes ->
     Lemma
-    (requires pred tr1 prin sess_id content /\ tr1 <$ tr2)
-    (ensures pred tr2 prin sess_id content)
+    (requires pred tr1 prin content /\ tr1 <$ tr2)
+    (ensures pred tr2 prin content)
   ;
   pred_knowable:
     tr:trace ->
-    prin:principal -> sess_id:nat -> content:bytes ->
+    prin:principal -> content:bytes ->
     Lemma
-    (requires pred tr prin sess_id content)
+    (requires pred tr prin content)
     (ensures
-      is_knowable_by (principal_state_label prin sess_id) tr content
+      is_knowable_by (principal_state_label prin (get_description content)) tr content
     )
   ;
 }
@@ -51,7 +51,7 @@ let trace_event_invariant #invs tr event =
   | MsgSent msg ->
     is_publishable tr msg
   | SetState prin sess_id content -> (
-    invs.trace_invs.state_pred.pred tr prin sess_id content
+    invs.trace_invs.state_pred.pred tr prin content
   )
   | Event prin tag content -> (
     invs.trace_invs.event_pred tr prin tag content
@@ -111,16 +111,16 @@ val state_was_set_implies_pred:
     trace_invariant tr /\
     state_was_set tr prin sess_id content
   )
-  (ensures state_pred tr prin sess_id content)
+  (ensures state_pred tr prin content)
   [SMTPat (state_was_set tr prin sess_id content);
    SMTPat (trace_invariant tr);
   ]
 let state_was_set_implies_pred #invs tr prin sess_id content =
   eliminate exists i. event_at tr i (SetState prin sess_id content)
-  returns invs.trace_invs.state_pred.pred tr prin sess_id content
+  returns invs.trace_invs.state_pred.pred tr prin content
   with _. (
     event_at_implies_trace_event_invariant tr i (SetState prin sess_id content);
-    invs.trace_invs.state_pred.pred_later (prefix tr i) tr prin sess_id content
+    invs.trace_invs.state_pred.pred_later (prefix tr i) tr prin content
   )
 
 // Lemma for attacker theorem
@@ -132,9 +132,9 @@ val state_is_knowable_by:
     trace_invariant tr /\
     state_was_set tr prin sess_id content
   )
-  (ensures is_knowable_by (principal_state_label prin sess_id) tr content)
+  (ensures is_knowable_by (principal_state_label prin (get_description content)) tr content)
 let state_is_knowable_by #invs tr prin sess_id content =
-  state_pred_knowable tr prin sess_id content
+  state_pred_knowable tr prin content
 
 val event_triggered_at_implies_pred:
   {|protocol_invariants|} -> tr:trace ->

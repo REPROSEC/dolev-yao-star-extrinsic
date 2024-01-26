@@ -5,6 +5,7 @@ open DY.Core.Trace.Invariant
 open DY.Core.Bytes.Type
 open DY.Core.Bytes
 open DY.Core.Label.Type
+open DY.Core.Label
 
 #set-options "--fuel 1 --ifuel 1"
 
@@ -163,24 +164,24 @@ let recv_msg_invariant #invs i tr =
 (*** Corruption ***)
 
 [@@ "opaque_to_smt"]
-val corrupt: principal -> nat -> crypto unit
-let corrupt prin sess_id =
-  add_event (Corrupt prin sess_id)
+val corrupt: principal -> nat -> nat -> crypto unit
+let corrupt prin sess_id time =
+  add_event (Corrupt prin sess_id time)
 
 val corrupt_invariant:
   {|protocol_invariants|} ->
-  prin:principal -> sess_id:nat -> tr:trace ->
+  prin:principal -> sess_id:nat -> time:nat -> tr:trace ->
   Lemma
   (requires
     trace_invariant tr
   )
   (ensures (
-    let ((), tr_out) = corrupt prin sess_id tr in
+    let ((), tr_out) = corrupt prin sess_id time tr in
     trace_invariant tr_out
   ))
-  [SMTPat (corrupt prin sess_id tr); SMTPat (trace_invariant tr)]
-let corrupt_invariant #invs prin sess_id tr =
-  add_event_invariant (Corrupt prin sess_id) tr;
+  [SMTPat (corrupt prin sess_id time tr); SMTPat (trace_invariant tr)]
+let corrupt_invariant #invs prin sess_id time tr =
+  add_event_invariant (Corrupt prin sess_id time) tr;
   normalize_term_spec corrupt
 
 (*** Random number generation ***)
@@ -338,7 +339,7 @@ val set_state_invariant:
   prin:principal -> sess_id:nat -> content:bytes -> tr:trace ->
   Lemma
   (requires
-    state_pred tr prin sess_id content /\
+    state_pred tr prin content /\
     trace_invariant tr
   )
   (ensures (
@@ -362,7 +363,7 @@ val get_state_aux_state_invariant:
   (ensures (
     match get_state_aux prin sess_id tr with
     | None -> True
-    | Some content -> state_pred tr prin sess_id content
+    | Some content -> state_pred tr prin content
   ))
 let rec get_state_aux_state_invariant #invs prin sess_id tr =
   reveal_opaque (`%grows) (grows);
@@ -372,19 +373,19 @@ let rec get_state_aux_state_invariant #invs prin sess_id tr =
   | Nil -> ()
   | Snoc tr_init (SetState prin' sess_id' content) -> (
     if prin = prin' && sess_id = sess_id' then (
-      state_pred_later tr_init tr prin sess_id content
+      state_pred_later tr_init tr prin content
     ) else (
       get_state_aux_state_invariant prin sess_id tr_init;
       match get_state_aux prin sess_id tr_init with
       | None -> ()
-      | Some content -> state_pred_later tr_init tr prin sess_id content
+      | Some content -> state_pred_later tr_init tr prin content
     )
   )
   | Snoc tr_init _ ->
     get_state_aux_state_invariant prin sess_id tr_init;
     match get_state_aux prin sess_id tr_init with
     | None -> ()
-    | Some content -> state_pred_later tr_init tr prin sess_id content
+    | Some content -> state_pred_later tr_init tr prin content
 
 val get_state_state_invariant:
   {|protocol_invariants|} ->
@@ -398,7 +399,7 @@ val get_state_state_invariant:
     tr == tr_out /\ (
       match opt_content with
       | None -> True
-      | Some content -> state_pred tr prin sess_id content
+      | Some content -> state_pred tr prin content
     )
   ))
   [SMTPat (get_state prin sess_id tr); SMTPat (trace_invariant tr)]

@@ -10,7 +10,7 @@ type usage_ (bytes:Type0) =
 
 type bytes =
   | Literal: FStar.Seq.seq FStar.UInt8.t -> bytes
-  | Rand: usage:usage_ bytes -> label:label -> len:nat{len <> 0} -> time:nat -> bytes
+  | Rand: usage:usage_ bytes -> label:label bytes -> len:nat{len <> 0} -> time:nat -> bytes
 
   | Concat: left:bytes -> right:bytes -> bytes
 

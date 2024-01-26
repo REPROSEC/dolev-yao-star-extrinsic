@@ -149,6 +149,8 @@ let default_crypto_predicates cusages = {
 class crypto_invariants = {
   [@@@FStar.Tactics.Typeclasses.tcinstance]
   usages: crypto_usages;
+  [@@@FStar.Tactics.Typeclasses.tcinstance]
+  label_description_flow: label_description_flow;
   [@@@FStar.Tactics.Typeclasses.no_method]
   preds: crypto_predicates usages;
 }

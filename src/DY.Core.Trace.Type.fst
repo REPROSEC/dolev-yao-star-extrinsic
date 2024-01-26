@@ -5,8 +5,8 @@ open DY.Core.Label.Type
 
 type trace_event =
   | MsgSent: bytes -> trace_event
-  | RandGen: usg:usage -> lab:label -> len:nat{len <> 0} -> trace_event
-  | Corrupt: prin:principal -> sess_id:nat -> trace_event
+  | RandGen: usg:usage -> lab:label bytes -> len:nat{len <> 0} -> trace_event
+  | Corrupt: prin:principal -> sess_id:nat -> time:nat -> trace_event
   | SetState: prin:principal -> sess_id:nat -> content:bytes -> trace_event
   | Event: prin:principal -> tag:string -> content:bytes -> trace_event
 
@@ -137,9 +137,21 @@ val state_was_set: trace -> principal -> nat -> bytes -> prop
 let state_was_set tr prin sess_id content =
   event_exists tr (SetState prin sess_id content)
 
-val was_corrupt: trace -> principal -> nat -> prop
-let was_corrupt tr prin sess_id =
-  event_exists tr (Corrupt prin sess_id)
+val state_was_corrupt: trace -> principal -> bytes -> prop
+let state_was_corrupt tr prin content =
+  exists sess_id i.
+    event_exists tr (Corrupt prin sess_id i) /\
+    event_at tr i (SetState prin sess_id content)
+
+val state_was_corrupt_grows:
+  tr1:trace -> tr2:trace ->
+  prin:principal -> content:bytes ->
+  Lemma
+  (requires state_was_corrupt tr1 prin content /\ tr1 <$ tr2)
+  (ensures state_was_corrupt tr2 prin content)
+  [SMTPat (state_was_corrupt tr1 prin content); SMTPat (tr1 <$ tr2)]
+let state_was_corrupt_grows tr1 tr2 prin content =
+  ()
 
 val event_triggered_at: trace -> nat -> principal -> string -> bytes -> prop
 let event_triggered_at tr i prin tag content =

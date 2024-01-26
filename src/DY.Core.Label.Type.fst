@@ -4,31 +4,42 @@ open DY.Core.Label.Lattice
 
 type principal = string
 
-type pre_pre_label =
-  | P: principal -> pre_pre_label
-  | S: principal -> nat -> pre_pre_label
+type pre_pre_label (desc_t:Type0) =
+  | P: prin:principal -> pre_pre_label desc_t
+  | S: prin:principal -> serialized_description:desc_t -> pre_pre_label desc_t
 
-val get_principal: pre_pre_label -> option principal
-let get_principal l =
+val get_principal: #desc_t:Type0 -> pre_pre_label desc_t -> option principal
+let get_principal #desc_t l =
   match l with
   | P p -> Some p
   | S p _ -> Some p
 
-val get_session: pre_pre_label -> option nat
-let get_session l =
+val get_description: #desc_t:Type0 -> pre_pre_label desc_t -> option desc_t
+let get_description l =
   match l with
   | P _ -> None
   | S _ s -> Some s
 
-val pre_pre_label_order: order pre_pre_label
-let pre_pre_label_order = {
+val pre_pre_label_order: #desc_t:Type0 -> order desc_t -> order (pre_pre_label desc_t)
+let pre_pre_label_order #desc_t description_order = {
   rel = (fun x y ->
-    match y with
-    | P p -> Some p == get_principal x
-    | S p s -> Some p == get_principal x /\ Some s == get_session x
+    match x, y with
+    | S px _, P py
+    | P px, P py -> px == py
+    | P _, S _ _ -> False
+    | S px dx, S py dy ->
+      px == py /\ description_order.rel dx dy
   );
-  refl = (fun x -> ());
-  trans = (fun x y z -> ());
+  refl = (fun x ->
+    match x with
+    | S _ d -> description_order.refl d
+    | _ -> ()
+  );
+  trans = (fun x y z ->
+    match x, y, z with
+    | S _ dx, S _ dy, S _ dz -> description_order.trans dx dy dz
+    | _, _, _ -> ()
+  );
 }
 
 val corruption_pred_ok: #a:Type -> order a -> (a -> prop) -> prop
@@ -66,15 +77,18 @@ let pre_label_order ord is_corrupt = {
   );
 }
 
-type label = lattice (pre_label pre_pre_label)
+type label (desc_t:Type0) = lattice (pre_label (pre_pre_label desc_t))
 
-val label_order: corruption_pred pre_pre_label_order -> order label
-let label_order is_corrupt = {
-  rel = lattice_order (pre_label_order pre_pre_label_order is_corrupt);
+val label_order:
+  #desc_t:Type0 ->
+  desc_order:order desc_t -> corruption_pred (pre_pre_label_order desc_order) ->
+  order (label desc_t)
+let label_order #desc_t desc_order is_corrupt = {
+  rel = lattice_order (pre_label_order (pre_pre_label_order desc_order) is_corrupt);
   refl = (fun x ->
-    lattice_order_refl (pre_label_order pre_pre_label_order is_corrupt) x
+    lattice_order_refl (pre_label_order (pre_pre_label_order desc_order) is_corrupt) x
   );
   trans = (fun x y z ->
-    lattice_order_trans (pre_label_order pre_pre_label_order is_corrupt) x y z
+    lattice_order_trans (pre_label_order (pre_pre_label_order desc_order) is_corrupt) x y z
   );
 }
