@@ -18,7 +18,7 @@ val initiator_authentication:
     trace_invariant tr
   )
   (ensures
-    principal_corrupt tr alice \/ principal_corrupt tr bob \/
+    is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob) \/
     event_triggered (prefix tr i) alice (Initiate2 alice bob n_a n_b)
   )
 let initiator_authentication tr i alice bob n_a n_b = ()
@@ -32,7 +32,7 @@ val responder_authentication:
     trace_invariant tr
   )
   (ensures
-    principal_corrupt tr alice \/ principal_corrupt tr bob \/
+    is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob) \/
     event_triggered (prefix tr i) bob (Respond1 alice bob n_a n_b)
   )
 let responder_authentication tr i alice bob n_a n_b = ()
@@ -48,7 +48,7 @@ val n_a_secrecy:
       (exists sess_id n_b. typed_state_was_set tr nsl_session_label bob sess_id (ResponderReceivedMsg3 alice n_a n_b))
     )
   )
-  (ensures principal_corrupt tr alice \/ principal_corrupt tr bob)
+  (ensures is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob))
 let n_a_secrecy tr alice bob n_a =
   attacker_only_knows_publishable_values tr n_a
 
@@ -63,6 +63,6 @@ val n_b_secrecy:
       (exists sess_id n_a. typed_state_was_set tr nsl_session_label alice sess_id (InitiatorSentMsg3 bob n_a n_b))
     )
   )
-  (ensures principal_corrupt tr alice \/ principal_corrupt tr bob)
+  (ensures is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob))
 let n_b_secrecy tr alice bob n_b =
   attacker_only_knows_publishable_values tr n_b

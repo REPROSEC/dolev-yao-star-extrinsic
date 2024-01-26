@@ -150,7 +150,7 @@ val decode_message2_proof:
     | None -> True
     | Some msg2 -> (
       is_knowable_by (join (principal_label alice) (principal_label bob)) tr msg2.n_b /\ (
-      (principal_corrupt tr alice \/ principal_corrupt tr bob) \/ (
+      (is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob)) \/ (
         event_triggered tr bob (Respond1 alice bob n_a msg2.n_b)
       )
       )
@@ -212,7 +212,7 @@ val decode_message3_proof:
     match decode_message3 alice bob msg_cipher sk_b n_b with
     | None -> True
     | Some msg3 -> (
-      (principal_corrupt tr alice \/ principal_corrupt tr bob) \/ (
+      (is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob)) \/ (
         (exists alice n_a.
           get_label msg3.n_b `can_flow tr` (principal_label alice) /\
           event_triggered tr alice (Initiate2 alice bob n_a n_b))

@@ -60,14 +60,14 @@ let nsl_event_pred: event_predicate nsl_event =
     | Initiate2 alice bob n_a n_b -> (
       prin == alice /\
       event_triggered tr alice (Initiate1 alice bob n_a) /\ (
-        principal_corrupt tr alice \/ principal_corrupt tr bob \/
+        is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob) \/
         event_triggered tr bob (Respond1 alice bob n_a n_b)
       )
     )
     | Respond2 alice bob n_a n_b -> (
       prin == bob /\
       event_triggered tr bob (Respond1 alice bob n_a n_b) /\ (
-        principal_corrupt tr alice \/ principal_corrupt tr bob \/
+        is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob) \/
         event_triggered tr alice (Initiate2 alice bob n_a n_b)
       )
     )

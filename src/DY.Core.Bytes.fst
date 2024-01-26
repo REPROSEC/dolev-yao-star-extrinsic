@@ -4,7 +4,6 @@ open DY.Core.Bytes.Type
 open DY.Core.Trace.Type
 open DY.Core.Label.Type
 open DY.Core.Label
-open DY.Core.Label.Lattice
 
 #set-options "--fuel 1 --ifuel 1"
 

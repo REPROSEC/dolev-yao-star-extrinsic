@@ -3,129 +3,100 @@ module DY.Core.Label
 open DY.Core.Label.Type
 open DY.Core.Trace.Type
 
-val pre_can_flow:
-  pre_pre_label -> pre_pre_label -> prop
-let pre_can_flow who1 who2 =
-  who2 `pre_pre_label_order.rel` who1
-
-val pre_can_flow_transitive:
-  who1:pre_pre_label -> who2:pre_pre_label -> who3:pre_pre_label ->
-  Lemma
-  (requires who1 `pre_can_flow` who2 /\ who2 `pre_can_flow` who3)
-  (ensures who1 `pre_can_flow` who3)
-  [SMTPat (who1 `pre_can_flow` who2); SMTPat (who1 `pre_can_flow` who3)]
-let pre_can_flow_transitive who1 who2 who3 =
-  pre_pre_label_order.trans who3 who2 who1
-
-val is_corrupt: trace -> pre_pre_label -> prop
-let is_corrupt tr who =
+[@@"opaque_to_smt"]
+val pre_is_corrupt: trace -> pre_label -> prop
+let pre_is_corrupt tr who =
   exists prin sess_id.
-    who `pre_can_flow` (S prin sess_id) /\
+    (S prin sess_id) `pre_label_order.rel` who /\
     was_corrupt tr prin sess_id
+
+[@@"opaque_to_smt"]
+val is_corrupt: trace -> label -> prop
+let rec is_corrupt tr l =
+  match l with
+  | Secret -> False
+  | State s -> pre_is_corrupt tr s
+  | Meet l1 l2 -> is_corrupt tr l1 /\ is_corrupt tr l2
+  | Join l1 l2 -> is_corrupt tr l1 \/ is_corrupt tr l2
+  | Public -> True
 
 val is_corrupt_later:
   tr1:trace -> tr2:trace ->
-  who:pre_pre_label ->
+  l:label ->
   Lemma
-  (requires is_corrupt tr1 who /\ tr1 <$ tr2)
-  (ensures is_corrupt tr2 who)
-  [SMTPat (is_corrupt tr1 who); SMTPat (tr1 <$ tr2)]
-let is_corrupt_later tr1 tr2 who = ()
-
-val is_corrupt_order:
-  tr:trace ->
-  who1:pre_pre_label -> who2:pre_pre_label ->
-  Lemma
-  (requires is_corrupt tr who1 /\ who2 `pre_can_flow` who1)
-  (ensures is_corrupt tr who2)
-  // TODO SMT pattern is weird, refactor
-  [SMTPat (is_corrupt tr who1); SMTPat (who1 `pre_pre_label_order.rel` who2)]
-let is_corrupt_order tr who1 who2 = ()
+  (requires is_corrupt tr1 l /\ tr1 <$ tr2)
+  (ensures is_corrupt tr2 l)
+  [SMTPat (is_corrupt tr1 l); SMTPat (tr1 <$ tr2)]
+let rec is_corrupt_later tr1 tr2 l =
+  reveal_opaque (`%pre_is_corrupt) (pre_is_corrupt);
+  norm_spec [zeta; delta_only [`%is_corrupt]] (is_corrupt);
+  match l with
+  | Secret
+  | Public
+  | State _ -> ()
+  | Meet l1 l2
+  | Join l1 l2 ->
+    introduce is_corrupt tr1 l1 ==> is_corrupt tr2 l1 with _. is_corrupt_later tr1 tr2 l1;
+    introduce is_corrupt tr1 l2 ==> is_corrupt tr2 l2 with _. is_corrupt_later tr1 tr2 l2
 
 [@@"opaque_to_smt"]
 val can_flow: trace -> label -> label -> prop
 let can_flow tr l1 l2 =
-  l2 `(label_order (is_corrupt tr)).rel` l1
+  forall tr_extended. tr <$ tr_extended ==>
+    (is_corrupt tr_extended l2 ==> is_corrupt tr_extended l1)
 
 [@@"opaque_to_smt"]
 val secret: label
 let secret =
-  DY.Core.Label.Lattice.Leaf Secret
+  Secret
 
 [@@"opaque_to_smt"]
 val public: label
 let public =
-  DY.Core.Label.Lattice.Leaf Public
+  Public
 
 [@@"opaque_to_smt"]
 val meet: label -> label -> label
 let meet l1 l2 =
-  DY.Core.Label.Lattice.Meet l1 l2
+  Meet l1 l2
 
 [@@"opaque_to_smt"]
 val join: label -> label -> label
 let join l1 l2 =
-  DY.Core.Label.Lattice.Join l1 l2
+  Join l1 l2
 
 [@@"opaque_to_smt"]
 val principal_label: principal -> label
 let principal_label prin =
-  DY.Core.Label.Lattice.Leaf (State (P prin))
+  State (P prin)
 
 [@@"opaque_to_smt"]
 val principal_state_label: principal -> nat -> label
 let principal_state_label prin sess_id =
-  DY.Core.Label.Lattice.Leaf (State (S prin sess_id))
+  State (S prin sess_id)
 
 [@@"opaque_to_smt"]
-val principal_corrupt: trace -> principal -> prop
-let principal_corrupt tr prin =
-  is_corrupt tr (P prin)
-
-[@@"opaque_to_smt"]
-val principal_state_corrupt: trace -> principal -> nat -> prop
-let principal_state_corrupt tr prin sess_id =
-  is_corrupt tr (S prin sess_id)
+val extract_pre_label: label -> GTot (option pre_label)
+let extract_pre_label l =
+  match l with
+  | State s -> Some s
+  | _ -> None
 
 val principal_label_injective:
-  p1:principal -> p2:principal ->
-  Lemma
-  (requires principal_label p1 == principal_label p2)
-  (ensures p1 == p2)
-  [SMTPat (principal_label p1); SMTPat (principal_label p2)]
-let principal_label_injective p1 p2 =
+  p:principal ->
+  Lemma (extract_pre_label (principal_label p) == Some (P p))
+  [SMTPat (principal_label p)]
+let principal_label_injective p =
+  normalize_term_spec extract_pre_label;
   normalize_term_spec principal_label
 
 val principal_state_label_injective:
-  p1:principal -> s1:nat -> p2:principal -> s2:nat ->
-  Lemma
-  (requires principal_state_label p1 s1 == principal_state_label p2 s2)
-  (ensures p1 == p2 /\ s1 == s2)
-  [SMTPat (principal_state_label p1 s1); SMTPat (principal_state_label p2 s2)]
-let principal_state_label_injective p1 s1 p2 s2 =
+  p:principal -> s:nat ->
+  Lemma (extract_pre_label (principal_state_label p s) == Some (S p s))
+  [SMTPat (principal_state_label p s)]
+let principal_state_label_injective p s =
+  normalize_term_spec extract_pre_label;
   normalize_term_spec principal_state_label
-
-val principal_corrupt_later:
-  tr1:trace -> tr2:trace ->
-  prin:principal ->
-  Lemma
-  (requires principal_corrupt tr1 prin /\ tr1 <$ tr2)
-  (ensures principal_corrupt tr2 prin)
-  [SMTPat (principal_corrupt tr1 prin); SMTPat (tr1 <$ tr2)]
-let principal_corrupt_later tr1 tr2 prin =
-  assert_norm(principal_corrupt tr1 prin == is_corrupt tr1 (P prin));
-  assert_norm(principal_corrupt tr2 prin == is_corrupt tr2 (P prin))
-
-val principal_state_corrupt_later:
-  tr1:trace -> tr2:trace ->
-  prin:principal -> sess_id:nat ->
-  Lemma
-  (requires principal_state_corrupt tr1 prin sess_id /\ tr1 <$ tr2)
-  (ensures principal_state_corrupt tr2 prin sess_id)
-  [SMTPat (principal_state_corrupt tr1 prin sess_id); SMTPat (tr1 <$ tr2)]
-let principal_state_corrupt_later tr1 tr2 prin sess_id =
-  assert_norm(principal_state_corrupt tr1 prin sess_id == is_corrupt tr1 (S prin sess_id));
-  assert_norm(principal_state_corrupt tr2 prin sess_id == is_corrupt tr2 (S prin sess_id))
 
 val can_flow_reflexive:
   tr:trace -> l:label ->
@@ -133,8 +104,7 @@ val can_flow_reflexive:
   (ensures l `can_flow tr` l)
   [SMTPat (l `can_flow tr` l)]
 let can_flow_reflexive tr l =
-  normalize_term_spec can_flow;
-  (label_order (is_corrupt tr)).refl l
+  normalize_term_spec can_flow
 
 val can_flow_transitive:
   tr:trace -> l1:label -> l2:label -> l3:label ->
@@ -143,8 +113,7 @@ val can_flow_transitive:
   (ensures l1 `can_flow tr` l3)
   [SMTPat (l1 `can_flow tr` l3); SMTPat (l1 `can_flow tr` l2)]
 let can_flow_transitive tr l1 l2 l3 =
-  normalize_term_spec can_flow;
-  (label_order (is_corrupt tr)).trans l3 l2 l1
+  normalize_term_spec can_flow
 
 val can_flow_later:
   tr1:trace -> tr2:trace ->
@@ -154,8 +123,7 @@ val can_flow_later:
   (ensures l1 `can_flow tr2` l2)
   [SMTPat (l1 `can_flow tr1` l2); SMTPat (tr1 <$ tr2)]
 let can_flow_later tr1 tr2 l1 l2 =
-  normalize_term_spec can_flow;
-  DY.Core.Label.Lattice.lattice_order_monotone (pre_label_order pre_pre_label_order (is_corrupt tr1)) (pre_label_order pre_pre_label_order (is_corrupt tr2)) l2 l1
+  reveal_opaque (`%can_flow) (can_flow)
 
 val secret_is_bottom:
   tr:trace -> l:label ->
@@ -164,8 +132,7 @@ val secret_is_bottom:
   [SMTPat (l `can_flow tr` secret)]
 let secret_is_bottom tr l =
   normalize_term_spec can_flow;
-  normalize_term_spec secret;
-  DY.Core.Label.Lattice.bottom_to_bottom (pre_label_order pre_pre_label_order (is_corrupt tr)) Secret l
+  normalize_term_spec secret
 
 val public_is_top:
   tr:trace -> l:label ->
@@ -174,8 +141,7 @@ val public_is_top:
   [SMTPat (public `can_flow tr` l)]
 let public_is_top tr l =
   normalize_term_spec can_flow;
-  normalize_term_spec public;
-  DY.Core.Label.Lattice.top_to_top (pre_label_order pre_pre_label_order (is_corrupt tr)) Public l
+  normalize_term_spec public
 
 val meet_eq:
   tr:trace -> x:label -> y1:label -> y2:label ->
@@ -183,9 +149,9 @@ val meet_eq:
   (ensures meet y1 y2 `can_flow tr` x <==> (y1 `can_flow tr` x /\ y2 `can_flow tr` x))
   [SMTPat (meet y1 y2 `can_flow tr` x)] //Not sure about this
 let meet_eq tr x y1 y2 =
-  normalize_term_spec can_flow;
-  normalize_term_spec meet;
-  DY.Core.Label.Lattice.meet_eq (pre_label_order pre_pre_label_order (is_corrupt tr)) x y1 y2
+  norm_spec [zeta; delta_only [`%is_corrupt]] (is_corrupt);
+  reveal_opaque (`%can_flow) (can_flow);
+  reveal_opaque (`%meet) (meet)
 
 val join_eq:
   tr:trace -> x1:label -> x2:label -> y:label ->
@@ -193,33 +159,19 @@ val join_eq:
   (ensures y `can_flow tr` join x1 x2 <==> (y `can_flow tr` x1 /\ y `can_flow tr` x2))
   [SMTPat (y `can_flow tr` join x1 x2)] //Not sure about this
 let join_eq tr x1 x2 y =
-  normalize_term_spec can_flow;
-  normalize_term_spec join;
-  DY.Core.Label.Lattice.join_eq (pre_label_order pre_pre_label_order (is_corrupt tr)) x1 x2 y
+  norm_spec [zeta; delta_only [`%is_corrupt]] (is_corrupt);
+  reveal_opaque (`%can_flow) (can_flow);
+  reveal_opaque (`%join) (join)
 
-val principal_flow_to_public_eq:
-  tr:trace -> prin:principal ->
+val flow_to_public_eq:
+  tr:trace -> l:label ->
   Lemma
-  (ensures (principal_label prin) `can_flow tr` public <==> principal_corrupt tr prin)
-  [SMTPat ((principal_label prin) `can_flow tr` public)] //Not sure about this
-let principal_flow_to_public_eq tr prin =
-  normalize_term_spec can_flow;
-  normalize_term_spec principal_label;
-  normalize_term_spec public;
-  assert_norm(principal_corrupt tr prin == is_corrupt tr (P prin));
-  DY.Core.Label.Lattice.leaf_eq (pre_label_order pre_pre_label_order (is_corrupt tr)) Public (State (P prin))
-
-val principal_state_flow_to_public_eq:
-  tr:trace -> prin:principal -> sess_id:nat ->
-  Lemma
-  (ensures (principal_state_label prin sess_id) `can_flow tr` public <==> principal_state_corrupt tr prin sess_id)
-  [SMTPat ((principal_state_label prin sess_id) `can_flow tr` public)] //Not sure about this
-let principal_state_flow_to_public_eq tr prin sess_id =
-  normalize_term_spec can_flow;
-  normalize_term_spec principal_state_label;
-  normalize_term_spec public;
-  assert_norm(principal_state_corrupt tr prin sess_id == is_corrupt tr (S prin sess_id));
-  DY.Core.Label.Lattice.leaf_eq (pre_label_order pre_pre_label_order (is_corrupt tr)) Public (State (S prin sess_id))
+  (ensures l `can_flow tr` public <==> is_corrupt tr l)
+  [SMTPat (l `can_flow tr` public)] //Not sure about this
+let flow_to_public_eq tr prin =
+  norm_spec [zeta; delta_only [`%is_corrupt]] (is_corrupt);
+  reveal_opaque (`%can_flow) (can_flow);
+  reveal_opaque (`%public) (public)
 
 val principal_flow_to_principal_state:
   tr:trace -> prin:principal -> sess_id:nat ->
@@ -227,6 +179,8 @@ val principal_flow_to_principal_state:
   (ensures (principal_label prin) `can_flow tr` (principal_state_label prin sess_id))
   [SMTPat ((principal_label prin) `can_flow tr` (principal_state_label prin sess_id))]
 let principal_flow_to_principal_state tr prin sess_id =
+  reveal_opaque (`%pre_is_corrupt) (pre_is_corrupt);
+  norm_spec [zeta; delta_only [`%is_corrupt]] (is_corrupt);
   normalize_term_spec can_flow;
   normalize_term_spec principal_label;
   normalize_term_spec principal_state_label
@@ -237,7 +191,7 @@ val join_flow_to_public_eq:
   (ensures (join x1 x2) `can_flow tr` public <==> x1 `can_flow tr` public \/ x2 `can_flow tr` public)
   [SMTPat ((join x1 x2) `can_flow tr` public)] //Not sure about this
 let join_flow_to_public_eq tr x1 x2 =
-  normalize_term_spec can_flow;
-  normalize_term_spec join;
-  normalize_term_spec public;
-  DY.Core.Label.Lattice.leaf_less_join (pre_label_order pre_pre_label_order (is_corrupt tr)) Public x1 x2
+  norm_spec [zeta; delta_only [`%is_corrupt]] (is_corrupt);
+  reveal_opaque (`%can_flow) (can_flow);
+  reveal_opaque (`%join) (join);
+  reveal_opaque (`%public) (public)

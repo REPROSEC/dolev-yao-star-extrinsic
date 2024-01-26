@@ -37,6 +37,14 @@ let grows tr1 tr2 =
 
 let (<$) = grows
 
+val grows_reflexive:
+  tr:trace ->
+  Lemma (tr <$ tr)
+  [SMTPat (tr <$ tr)]
+let grows_reflexive tr =
+  reveal_opaque (`%grows) (grows);
+  norm_spec [zeta; delta_only [`%prefix]] (prefix)
+
 val grows_transitive:
   tr1:trace -> tr2:trace -> tr3:trace ->
   Lemma
