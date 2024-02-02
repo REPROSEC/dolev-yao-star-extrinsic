@@ -137,6 +137,29 @@ let rec event_at_grows tr1 tr2 i e =
     event_at_grows tr1 tr2_init i e
   )
 
+val prefix_prefix_grows:
+  tr1:trace -> tr2:trace -> i1:nat -> i2:nat ->
+  Lemma
+  (requires
+    tr1 <$ tr2 /\
+    i1 <= length tr1 /\
+    i2 <= length tr2 /\
+    i1 <= i2
+  )
+  (ensures prefix tr1 i1 <$ prefix tr2 i2)
+let rec prefix_prefix_grows tr1 tr2 i1 i2 =
+  reveal_opaque (`%grows) (grows);
+  norm_spec [zeta; delta_only [`%prefix]] (prefix);
+  if i2 = length tr2 then ()
+  else if length tr1 = length tr2 then (
+    let Snoc tr1_init _ = tr1 in
+    let Snoc tr2_init _ = tr2 in
+    prefix_prefix_grows tr1_init tr2_init i1 i2
+  ) else (
+    let Snoc tr2_init _ = tr2 in
+    prefix_prefix_grows tr1 tr2_init i1 i2
+  )
+
 val msg_sent_on_network: trace -> bytes -> prop
 let msg_sent_on_network tr msg =
   event_exists tr (MsgSent msg)

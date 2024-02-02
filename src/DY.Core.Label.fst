@@ -10,12 +10,36 @@ let pre_is_corrupt tr who =
     (S prin sess_id) `pre_label_order.rel` who /\
     was_corrupt tr prin sess_id
 
+val trace_before: trace -> nat -> trace
+let trace_before tr time =
+  prefix tr (min time (length tr))
+
+val trace_before_grows:
+  tr1:trace -> tr2:trace -> time:nat ->
+  Lemma
+  (requires tr1 <$ tr2)
+  (ensures (tr1 `trace_before` time) <$ (tr2 `trace_before` time))
+  [SMTPat ((tr1 `trace_before` time) <$ (tr2 `trace_before` time))]
+let trace_before_grows tr1 tr2 time =
+  prefix_prefix_grows tr1 tr2 (min time (length tr1)) (min time (length tr2))
+
+val trace_before_later:
+  tr:trace -> time1:nat -> time2:nat ->
+  Lemma
+  (requires time1 <= time2)
+  (ensures (tr `trace_before` time1) <$ (tr `trace_before` time2))
+  [SMTPat ((tr `trace_before` time1) <$ (tr `trace_before` time2))]
+let trace_before_later tr time1 time2 =
+  prefix_prefix_grows tr tr (min time1 (length tr)) (min time2 (length tr))
+
 [@@"opaque_to_smt"]
 val is_corrupt: trace -> label -> prop
-let rec is_corrupt tr l =
+let rec is_corrupt tr l: Tot prop (decreases l) =
   match l with
   | Secret -> False
   | State s -> pre_is_corrupt tr s
+  | Before l time ->
+    is_corrupt (tr `trace_before` time) l
   | Meet l1 l2 -> is_corrupt tr l1 /\ is_corrupt tr l2
   | Join l1 l2 -> is_corrupt tr l1 \/ is_corrupt tr l2
   | Public -> True
@@ -26,6 +50,7 @@ val is_corrupt_later:
   Lemma
   (requires is_corrupt tr1 l /\ tr1 <$ tr2)
   (ensures is_corrupt tr2 l)
+  (decreases l)
   [SMTPat (is_corrupt tr1 l); SMTPat (tr1 <$ tr2)]
 let rec is_corrupt_later tr1 tr2 l =
   reveal_opaque (`%pre_is_corrupt) (pre_is_corrupt);
@@ -34,6 +59,8 @@ let rec is_corrupt_later tr1 tr2 l =
   | Secret
   | Public
   | State _ -> ()
+  | Before l time ->
+    is_corrupt_later (tr1 `trace_before` time) (tr2 `trace_before` time) l
   | Meet l1 l2
   | Join l1 l2 ->
     introduce is_corrupt tr1 l1 ==> is_corrupt tr2 l1 with _. is_corrupt_later tr1 tr2 l1;
@@ -54,6 +81,11 @@ let secret =
 val public: label
 let public =
   Public
+
+[@@"opaque_to_smt"]
+val before: label -> nat -> label
+let before l i =
+  Before l i
 
 [@@"opaque_to_smt"]
 val meet: label -> label -> label
@@ -195,3 +227,44 @@ let join_flow_to_public_eq tr x1 x2 =
   reveal_opaque (`%can_flow) (can_flow);
   reveal_opaque (`%join) (join);
   reveal_opaque (`%public) (public)
+
+val label_can_flow_before:
+  tr:trace -> l1:label -> l2:label -> i2:nat ->
+  Lemma
+  (requires l1 `can_flow (tr `trace_before` i2)` l2)
+  (ensures l1 `can_flow tr` (l2 `before` i2))
+let label_can_flow_before tr l1 l2 i2 =
+  norm_spec [zeta; delta_only [`%is_corrupt]] (is_corrupt);
+  reveal_opaque (`%can_flow) (can_flow);
+  reveal_opaque (`%before) (before)
+
+val before_can_flow_label:
+  tr:trace -> l1:label -> i1:nat -> l2:label ->
+  Lemma
+  (requires l1 `can_flow (tr `trace_before` i1)` public)
+  (ensures (l1 `before` i1) `can_flow tr` l2)
+let before_can_flow_label tr l1 i1 l2 =
+  norm_spec [zeta; delta_only [`%is_corrupt]] (is_corrupt);
+  reveal_opaque (`%can_flow) (can_flow);
+  reveal_opaque (`%before) (before)
+
+val before_can_flow_before_earlier:
+  tr:trace -> l1:label -> i1:nat -> l2:label -> i2:nat ->
+  Lemma
+  (requires i1 <= i2 /\ l1 `can_flow (tr `trace_before` i1)` public)
+  (ensures (l1 `before` i1) `can_flow tr` (l2 `before` i2))
+let before_can_flow_before_earlier tr l1 i1 l2 i2 =
+  norm_spec [zeta; delta_only [`%is_corrupt]] (is_corrupt);
+  reveal_opaque (`%can_flow) (can_flow);
+  reveal_opaque (`%before) (before)
+
+val before_can_flow_before_later:
+  tr:trace -> l1:label -> i1:nat -> l2:label -> i2:nat ->
+  Lemma
+  (requires i1 >= i2 /\ l1 `can_flow (tr `trace_before` i1)` l2)
+  (ensures (l1 `before` i1) `can_flow tr` (l2 `before` i2))
+let before_can_flow_before_later tr l1 i1 l2 i2 =
+  norm_spec [zeta; delta_only [`%is_corrupt]] (is_corrupt);
+  reveal_opaque (`%can_flow) (can_flow);
+  reveal_opaque (`%before) (before);
+  assert(forall tr. (tr `trace_before` i2) <$ (tr `trace_before` i1))

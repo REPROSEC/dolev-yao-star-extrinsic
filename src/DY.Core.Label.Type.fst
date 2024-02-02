@@ -39,6 +39,7 @@ let pre_label_order = {
 type label =
   | Secret: label
   | State: pre_label -> label
+  | Before: label -> nat -> label
   | Meet: label -> label -> label
   | Join: label -> label -> label
   | Public: label
