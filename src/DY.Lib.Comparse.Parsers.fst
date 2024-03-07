@@ -3,6 +3,9 @@ module DY.Lib.Comparse.Parsers
 open DY.Core
 open Comparse
 
+/// This module defines some message formats for useful types in DY*,
+/// such as message formats for `principal`s or `nat`s.
+
 (*** Parser for principals ***)
 
 val ps_char: #bytes:Type0 -> {|bytes_like bytes|} -> parser_serializer bytes Char.char

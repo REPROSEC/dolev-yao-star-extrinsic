@@ -7,6 +7,52 @@ open DY.Core.Label
 
 #set-options "--fuel 1 --ifuel 1"
 
+/// This module contains functions and predicates operating on bytes.
+///
+/// To conduct security proofs, a crucial predicate is the `bytes_invariant`,
+/// an invariant on all the bytes being used in a protocol execution.
+/// This is invariant is preserved by honest participants
+/// (something which we need to prove on protocols analyzed with DY*),
+/// and is also preserved by the attacker
+/// (which preserve a stronger invariant, publishability, more on that below).
+///
+/// Because each cryptographic protocol need a custom bytes invariant to be proved secure,
+/// the bytes invariant can be customised with `crypto_invariants` specific to a protocol.
+/// For example, they can be used to ensure that honest participants
+/// only sign bytestrings that satisfy some predicate (namely, the signature predicate `sign_pred`).
+/// In return, when a signature verifies,
+/// we can deduce that the signed bytestring verifies the signature predicate
+/// (or that the signature key is known to the attacker).
+///
+/// Security proofs also rely on the essential notion of labels,
+/// an approximation of the set of principals that know some bytestring
+/// (see DY.Core.Label for more detailed explanations),
+/// which are used to define the cryptographic invariants.
+/// Labels are then used to define the "publishability" predicate (`is_publishable`),
+/// which states that a given bytestring satisfy the bytes invariant,
+/// and has a label equivalent to "public", i.e. its content is not secret
+/// (either because it's public data, or because the attacker corrupted some principal).
+/// The publishability predicate is then used to state the attacker knowledge theorem of DY*:
+/// if the attacker knows a bytestring `b`, then `b` is publishable.
+/// (This theorem is proved in DY.Core.Attacker.Knowledge.attacker_only_knows_publishable_values.)
+/// (In turn, if we know `b` is a secret key,
+/// this fact could be used to further deduce that the attacker must have compromised some principal.)
+///
+/// The definition of every cryptographic primitive will have the following structure:
+/// - definition of the constructors (e.g. encryption) and destructors (e.g. decryption)
+/// - reduction theorems
+///   (e.g. the decryption of an encryption gives back the plaintext)
+/// - lemmas for the attacker knowledge theorem,
+///   proving that each function preserves publishability
+/// - lemmas for the user on honest usage of cryptography,
+///   stating and proving under which condition functions preserve the bytes invariant
+/// - other lemmas that can be useful, such as lemmas on labels
+
+/// Compute the length of a bytestring.
+/// The output length of various cryptographic function is guessed to be some specific (realistic) value,
+/// this handling could be improved but is good enough.
+/// Such a length function is crucial to integrate DY* with Comparse.
+
 [@@"opaque_to_smt"]
 val length: bytes -> nat
 let rec length b =
@@ -30,15 +76,25 @@ let rec length b =
   | Hash msg ->
     32
 
+/// Customizable functions stating how labels and usages evolve
+/// when using some cryptographic functions.
+
 class crypto_usages = {
    [@@@FStar.Tactics.Typeclasses.no_method]
+   /// nothing here yet, this will be useful to implement KDF
   __nothing: unit;
 }
+
+/// Default (empty) usage functions, that can be used like this:
+/// { default_crypto_usages with ... }
 
 val default_crypto_usages: crypto_usages
 let default_crypto_usages = {
   __nothing = ();
 }
+
+/// Obtain the usage of a given bytestring.
+/// See DY.Core.Bytes.Type for more explanations.
 
 [@@"opaque_to_smt"]
 val get_usage: {|crypto_usages|} -> bytes -> GTot usage
@@ -47,6 +103,8 @@ let get_usage #cusages b =
   | Rand usg label len time ->
     usg
   | _ -> Unknown
+
+/// Obtain the label of a given bytestring.
 
 [@@"opaque_to_smt"]
 val get_label: {|crypto_usages|} -> bytes -> GTot label
@@ -71,12 +129,18 @@ let rec get_label #cusages b =
   | Hash msg ->
     get_label msg
 
+/// Obtain the label of the corresponding decryption key of an encryption key.
+/// Although the encryption key label is public,
+/// this is useful to reason on the corresponding decryption key label.
+
 [@@"opaque_to_smt"]
 val get_sk_label: {|crypto_usages|} -> bytes -> GTot label
 let get_sk_label #cusages pk =
   match pk with
   | Pk sk -> get_label sk
   | _ -> public
+
+/// Same as above, for usage.
 
 [@@"opaque_to_smt"]
 val get_sk_usage: {|crypto_usages|} -> bytes -> GTot usage
@@ -85,6 +149,10 @@ let get_sk_usage #cusages pk =
   | Pk sk -> get_usage sk
   | _ -> Unknown
 
+/// Obtain the label of the corresponding signature key of a verification key.
+/// Although the verification key label is public,
+/// this is useful to reason on the corresponding signature key label.
+
 [@@"opaque_to_smt"]
 val get_signkey_label: {|crypto_usages|} -> bytes -> GTot label
 let get_signkey_label #cusages pk =
@@ -92,12 +160,17 @@ let get_signkey_label #cusages pk =
   | Vk sk -> get_label sk
   | _ -> public
 
+/// Same as above, for usage.
+
 [@@"opaque_to_smt"]
 val get_signkey_usage: {|crypto_usages|} -> bytes -> GTot usage
 let get_signkey_usage #cusages pk =
   match pk with
   | Vk sk -> get_usage sk
   | _ -> Unknown
+
+/// Customizable predicates stating how cryptographic functions may be used
+/// by honest principals.
 
 noeq
 type crypto_predicates (cusages:crypto_usages) = {
@@ -131,6 +204,12 @@ type crypto_predicates (cusages:crypto_usages) = {
   // ...
 }
 
+/// Default (empty) cryptographic predicates, that can be used like this:
+/// { default_crypto_predicates with
+///   sign_pred = ...;
+///   sign_pred_later = ...;
+/// }
+
 val default_crypto_predicates:
   cusages:crypto_usages ->
   crypto_predicates cusages
@@ -145,12 +224,19 @@ let default_crypto_predicates cusages = {
   sign_pred_later = (fun tr1 tr2 vk msg -> ());
 }
 
+/// Gather the usage functions and the cryptographic predicates
+/// to obtain the cryptographic invariants,
+/// which will be a parameter of the bytes invariant.
+
 class crypto_invariants = {
   [@@@FStar.Tactics.Typeclasses.tcinstance]
   usages: crypto_usages;
   [@@@FStar.Tactics.Typeclasses.no_method]
   preds: crypto_predicates usages;
 }
+
+// `crypto_predicates` cannot be a typeclass that is inherited by `crypto_invariants`,
+// hence we simulate inheritance like this.
 
 let aead_pred {|cinvs:crypto_invariants|} = cinvs.preds.aead_pred
 let aead_pred_later {|cinvs:crypto_invariants|} = cinvs.preds.aead_pred_later
@@ -159,6 +245,12 @@ let pkenc_pred_later {|cinvs:crypto_invariants|} = cinvs.preds.pkenc_pred_later
 let sign_pred {|cinvs:crypto_invariants|} = cinvs.preds.sign_pred
 let sign_pred_later {|cinvs:crypto_invariants|} = cinvs.preds.sign_pred_later
 
+/// The invariants on every bytestring used in a protocol execution.
+/// - it is preserved by every honest participant
+///   (this is something that is proved on a protocol analyzed with DY*)
+/// - it is preserved by the attacker
+///   (which preserve a stronger invariant, publishability, proved in DY.Core.Attacker.Knowledge).
+
 [@@"opaque_to_smt"]
 val bytes_invariant: {|crypto_invariants|} -> trace -> bytes -> prop
 let rec bytes_invariant #cinvs tr b =
@@ -166,6 +258,7 @@ let rec bytes_invariant #cinvs tr b =
   | Literal buf ->
     True
   | Rand usage label len time ->
+    // Random bytes correspond to an event
     event_at tr time (RandGen usage label len)
   | Concat left right ->
     bytes_invariant tr left /\
@@ -175,16 +268,25 @@ let rec bytes_invariant #cinvs tr b =
     bytes_invariant tr nonce /\
     bytes_invariant tr msg /\
     bytes_invariant tr ad /\
+    // the nonce is a public value
+    // (e.g. it is often transmitted on the network)
     (get_label nonce) `can_flow tr` public /\
+    // the standard IND-CCA assumption do not guarantee indistinguishability of additional data,
+    // hence it must flow to public
     (get_label ad) `can_flow tr` public /\
     (
       (
-        // Honest case
+        // Honest case:
+        // - the key has the usage of AEAD key
         AeadKey? (get_usage key) /\
+        // - the custom (protocol-specific) invariant hold (authentication)
         cinvs.preds.aead_pred tr key nonce msg ad /\
+        // - the message is less secret than the key
+        //   (this is crucial so that decryption preserve publishability)
         (get_label msg) `can_flow tr` (get_label key)
       ) \/ (
-        // Attacker case
+        // Attacker case:
+        // the key and message are both public
         (get_label key) `can_flow tr` public /\
         (get_label msg) `can_flow tr` public
       )
@@ -197,13 +299,18 @@ let rec bytes_invariant #cinvs tr b =
     bytes_invariant tr msg /\
     (
       (
-        // Honest case
+        // Honest case:
+        // - the key has the usage of asymetric encryption key
         PkdecKey? (get_sk_usage pk) /\
+        // - the custom (protocol-specific) invariant hold (authentication)
+        cinvs.preds.pkenc_pred tr pk msg /\
+        // - the message is more secret than the decryption key
         (get_label msg) `can_flow tr` (get_sk_label pk) /\
-        (get_label msg) `can_flow tr` (get_label nonce) /\
-        cinvs.preds.pkenc_pred tr pk msg
+        // - the message is more secret than the nonce
+        (get_label msg) `can_flow tr` (get_label nonce)
       ) \/ (
-        // Attacker case
+        // Attacker case:
+        // the attacker knows the nonce, key and message
         (get_label pk) `can_flow tr` public /\
         (get_label nonce) `can_flow tr` public /\
         (get_label msg) `can_flow tr` public
@@ -217,11 +324,14 @@ let rec bytes_invariant #cinvs tr b =
     bytes_invariant tr msg /\
     (
       (
-        // Honest case
+        // Honest case:
+        // - the key has the usage of signature key
         SigKey? (get_signkey_usage (Vk sk)) /\
+        // - the custom (protocol-specific) invariant hold (authentication)
         cinvs.preds.sign_pred tr (Vk sk) msg
       ) \/ (
-        // Attacker case
+        // Attacker case:
+        // the attacker knows the signature key, nonce and message
         (get_label sk) `can_flow tr` public /\
         (get_label nonce) `can_flow tr` public /\
         (get_label msg) `can_flow tr` public
@@ -229,6 +339,8 @@ let rec bytes_invariant #cinvs tr b =
     )
   | Hash msg ->
     bytes_invariant tr msg
+
+/// The bytes invariant is preserved as the trace grows.
 
 val bytes_invariant_later:
   {|crypto_invariants|} ->
@@ -279,17 +391,34 @@ let rec bytes_invariant_later #cinvs tr1 tr2 msg =
 
 (*** Various predicates ***)
 
+/// Below are a few shorthand predicates on bytes,
+/// that are derived from bytes invariant, label and usage.
+/// They capture common properties we use to reason on bytestrings.
+/// They are not opaque to SMT because users have to reason with their definitions.
+
+/// Is a given bytestring less secret than a given label?
+/// In other words, can the bytestring be known to principals captured by this label?
+
 val is_knowable_by: {|crypto_invariants|} -> label -> trace -> bytes -> prop
 let is_knowable_by #cinvs lab tr b =
   bytes_invariant tr b /\ (get_label b) `can_flow tr` lab
+
+/// Particular case of the above predicate:
+/// can a given bytestring be published (e.g. on the network)?
+/// This predicate is will be used to define the attacker knowledge theorem
+/// (see DY.Core.Attacker.Knowledge).
 
 val is_publishable: {|crypto_invariants|} -> trace -> bytes -> prop
 let is_publishable #cinvs tr b =
   is_knowable_by public tr b
 
+/// Is a given bytestring secret, with some specific label?
+
 val is_secret: {|crypto_invariants|} -> label -> trace -> bytes -> prop
 let is_secret #cinvs lab tr b =
   bytes_invariant tr b /\ (get_label b) == lab
+
+/// Shorthand predicates for the various type of keys.
 
 val is_verification_key: {|crypto_invariants|} -> string -> label -> trace -> bytes -> prop
 let is_verification_key #cinvs usg lab tr b =
@@ -313,10 +442,14 @@ let is_decryption_key #cinvs usg lab tr b =
 
 (*** Literal ***)
 
+/// Constructor.
+
 [@@"opaque_to_smt"]
 val literal_to_bytes: FStar.Seq.seq FStar.UInt8.t -> bytes
 let literal_to_bytes lit =
   Literal lit
+
+/// Destructor.
 
 [@@"opaque_to_smt"]
 val bytes_to_literal: bytes -> option (FStar.Seq.seq FStar.UInt8.t)
@@ -325,7 +458,8 @@ let bytes_to_literal msg =
   | Literal lit -> Some lit
   | _ -> None
 
-// Symbolic reduction rule
+/// Symbolic reduction rules.
+
 val literal_to_bytes_to_literal:
   lit:FStar.Seq.seq FStar.UInt8.t ->
   Lemma
@@ -334,7 +468,8 @@ let literal_to_bytes_to_literal lit =
   normalize_term_spec literal_to_bytes;
   normalize_term_spec bytes_to_literal
 
-// Lemma for attacker knowledge theorem
+/// Lemma for attacker knowledge theorem.
+
 val literal_to_bytes_is_publishable:
   {|crypto_invariants|} -> tr:trace ->
   lit:FStar.Seq.seq FStar.UInt8.t ->
@@ -345,7 +480,8 @@ let literal_to_bytes_is_publishable #cinvs tr lit =
   normalize_term_spec bytes_invariant;
   normalize_term_spec get_label
 
-// Lemma for the user
+/// User lemma (back-and-forth)
+
 val bytes_to_literal_to_bytes:
   b:bytes ->
   Lemma (
@@ -357,6 +493,9 @@ let bytes_to_literal_to_bytes b =
   normalize_term_spec literal_to_bytes;
   normalize_term_spec bytes_to_literal
 
+
+/// User lemma (length).
+
 val length_literal_to_bytes:
   lit:FStar.Seq.seq FStar.UInt8.t ->
   Lemma (length (literal_to_bytes lit) == FStar.Seq.length lit)
@@ -365,22 +504,35 @@ let length_literal_to_bytes lit =
   normalize_term_spec literal_to_bytes;
   normalize_term_spec length
 
+/// User lemma (bytes invariant).
+/// Coincidentally this is the same as the attacker knowledge lemma above,
+/// but with an SMT pattern.
+
 val bytes_invariant_literal_to_bytes:
   {|crypto_invariants|} -> tr:trace ->
   lit:FStar.Seq.seq FStar.UInt8.t ->
   Lemma
-  (ensures bytes_invariant tr (literal_to_bytes lit))
+  (ensures is_publishable tr (literal_to_bytes lit))
   [SMTPat (bytes_invariant tr (literal_to_bytes lit))]
 let bytes_invariant_literal_to_bytes #cinvs tr lit =
   normalize_term_spec literal_to_bytes;
-  normalize_term_spec bytes_invariant
+  normalize_term_spec bytes_invariant;
+  normalize_term_spec get_label
 
 (*** Concatenation ***)
+
+/// Constructor.
 
 [@@"opaque_to_smt"]
 val concat: bytes -> bytes -> bytes
 let concat left right =
   Concat left right
+
+/// Destructor.
+/// Splitting returns an option,
+/// for example if the spliting index is out-of-bound.
+/// Here, we additionnally fail if the splitting is not done at the boundary of a concatenation.
+/// For example, we cannot split in the middle of a ciphertext.
 
 [@@"opaque_to_smt"]
 val split: bytes -> nat -> option (bytes & bytes)
@@ -393,7 +545,8 @@ let split b i =
       None
   | _ -> None
 
-// Symbolic reduction rule
+/// Symbolic reduction rule.
+
 val split_concat:
   left:bytes -> right:bytes ->
   Lemma
@@ -402,7 +555,8 @@ let split_concat left right =
   normalize_term_spec split;
   normalize_term_spec concat
 
-// Lemma for attacker knowledge theorem
+/// Lemma for attacker knowledge theorem.
+
 val concat_preserves_publishability:
   {|crypto_invariants|} -> tr:trace ->
   b1:bytes -> b2:bytes ->
@@ -414,7 +568,8 @@ let concat_preserves_publishability #cinvs tr b1 b2 =
   normalize_term_spec bytes_invariant;
   normalize_term_spec get_label
 
-// Lemma for attacker knowledge theorem
+/// Lemma for attacker knowledge theorem.
+
 val split_preserves_publishability:
   {|crypto_invariants|} -> tr:trace ->
   b:bytes -> i:nat ->
@@ -430,7 +585,8 @@ let split_preserves_publishability #cinvs tr b i =
   normalize_term_spec bytes_invariant;
   normalize_term_spec get_label
 
-// Lemma for the user
+/// User lemma (back-and-forth).
+
 val concat_split:
   b:bytes -> i:nat ->
   Lemma (
@@ -442,6 +598,8 @@ let concat_split b i =
   normalize_term_spec concat;
   normalize_term_spec split
 
+/// User lemma (concatenation length).
+
 val concat_length:
   left:bytes -> right:bytes ->
   Lemma
@@ -449,6 +607,8 @@ val concat_length:
 let concat_length left right =
   normalize_term_spec concat;
   normalize_term_spec length
+
+/// User lemma (splitting length).
 
 val split_length:
   b:bytes -> i:nat ->
@@ -461,6 +621,8 @@ let split_length b i =
   normalize_term_spec split;
   normalize_term_spec length
 
+/// User lemma (concatenation bytes invariant).
+
 val bytes_invariant_concat:
   {|crypto_invariants|} -> tr:trace ->
   b1:bytes -> b2:bytes ->
@@ -471,6 +633,8 @@ val bytes_invariant_concat:
 let bytes_invariant_concat #cinvs tr b1 b2 =
   normalize_term_spec concat;
   normalize_term_spec bytes_invariant
+
+/// User lemma (splitting bytes invariant).
 
 val bytes_invariant_split:
   {|crypto_invariants|} -> tr:trace ->
@@ -487,6 +651,8 @@ let bytes_invariant_split #cinvs tr b i =
   normalize_term_spec split;
   normalize_term_spec bytes_invariant
 
+/// User lemma (concatenation label).
+
 val get_label_concat:
   {|crypto_usages|} ->
   b1:bytes -> b2:bytes ->
@@ -496,6 +662,8 @@ val get_label_concat:
 let get_label_concat b1 b2 =
   normalize_term_spec concat;
   normalize_term_spec get_label
+
+/// User lemma (concatenation knowability).
 
 val concat_preserves_knowability:
   {|crypto_invariants|} -> lab:label -> tr:trace ->
@@ -508,6 +676,8 @@ let concat_preserves_knowability #cinvs lab tr b1 b2 =
   normalize_term_spec concat;
   normalize_term_spec bytes_invariant;
   normalize_term_spec get_label
+
+/// User lemma (splitting knowability).
 
 val split_preserves_knowability:
   {|crypto_invariants|} -> lab:label -> tr:trace ->
@@ -526,10 +696,14 @@ let split_preserves_knowability #cinvs lab tr b i =
 
 (*** AEAD ***)
 
+/// Constructor.
+
 [@@"opaque_to_smt"]
 val aead_enc: bytes -> bytes -> bytes -> bytes -> bytes
 let aead_enc key nonce msg ad =
   Aead key nonce msg ad
+
+/// Destructor.
 
 [@@"opaque_to_smt"]
 val aead_dec: bytes -> bytes -> bytes -> bytes -> option bytes
@@ -542,7 +716,8 @@ let aead_dec key nonce msg ad =
       None
   | _ -> None
 
-// Symbolic reduction rule
+/// Symbolic reduction rule.
+
 val aead_dec_enc:
   key:bytes -> nonce:bytes -> msg:bytes -> ad:bytes ->
   Lemma
@@ -551,7 +726,8 @@ let aead_dec_enc key nonce msg ad =
   normalize_term_spec aead_enc;
   normalize_term_spec aead_dec
 
-// Lemma for attacker knowledge theorem
+/// Lemma for attacker knowledge theorem.
+
 val aead_enc_preserves_publishability:
   {|crypto_invariants|} -> tr:trace ->
   key:bytes -> nonce:bytes -> msg:bytes -> ad:bytes ->
@@ -568,7 +744,8 @@ let aead_enc_preserves_publishability #cinvs tr key nonce msg ad =
   normalize_term_spec bytes_invariant;
   normalize_term_spec get_label
 
-// Lemma for attacker knowledge theorem
+/// Lemma for attacker knowledge theorem.
+
 val aead_dec_preserves_publishability:
   {|crypto_invariants|} -> tr:trace ->
   key:bytes -> nonce:bytes -> msg:bytes -> ad:bytes ->
@@ -587,10 +764,13 @@ val aead_dec_preserves_publishability:
 let aead_dec_preserves_publishability #cinvs tr key nonce msg ad =
   normalize_term_spec aead_dec;
   normalize_term_spec bytes_invariant;
-  // F* needs the match for some reason?
+  // F* needs the match for some reason,
+  // see FStarLang/FStar#3093.
   match aead_dec key nonce msg ad with
   | Some res -> ()
   | None -> ()
+
+/// User lemma (AEAD encryption bytes invariant).
 
 val bytes_invariant_aead_enc:
   {|crypto_invariants|} -> tr:trace ->
@@ -613,6 +793,8 @@ let bytes_invariant_aead_enc #cinvs tr key nonce msg ad =
   normalize_term_spec aead_enc;
   normalize_term_spec bytes_invariant
 
+/// User lemma (AEAD encryption label).
+
 val get_label_aead_enc:
   {|crypto_usages|} ->
   key:bytes -> nonce:bytes -> msg:bytes -> ad:bytes ->
@@ -622,6 +804,8 @@ val get_label_aead_enc:
 let get_label_aead_enc #cusages key nonce msg ad =
   normalize_term_spec aead_enc;
   normalize_term_spec get_label
+
+/// User lemma (AEAD decryption bytes invariant).
 
 val bytes_invariant_aead_dec:
   {|crypto_invariants|} -> tr:trace ->
@@ -660,14 +844,20 @@ let bytes_invariant_aead_dec #cinvs tr key nonce msg ad =
 
 (*** Public-key encryption ***)
 
+/// Constructor.
+
 [@@"opaque_to_smt"]
 val pk: bytes -> bytes
 let pk sk = Pk sk
+
+/// Constructor.
 
 [@@"opaque_to_smt"]
 val pk_enc: bytes -> bytes -> bytes -> bytes
 let pk_enc pk nonce msg =
   PkEnc pk nonce msg
+
+/// Destructor.
 
 [@@"opaque_to_smt"]
 val pk_dec: bytes -> bytes -> option bytes
@@ -680,7 +870,8 @@ let pk_dec sk msg =
       None
   | _ -> None
 
-// Symbolic reduction rule
+/// Symbolic reduction rule.
+
 val pk_dec_enc:
   sk:bytes -> nonce:bytes -> msg:bytes ->
   Lemma
@@ -690,7 +881,8 @@ let pk_dec_enc key nonce msg =
   normalize_term_spec pk_enc;
   normalize_term_spec pk
 
-// Lemma for attacker knowledge theorem
+/// Lemma for attacker knowledge theorem.
+
 val pk_preserves_publishability:
   {|crypto_invariants|} -> tr:trace ->
   sk:bytes ->
@@ -702,7 +894,8 @@ let pk_preserves_publishability #cinvs tr sk =
   normalize_term_spec bytes_invariant;
   normalize_term_spec get_label
 
-// Lemma for attacker knowledge theorem
+/// Lemma for attacker knowledge theorem.
+
 val pk_enc_preserves_publishability:
   {|crypto_invariants|} -> tr:trace ->
   pk:bytes -> nonce:bytes -> msg:bytes ->
@@ -718,7 +911,8 @@ let pk_enc_preserves_publishability #cinvs tr pk nonce msg =
   normalize_term_spec bytes_invariant;
   normalize_term_spec get_label
 
-// Lemma for attacker knowledge theorem
+/// Lemma for attacker knowledge theorem.
+
 val pk_dec_preserves_publishability:
   {|crypto_invariants|} -> tr:trace ->
   sk:bytes -> msg:bytes ->
@@ -738,6 +932,8 @@ let pk_dec_preserves_publishability #cinvs tr sk msg =
   normalize_term_spec bytes_invariant;
   normalize_term_spec get_label
 
+/// User lemma (public encryption key bytes invariant).
+
 val bytes_invariant_pk:
   {|crypto_invariants|} -> tr:trace ->
   sk:bytes ->
@@ -749,6 +945,8 @@ let bytes_invariant_pk #cinvs tr sk =
   normalize_term_spec pk;
   normalize_term_spec bytes_invariant
 
+/// User lemma (public encryption key label).
+
 val get_label_pk:
   {|crypto_usages|} ->
   sk:bytes ->
@@ -758,6 +956,8 @@ val get_label_pk:
 let get_label_pk #cusages sk =
   normalize_term_spec pk;
   normalize_term_spec get_label
+
+/// User lemma (public encryption key sk label).
 
 val get_sk_label_pk:
   {|crypto_usages|} ->
@@ -769,6 +969,8 @@ let get_sk_label_pk #cusages sk =
   normalize_term_spec pk;
   normalize_term_spec get_sk_label
 
+/// User lemma (public encryption key sk usage).
+
 val get_sk_usage_pk:
   {|crypto_usages|} ->
   sk:bytes ->
@@ -778,6 +980,8 @@ val get_sk_usage_pk:
 let get_sk_usage_pk #cusages sk =
   normalize_term_spec pk;
   normalize_term_spec get_sk_usage
+
+/// User lemma (public-key encryption bytes invariant).
 
 val bytes_invariant_pk_enc:
   {|crypto_invariants|} -> tr:trace ->
@@ -798,6 +1002,8 @@ let bytes_invariant_pk_enc #cinvs tr pk nonce msg =
   normalize_term_spec pk_enc;
   normalize_term_spec bytes_invariant
 
+/// User lemma (public-key encryption label).
+
 val get_label_pk_enc:
   {|crypto_usages|} ->
   pk:bytes -> nonce:bytes -> msg:bytes ->
@@ -807,6 +1013,8 @@ val get_label_pk_enc:
 let get_label_pk_enc #cusages pk nonce msg =
   normalize_term_spec pk_enc;
   normalize_term_spec get_label
+
+/// User lemma (public-key decryption bytes invariant).
 
 val bytes_invariant_pk_dec:
   {|crypto_invariants|} -> tr:trace ->
@@ -840,14 +1048,20 @@ let bytes_invariant_pk_dec #cinvs tr sk msg =
 
 (*** Signature ***)
 
+/// Constructor.
+
 [@@"opaque_to_smt"]
 val vk: bytes -> bytes
 let vk sk = Vk sk
+
+/// Constructor.
 
 [@@"opaque_to_smt"]
 val sign: bytes -> bytes -> bytes -> bytes
 let sign sk nonce msg =
   Sign sk nonce msg
+
+/// Destructor.
 
 [@@"opaque_to_smt"]
 val verify: bytes -> bytes -> bytes -> bool
@@ -857,7 +1071,8 @@ let verify vk msg signature =
     vk = Vk sk && msg = msg'
   | _ -> false
 
-// Symbolic reduction rule
+/// Symbolic reduction rule.
+
 val verify_sign:
   sk:bytes -> nonce:bytes -> msg:bytes ->
   Lemma
@@ -867,7 +1082,8 @@ let verify_sign sk nonce msg =
   normalize_term_spec verify;
   normalize_term_spec sign
 
-// Lemma for attacker knowledge theorem
+/// Lemma for attacker knowledge theorem.
+
 val vk_preserves_publishability:
   {|crypto_invariants|} -> tr:trace ->
   sk:bytes ->
@@ -879,7 +1095,8 @@ let vk_preserves_publishability #cinvs tr sk =
   normalize_term_spec bytes_invariant;
   normalize_term_spec get_label
 
-// Lemma for attacker knowledge theorem
+/// Lemma for attacker knowledge theorem.
+
 val sign_preserves_publishability:
   {|crypto_invariants|} -> tr:trace ->
   sk:bytes -> nonce:bytes -> msg:bytes ->
@@ -895,6 +1112,8 @@ let sign_preserves_publishability #cinvs tr sk nonce msg =
   normalize_term_spec bytes_invariant;
   normalize_term_spec get_label
 
+/// User lemma (verification key bytes invariant).
+
 val bytes_invariant_vk:
   {|crypto_invariants|} -> tr:trace ->
   sk:bytes ->
@@ -906,6 +1125,8 @@ let bytes_invariant_vk #cinvs tr sk =
   normalize_term_spec vk;
   normalize_term_spec bytes_invariant
 
+/// User lemma (verification key label).
+
 val get_label_vk:
   {|crypto_usages|} ->
   sk:bytes ->
@@ -915,6 +1136,8 @@ val get_label_vk:
 let get_label_vk #cusages sk =
   normalize_term_spec vk;
   normalize_term_spec get_label
+
+/// User lemma (verification key signkey label).
 
 val get_signkey_label_vk:
   {|crypto_usages|} ->
@@ -926,6 +1149,8 @@ let get_signkey_label_vk #cusages sk =
   normalize_term_spec vk;
   normalize_term_spec get_signkey_label
 
+/// User lemma (verification key signkey usage).
+
 val get_signkey_usage_vk:
   {|crypto_usages|} ->
   sk:bytes ->
@@ -935,6 +1160,8 @@ val get_signkey_usage_vk:
 let get_signkey_usage_vk #cusages sk =
   normalize_term_spec vk;
   normalize_term_spec get_signkey_usage
+
+/// User lemma (signature bytes invariant).
 
 val bytes_invariant_sign:
   {|crypto_invariants|} -> tr:trace ->
@@ -955,6 +1182,8 @@ let bytes_invariant_sign #cinvs tr sk nonce msg =
   normalize_term_spec vk;
   normalize_term_spec bytes_invariant
 
+/// User lemma (signature label).
+
 val get_label_sign:
   {|crypto_usages|} ->
   sk:bytes -> nonce:bytes -> msg:bytes ->
@@ -964,6 +1193,8 @@ val get_label_sign:
 let get_label_sign #cusages sk nonce msg =
   normalize_term_spec sign;
   normalize_term_spec get_label
+
+/// User lemma (verification bytes invariant).
 
 val bytes_invariant_verify:
   {|crypto_invariants|} -> tr:trace ->
@@ -992,11 +1223,14 @@ let bytes_invariant_verify #cinvs tr vk msg signature =
 
 (*** Hash ***)
 
+/// Constructor.
+
 [@@"opaque_to_smt"]
 val hash: bytes -> bytes
 let hash msg = Hash msg
 
-// Lemma for attacker knowledge theorem
+/// Lemma for attacker knowledge theorem.
+
 val hash_preserves_publishability:
   {|crypto_invariants|} -> tr:trace ->
   msg:bytes ->
@@ -1008,7 +1242,8 @@ let hash_preserves_publishability #cinvs tr msg =
   normalize_term_spec bytes_invariant;
   normalize_term_spec get_label
 
-// Lemmas for the user
+/// User lemma (hash bytes invariant).
+
 val bytes_invariant_hash:
   {|crypto_invariants|} -> tr:trace ->
   msg:bytes ->
@@ -1020,6 +1255,8 @@ let bytes_invariant_hash #cinvs tr msg =
   normalize_term_spec hash;
   normalize_term_spec bytes_invariant
 
+/// User lemma (hash label).
+
 val get_label_hash:
   {|crypto_usages|} ->
   msg:bytes ->
@@ -1029,11 +1266,17 @@ let get_label_hash #cusages msg =
   normalize_term_spec hash;
   normalize_term_spec get_label
 
+/// User lemma (hash collision-resistance).
+
 val hash_injective:
   msg1:bytes -> msg2:bytes ->
   Lemma
   (requires hash msg1 == hash msg2)
   (ensures msg1 == msg2)
-  // No SMTPat, call this manually because it's an important argument of the proof?
+  // No SMTPat, call this manually because it's an important argument of the proof.
+  // If this decision has to be revised, do not do [SMTPat (hash msg1); SMTPat (hash msg2)],
+  // as this would lead to quadratic triggering.
+  // Write it as a theorem like `inv_hash (hash msg) == Some msg`
+  // with [SMTPat (hash msg)].
 let hash_injective msg1 msg2 =
   normalize_term_spec hash

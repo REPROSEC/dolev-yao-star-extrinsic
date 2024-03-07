@@ -3,22 +3,65 @@ module DY.Core.Trace.Type
 open DY.Core.Bytes.Type
 open DY.Core.Label.Type
 
+/// This module defines the trace type, and simple predicates on it.
+/// It is separated from functions and predicates on trace (manipulation, invariants)
+/// in order to avoid dependency cycles.
+///
+/// The trace is a log of every event that has happened during a protocol execution,
+/// such as messages sent on the network, state storage or corruption by the attacker,
+/// as is standard is symbolic analysis tools to express security properties.
+///
+/// Given a trace, we can for example deduce:
+/// - what bytestrings are known by the attacker (see DY.Core.Attacker.Knowledge.attacker_knows),
+/// - what principals are corrupt (see DY.Core.Label.is_corrupt),
+/// - what protocol steps have been reached by some principals,
+/// - and more!
+///
+/// In turn, the set of traces that are reachable by executions of the protocol
+/// can be used to express security properties.
+/// For example, confidentiality can often be expressed as:
+///   in every trace resulting from an execution of the protocol,
+///   if the attacker knows some secret key,
+///   then it must have corrupt some principal.
+/// As another example, authentication can often be expressed as:
+///   in every trace resulting from an execution of the protocol,
+///   if Alice has finished a handshake with Bob,
+///   then Bob must have initiated a handshake with Alice.
+
+/// The type for events in the trace.
+
 type trace_event =
+  // A message has been sent on the network.
   | MsgSent: bytes -> trace_event
+  // A random number has been generated, with some usage and label.
   | RandGen: usg:usage -> lab:label -> len:nat{len <> 0} -> trace_event
+  // A state of a principal has been corrupt.
   | Corrupt: prin:principal -> sess_id:nat -> trace_event
+  // A principal stored some state.
   | SetState: prin:principal -> sess_id:nat -> content:bytes -> trace_event
+  // A custom and protocol-specific event has been triggered by a principal.
   | Event: prin:principal -> tag:string -> content:bytes -> trace_event
+
+/// The trace is a list of trace events.
+/// Because the trace grows with time and the time is often represented going from left to right,
+/// the trace is actually a reversed list.
+/// To avoid confusions, we define a custom inductive to swap the arguments of the "cons" constructor.
 
 type trace =
   | Nil: trace
   | Snoc: trace -> trace_event -> trace
+
+/// The length of a trace.
 
 val length: trace -> nat
 let rec length tr =
   match tr with
   | Nil -> 0
   | Snoc init last -> length init + 1
+
+(*** Prefix and trace extension ***)
+
+/// Compute the prefix of a trace.
 
 [@@ "opaque_to_smt"]
 val prefix: tr:trace -> i:nat{i <= length tr} -> trace
@@ -29,13 +72,21 @@ let rec prefix tr i =
     let Snoc tr_init _ = tr in
     prefix tr_init i
 
+/// Express whether a trace is the extension of another.
+/// This is a crucial relation between traces,
+/// because the trace only grows during a protocol execution.
+
 [@@ "opaque_to_smt"]
 val grows: trace -> trace -> prop
 let grows tr1 tr2 =
   length tr1 <= length tr2 /\
   tr1 == prefix tr2 (length tr1)
 
+/// It is used a lot in DY*, therefore we define an operator shorthand.
+
 let (<$) = grows
+
+/// The relation <$ is reflexive.
 
 val grows_reflexive:
   tr:trace ->
@@ -44,6 +95,8 @@ val grows_reflexive:
 let grows_reflexive tr =
   reveal_opaque (`%grows) (grows);
   norm_spec [zeta; delta_only [`%prefix]] (prefix)
+
+/// The relation <$ is transitive.
 
 val grows_transitive:
   tr1:trace -> tr2:trace -> tr3:trace ->
@@ -61,6 +114,8 @@ let rec grows_transitive tr1 tr2 tr3 =
     grows_transitive tr1 tr2 tr3_init
   )
 
+/// The prefix function outputs traces of the correct length.
+
 val length_prefix:
   tr:trace -> i:nat{i <= length tr} ->
   Lemma
@@ -73,6 +128,19 @@ let rec length_prefix tr i =
     let Snoc tr_init _ = tr in
     length_prefix tr_init i
 
+/// A trace which is the prefix of another is shorter.
+
+val length_grows:
+  tr1:trace -> tr2:trace ->
+  Lemma
+  (requires tr1 <$ tr2)
+  (ensures length tr1 <= length tr2)
+  [SMTPat (tr1 <$ tr2)]
+let length_grows tr1 tr2 =
+  reveal_opaque (`%grows) (grows)
+
+/// The prefix function outputs traces that are prefixes of the input.
+
 val prefix_grows:
   tr:trace -> i:nat{i <= length tr} ->
   Lemma
@@ -84,6 +152,10 @@ let prefix_grows tr i =
   reveal_opaque (`%grows) (grows);
   norm_spec [zeta; delta_only [`%prefix]] (prefix)
 
+(*** Event in the trace predicates ***)
+
+/// Retrieve the event at some timestamp in the trace.
+
 val get_event_at: tr:trace -> i:nat{i < length tr} -> trace_event
 let rec get_event_at tr i =
   if i+1 = length tr then
@@ -94,6 +166,8 @@ let rec get_event_at tr i =
     get_event_at tr_init i
   )
 
+/// Has some particular event been triggered at a some particular timestamp in the trace?
+
 val event_at: trace -> nat -> trace_event -> prop
 let event_at tr i e =
   if i >= length tr then
@@ -101,24 +175,13 @@ let event_at tr i e =
   else
     e == get_event_at tr i
 
+/// Has some particular event been triggered in the trace (at any timestamp)?
+
 val event_exists: trace -> trace_event -> prop
 let event_exists tr e =
   exists i. event_at tr i e
 
-val length_grows:
-  tr1:trace -> tr2:trace ->
-  Lemma
-  (requires tr1 <$ tr2)
-  (ensures length tr1 <= length tr2)
-  [SMTPat (tr1 <$ tr2)]
-let rec length_grows tr1 tr2 =
-  reveal_opaque (`%grows) (grows);
-  norm_spec [zeta; delta_only [`%prefix]] (prefix);
-  if length tr1 >= length tr2 then ()
-  else (
-    let Snoc tr2_init _ = tr2 in
-    length_grows tr1 tr2_init
-  )
+/// An event in the trace stays here when the trace grows.
 
 val event_at_grows:
   tr1:trace -> tr2:trace ->
@@ -137,25 +200,39 @@ let rec event_at_grows tr1 tr2 i e =
     event_at_grows tr1 tr2_init i e
   )
 
+/// Shorthand predicates.
+
+/// Has a message been sent on the network?
+
 val msg_sent_on_network: trace -> bytes -> prop
 let msg_sent_on_network tr msg =
   event_exists tr (MsgSent msg)
+
+/// Has some state been stored by a principal?
 
 val state_was_set: trace -> principal -> nat -> bytes -> prop
 let state_was_set tr prin sess_id content =
   event_exists tr (SetState prin sess_id content)
 
+/// Has a principal been corrupt?
+
 val was_corrupt: trace -> principal -> nat -> prop
 let was_corrupt tr prin sess_id =
   event_exists tr (Corrupt prin sess_id)
+
+/// Has a (custom, protocol-specific) event been triggered at some timestamp?
 
 val event_triggered_at: trace -> nat -> principal -> string -> bytes -> prop
 let event_triggered_at tr i prin tag content =
   event_at tr i (Event prin tag content)
 
+/// Has a (custom, protocol-specific) event been triggered (at any timestamp)?
+
 val event_triggered: trace -> principal -> string -> bytes -> prop
 let event_triggered tr prin tag content =
   exists i. event_triggered_at tr i prin tag content
+
+/// An event being triggered at some time stays triggered as the trace grows.
 
 val event_triggered_grows:
   tr1:trace -> tr2:trace ->
@@ -165,6 +242,8 @@ val event_triggered_grows:
   (ensures event_triggered tr2 prin tag content)
   [SMTPat (event_triggered tr1 prin tag content); SMTPat (tr1 <$ tr2)]
 let event_triggered_grows tr1 tr2 prin tag content = ()
+
+/// Has a random bytestring been generated at some timestamp?
 
 val rand_generated_at: trace -> nat -> bytes -> prop
 let rand_generated_at tr i b =

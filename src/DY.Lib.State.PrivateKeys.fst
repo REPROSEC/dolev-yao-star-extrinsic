@@ -8,6 +8,10 @@ open DY.Lib.State.Map
 
 #set-options "--fuel 1 --ifuel 1"
 
+/// This module defines a state to store private keys for a principal.
+/// Private keys can be generated with `generate_private_key`
+/// and obtained back with `get_private_key`.
+
 (*** Private keys types & invariants ***)
 
 [@@ with_bytes bytes]

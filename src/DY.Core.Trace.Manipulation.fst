@@ -8,9 +8,19 @@ open DY.Core.Label.Type
 
 #set-options "--fuel 1 --ifuel 1"
 
+/// This module defines the lightweight cryptography monad `crypto`,
+/// various trace-manipulation functions and
+/// corresponding invariant preservation theorems.
+
 (*** Trace monad ***)
 
+/// The lightweight cryptography monad is a state monad on the trace.
+/// Furthermore, the trace is required to grow:
+/// a cryptographic function can only append events to the trace.
+
 type crypto a = tr_in:trace -> out:(a & trace){tr_in <$ snd out}
+
+/// Bind operator for the cryptography monad
 
 val (let*): #a:Type -> #b:Type -> x:crypto a -> f:(a -> crypto b) -> crypto b
 let (let*) #a #b x f tr =
@@ -18,11 +28,21 @@ let (let*) #a #b x f tr =
   let (y, tr) = f x' tr in
   (y, tr)
 
+/// Bind operator for the option monad.
+/// The `Pure` effect is a trick found by Son Ho to allow some kind of intrinsic proofs,
+/// for example to be able to do:
+///   let? x = Some y in
+///   let Some y' = x in
+/// In the second line of code, without the Pure annotation,
+/// F* wouldn't be able to tell that `x` is a `Some`.
+
 val (let?): #a:Type -> #b:Type -> x:option a -> (y:a -> Pure (option b) (requires x == Some y) (ensures fun _ -> True)) -> option b
 let (let?) #a #b x f =
   match x with
   | None -> None
   | Some x -> f x
+
+/// Bind operator for the cryptography + option monad.
 
 val (let*?): #a:Type -> #b:Type -> x:crypto (option a) -> f:(a -> crypto (option b)) -> crypto (option b)
 let (let*?) #a #b x f tr0 =
@@ -34,11 +54,15 @@ let (let*?) #a #b x f tr0 =
     (y, tr)
   )
 
+/// return function for the cryptography monad.
+
 val return: #a:Type -> a -> crypto a
 let return #a x tr =
   reveal_opaque (`%grows) (grows);
   norm_spec [zeta; delta_only [`%prefix]] (prefix);
   (x, tr)
+
+/// getter for the cryptography monad.
 
 val get_trace: crypto trace
 let get_trace tr =
@@ -46,12 +70,16 @@ let get_trace tr =
   norm_spec [zeta; delta_only [`%prefix]] (prefix);
   (tr, tr)
 
+/// guard function for the option monad.
+
 val guard: b:bool -> option unit
 let guard b =
   if b then Some ()
   else None
 
-// Some inversion lemmas to keep ifuel low
+// Some inversion lemmas to keep ifuel low.
+// See FStarLang/FStar#3076 for more information.
+
 val invert_crypto:
   a:Type ->
   Lemma
@@ -70,16 +98,16 @@ let invert_crypto_option a =
 
 (*** Generic trace manipulation ***)
 
+/// Internal function: add a trace event to the trace.
+
 val add_event: trace_event -> crypto unit
 let add_event e tr =
   reveal_opaque (`%grows) (grows);
   norm_spec [zeta; delta_only [`%prefix]] (prefix);
   ((), Snoc tr e)
 
-val get_time: crypto nat
-let get_time =
-  let* tr = get_trace in
-  return (DY.Core.Trace.Type.length tr)
+/// Adding a trace event preserves the trace invariant
+/// when the trace event satisfy the invariant.
 
 val add_event_invariant:
   {|protocol_invariants|} ->
@@ -97,7 +125,16 @@ val add_event_invariant:
 let add_event_invariant #invs e tr =
   norm_spec [zeta; delta_only [`%trace_invariant]] (trace_invariant)
 
+/// Get the current time (i.e. trace length).
+
+val get_time: crypto nat
+let get_time =
+  let* tr = get_trace in
+  return (DY.Core.Trace.Type.length tr)
+
 (*** Sending messages ***)
+
+/// Send a message on the network.
 
 [@@ "opaque_to_smt"]
 val send_msg: bytes -> crypto nat
@@ -105,6 +142,9 @@ let send_msg msg =
   let* time = get_time in
   add_event (MsgSent msg);*
   return time
+
+/// Sending a message on the network preserves the trace invariant
+/// when the message is publishable.
 
 val send_msg_invariant:
   {|protocol_invariants|} ->
@@ -124,6 +164,8 @@ let send_msg_invariant #invs msg tr =
   add_event_invariant (MsgSent msg) tr;
   reveal_opaque (`%send_msg) (send_msg)
 
+/// Receive a message from the network.
+
 [@@ "opaque_to_smt"]
 val recv_msg: nat -> crypto (option bytes)
 let recv_msg i =
@@ -134,6 +176,9 @@ let recv_msg i =
     | _ -> return None
   else
     return None
+
+/// When the trace invariant holds,
+/// received messages are publishable.
 
 val recv_msg_invariant:
   {|protocol_invariants|} ->
@@ -162,10 +207,14 @@ let recv_msg_invariant #invs i tr =
 
 (*** Corruption ***)
 
+/// Corrupt a session of a principal.
+
 [@@ "opaque_to_smt"]
 val corrupt: principal -> nat -> crypto unit
 let corrupt prin sess_id =
   add_event (Corrupt prin sess_id)
+
+/// Corrupting a principal always preserve the trace invariant.
 
 val corrupt_invariant:
   {|protocol_invariants|} ->
@@ -185,12 +234,16 @@ let corrupt_invariant #invs prin sess_id tr =
 
 (*** Random number generation ***)
 
+/// Generate a random bytestring.
+
 [@@ "opaque_to_smt"]
 val mk_rand: usg:usage -> lab:label -> len:nat{len <> 0} -> crypto bytes
 let mk_rand usg lab len =
   let* time = get_time in
   add_event (RandGen usg lab len);*
   return (Rand usg lab len time)
+
+/// Generating a random bytestrings always preserve the trace invariant.
 
 #push-options "--z3rlimit 25"
 val mk_rand_trace_invariant:
@@ -210,6 +263,8 @@ let mk_rand_trace_invariant #invs usg lab len tr =
   reveal_opaque (`%mk_rand) (mk_rand)
 #pop-options
 
+/// Random bytestrings satisfy the bytes invariant.
+
 val mk_rand_bytes_invariant:
   {|protocol_invariants|} ->
   usg:usage -> lab:label -> len:nat{len <> 0} -> tr:trace ->
@@ -220,11 +275,13 @@ val mk_rand_bytes_invariant:
   ))
   // We need a way for the SMT pattern to know the value of `invs`
   // This is done using `trace_invariant`, although it is not necessary for the theorem to hold,
-  // It is certainly around in the context
+  // it is certainly around in the context
   [SMTPat (mk_rand usg lab len tr); SMTPat (trace_invariant tr)]
 let mk_rand_bytes_invariant #invs usg lab len tr =
   reveal_opaque (`%mk_rand) (mk_rand);
   normalize_term_spec bytes_invariant
+
+/// Label of random bytestrings.
 
 val mk_rand_get_label:
   {|protocol_invariants|} ->
@@ -238,6 +295,8 @@ val mk_rand_get_label:
 let mk_rand_get_label #invs usg lab len tr =
   reveal_opaque (`%mk_rand) (mk_rand);
   normalize_term_spec get_label
+
+/// Usage of random bytestrings.
 
 val mk_rand_get_usage:
   {|protocol_invariants|} ->
@@ -253,6 +312,8 @@ let mk_rand_get_usage #invs usg lab len tr =
   normalize_term_spec get_usage
 
 (*** State ***)
+
+/// Set the state of a principal at a given state identifier.
 
 [@@ "opaque_to_smt"]
 val set_state: principal -> nat -> bytes -> crypto unit
@@ -294,6 +355,8 @@ let rec compute_new_session_id_correct prin tr sess_id state_content =
     )
   )
 
+/// Compute a fresh state identifier for a principal.
+
 [@@ "opaque_to_smt"]
 val new_session_id: principal -> crypto nat
 let new_session_id prin =
@@ -313,24 +376,29 @@ let rec get_state_aux prin sess_id tr =
   | Snoc tr_init _ ->
       get_state_aux prin sess_id tr_init
 
+/// Retrieve the state stored by a principal at some state identifier.
+
 [@@ "opaque_to_smt"]
 val get_state: principal -> nat -> crypto (option bytes)
 let get_state prin sess_id =
   let* tr = get_trace in
   return (get_state_aux prin sess_id tr)
 
+/// Obtaining a new state identifier do not change the trace.
+
 val new_session_id_invariant:
-  {|protocol_invariants|} ->
   prin:principal -> tr:trace ->
   Lemma
-  (requires trace_invariant tr)
   (ensures (
     let (_, tr_out) = new_session_id prin tr in
     tr == tr_out
   ))
-  [SMTPat (new_session_id prin tr); SMTPat (trace_invariant tr)]
-let new_session_id_invariant #invs prin tr =
+  [SMTPat (new_session_id prin tr)]
+let new_session_id_invariant prin tr =
   normalize_term_spec new_session_id
+
+/// Storing a state preserves the trace invariant
+/// when the state satisfy the state predicate.
 
 #push-options "--z3rlimit 15"
 val set_state_invariant:
@@ -386,6 +454,9 @@ let rec get_state_aux_state_invariant #invs prin sess_id tr =
     | None -> ()
     | Some content -> state_pred_later tr_init tr prin sess_id content
 
+/// When the trace invariant holds,
+/// retrieved states satisfy the state predicate.
+
 val get_state_state_invariant:
   {|protocol_invariants|} ->
   prin:principal -> sess_id:nat -> tr:trace ->
@@ -408,10 +479,15 @@ let get_state_state_invariant #invs prin sess_id tr =
 
 (*** Event triggering ***)
 
+/// Trigger a protocol event.
+
 [@@ "opaque_to_smt"]
 val trigger_event: principal -> string -> bytes -> crypto unit
 let trigger_event prin tag content =
   add_event (Event prin tag content)
+
+/// Triggering a protocol event preserves the trace invariant
+/// when the protocol event satisfy the event predicate.
 
 val trigger_event_trace_invariant:
   {|protocol_invariants|} ->

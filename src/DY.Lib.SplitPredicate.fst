@@ -2,35 +2,99 @@ module DY.Lib.SplitPredicate
 
 #set-options "--fuel 1 --ifuel 1"
 
-// Some kind of cheap module functor like ocaml but in F*
+/// This module defines a library to create a global predicate from several independent local predicates,
+/// also called the "split predicate methodology".
+///
+/// DY* proofs rely on global protocol invariants
+/// (e.g. what protocol participants are allowed to store, or are allowed to sign),
+/// that must be preserved by each step of the protocol.
+/// The practice of defining this global protocol invariant monolithically somewhere has a few drawbacks:
+/// - it does not allows the user to do modular proofs,
+///   as many unrelated predicates are put in the same place
+/// - when modifying the global predicate for some sub-component,
+///   other unrelated sub-components will need to be re-checked
+///   (because the global predicate they depend on has changed)
+///   (and their proof might fail if the SMT gods are angry!)
+/// - it makes it difficult to create reusable components
+///   (such as a generic state to store private keys)
+///
+/// With this module, we can create a global predicate from several independent local predicates (see mk_global_pred).
+/// Then, instead of proving theorems that use a top-level defined global predicate,
+/// theorems will take as parameter the global predicate,
+/// with the precondition that it contains some top-level defined local predicate (see has_local_pred).
+/// This solves all the problems mentioned aboves:
+/// predicates are defined where they belong,
+/// proofs are modular because this dependency on the global predicate is no more.
+///
+/// Under the hood, the split predicate methodology
+/// is simply factorizing out a common pattern we see
+/// when writing monolithic global predicates.
+/// Indeed, such a monolithic global predicate usually
+/// - first disambiguate to which local predicate its input belong to
+/// - then dispatch the input to that local predicate, maybe after some modifications.
+/// In practice, it may look like this:
+/// let global_predicate param1 param2 param3 ... =
+///   // First detect in which sub-component we are in
+///   let tag = ... in
+///   // then dispatch to the corresponding local predicate
+///   match tag with
+///   | ... -> local_pred1 ...
+///   | ... -> local_pred2 ...
+///   ...
+/// The tag may be obtained in different ways,
+/// for example with the key usage (e.g. for a signature predicate, see DY.Core.Bytes.Type.usage),
+/// or because some messages are tagged
+/// (e.g. the state content in a state predicate or the signature input in signature predicate).
+/// How to obtain this tag is not always trivial,
+/// it is actually a core argument in the proof of
+/// why it is secure to deploy different sub-components in parallel.
+///
+/// The split predicate methodology can be used to implement horizontal composition:
+/// as long as we can find a way to disambiguate the composed protocols (using the tag),
+/// we can easily construct a global predicate implementing this horizontal composition.
+
+/// The parameters of the split predicate methodology.
+
 noeq type split_predicate_input_values = {
+  // Types for global and local predicates
+  local_pred: Type;
+  global_pred: Type;
+  // Input type for the global predicate
+  raw_data_t: Type;
+  // Input type for the local predicates
   labeled_data_t: Type;
+
+  // Apply a local predicate to its input
+  apply_local_pred: local_pred -> raw_data_t -> prop;
+  // Apply the global predicate to its input
+  apply_global_pred: global_pred -> labeled_data_t -> prop;
+  // Create a global predicate
+  mk_global_pred: (labeled_data_t -> prop) -> global_pred;
+  // Correctness theorem on creating and applying a global predicate
+  apply_mk_global_pred: bare:(labeled_data_t -> prop) -> x:labeled_data_t -> Lemma
+    (apply_global_pred (mk_global_pred bare) x == bare x);
+
+  // Two types of tag, that are related using `encode_label`:
+  // the label type that we use to define the predicate,
+  // and the label type that we obtain when decoding the global predicate input.
+  // Having different types may be handy in some situations.
   label_t: Type;
   encoded_label_t: Type;
-  raw_data_t: Type;
 
-  decode_labeled_data: labeled_data_t -> GTot (option (encoded_label_t & raw_data_t));
-
+  // We can encode the label, and this encoding must be injective.
   encode_label: label_t -> encoded_label_t;
   encode_label_inj: l1:label_t -> l2:label_t -> Lemma
     (requires encode_label l1 == encode_label l2)
     (ensures l1 == l2)
   ;
 
-  local_pred:Type;
-  global_pred:Type;
-  apply_local_pred: local_pred -> raw_data_t -> prop;
-  apply_global_pred: global_pred -> labeled_data_t -> prop;
-  mk_global_pred: (labeled_data_t -> prop) -> global_pred;
-  apply_mk_global_pred: bare:(labeled_data_t -> prop) -> x:labeled_data_t -> Lemma
-    (apply_global_pred (mk_global_pred bare) x == bare x)
+  // Finally, we can decode the global predicate input
+  // into an encoded label and a local predicate input
+  decode_labeled_data: labeled_data_t -> GTot (option (encoded_label_t & raw_data_t));
 }
 
-// Can probably be generalized to handle kdf usage too?
-type bare_global_pred (func:split_predicate_input_values) =
-  func.labeled_data_t -> prop
-type bare_local_pred (func:split_predicate_input_values) =
-  func.raw_data_t -> prop
+/// Do a global predicate contain some given local predicate with some tag?
+/// This will be a crucial precondition for the correctness theorem `local_eq_global_lemma`.
 
 val has_local_pred: func:split_predicate_input_values -> func.global_pred -> (func.label_t & func.local_pred) -> prop
 let has_local_pred func gpred (the_label, lpred) =
@@ -39,6 +103,11 @@ let has_local_pred func gpred (the_label, lpred) =
     | Some (label, raw_data) ->
       label == func.encode_label the_label ==> (func.apply_global_pred gpred labeled_data <==> func.apply_local_pred lpred raw_data)
     | None -> True
+
+type bare_global_pred (func:split_predicate_input_values) =
+  func.labeled_data_t -> prop
+type bare_local_pred (func:split_predicate_input_values) =
+  func.raw_data_t -> prop
 
 val mk_global_pred_aux: func:split_predicate_input_values -> list (func.label_t & func.local_pred) -> bare_global_pred func
 let rec mk_global_pred_aux func l labeled_data =
@@ -52,6 +121,8 @@ let rec mk_global_pred_aux func l labeled_data =
       | None -> False
     in
     cur_prop \/ mk_global_pred_aux func t labeled_data
+
+/// Given a list of labels and local predicates, create the global predicate.
 
 val mk_global_pred: func:split_predicate_input_values -> list (func.label_t & func.local_pred) -> func.global_pred
 let mk_global_pred func l =
@@ -152,6 +223,9 @@ let rec disjointP_nil #a l =
   | [] -> ()
   | _::t -> disjointP_nil t
 
+/// Correctness theorem for `mk_global_pred`:
+/// the global predicate contains all the local predicates used to construct it.
+
 val mk_global_pred_correct:
   func:split_predicate_input_values -> lpreds:list (func.label_t & func.local_pred) -> the_label:func.label_t -> lpred:func.local_pred ->
   Lemma
@@ -184,6 +258,11 @@ let rec mk_global_pred_eq_aux func lpreds labeled_data =
     | None -> ()
     | Some (label, raw_data) -> ()
 
+/// Equivalence theorem for `mk_global_pred`.
+/// This may be useful to lift properties of the local predicates
+/// to property on the global predicate.
+/// (e.g. the predicate stays true when the trace grows.)
+
 val mk_global_pred_eq:
   func:split_predicate_input_values -> lpreds:list (func.label_t & func.local_pred) ->
   labeled_data:func.labeled_data_t ->
@@ -198,6 +277,10 @@ val mk_global_pred_eq:
 let mk_global_pred_eq func lpreds labeled_data =
   func.apply_mk_global_pred (mk_global_pred_aux func lpreds) labeled_data;
   mk_global_pred_eq_aux func lpreds labeled_data
+
+/// If a global predicate contains some local predicate,
+/// and the global predicate input decodes to a label for this local predicate,
+/// then the global predicate is equivalent to the local predicate on this input.
 
 val local_eq_global_lemma:
   func:split_predicate_input_values ->

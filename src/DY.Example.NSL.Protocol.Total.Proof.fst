@@ -8,6 +8,12 @@ open DY.Example.NSL.Protocol.Stateful
 
 #set-options "--fuel 0 --ifuel 0 --z3cliopt 'smt.qi.eager_threshold=100'"
 
+/// This module proves lemmas for the functions in DY.Example.NSL.Protocol.Total.
+/// They will in turn be used in the stateful invariant proofs
+/// in DY.Example.NSL.Protocol.Stateful.Proofs.
+
+(*** Cryptographic invariants ***)
+
 val nsl_crypto_usages: crypto_usages
 instance nsl_crypto_usages = default_crypto_usages
 
@@ -47,6 +53,8 @@ instance nsl_crypto_invs = {
   usages = nsl_crypto_usages;
   preds = nsl_crypto_preds;
 }
+
+(*** Proofs ***)
 
 val compute_message1_proof:
   tr:trace ->

@@ -7,7 +7,13 @@ open DY.Lib.State.Typed
 
 #set-options "--fuel 0 --ifuel 0"
 
+/// This module defines a generic state for maps.
+/// It will be used by DY.Lib.State.PKI or DY.Lib.State.PrivateKeys,
+/// but can also be useful when specifying a protocol.
+
 (*** Map state & invariants ***)
+
+/// The parameters necessary to define the map functions.
 
 noeq type map_types = {
   key: eqtype;
@@ -15,6 +21,9 @@ noeq type map_types = {
   value: Type0;
   ps_value: parser_serializer bytes value;
 }
+
+/// Type for the map predicate, which is used to define the state predicate.
+/// The map predicate relates a key and its associated value.
 
 noeq type map_predicate {|crypto_invariants|} (mt:map_types) = {
   pred: trace -> principal -> nat -> mt.key -> mt.value -> prop;

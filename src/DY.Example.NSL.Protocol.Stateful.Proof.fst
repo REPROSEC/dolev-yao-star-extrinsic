@@ -9,7 +9,12 @@ open DY.Example.NSL.Protocol.Stateful
 
 #set-options "--fuel 0 --ifuel 1 --z3rlimit 25  --z3cliopt 'smt.qi.eager_threshold=100'"
 
-(*** Trace predicates ***)
+/// This module proves invariant preservation
+/// for all the functions in DY.Example.NSL.Protocol.Stateful.
+
+(*** Trace invariants ***)
+
+/// The (local) state predicate.
 
 let nsl_session_pred: typed_session_pred nsl_session = {
   pred = (fun tr prin sess_id st ->
@@ -42,6 +47,8 @@ let nsl_session_pred: typed_session_pred nsl_session = {
   pred_knowable = (fun tr prin sess_id st -> ());
 }
 
+/// The (local) event predicate.
+
 let nsl_event_pred: event_predicate nsl_event =
   fun tr prin e ->
     match e with
@@ -72,15 +79,21 @@ let nsl_event_pred: event_predicate nsl_event =
       )
     )
 
+/// List of all local state predicates.
+
 let all_sessions = [
   (pki_label, typed_session_pred_to_session_pred (map_session_invariant pki_pred));
   (private_keys_label, typed_session_pred_to_session_pred (map_session_invariant private_keys_pred));
   (nsl_session_label, typed_session_pred_to_session_pred nsl_session_pred);
 ]
 
+/// List of all local event predicates.
+
 let all_events = [
   (event_nsl_event.tag, compile_event_pred nsl_event_pred)
 ]
+
+/// Create the global trace invariants.
 
 let nsl_trace_invs: trace_invariants (nsl_crypto_invs) = {
   state_pred = mk_state_predicate nsl_crypto_invs all_sessions;
@@ -91,6 +104,8 @@ instance nsl_protocol_invs: protocol_invariants = {
   crypto_invs = nsl_crypto_invs;
   trace_invs = nsl_trace_invs;
 }
+
+/// Lemmas that the global state predicate contains all the local ones
 
 val all_sessions_has_all_sessions: unit -> Lemma (norm [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP (has_session_pred nsl_protocol_invs) all_sessions))
 let all_sessions_has_all_sessions () =
@@ -107,6 +122,8 @@ let full_nsl_session_pred_has_private_keys_invariant = all_sessions_has_all_sess
 val full_nsl_session_pred_has_nsl_invariant: squash (has_typed_session_pred nsl_protocol_invs (nsl_session_label, nsl_session_pred))
 let full_nsl_session_pred_has_nsl_invariant = all_sessions_has_all_sessions ()
 
+/// Lemmas that the global event predicate contains all the local ones
+
 val all_events_has_all_events: unit -> Lemma (norm [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP (has_compiled_event_pred nsl_protocol_invs) all_events))
 let all_events_has_all_events () =
   assert_norm(List.Tot.no_repeats_p (List.Tot.map fst (all_events)));
@@ -118,7 +135,7 @@ let all_events_has_all_events () =
 val full_nsl_event_pred_has_nsl_invariant: squash (has_event_pred nsl_protocol_invs nsl_event_pred)
 let full_nsl_event_pred_has_nsl_invariant = all_events_has_all_events ()
 
-(*** Proof ***)
+(*** Proofs ***)
 
 val prepare_msg1_proof:
   tr:trace ->
@@ -281,7 +298,6 @@ val event_respond1_injective:
 let event_respond1_injective tr alice alice' bob n_a n_a' n_b = ()
 
 #push-options "--z3rlimit 50"
-#restart-solver
 val prepare_msg4:
   tr:trace ->
   global_sess_id:nsl_global_sess_ids -> bob:principal -> sess_id:nat -> msg_id:nat ->

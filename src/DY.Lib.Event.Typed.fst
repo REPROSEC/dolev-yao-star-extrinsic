@@ -5,6 +5,21 @@ open DY.Core
 open DY.Lib.SplitPredicate
 open DY.Lib.Comparse.Glue
 
+/// This module defines user-friendly API for protocol events.
+/// It does it in three ways.
+///
+/// First, the API uses the split predicate methodology,
+/// so that the global event predicate can be defined modularly
+/// (see DY.Lib.SplitPredicate).
+///
+/// Second, the API is integrated with Comparse,
+/// so that the event content is a high-level type
+/// instead of being a bare `bytes`.
+///
+/// Finally, the API rely on a typeclass
+/// that associate an F* to an event tag and message format.
+/// This removes some unnecessary boilerplate in the functions arguments.
+
 (*** Event typeclass ***)
 
 class event (a:Type0) = {

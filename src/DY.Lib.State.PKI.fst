@@ -8,6 +8,17 @@ open DY.Lib.State.Map
 
 #set-options "--fuel 1 --ifuel 1"
 
+/// This module defines a local Public-Key Infrastructure (PKI).
+/// Public keys we use in a protocol may be authenticated in various ways,
+/// for example by relying on certificate authorities (like TLS),
+/// or by relying on off-band authentication (like Signal).
+/// This authentication is abstracted away with this local PKI:
+/// when a key is authenticated in some way (we don't know how),
+/// we can add it to the local PKI store (using `install_public_key`).
+/// Afterward, when we retrieve the public key of some principal (using `get_public_key`),
+/// we will remember that it was authenticated beforehard
+/// (i.e. it satisfy the predicate `is_public_key_for`).
+
 (*** PKI types & invariants ***)
 
 [@@ with_bytes bytes]

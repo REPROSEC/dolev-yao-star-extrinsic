@@ -5,6 +5,14 @@ open DY.Core
 open DY.Lib
 open DY.Example.NSL.Protocol.Total
 
+/// This module implements the impure (or stateful) part of the NSL protocol.
+/// This effectively connects the pure code of NSL to the outside world,
+/// by handling network connections, state storage, or random generation.
+
+(*** State type ***)
+
+/// Type for the NSL state machine
+
 [@@ with_bytes bytes]
 type nsl_session =
   | InitiatorSentMsg1: b:principal -> n_a:bytes -> nsl_session
@@ -21,6 +29,11 @@ instance nsl_session_parseable_serializeable: parseable_serializeable bytes nsl_
 val nsl_session_label: string
 let nsl_session_label = "NSL.Session"
 
+(*** Event type ***)
+
+/// Type for the NSL protocol events.
+/// They will be used to write authentication security properties.
+
 [@@ with_bytes bytes]
 type nsl_event =
   | Initiate1: a:principal -> b:principal -> n_a:bytes -> nsl_event
@@ -35,6 +48,8 @@ instance event_nsl_event: event nsl_event = {
   tag = "NSL.Event";
   format = mk_parseable_serializeable ps_nsl_event;
 }
+
+(*** Stateful code ***)
 
 type nsl_global_sess_ids = {
   pki: nat;

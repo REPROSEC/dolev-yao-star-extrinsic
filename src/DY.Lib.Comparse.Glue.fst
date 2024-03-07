@@ -3,6 +3,10 @@ module DY.Lib.Comparse.Glue
 open Comparse
 open DY.Core
 
+/// This module instantiate Comparse with DY*'s bytes.
+
+/// The `bytes_like` instantiation on DY*'s bytes.
+
 instance bytes_like_bytes: bytes_like bytes = {
   length = length;
 
@@ -55,6 +59,8 @@ instance bytes_like_bytes: bytes_like bytes = {
   );
 }
 
+/// Compability of some DY*'s predicates with concat and split.
+
 val bytes_invariant_is_pre_compatible:
   {|crypto_invariants|} -> tr:trace ->
   Lemma
@@ -90,6 +96,8 @@ let is_knowable_by_is_pre_compatible #cinvs lab tr =
     (fun b1 b2 -> concat_preserves_knowability lab tr b1 b2)
     (fun b i -> split_preserves_knowability lab tr b i)
     (fun sz n -> (literal_to_bytes_is_publishable tr (FStar.Endianness.n_to_be sz n)))
+
+/// Add an SMT pattern that serialization is injective.
 
 val parse_serialize_inv_lemma_smtpat:
   #bytes:Type0 -> {|bl:bytes_like bytes|} ->

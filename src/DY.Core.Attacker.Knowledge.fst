@@ -9,19 +9,41 @@ open DY.Core.Label
 
 #set-options "--fuel 1 --ifuel 0"
 
+/// This modules defines the knowledge of the attacker,
+/// and the attacker knowledge theorem
+/// stating that an attacker only knows publishable value.
+///
+/// This is a crucial theorem for confidentiality proofs:
+/// if the attacker knows a secret bytestring,
+/// we deduce that the bytestring is publishable (attacker knowledge theorem),
+/// meaning that its label flows to public (by definition of publishability),
+/// which in turn will imply that some set of principals have been compromised (property of labels).
+
+/// Auxillary prediate for the attacker knowledge:
+/// given a trace `tr`,
+/// can the attacker compute `msg`
+/// by applying at most `step` cryptographic functions?
+
 val attacker_knows_aux: nat -> trace -> bytes -> prop
 let rec attacker_knows_aux step tr msg =
+  // In zero steps, the attacker knows:
   if step = 0 then (
+    // - messages sent on the network
     (
       msg_sent_on_network tr msg
-    ) \/ (
+    ) \/
+    // - states that the attacker has corrupt
+    (
       exists prin sess_id.
         is_corrupt tr (principal_state_label prin sess_id) /\
         state_was_set tr prin sess_id msg
-    ) \/ (
+    ) \/
+    // - public literals
+    (
       exists lit.
         msg == literal_to_bytes lit
     )
+  // The attacker can compute each cryptographic function in one step.
   ) else (
     // Use less steps (not super useful, but why not)
     attacker_knows_aux (step-1) tr msg \/
@@ -93,6 +115,11 @@ let rec attacker_knows_aux step tr msg =
     )
   )
 
+/// The predicate for attacker knowledge:
+/// given a trace `tr`,
+/// can the attacker compute a bytestring `msg`
+/// in any number of steps?
+
 [@@ "opaque_to_smt"]
 val attacker_knows: trace -> bytes -> prop
 let attacker_knows tr msg =
@@ -109,6 +136,10 @@ val move_requires_4
     : Lemma (p x y z w ==> q x y z w)
 let move_requires_4 #a #b #c #d #p #q pf x y z w =
   introduce p x y z w ==> q x y z w with _. pf x y z w
+
+/// Lemma for the base case of the attacker knowledge theorem:
+/// bytestrings that the attacker obtained by corruption
+/// are publishable.
 
 val corrupted_state_is_publishable:
   {|protocol_invariants|} ->
@@ -154,6 +185,9 @@ let rec attacker_only_knows_publishable_values_aux #invs step tr msg =
     ()
   )
 #pop-options
+
+/// In a trace that satisfy the trace invariant,
+/// every bytestring known by the attacker is publishable.
 
 val attacker_only_knows_publishable_values:
   {|protocol_invariants|} ->
