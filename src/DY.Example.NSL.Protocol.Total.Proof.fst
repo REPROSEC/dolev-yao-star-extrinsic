@@ -67,6 +67,8 @@ val compute_message1_proof:
     is_secret (join (principal_label alice) (principal_label bob)) tr n_a  /\
     // From random generation
     is_secret (principal_label alice) tr nonce /\
+    // From random generation
+    PkNonce? (get_usage nonce) /\
     // From PKI invariants
     is_encryption_key "NSL.PublicKey" (principal_label bob) tr pk_b
   )
@@ -123,6 +125,8 @@ val compute_message2_proof:
     is_secret (join (principal_label msg1.alice) (principal_label bob)) tr n_b /\
     // From the random generation
     is_secret (principal_label bob) tr nonce /\
+    // From the random generation
+    PkNonce? (get_usage nonce) /\
     // From the PKI
     is_encryption_key "NSL.PublicKey" (principal_label msg1.alice) tr pk_a
   )
@@ -185,6 +189,8 @@ val compute_message3_proof:
     is_knowable_by (join (principal_label alice) (principal_label bob)) tr n_b /\
     // From the random generation
     is_secret (principal_label alice) tr nonce /\
+    // From the random generation
+    PkNonce? (get_usage nonce) /\
     // From the PKI
     is_encryption_key "NSL.PublicKey" (principal_label bob) tr pk_b
   )

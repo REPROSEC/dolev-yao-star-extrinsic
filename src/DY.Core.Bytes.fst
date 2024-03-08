@@ -305,9 +305,15 @@ let rec bytes_invariant #cinvs tr b =
         // - the custom (protocol-specific) invariant hold (authentication)
         cinvs.preds.pkenc_pred tr pk msg /\
         // - the message is less secret than the decryption key
+        //   (this is crucial so that decryption preserve publishability)
         (get_label msg) `can_flow tr` (get_sk_label pk) /\
         // - the message is less secret than the nonce
-        (get_label msg) `can_flow tr` (get_label nonce)
+        //   (this is because the standard IND-CCA security assumption
+        //   do not give guarantees on the indistinguishability of the message
+        //   when the attacker knows the nonce)
+        (get_label msg) `can_flow tr` (get_label nonce) /\
+        // - the nonce has the correct usage (for the same reason as above)
+        PkNonce? (get_usage nonce)
       ) \/ (
         // Attacker case:
         // the attacker knows the nonce, key and message
@@ -328,7 +334,16 @@ let rec bytes_invariant #cinvs tr b =
         // - the key has the usage of signature key
         SigKey? (get_signkey_usage (Vk sk)) /\
         // - the custom (protocol-specific) invariant hold (authentication)
-        cinvs.preds.sign_pred tr (Vk sk) msg
+        cinvs.preds.sign_pred tr (Vk sk) msg /\
+        // - the nonce is more secret than the signature key
+        //   (this is because the standard EUF-CMA security assumption on signatures
+        //   do not have any guarantees when the nonce is leaked to the attacker,
+        //   in practice knowing the nonce used to sign a message
+        //   can be used to obtain the private key,
+        //   hence this restriction)
+        (get_label sk) `can_flow tr` (get_label nonce) /\
+        // - the nonce has the correct usage (for the same reason as above)
+        SigNonce? (get_usage nonce)
       ) \/ (
         // Attacker case:
         // the attacker knows the signature key, nonce and message
@@ -994,6 +1009,7 @@ val bytes_invariant_pk_enc:
     (get_label msg) `can_flow tr` (get_sk_label pk) /\
     (get_label msg) `can_flow tr` (get_label nonce) /\
     PkdecKey? (get_sk_usage pk) /\
+    PkNonce? (get_usage nonce) /\
     pkenc_pred tr pk msg
   )
   (ensures bytes_invariant tr (pk_enc pk nonce msg))
@@ -1173,7 +1189,9 @@ val bytes_invariant_sign:
     bytes_invariant tr msg /\
     bytes_invariant tr sk /\
     SigKey? (get_usage sk) /\
-    sign_pred tr (vk sk) msg
+    SigNonce? (get_usage nonce) /\
+    sign_pred tr (vk sk) msg /\
+    (get_label sk) `can_flow tr` (get_label nonce)
   )
   (ensures bytes_invariant tr (sign sk nonce msg))
   [SMTPat (bytes_invariant tr (sign sk nonce msg))]

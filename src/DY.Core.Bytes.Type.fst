@@ -27,7 +27,9 @@ open DY.Core.Label.Type
 
 type usage_ (bytes:Type0) =
   | SigKey: tag:string -> usage_ bytes
+  | SigNonce: usage_ bytes
   | PkdecKey: tag:string -> usage_ bytes
+  | PkNonce: usage_ bytes
   | AeadKey: tag:string -> usage_ bytes
   | NoUsage: usage_ bytes // baked-in None
 

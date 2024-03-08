@@ -168,7 +168,7 @@ let send_msg1_proof tr global_sess_id alice sess_id =
     let (Some (InitiatorSentMsg1 bob n_a), tr) = get_typed_state #nsl_session nsl_session_label alice sess_id tr in
     let (Some (pk_b, nonce), tr) = (
       let*? pk_b = get_public_key alice global_sess_id.pki (PkEnc "NSL.PublicKey") bob in
-      let* nonce = mk_rand NoUsage (principal_label alice) 32 in
+      let* nonce = mk_rand PkNonce (principal_label alice) 32 in
       return (Some (pk_b, nonce))
     ) tr in
     compute_message1_proof tr alice bob pk_b n_a nonce
@@ -219,7 +219,7 @@ let send_msg2_proof tr global_sess_id bob sess_id =
     let (Some (ResponderSentMsg2 alice n_a n_b), tr) = get_typed_state #nsl_session nsl_session_label bob sess_id tr in
     let (Some (pk_a, nonce), tr) = (
       let*? pk_a = get_public_key bob global_sess_id.pki (PkEnc "NSL.PublicKey") alice in
-      let* nonce = mk_rand NoUsage (principal_label bob) 32 in
+      let* nonce = mk_rand PkNonce (principal_label bob) 32 in
       return (Some (pk_a, nonce))
     ) tr in
     let msg = compute_message2 bob {n_a; alice;} pk_a n_b nonce in
@@ -274,7 +274,7 @@ let send_msg3_proof tr global_sess_id alice sess_id =
     let (Some (InitiatorSentMsg3 bob n_a n_b), tr) = get_typed_state #nsl_session nsl_session_label alice sess_id tr in
     let (Some (pk_b, nonce), tr) = (
       let*? pk_b = get_public_key alice global_sess_id.pki (PkEnc "NSL.PublicKey") bob in
-      let* nonce = mk_rand NoUsage (principal_label alice) 32 in
+      let* nonce = mk_rand PkNonce (principal_label alice) 32 in
       return (Some (pk_b, nonce))
     ) tr in
     let msg = compute_message3 alice bob pk_b n_b nonce in
