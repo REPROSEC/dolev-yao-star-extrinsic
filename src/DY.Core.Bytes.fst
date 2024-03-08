@@ -63,7 +63,7 @@ let rec length b =
     len
   | Concat left right ->
     length left + length right
-  | Aead key nonce msg ad ->
+  | AeadEnc key nonce msg ad ->
     16 + length msg
   | Pk sk ->
     32
@@ -102,7 +102,7 @@ let get_usage #cusages b =
   match b with
   | Rand usg label len time ->
     usg
-  | _ -> Unknown
+  | _ -> NoUsage
 
 /// Obtain the label of a given bytestring.
 
@@ -116,7 +116,7 @@ let rec get_label #cusages b =
     label
   | Concat left right ->
     meet (get_label left) (get_label right)
-  | Aead key nonce msg ad ->
+  | AeadEnc key nonce msg ad ->
     public
   | Pk sk ->
     public
@@ -147,7 +147,7 @@ val get_sk_usage: {|crypto_usages|} -> bytes -> GTot usage
 let get_sk_usage #cusages pk =
   match pk with
   | Pk sk -> get_usage sk
-  | _ -> Unknown
+  | _ -> NoUsage
 
 /// Obtain the label of the corresponding signature key of a verification key.
 /// Although the verification key label is public,
@@ -167,7 +167,7 @@ val get_signkey_usage: {|crypto_usages|} -> bytes -> GTot usage
 let get_signkey_usage #cusages pk =
   match pk with
   | Vk sk -> get_usage sk
-  | _ -> Unknown
+  | _ -> NoUsage
 
 /// Customizable predicates stating how cryptographic functions may be used
 /// by honest principals.
@@ -263,7 +263,7 @@ let rec bytes_invariant #cinvs tr b =
   | Concat left right ->
     bytes_invariant tr left /\
     bytes_invariant tr right
-  | Aead key nonce msg ad ->
+  | AeadEnc key nonce msg ad ->
     bytes_invariant tr key /\
     bytes_invariant tr nonce /\
     bytes_invariant tr msg /\
@@ -357,7 +357,7 @@ let rec bytes_invariant_later #cinvs tr1 tr2 msg =
   | Concat left right ->
     bytes_invariant_later tr1 tr2 left;
     bytes_invariant_later tr1 tr2 right
-  | Aead key nonce msg ad -> (
+  | AeadEnc key nonce msg ad -> (
     bytes_invariant_later tr1 tr2 key;
     bytes_invariant_later tr1 tr2 nonce;
     bytes_invariant_later tr1 tr2 msg;
@@ -701,7 +701,7 @@ let split_preserves_knowability #cinvs lab tr b i =
 [@@"opaque_to_smt"]
 val aead_enc: bytes -> bytes -> bytes -> bytes -> bytes
 let aead_enc key nonce msg ad =
-  Aead key nonce msg ad
+  AeadEnc key nonce msg ad
 
 /// Destructor.
 
@@ -709,7 +709,7 @@ let aead_enc key nonce msg ad =
 val aead_dec: bytes -> bytes -> bytes -> bytes -> option bytes
 let aead_dec key nonce msg ad =
   match msg with
-  | Aead key' nonce' res ad' ->
+  | AeadEnc key' nonce' res ad' ->
     if key = key' && nonce = nonce' && ad = ad' then
       Some res
     else

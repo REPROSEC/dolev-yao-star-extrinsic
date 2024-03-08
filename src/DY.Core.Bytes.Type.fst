@@ -25,13 +25,11 @@ open DY.Core.Label.Type
 /// At the end, this usage string may play a role in the security proof
 /// via the protocol invariants.
 
-// TODO: change `label` to `tag`, otherwise it is confusing with security labels?
 type usage_ (bytes:Type0) =
-  | SigKey: label:string -> usage_ bytes
-  | PkdecKey: label:string -> usage_ bytes
-  | AeadKey: label:string -> usage_ bytes
-  // TODO: rename to NoUsage, otherwise it is confusing?
-  | Unknown: usage_ bytes // baked-in None
+  | SigKey: tag:string -> usage_ bytes
+  | PkdecKey: tag:string -> usage_ bytes
+  | AeadKey: tag:string -> usage_ bytes
+  | NoUsage: usage_ bytes // baked-in None
 
 /// The bytes term.
 /// It is similar to the one you would find in other symbolic analysis tools.
@@ -56,8 +54,7 @@ type bytes =
   | Concat: left:bytes -> right:bytes -> bytes
 
   // Authenticated (private key) Encryption with Additional Data
-  // TODO: should be AeadEnc?
-  | Aead: key:bytes -> nonce:bytes -> msg:bytes -> ad:bytes -> bytes
+  | AeadEnc: key:bytes -> nonce:bytes -> msg:bytes -> ad:bytes -> bytes
 
   // Public key encryption
   | Pk: sk:bytes -> bytes
