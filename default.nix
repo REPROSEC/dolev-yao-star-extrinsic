@@ -7,7 +7,6 @@ let
       lib.sources.sourceByRegex ./. [
         "Makefile"
         "src"
-        "src/DY.Misc.*"
         "src/DY.Core.*"
         "src/DY.Lib.*"
       ]
