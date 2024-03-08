@@ -34,13 +34,37 @@ open DY.Core.Trace.Type
 /// This notion of "less secret" is lifted to labels,
 /// using the flow relation (`can_flow`).
 
+
+val get_principal: pre_label -> option principal
+let get_principal l =
+  match l with
+  | P p -> Some p
+  | S p _ -> Some p
+
+val get_session: pre_label -> option nat
+let get_session l =
+  match l with
+  | P _ -> None
+  | S _ s -> Some s
+
+/// When is a pre-label less secret than another?
+/// This encodes the fact that `P p` is less secret than `S p s`.
+
+val pre_can_flow:
+  pre_label -> pre_label ->
+  prop
+let pre_can_flow x y =
+  match x with
+  | P p -> Some p == get_principal y
+  | S p s -> Some p == get_principal y /\ Some s == get_session y
+
 /// A pre-label is corrupt when there exists a corresponding corruption event in the trace.
 
 [@@"opaque_to_smt"]
 val pre_is_corrupt: trace -> pre_label -> prop
 let pre_is_corrupt tr who =
   exists prin sess_id.
-    (S prin sess_id) `pre_label_order.rel` who /\
+    who `pre_can_flow` (S prin sess_id) /\
     was_corrupt tr prin sess_id
 
 /// If the attacker knows a value with label `l`, then it must have done some corruptions in the trace.

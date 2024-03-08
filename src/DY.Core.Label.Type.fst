@@ -4,14 +4,6 @@ module DY.Core.Label.Type
 /// It is separated from functions and predicates on labels
 /// in order to avoid dependency cycles.
 
-// TODO remove me, this is an artifact of the previous `can_flow` construction
-noeq
-type order (a:Type) = {
-  rel: a -> a -> prop;
-  refl: x:a -> Lemma (rel x x);
-  trans: x:a -> y:a -> z:a -> Lemma (requires rel x y /\ rel y z) (ensures rel x z);
-}
-
 /// Principals are described using strings (such as "Alice").
 
 type principal = string
@@ -40,30 +32,6 @@ type principal = string
 type pre_label =
   | P: principal -> pre_label
   | S: principal -> nat -> pre_label
-
-val get_principal: pre_label -> option principal
-let get_principal l =
-  match l with
-  | P p -> Some p
-  | S p _ -> Some p
-
-val get_session: pre_label -> option nat
-let get_session l =
-  match l with
-  | P _ -> None
-  | S _ s -> Some s
-
-// TODO move me, I am lost and have nothing to do in this file
-val pre_label_order: order pre_label
-let pre_label_order = {
-  rel = (fun x y ->
-    match y with
-    | P p -> Some p == get_principal x
-    | S p s -> Some p == get_principal x /\ Some s == get_session x
-  );
-  refl = (fun x -> ());
-  trans = (fun x y z -> ());
-}
 
 /// Labels are roughly a free lattice on pre-labels,
 /// with lower bound (meet) and upper bound (join),
