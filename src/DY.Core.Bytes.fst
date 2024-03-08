@@ -304,9 +304,9 @@ let rec bytes_invariant #cinvs tr b =
         PkdecKey? (get_sk_usage pk) /\
         // - the custom (protocol-specific) invariant hold (authentication)
         cinvs.preds.pkenc_pred tr pk msg /\
-        // - the message is more secret than the decryption key
+        // - the message is less secret than the decryption key
         (get_label msg) `can_flow tr` (get_sk_label pk) /\
-        // - the message is more secret than the nonce
+        // - the message is less secret than the nonce
         (get_label msg) `can_flow tr` (get_label nonce)
       ) \/ (
         // Attacker case:
