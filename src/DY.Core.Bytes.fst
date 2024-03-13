@@ -75,14 +75,26 @@ let rec length b =
     64
   | Hash msg ->
     32
+  | DhPub sk ->
+    32
+  | Dh sk pk ->
+    32
 
 /// Customizable functions stating how labels and usages evolve
 /// when using some cryptographic functions.
 
 class crypto_usages = {
-   [@@@FStar.Tactics.Typeclasses.no_method]
-   /// nothing here yet, this will be useful to implement KDF
-  __nothing: unit;
+  dh_known_peer_usage: string -> string -> usage;
+  dh_unknown_peer_usage: string -> usage;
+  dh_known_peer_usage_commutes:
+    s1:string -> s2:string -> Lemma
+    (dh_known_peer_usage s1 s2 == dh_known_peer_usage s2 s1)
+  ;
+  dh_unknown_peer_usage_implies:
+    s1:string -> s2:string -> Lemma
+    (requires dh_unknown_peer_usage s1 =!= NoUsage)
+    (ensures dh_known_peer_usage s1 s2 == dh_unknown_peer_usage s1)
+  ;
 }
 
 /// Default (empty) usage functions, that can be used like this:
@@ -90,22 +102,43 @@ class crypto_usages = {
 
 val default_crypto_usages: crypto_usages
 let default_crypto_usages = {
-  __nothing = ();
+  dh_known_peer_usage = (fun s1 s2 -> NoUsage);
+  dh_unknown_peer_usage = (fun s1 -> NoUsage);
+  dh_known_peer_usage_commutes = (fun s1 s2 -> ());
+  dh_unknown_peer_usage_implies = (fun s1 s2 -> ());
 }
 
 /// Obtain the usage of a given bytestring.
 /// See DY.Core.Bytes.Type for more explanations.
 
+#push-options "--ifuel 2"
 [@@"opaque_to_smt"]
-val get_usage: {|crypto_usages|} -> bytes -> GTot usage
-let get_usage #cusages b =
+val get_usage: {|crypto_usages|} -> b:bytes -> GTot usage
+let rec get_usage #cusages b =
   match b with
   | Rand usg label len time ->
     usg
+  | Dh sk1 (DhPub sk2) -> (
+    match get_usage sk1, get_usage sk2 with
+    | DhKey s1, DhKey s2 ->
+      dh_known_peer_usage s1 s2
+    | DhKey s, _
+    | _, DhKey s ->
+      dh_unknown_peer_usage s
+    | _, _ ->
+      NoUsage
+  )
+  | Dh sk pk -> (
+    match get_usage sk with
+    | DhKey s -> dh_unknown_peer_usage s
+    | _ -> NoUsage
+  )
   | _ -> NoUsage
+#pop-options
 
 /// Obtain the label of a given bytestring.
 
+#push-options "--ifuel 2"
 [@@"opaque_to_smt"]
 val get_label: {|crypto_usages|} -> bytes -> GTot label
 let rec get_label #cusages b =
@@ -128,6 +161,13 @@ let rec get_label #cusages b =
     get_label msg
   | Hash msg ->
     get_label msg
+  | DhPub sk ->
+    public
+  | Dh sk1 (DhPub sk2) ->
+    join (get_label sk1) (get_label sk2)
+  | Dh sk pk ->
+    public
+#pop-options
 
 /// Obtain the label of the corresponding decryption key of an encryption key.
 /// Although the encryption key label is public,
@@ -168,6 +208,27 @@ let get_signkey_usage #cusages pk =
   match pk with
   | Vk sk -> get_usage sk
   | _ -> NoUsage
+
+/// Obtain the label of the corresponding DH private key of a DH public key.
+/// Although the DH public key label is public,
+/// this is useful to reason on the corresponding DH signature key label.
+
+[@@"opaque_to_smt"]
+val get_dh_label: {|crypto_usages|} -> bytes -> GTot label
+let get_dh_label #cusages pk =
+  match pk with
+  | DhPub sk -> get_label sk
+  | _ -> public
+
+/// Same as above, for usage.
+
+[@@"opaque_to_smt"]
+val get_dh_usage: {|crypto_usages|} -> bytes -> GTot usage
+let get_dh_usage #cusages pk =
+  match pk with
+  | DhPub sk -> get_usage sk
+  | _ -> NoUsage
+
 
 /// Customizable predicates stating how cryptographic functions may be used
 /// by honest principals.
@@ -354,6 +415,35 @@ let rec bytes_invariant #cinvs tr b =
     )
   | Hash msg ->
     bytes_invariant tr msg
+  | DhPub sk ->
+    bytes_invariant tr sk
+  | Dh sk1 (DhPub sk2) ->
+    bytes_invariant tr sk1 /\
+    bytes_invariant tr sk2 /\
+    (
+      (
+        // Honest case:
+        // - one of the keys have the correct usage
+        DhKey? (get_usage sk1) \/
+        DhKey? (get_usage sk2)
+      ) \/ (
+        // Attacker case:
+        // the attacker knows one of the secret keys
+        (get_label sk1) `can_flow tr` public \/
+        (get_label sk2) `can_flow tr` public
+      )
+    )
+  | Dh sk pk ->
+    bytes_invariant tr pk /\
+    bytes_invariant tr sk /\
+    (get_label pk) `can_flow tr` public /\
+    (
+      (
+        DhKey? (get_usage sk)
+      ) \/ (
+        (get_label sk) `can_flow tr` public
+      )
+    )
 
 /// The bytes invariant is preserved as the trace grows.
 
@@ -403,6 +493,14 @@ let rec bytes_invariant_later #cinvs tr1 tr2 msg =
   )
   | Hash msg ->
     bytes_invariant_later tr1 tr2 msg
+  | DhPub sk ->
+    bytes_invariant_later tr1 tr2 sk
+  | Dh sk1 (DhPub sk2) ->
+    bytes_invariant_later tr1 tr2 sk1;
+    bytes_invariant_later tr1 tr2 sk2
+  | Dh sk pk ->
+    bytes_invariant_later tr1 tr2 pk;
+    bytes_invariant_later tr1 tr2 sk
 
 (*** Various predicates ***)
 
@@ -1298,3 +1396,213 @@ val hash_injective:
   // with [SMTPat (hash msg)].
 let hash_injective msg1 msg2 =
   normalize_term_spec hash
+
+(*** Diffie-Hellman ***)
+
+/// Constructor.
+
+[@@"opaque_to_smt"]
+val dh_pk: bytes -> bytes
+let dh_pk sk =
+  DhPub sk
+
+/// Constructor.
+
+[@@"opaque_to_smt"]
+val dh: bytes -> bytes -> bytes
+let dh sk pk =
+  match pk with
+  | DhPub sk2 ->
+    if sk `DY.Core.Internal.Ord.is_less_than` sk2 then
+      Dh sk (DhPub sk2)
+    else
+      Dh sk2 (DhPub sk)
+  | _ ->
+    Dh sk pk
+
+/// Symbolic reduction rule.
+
+val dh_shared_secret_lemma:
+  x:bytes -> y:bytes ->
+  Lemma (dh x (dh_pk y) == dh y (dh_pk x))
+let dh_shared_secret_lemma x y =
+  reveal_opaque (`%dh_pk) (dh_pk);
+  reveal_opaque (`%dh) (dh);
+  DY.Core.Internal.Ord.is_less_than_total x y;
+  FStar.Classical.move_requires_2 DY.Core.Internal.Ord.is_less_than_antisym x y
+
+/// Lemma for attacker knowledge theorem.
+
+val dh_pk_preserves_publishability:
+  {|crypto_invariants|} -> tr:trace ->
+  sk:bytes ->
+  Lemma
+  (requires is_publishable tr sk)
+  (ensures is_publishable tr (dh_pk sk))
+let dh_pk_preserves_publishability tr sk =
+  reveal_opaque (`%dh_pk) (dh_pk);
+  normalize_term_spec bytes_invariant;
+  normalize_term_spec get_label
+
+/// Lemma for attacker knowledge theorem.
+
+val dh_preserves_publishability:
+  {|crypto_invariants|} -> tr:trace ->
+  sk:bytes -> pk:bytes ->
+  Lemma
+  (requires
+    is_publishable tr sk /\
+    is_publishable tr pk
+  )
+  (ensures is_publishable tr (dh sk pk))
+let dh_preserves_publishability tr sk pk =
+  reveal_opaque (`%dh_pk) (dh_pk);
+  reveal_opaque (`%dh) (dh);
+  normalize_term_spec bytes_invariant;
+  normalize_term_spec get_label
+
+/// User lemma (dh_pk preserves bytes invariant)
+
+val bytes_invariant_dh_pk:
+  {|crypto_invariants|} -> tr:trace ->
+  sk:bytes ->
+  Lemma
+  (requires bytes_invariant tr sk)
+  (ensures bytes_invariant tr (dh_pk sk))
+  [SMTPat (bytes_invariant tr (dh_pk sk))]
+let bytes_invariant_dh_pk tr sk =
+  reveal_opaque (`%dh_pk) (dh_pk);
+  normalize_term_spec bytes_invariant
+
+/// User lemma (DH public key is public)
+
+val get_label_dh_pk:
+  {|crypto_usages|} ->
+  sk:bytes ->
+  Lemma
+  (ensures get_label (dh_pk sk) == public)
+  [SMTPat (get_label (dh_pk sk))]
+let get_label_dh_pk sk =
+  reveal_opaque (`%dh_pk) (dh_pk);
+  normalize_term_spec get_label
+
+/// User lemma (get_dh_label on DH public key ).
+
+val get_dh_label_dh_pk:
+  {|crypto_usages|} ->
+  sk:bytes ->
+  Lemma
+  (get_dh_label (dh_pk sk) == get_label sk)
+  [SMTPat (get_dh_label (dh_pk sk))]
+let get_dh_label_dh_pk sk =
+  reveal_opaque (`%dh_pk) (dh_pk);
+  reveal_opaque (`%get_dh_label) (get_dh_label)
+
+/// User lemma (get_dh_usage on DH public key ).
+
+val get_dh_usage_dh_pk:
+  {|crypto_usages|} ->
+  sk:bytes ->
+  Lemma
+  (get_dh_usage (dh_pk sk) == get_usage sk)
+  [SMTPat (get_dh_usage (dh_pk sk))]
+let get_dh_usage_dh_pk sk =
+  reveal_opaque (`%dh_pk) (dh_pk);
+  reveal_opaque (`%get_dh_usage) (get_dh_usage)
+
+/// User lemma (dh bytes invariant)
+
+val bytes_invariant_dh:
+  {|crypto_invariants|} -> tr:trace ->
+  sk:bytes -> pk:bytes ->
+  Lemma
+  (requires
+    bytes_invariant tr sk /\
+    DhKey? (get_usage sk) /\
+    is_publishable tr pk
+  )
+  (ensures bytes_invariant tr (dh sk pk))
+  [SMTPat (bytes_invariant tr (dh sk pk))]
+let bytes_invariant_dh tr sk pk =
+  reveal_opaque (`%dh_pk) (dh_pk);
+  reveal_opaque (`%dh) (dh);
+  normalize_term_spec bytes_invariant
+
+/// User lemma (dh bytes label)
+
+// TODO: this lemma would benefit a notion of "equivalent label"
+#push-options "--z3rlimit 25"
+val get_label_dh:
+  {|crypto_usages|} ->
+  sk:bytes -> pk:bytes ->
+  Lemma
+  (ensures
+    forall tr.
+    (get_label (dh sk pk)) `can_flow tr` ((get_label sk) `join` (get_dh_label pk)) /\
+    ((get_label sk) `join` (get_dh_label pk)) `can_flow tr` (get_label (dh sk pk))
+  )
+  [SMTPat (get_label (dh sk pk))]
+let get_label_dh sk pk =
+  reveal_opaque (`%dh_pk) (dh_pk);
+  reveal_opaque (`%dh) (dh);
+  normalize_term_spec get_dh_label;
+  normalize_term_spec get_label;
+  let join_commute_lemma (l1:label) (l2:label) (tr:trace):
+    Lemma ((join l1 l2) `can_flow tr` (join l2 l1))
+    =
+    join_eq tr l1 l2 (join l1 l2);
+    join_eq tr l2 l1 (join l2 l1)
+  in
+  FStar.Classical.forall_intro (join_commute_lemma (get_label sk) (get_dh_label pk));
+  FStar.Classical.forall_intro (join_commute_lemma (get_dh_label pk) (get_label sk))
+#pop-options
+
+
+/// User lemma (dh bytes usage with known peer)
+
+val get_usage_dh_known_peer:
+  {|crypto_usages|} ->
+  sk:bytes -> pk:bytes ->
+  Lemma
+  (requires
+    DhKey? (get_usage sk) /\
+    DhKey? (get_dh_usage pk)
+  )
+  (ensures (
+    let DhKey sk_tag = get_usage sk in
+    let DhKey pk_tag = get_dh_usage pk in
+    get_usage (dh sk pk) == dh_known_peer_usage sk_tag pk_tag
+  ))
+  [SMTPat (get_usage (dh sk pk))]
+let get_usage_dh_known_peer sk pk =
+  reveal_opaque (`%dh_pk) (dh_pk);
+  reveal_opaque (`%dh) (dh);
+  normalize_term_spec get_dh_usage;
+  normalize_term_spec get_usage;
+  let DhKey sk_tag = get_usage sk in
+  let DhKey pk_tag = get_dh_usage pk in
+  dh_known_peer_usage_commutes sk_tag pk_tag
+
+/// User lemma (dh bytes usage with unknown peer)
+
+val get_usage_dh_unknown_peer:
+  {|crypto_usages|} ->
+  sk:bytes -> pk:bytes ->
+  Lemma
+  (requires
+    DhKey? (get_usage sk) /\ (
+    let DhKey sk_tag = get_usage sk in
+    dh_unknown_peer_usage sk_tag <> NoUsage
+  ))
+  (ensures (
+    let DhKey sk_tag = get_usage sk in
+    get_usage (dh sk pk) == dh_unknown_peer_usage sk_tag
+  ))
+  [SMTPat (get_usage (dh sk pk))]
+let get_usage_dh_unknown_peer sk pk =
+  reveal_opaque (`%dh_pk) (dh_pk);
+  reveal_opaque (`%dh) (dh);
+  normalize_term_spec get_dh_usage;
+  normalize_term_spec get_usage;
+  let DhKey sk_tag = get_usage sk in
+  FStar.Classical.forall_intro (FStar.Classical.move_requires (dh_unknown_peer_usage_implies sk_tag))

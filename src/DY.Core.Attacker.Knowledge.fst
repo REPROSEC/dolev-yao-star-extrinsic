@@ -112,6 +112,17 @@ let rec attacker_knows_aux step tr msg =
       exists buf.
         msg == hash buf /\
         attacker_knows_aux (step-1) tr buf
+    ) \/
+    // Diffie-Hellman
+    (
+      exists sk.
+        msg == dh_pk sk /\
+        attacker_knows_aux (step-1) tr sk
+    ) \/ (
+      exists sk pk.
+        msg == dh sk pk /\
+        attacker_knows_aux (step-1) tr sk /\
+        attacker_knows_aux (step-1) tr pk
     )
   )
 
@@ -182,6 +193,8 @@ let rec attacker_only_knows_publishable_values_aux #invs step tr msg =
     FStar.Classical.forall_intro   (FStar.Classical.move_requires   (vk_preserves_publishability tr));
     FStar.Classical.forall_intro_3 (FStar.Classical.move_requires_3 (sign_preserves_publishability tr));
     FStar.Classical.forall_intro   (FStar.Classical.move_requires   (hash_preserves_publishability tr));
+    FStar.Classical.forall_intro   (FStar.Classical.move_requires   (dh_pk_preserves_publishability tr));
+    FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (dh_preserves_publishability tr));
     ()
   )
 #pop-options
