@@ -56,3 +56,35 @@ val meet_always_commutes:
   ((l1 `meet` l2) `always_equivalent` (l2 `meet` l1))
 let meet_always_commutes l1 l2 =
   introduce_always_equivalent (l1 `meet` l2) (l2 `meet` l1) (fun tr -> meet_commutes tr l1 l2)
+
+val join_flows_to_left:
+  tr:trace ->
+  l1:label -> l2:label ->
+  Lemma ((l1 `join` l2) `can_flow tr` l1)
+  [SMTPat ((l1 `join` l2) `can_flow tr` l1)]
+let join_flows_to_left tr l1 l2 =
+  join_eq tr l1 l2 (join l1 l2)
+
+val join_flows_to_right:
+  tr:trace ->
+  l1:label -> l2:label ->
+  Lemma ((l1 `join` l2) `can_flow tr` l2)
+  [SMTPat ((l1 `join` l2) `can_flow tr` l2)]
+let join_flows_to_right tr l1 l2 =
+  join_eq tr l1 l2 (join l1 l2)
+
+val left_flows_to_meet:
+  tr:trace ->
+  l1:label -> l2:label ->
+  Lemma (l1 `can_flow tr` (l1 `meet` l2))
+  [SMTPat (l1 `can_flow tr` (l1 `meet` l2))]
+let left_flows_to_meet tr l1 l2 =
+  meet_eq tr (meet l1 l2) l1 l2
+
+val right_flows_to_meet:
+  tr:trace ->
+  l1:label -> l2:label ->
+  Lemma (l2 `can_flow tr` (l1 `meet` l2))
+  [SMTPat (l2 `can_flow tr` (l1 `meet` l2))]
+let right_flows_to_meet tr l1 l2 =
+  meet_eq tr (meet l1 l2) l1 l2
