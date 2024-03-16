@@ -60,7 +60,7 @@ let rec length b =
   match b with
   | Literal buf ->
     Seq.length buf
-  | Rand usg label len time ->
+  | Rand usg len time ->
     len
   | Concat left right ->
     length left + length right
@@ -117,7 +117,7 @@ let default_crypto_usages = {
 val get_usage: {|crypto_usages|} -> b:bytes -> GTot usage
 let rec get_usage #cusages b =
   match b with
-  | Rand usg label len time ->
+  | Rand usg len time ->
     usg
   | Dh sk1 (DhPub sk2) -> (
     match get_usage sk1, get_usage sk2 with
@@ -146,8 +146,8 @@ let rec get_label #cusages b =
   match b with
   | Literal buf ->
     public
-  | Rand usg label len time ->
-    label
+  | Rand usg len time ->
+    RandLabelAt time
   | Concat left right ->
     meet (get_label left) (get_label right)
   | AeadEnc key nonce msg ad ->
@@ -319,9 +319,9 @@ let rec bytes_invariant #cinvs tr b =
   match b with
   | Literal buf ->
     True
-  | Rand usage label len time ->
+  | Rand usage len time ->
     // Random bytes correspond to an event
-    event_at tr time (RandGen usage label len)
+    exists lab. event_at tr time (RandGen usage lab len)
   | Concat left right ->
     bytes_invariant tr left /\
     bytes_invariant tr right
@@ -459,7 +459,7 @@ let rec bytes_invariant_later #cinvs tr1 tr2 msg =
   normalize_term_spec bytes_invariant;
   match msg with
   | Literal buf -> ()
-  | Rand usage label len time -> ()
+  | Rand usage len time -> ()
   | Concat left right ->
     bytes_invariant_later tr1 tr2 left;
     bytes_invariant_later tr1 tr2 right
@@ -530,13 +530,13 @@ let is_publishable #cinvs tr b =
 
 val is_secret: {|crypto_invariants|} -> label -> trace -> bytes -> prop
 let is_secret #cinvs lab tr b =
-  bytes_invariant tr b /\ (get_label b) == lab
+  bytes_invariant tr b /\ (get_label b) `equivalent tr` lab
 
 /// Shorthand predicates for the various type of keys.
 
 val is_verification_key: {|crypto_invariants|} -> string -> label -> trace -> bytes -> prop
 let is_verification_key #cinvs usg lab tr b =
-  is_publishable tr b /\ (get_signkey_label b) == lab /\
+  is_publishable tr b /\ (get_signkey_label b) `equivalent tr` lab /\
   get_signkey_usage b == SigKey usg
 
 val is_signature_key: {|crypto_invariants|} -> string -> label -> trace -> bytes -> prop
@@ -546,7 +546,7 @@ let is_signature_key #cinvs usg lab tr b =
 
 val is_encryption_key: {|crypto_invariants|} -> string -> label -> trace -> bytes -> prop
 let is_encryption_key #cinvs usg lab tr b =
-  is_publishable tr b /\ (get_sk_label b) == lab /\
+  is_publishable tr b /\ (get_sk_label b) `equivalent tr` lab /\
   get_sk_usage b == PkdecKey usg
 
 val is_decryption_key: {|crypto_invariants|} -> string -> label -> trace -> bytes -> prop

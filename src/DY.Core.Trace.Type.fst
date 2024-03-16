@@ -30,11 +30,12 @@ open DY.Core.Label.Type
 
 /// The type for events in the trace.
 
+noeq
 type trace_event =
   // A message has been sent on the network.
   | MsgSent: bytes -> trace_event
   // A random number has been generated, with some usage and label.
-  | RandGen: usg:usage -> lab:label -> len:nat{len <> 0} -> trace_event
+  | RandGen: usg:usage -> lab:FStar.Ghost.erased label -> len:nat{len <> 0} -> trace_event
   // A state of a principal has been corrupt.
   | Corrupt: prin:principal -> sess_id:nat -> trace_event
   // A principal stored some state.
@@ -47,6 +48,7 @@ type trace_event =
 /// the trace is actually a reversed list.
 /// To avoid confusions, we define a custom inductive to swap the arguments of the "cons" constructor.
 
+noeq
 type trace =
   | Nil: trace
   | Snoc: trace -> trace_event -> trace
@@ -183,6 +185,24 @@ let event_exists tr e =
 
 /// An event in the trace stays here when the trace grows.
 
+val get_event_at_grows:
+  tr1:trace -> tr2:trace ->
+  i:nat ->
+  Lemma
+  (requires i < length tr1 /\ tr1 <$ tr2)
+  (ensures get_event_at tr1 i == get_event_at tr2 i)
+  [SMTPat (get_event_at tr1 i); SMTPat (tr1 <$ tr2)]
+let rec get_event_at_grows tr1 tr2 i =
+  reveal_opaque (`%grows) (grows);
+  norm_spec [zeta; delta_only [`%prefix]] (prefix);
+  if i >= length tr1 then ()
+  else if length tr1 >= length tr2 then ()
+  else (
+    let Snoc tr2_init _ = tr2 in
+    get_event_at_grows tr1 tr2_init i
+  )
+
+
 val event_at_grows:
   tr1:trace -> tr2:trace ->
   i:nat -> e:trace_event ->
@@ -190,15 +210,7 @@ val event_at_grows:
   (requires event_at tr1 i e /\ tr1 <$ tr2)
   (ensures event_at tr2 i e)
   [SMTPat (event_at tr1 i e); SMTPat (tr1 <$ tr2)]
-let rec event_at_grows tr1 tr2 i e =
-  reveal_opaque (`%grows) (grows);
-  norm_spec [zeta; delta_only [`%prefix]] (prefix);
-  if i >= length tr1 then ()
-  else if length tr1 >= length tr2 then ()
-  else (
-    let Snoc tr2_init _ = tr2 in
-    event_at_grows tr1 tr2_init i e
-  )
+let event_at_grows tr1 tr2 i e = ()
 
 /// Shorthand predicates.
 
@@ -248,6 +260,6 @@ let event_triggered_grows tr1 tr2 prin tag content = ()
 val rand_generated_at: trace -> nat -> bytes -> prop
 let rand_generated_at tr i b =
   match b with
-  | Rand usg lab len time ->
-    time == i /\ event_at tr i (RandGen usg lab len)
+  | Rand usg len time ->
+    time == i /\ (exists lab. event_at tr i (RandGen usg lab len))
   | _ -> False

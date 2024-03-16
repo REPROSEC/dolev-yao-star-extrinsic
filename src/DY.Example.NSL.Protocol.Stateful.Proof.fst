@@ -54,13 +54,13 @@ let nsl_event_pred: event_predicate nsl_event =
     match e with
     | Initiate1 alice bob n_a -> (
       prin == alice /\
-      get_label n_a == join (principal_label alice) (principal_label bob) /\
+      get_label n_a `equivalent tr` join (principal_label alice) (principal_label bob) /\
       0 < DY.Core.Trace.Type.length tr /\
       rand_generated_at tr (DY.Core.Trace.Type.length tr - 1) n_a
     )
     | Respond1 alice bob n_a n_b -> (
       prin == bob /\
-      get_label n_b == join (principal_label alice) (principal_label bob) /\
+      get_label n_b `equivalent tr` join (principal_label alice) (principal_label bob) /\
       0 < DY.Core.Trace.Type.length tr /\
       rand_generated_at tr (DY.Core.Trace.Type.length tr - 1) n_b
     )
@@ -292,7 +292,6 @@ let prepare_msg4 tr global_sess_id bob sess_id msg_id =
       match get_typed_state nsl_session_label bob sess_id tr with
       | (Some (ResponderSentMsg2 alice n_a n_b), tr) -> (
         decode_message3_proof tr alice bob msg sk_b n_b;
-
         match decode_message3 alice bob msg sk_b n_b with
         | None -> ()
         | Some msg3 -> (

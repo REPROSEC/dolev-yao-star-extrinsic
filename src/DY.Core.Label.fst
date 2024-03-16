@@ -3,6 +3,8 @@ module DY.Core.Label
 open DY.Core.Label.Type
 open DY.Core.Trace.Type
 
+#set-options "--fuel 1 --ifuel 1"
+
 /// This module define the notion of corruption of a label (`is_corrupt`),
 /// and the flow relation between labels (`can_flow`),
 /// along with theorems that can be used to reason on the label flow.
@@ -77,14 +79,75 @@ let pre_is_corrupt tr who =
 /// Given this intuition on the corruption predicate, its definition follows.
 
 [@@"opaque_to_smt"]
-val is_corrupt: trace -> label -> prop
-let rec is_corrupt tr l =
+val is_corrupt_aux: nat -> trace -> label -> prop
+let rec is_corrupt_aux steps tr l =
   match l with
   | Secret -> False
+  | RandLabelAt time ->
+    if length tr <= time then False
+    else if steps = 0 then False
+    else (
+      match get_event_at tr time with
+      | RandGen usg lab len ->
+        is_corrupt_aux (steps-1) tr lab
+      | _ -> False
+    )
   | State s -> pre_is_corrupt tr s
-  | Meet l1 l2 -> is_corrupt tr l1 /\ is_corrupt tr l2
-  | Join l1 l2 -> is_corrupt tr l1 \/ is_corrupt tr l2
+  | Meet l1 l2 -> is_corrupt_aux steps tr l1 /\ is_corrupt_aux steps tr l2
+  | Join l1 l2 -> is_corrupt_aux steps tr l1 \/ is_corrupt_aux steps tr l2
   | Public -> True
+
+[@@"opaque_to_smt"]
+val is_corrupt: trace -> label -> prop
+let is_corrupt tr l =
+  exists steps. is_corrupt_aux steps tr l
+
+val is_corrupt_aux_later:
+  steps:nat ->
+  tr1:trace -> tr2:trace ->
+  l:label ->
+  Lemma
+  (requires is_corrupt_aux steps tr1 l /\ tr1 <$ tr2)
+  (ensures is_corrupt_aux steps tr2 l)
+  [SMTPat (is_corrupt_aux steps tr1 l); SMTPat (tr1 <$ tr2)]
+let rec is_corrupt_aux_later steps tr1 tr2 l =
+  reveal_opaque (`%pre_is_corrupt) (pre_is_corrupt);
+  norm_spec [zeta; delta_only [`%is_corrupt_aux]] (is_corrupt_aux);
+  match l with
+  | Secret
+  | Public
+  | State _ -> ()
+  | RandLabelAt time -> (
+    let RandGen usg lab len = get_event_at tr1 time in
+    is_corrupt_aux_later (steps-1) tr1 tr2 lab
+  )
+  | Meet l1 l2
+  | Join l1 l2 ->
+    introduce is_corrupt_aux steps tr1 l1 ==> is_corrupt_aux steps tr2 l1 with _. is_corrupt_aux_later steps tr1 tr2 l1;
+    introduce is_corrupt_aux steps tr1 l2 ==> is_corrupt_aux steps tr2 l2 with _. is_corrupt_aux_later steps tr1 tr2 l2
+
+val is_corrupt_aux_more_steps:
+  steps1:nat -> steps2:nat ->
+  tr:trace ->
+  l:label ->
+  Lemma
+  (requires is_corrupt_aux steps1 tr l /\ steps1 <= steps2)
+  (ensures is_corrupt_aux steps2 tr l)
+let rec is_corrupt_aux_more_steps steps1 steps2 tr l =
+  reveal_opaque (`%pre_is_corrupt) (pre_is_corrupt);
+  norm_spec [zeta; delta_only [`%is_corrupt_aux]] (is_corrupt_aux);
+  match l with
+  | Secret
+  | Public
+  | State _ -> ()
+  | RandLabelAt time -> (
+    let RandGen usg lab len = get_event_at tr time in
+    is_corrupt_aux_more_steps (steps1-1) (steps2-1) tr lab
+  )
+  | Meet l1 l2
+  | Join l1 l2 ->
+    introduce is_corrupt_aux steps1 tr l1 ==> is_corrupt_aux steps2 tr l1 with _. is_corrupt_aux_more_steps steps1 steps2 tr l1;
+    introduce is_corrupt_aux steps1 tr l2 ==> is_corrupt_aux steps2 tr l2 with _. is_corrupt_aux_more_steps steps1 steps2 tr l2
 
 /// A key property of the corruption predicate is that it is monotone in the trace:
 /// if a label `l` is corrupt now (in the trace `t1`), it will stay corrupt in the future (in the trace `t2`).
@@ -96,17 +159,8 @@ val is_corrupt_later:
   (requires is_corrupt tr1 l /\ tr1 <$ tr2)
   (ensures is_corrupt tr2 l)
   [SMTPat (is_corrupt tr1 l); SMTPat (tr1 <$ tr2)]
-let rec is_corrupt_later tr1 tr2 l =
-  reveal_opaque (`%pre_is_corrupt) (pre_is_corrupt);
-  norm_spec [zeta; delta_only [`%is_corrupt]] (is_corrupt);
-  match l with
-  | Secret
-  | Public
-  | State _ -> ()
-  | Meet l1 l2
-  | Join l1 l2 ->
-    introduce is_corrupt tr1 l1 ==> is_corrupt tr2 l1 with _. is_corrupt_later tr1 tr2 l1;
-    introduce is_corrupt tr1 l2 ==> is_corrupt tr2 l2 with _. is_corrupt_later tr1 tr2 l2
+let is_corrupt_later tr1 tr2 l =
+  reveal_opaque (`%is_corrupt) (is_corrupt)
 
 /// A label `l1` can flow to a label `l2` when `l2` will always be more secret than `l1` in the future,
 /// or more precisely, when in the future, a corruption of `l2` implies a corruption of `l1`.
@@ -242,9 +296,21 @@ val meet_eq:
   (ensures meet y1 y2 `can_flow tr` x <==> (y1 `can_flow tr` x /\ y2 `can_flow tr` x))
   [SMTPat (meet y1 y2 `can_flow tr` x)] //Not sure about this
 let meet_eq tr x y1 y2 =
-  norm_spec [zeta; delta_only [`%is_corrupt]] (is_corrupt);
+  norm_spec [zeta; delta_only [`%is_corrupt_aux]] (is_corrupt_aux);
+  reveal_opaque (`%is_corrupt) (is_corrupt);
   reveal_opaque (`%can_flow) (can_flow);
-  reveal_opaque (`%meet) (meet)
+  reveal_opaque (`%meet) (meet);
+  introduce forall tr. is_corrupt tr y1 /\ is_corrupt tr y2 ==> is_corrupt tr (y1 `meet` y2) with  (
+    introduce _ ==> _ with _. (
+      eliminate exists steps1 steps2. is_corrupt_aux steps1 tr y1 /\ is_corrupt_aux steps2 tr y2
+      returns _
+      with _. (
+        let steps_max = if steps1 < steps2 then steps2 else steps1 in
+        is_corrupt_aux_more_steps steps1 steps_max tr y1;
+        is_corrupt_aux_more_steps steps2 steps_max tr y2
+      )
+    )
+  )
 
 /// `join` satisfy the upper bound property.
 
@@ -254,7 +320,8 @@ val join_eq:
   (ensures y `can_flow tr` join x1 x2 <==> (y `can_flow tr` x1 /\ y `can_flow tr` x2))
   [SMTPat (y `can_flow tr` join x1 x2)] //Not sure about this
 let join_eq tr x1 x2 y =
-  norm_spec [zeta; delta_only [`%is_corrupt]] (is_corrupt);
+  norm_spec [zeta; delta_only [`%is_corrupt_aux]] (is_corrupt_aux);
+  reveal_opaque (`%is_corrupt) (is_corrupt);
   reveal_opaque (`%can_flow) (can_flow);
   reveal_opaque (`%join) (join)
 
@@ -265,10 +332,12 @@ val flow_to_public_eq:
   Lemma
   (ensures l `can_flow tr` public <==> is_corrupt tr l)
   [SMTPat (l `can_flow tr` public)] //Not sure about this
-let flow_to_public_eq tr prin =
-  norm_spec [zeta; delta_only [`%is_corrupt]] (is_corrupt);
+let flow_to_public_eq tr l =
+  norm_spec [zeta; delta_only [`%is_corrupt_aux]] (is_corrupt_aux);
+  reveal_opaque (`%is_corrupt) (is_corrupt);
   reveal_opaque (`%can_flow) (can_flow);
-  reveal_opaque (`%public) (public)
+  reveal_opaque (`%public) (public);
+  assert(is_corrupt_aux 0 tr public)
 
 /// A principal flows to a particular state of this principal.
 
@@ -279,7 +348,8 @@ val principal_flow_to_principal_state:
   [SMTPat ((principal_label prin) `can_flow tr` (principal_state_label prin sess_id))]
 let principal_flow_to_principal_state tr prin sess_id =
   reveal_opaque (`%pre_is_corrupt) (pre_is_corrupt);
-  norm_spec [zeta; delta_only [`%is_corrupt]] (is_corrupt);
+  norm_spec [zeta; delta_only [`%is_corrupt_aux]] (is_corrupt_aux);
+  reveal_opaque (`%is_corrupt) (is_corrupt);
   normalize_term_spec can_flow;
   normalize_term_spec principal_label;
   normalize_term_spec principal_state_label
@@ -294,7 +364,8 @@ val join_flow_to_public_eq:
   (ensures (join x1 x2) `can_flow tr` public <==> x1 `can_flow tr` public \/ x2 `can_flow tr` public)
   [SMTPat ((join x1 x2) `can_flow tr` public)] //Not sure about this
 let join_flow_to_public_eq tr x1 x2 =
-  norm_spec [zeta; delta_only [`%is_corrupt]] (is_corrupt);
+  norm_spec [zeta; delta_only [`%is_corrupt_aux]] (is_corrupt_aux);
+  reveal_opaque (`%is_corrupt) (is_corrupt);
   reveal_opaque (`%can_flow) (can_flow);
   reveal_opaque (`%join) (join);
   reveal_opaque (`%public) (public)

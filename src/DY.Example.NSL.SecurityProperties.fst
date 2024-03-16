@@ -69,7 +69,8 @@ val n_a_secrecy:
   )
   (ensures is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob))
 let n_a_secrecy tr alice bob n_a =
-  attacker_only_knows_publishable_values tr n_a
+  attacker_only_knows_publishable_values tr n_a;
+  assert((join (principal_label alice) (principal_label bob)) `can_flow tr` public)
 
 /// The nonce n_b is unknown to the attacker,
 /// unless the attacker corrupted Alice or Bob.
@@ -87,4 +88,5 @@ val n_b_secrecy:
   )
   (ensures is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob))
 let n_b_secrecy tr alice bob n_b =
-  attacker_only_knows_publishable_values tr n_b
+  attacker_only_knows_publishable_values tr n_b;
+  assert((join (principal_label alice) (principal_label bob)) `can_flow tr` public)

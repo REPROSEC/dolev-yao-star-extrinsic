@@ -1,7 +1,5 @@
 module DY.Core.Bytes.Type
 
-open DY.Core.Label.Type
-
 /// This module defines the types associated with bytes.
 /// It is separated from functions and predicates on bytes
 /// in order to avoid dependency cycles.
@@ -51,7 +49,7 @@ and bytes =
   // Public values (strings, numbers, ...)
   | Literal: FStar.Seq.seq FStar.UInt8.t -> bytes
   // Randomly generated numbers. `time` is used to ensure two random numbers are distinct.
-  | Rand: usage:usage -> label:label -> len:nat{len <> 0} -> time:nat -> bytes
+  | Rand: usage:usage -> len:nat{len <> 0} -> time:nat -> bytes
 
   // Concatenation
   | Concat: left:bytes -> right:bytes -> bytes
@@ -91,7 +89,7 @@ let rec encode_usage usg =
 and encode_bytes b =
   match b with
   | Literal l -> 0::(encode_list [encode l])
-  | Rand usg lab len time -> 1::(encode_list [encode_usage usg; encode lab; encode (len <: nat); encode time])
+  | Rand usg len time -> 1::(encode_list [encode_usage usg; encode (len <: nat); encode time])
   | Concat left right -> 2::(encode_list [encode_bytes left; encode_bytes right])
   | AeadEnc key nonce msg ad -> 3::(encode_list [encode_bytes key; encode_bytes nonce; encode_bytes msg; encode_bytes ad])
   | Pk sk -> 4::(encode_list [encode_bytes sk])
@@ -129,11 +127,10 @@ and encode_bytes_inj b1 b2 =
   //);
   encode_inj_forall (list (list int)) ();
   encode_inj_forall (FStar.Seq.seq FStar.UInt8.t) ();
-  encode_inj_forall label ();
   encode_inj_forall nat ();
   match b1, b2 with
   | Literal _, Literal _ -> ()
-  | Rand _ _ _ _, Rand _ _ _ _ -> ()
+  | Rand _ _ _, Rand _ _ _ -> ()
   | Pk x1, Pk y1
   | Vk x1, Vk y1
   | Hash x1, Hash y1

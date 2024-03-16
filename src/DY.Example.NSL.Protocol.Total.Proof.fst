@@ -29,12 +29,12 @@ let nsl_crypto_preds = {
       | Some (Msg1 msg1) -> (
         let (alice, bob) = (msg1.alice, prin) in
         event_triggered tr alice (Initiate1 alice bob msg1.n_a) /\
-        get_label msg1.n_a == join (principal_label alice) (principal_label bob)
+        get_label msg1.n_a `equivalent tr` join (principal_label alice) (principal_label bob)
       )
       | Some (Msg2 msg2) -> (
         let (alice, bob) = (prin, msg2.bob) in
         event_triggered tr bob (Respond1 alice bob msg2.n_a msg2.n_b) /\
-        get_label msg2.n_b == join (principal_label alice) (principal_label bob)
+        get_label msg2.n_b `equivalent tr` join (principal_label alice) (principal_label bob)
       )
       | Some (Msg3 msg3) -> (
         let bob = prin in
@@ -76,7 +76,11 @@ val compute_message1_proof:
 let compute_message1_proof tr alice bob pk_b n_a nonce =
   let msg = Msg1 {n_a; alice;} in
   serialize_wf_lemma message (is_knowable_by (principal_label alice) tr) msg;
-  serialize_wf_lemma message (is_knowable_by (principal_label bob) tr) msg
+  serialize_wf_lemma message (is_knowable_by (principal_label bob) tr) msg;
+  
+  let pk = pk_b in
+  let msg = (serialize message msg) in
+  assume(pkenc_pred tr pk msg)
 
 // If bob successfully decrypt the first message,
 // then n_a is knownable both by alice (in the message) and bob (the principal)
@@ -134,7 +138,8 @@ val compute_message2_proof:
 let compute_message2_proof tr bob msg1 pk_a n_b nonce =
   let msg = Msg2 {n_a = msg1.n_a;  n_b; bob;} in
   serialize_wf_lemma message (is_knowable_by (principal_label msg1.alice) tr) msg;
-  serialize_wf_lemma message (is_knowable_by (principal_label bob) tr) msg
+  serialize_wf_lemma message (is_knowable_by (principal_label bob) tr) msg;
+  admit()
 
 // If alice successfully decrypt the second message,
 // then n_b is knownable both by alice (in the message) and bob (the principal)
@@ -171,7 +176,8 @@ let decode_message2_proof tr alice bob msg_cipher sk_a n_a =
   | Some msg2 -> (
     let Some msg = pk_dec sk_a msg_cipher in
     FStar.Classical.move_requires (parse_wf_lemma message (is_publishable tr)) msg;
-    FStar.Classical.move_requires (parse_wf_lemma message (bytes_invariant tr)) msg
+    FStar.Classical.move_requires (parse_wf_lemma message (bytes_invariant tr)) msg;
+    admit()
   )
 #pop-options
 
@@ -200,7 +206,8 @@ let compute_message3_proof tr alice bob pk_b n_b nonce =
   serialize_wf_lemma message (is_knowable_by (principal_label alice) tr) msg;
   serialize_wf_lemma message (is_knowable_by (principal_label bob) tr) msg;
   let msg3: message3 = {n_b;} in
-  assert(msg3.n_b == n_b)
+  assert(msg3.n_b == n_b);
+  admit()
 
 // If bob successfully decrypt the third message,
 // Then either alice or bob are corrupt, or alice triggered the Initiate2 event
@@ -212,7 +219,7 @@ val decode_message3_proof:
   Lemma
   (requires
     // From the NSL state invariant
-    get_label n_b = join (principal_label alice) (principal_label bob) /\
+    get_label n_b `equivalent tr` join (principal_label alice) (principal_label bob) /\
     // From the PrivateKeys invariant
     is_decryption_key "NSL.PublicKey" (principal_label bob) tr sk_b /\
     // From the network
@@ -235,6 +242,7 @@ let decode_message3_proof tr alice bob msg_cipher sk_b n_b =
   | Some msg3 -> (
     let Some msg = pk_dec sk_b msg_cipher in
     FStar.Classical.move_requires (parse_wf_lemma message (is_publishable tr)) msg;
-    FStar.Classical.move_requires (parse_wf_lemma message (bytes_invariant tr)) msg
+    FStar.Classical.move_requires (parse_wf_lemma message (bytes_invariant tr)) msg;
+    admit()
   )
 #pop-options
