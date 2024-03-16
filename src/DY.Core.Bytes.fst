@@ -4,6 +4,7 @@ open DY.Core.Bytes.Type
 open DY.Core.Trace.Type
 open DY.Core.Label.Type
 open DY.Core.Label
+open DY.Core.Label.Derived
 
 #set-options "--fuel 1 --ifuel 1"
 
@@ -1530,33 +1531,20 @@ let bytes_invariant_dh tr sk pk =
 
 /// User lemma (dh bytes label)
 
-// TODO: this lemma would benefit a notion of "equivalent label"
 #push-options "--z3rlimit 25"
 val get_label_dh:
   {|crypto_usages|} ->
   sk:bytes -> pk:bytes ->
   Lemma
-  (ensures
-    forall tr.
-    (get_label (dh sk pk)) `can_flow tr` ((get_label sk) `join` (get_dh_label pk)) /\
-    ((get_label sk) `join` (get_dh_label pk)) `can_flow tr` (get_label (dh sk pk))
-  )
+  (ensures (get_label (dh sk pk)) `always_equivalent` ((get_label sk) `join` (get_dh_label pk)))
   [SMTPat (get_label (dh sk pk))]
 let get_label_dh sk pk =
   reveal_opaque (`%dh_pk) (dh_pk);
   reveal_opaque (`%dh) (dh);
   normalize_term_spec get_dh_label;
   normalize_term_spec get_label;
-  let join_commute_lemma (l1:label) (l2:label) (tr:trace):
-    Lemma ((join l1 l2) `can_flow tr` (join l2 l1))
-    =
-    join_eq tr l1 l2 (join l1 l2);
-    join_eq tr l2 l1 (join l2 l1)
-  in
-  FStar.Classical.forall_intro (join_commute_lemma (get_label sk) (get_dh_label pk));
-  FStar.Classical.forall_intro (join_commute_lemma (get_dh_label pk) (get_label sk))
+  join_always_commutes (get_label sk) (get_dh_label pk)
 #pop-options
-
 
 /// User lemma (dh bytes usage with known peer)
 
