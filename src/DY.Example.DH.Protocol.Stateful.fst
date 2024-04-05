@@ -84,7 +84,7 @@ let send_msg2 global_sess_id bob session_id =
 
 // Alice prepares message 3
 //
-// This message has to verify the signature from message 2
+// This function has to verify the signature from message 2
 val prepare_msg3: dh_global_sess_ids -> principal -> principal -> nat -> nat -> crypto (option unit)
 let prepare_msg3 global_sess_id alice bob msg_id session_id =
     let*? session_state: dh_session = get_typed_state dh_session_label alice session_id in
