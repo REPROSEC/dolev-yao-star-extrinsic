@@ -90,7 +90,7 @@ let prepare_msg3 global_sess_id alice bob msg_id session_id =
     let*? session_state: dh_session = get_typed_state dh_session_label alice session_id in
     match session_state with
     | InitiatorSentMsg1 bob x -> (
-        let*? pk_b = get_public_key alice global_sess_id.pki (PkEnc "DH.PublicKey") bob in
+        let*? pk_b = get_public_key alice global_sess_id.pki (Verify "DH.PublicKey") bob in
         let*? msg = recv_msg msg_id in
         let gx = dh_pk x in
         let*? msg2: message2 = return (decode_message2 msg alice gx pk_b) in
@@ -119,7 +119,7 @@ let verify_msg3 global_sess_id alice bob msg_id session_id =
     let*? session_state: dh_session = get_typed_state dh_session_label bob session_id in
     match session_state with
     | ResponderSentMsg2 alice gx gy y -> (
-        let*? pk_a = get_public_key bob global_sess_id.pki (PkEnc "DH.PublicKey") alice in
+        let*? pk_a = get_public_key bob global_sess_id.pki (Verify "DH.PublicKey") alice in
         let*? msg = recv_msg msg_id in
         let*? msg3: message3 = return (decode_message3 msg bob gx gy pk_a) in
         set_typed_state dh_session_label bob session_id (ResponderReceivedMsg3 alice gx gy y <: dh_session);*
