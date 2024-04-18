@@ -3,9 +3,12 @@ FSTAR_HOME 	?= $(dir $(shell which fstar.exe))/..
 Z3 		?= $(shell which z3)
 COMPARSE_HOME 	?= $(DY_HOME)/../comparse
 
-SOURCE_DIR = src
+INNER_SOURCE_DIRS = core lib lib/comparse lib/event lib/state lib/utils
+SOURCE_DIRS = $(addprefix $(DY_HOME)/src/, $(INNER_SOURCE_DIRS))
+INNER_EXAMPLE_DIRS = nsl_pk
+EXAMPLE_DIRS = $(addprefix $(DY_HOME)/examples/, $(INNER_EXAMPLE_DIRS))
 
-INCLUDE_DIRS = $(SOURCE_DIR) $(COMPARSE_HOME)/src
+INCLUDE_DIRS = $(SOURCE_DIRS) $(EXAMPLE_DIRS) $(COMPARSE_HOME)/src
 FSTAR_INCLUDE_DIRS = $(addprefix --include , $(INCLUDE_DIRS))
 
 ADMIT ?=
@@ -34,8 +37,10 @@ clean:
 # Dependency analysis
 
 FSTAR_ROOTS = \
-  $(wildcard $(addsuffix /*.fsti,$(SOURCE_DIR))) \
-  $(wildcard $(addsuffix /*.fst,$(SOURCE_DIR)))
+  $(wildcard $(addsuffix /*.fsti,$(SOURCE_DIRS))) \
+  $(wildcard $(addsuffix /*.fst,$(SOURCE_DIRS))) \
+  $(wildcard $(addsuffix /*.fsti,$(EXAMPLE_DIRS))) \
+  $(wildcard $(addsuffix /*.fst,$(EXAMPLE_DIRS)))
 
 ifeq (,$(filter %-in,$(MAKECMDGOALS)))
 ifndef MAKE_RESTARTS

@@ -4,18 +4,18 @@
 
 ### The "core" DY\*
 
-In the namespace [`DY.Core`](src/DY.Core.fst),
+In the namespace [`DY.Core`](src/core/DY.Core.fst),
 we can find all functions and theorems needed to specify a cryptographic protocol and prove its security.
-To read and understand this module, you can start by reading the file [`DY.Core.fst`](src/DY.Core.fst).
+To read and understand this module, you can start by reading the file [`DY.Core.fst`](src/core/DY.Core.fst).
 
 ### The "lib" DY\*
 
 To improve the user experience of specifying cryptographic protocols and doing security proofs,
-we can find functions and theorems built on top of [`DY.Core`](src/DY.Core.fst) in [`DY.Lib`](src/DY.Lib.fst).
+we can find functions and theorems built on top of [`DY.Core`](src/core/DY.Core.fst) in [`DY.Lib`](src/lib/DY.Lib.fst).
 
 ### Examples
 
-The NSL protocol is proved secure in the namespace [`DY.Example.NSL`](src/DY.Example.NSL.SecurityProperties.fst).
+The NSL protocol is proved secure in the namespace [`DY.Example.NSL`](examples/nsl_pk/DY.Example.NSL.SecurityProperties.fst).
 
 ## How to build
 
