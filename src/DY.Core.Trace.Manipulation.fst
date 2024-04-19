@@ -140,6 +140,10 @@ let get_time =
 val send_msg: bytes -> crypto nat
 let send_msg msg =
   let* time = get_time in
+  let _ = IO.debug_print_string (
+      Printf.sprintf "{\"TraceID\": %d, \"Type\": \"Message\", \"Content\": \"%s\"}\n"
+        time (DY.Core.Printing.bytes_to_string msg)
+    ) in
   add_event (MsgSent msg);*
   return time
 
@@ -240,6 +244,12 @@ let corrupt_invariant #invs prin sess_id tr =
 val mk_rand: usg:usage -> lab:label -> len:nat{len <> 0} -> crypto bytes
 let mk_rand usg lab len =
   let* time = get_time in
+  let _ = IO.debug_print_string (
+      Printf.sprintf "{\"TraceID\": %d, \"Type\": \"Nonce\", \"Usage\": \"%s\", \"Label\": \"%s\"}\n" 
+        time 
+        (DY.Core.Printing.usage_to_string usg) 
+        (DY.Core.Printing.label_to_string lab)
+    ) in
   add_event (RandGen usg lab len);*
   return (Rand usg lab len time)
 
@@ -484,6 +494,11 @@ let get_state_state_invariant #invs prin sess_id tr =
 [@@ "opaque_to_smt"]
 val trigger_event: principal -> string -> bytes -> crypto unit
 let trigger_event prin tag content =
+  let* time = get_time in
+  let _ = (IO.debug_print_string (
+      Printf.sprintf "{\"TraceID\": %d, \"Type\": \"Event\", \"Principal\": \"%s\", \"Tag\": \"%s\", \"Content\": \"%s\"}\n" 
+        time prin tag (DY.Core.Printing.bytes_to_string content)
+    )) in
   add_event (Event prin tag content)
 
 /// Triggering a protocol event preserves the trace invariant
