@@ -5,7 +5,7 @@ COMPARSE_HOME 	?= $(DY_HOME)/../comparse
 
 INNER_SOURCE_DIRS = core lib lib/comparse lib/event lib/state lib/utils
 SOURCE_DIRS = $(addprefix $(DY_HOME)/src/, $(INNER_SOURCE_DIRS))
-INNER_EXAMPLE_DIRS = nsl_pk
+INNER_EXAMPLE_DIRS = nsl_pk dh
 EXAMPLE_DIRS = $(addprefix $(DY_HOME)/examples/, $(INNER_EXAMPLE_DIRS))
 
 INCLUDE_DIRS = $(SOURCE_DIRS) $(EXAMPLE_DIRS) $(COMPARSE_HOME)/src
