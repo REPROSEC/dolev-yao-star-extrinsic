@@ -74,8 +74,6 @@ val compute_message1_proof:
   )
   (ensures is_publishable tr (compute_message1 alice bob pk_b n_a nonce))
 let compute_message1_proof tr alice bob pk_b n_a nonce =
-  // trigger `join_eq` SMTPat
-  assert (join (principal_label alice) (principal_label bob) `can_flow tr` join (principal_label alice) (principal_label bob));
   let msg = Msg1 {n_a; alice;} in
   serialize_wf_lemma message (is_knowable_by (principal_label alice) tr) msg;
   serialize_wf_lemma message (is_knowable_by (principal_label bob) tr) msg
@@ -134,7 +132,6 @@ val compute_message2_proof:
     is_publishable tr (compute_message2 bob msg1 pk_a n_b nonce)
   )
 let compute_message2_proof tr bob msg1 pk_a n_b nonce =
-  assert (join (principal_label msg1.alice) (principal_label bob) `can_flow tr` join (principal_label msg1.alice) (principal_label bob));
   let msg = Msg2 {n_a = msg1.n_a;  n_b; bob;} in
   serialize_wf_lemma message (is_knowable_by (principal_label msg1.alice) tr) msg;
   serialize_wf_lemma message (is_knowable_by (principal_label bob) tr) msg
@@ -198,7 +195,6 @@ val compute_message3_proof:
     is_publishable tr (compute_message3 alice bob pk_b n_b nonce)
   )
 let compute_message3_proof tr alice bob pk_b n_b nonce =
-  assert (join (principal_label alice) (principal_label bob) `can_flow tr` join (principal_label alice) (principal_label bob));
   assert(exists alice n_a. event_triggered tr alice (Initiate2 alice bob n_a n_b));
   let msg = Msg3 {n_b;} in
   serialize_wf_lemma message (is_knowable_by (principal_label alice) tr) msg;

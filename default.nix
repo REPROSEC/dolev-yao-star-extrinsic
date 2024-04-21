@@ -6,9 +6,8 @@ let
     src =
       lib.sources.sourceByRegex ./. [
         "Makefile"
-        "src"
-        "src/DY.Core.*"
-        "src/DY.Lib.*"
+        "src(/.*)?"
+        "examples(/[^/]*)?"
       ]
     ;
     enableParallelBuilding = true;
@@ -27,6 +26,7 @@ let
       lib.sources.sourceByRegex ./. [
         "Makefile"
         "src(/.*)?"
+        "examples(/.*)?"
       ]
     ;
     enableParallelBuilding = true;
