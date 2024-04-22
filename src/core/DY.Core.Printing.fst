@@ -51,7 +51,7 @@ let rec bytes_to_string b =
     
     | Concat (Literal s) right -> Printf.sprintf "%s%s" 
                                     (uint_list_to_string (FStar.Seq.seq_to_list s)) (bytes_to_string right)
-    | Concat left right -> Printf.sprintf "(%s,%s)" (bytes_to_string left) (bytes_to_string right)
+    | Concat left right -> Printf.sprintf "[%s,%s]" (bytes_to_string left) (bytes_to_string right)
     
     | AeadEnc key nonce msg ad -> Printf.sprintf "AeadEnc(key=(%s), nonce=(%s), msg=(%s), ad=(%s))" 
                                 (bytes_to_string key) (bytes_to_string nonce) (bytes_to_string msg)
