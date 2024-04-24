@@ -14,6 +14,35 @@
 - An **example project** will show how to model a protocol in another repository sometime in the future, and it will be linked here.
 - For paper publication, you can either pack all the dependencies into one repository or use git submodules to reference a specific git commit in the public DY* and Comparse repositories.
 
+# Proof hygiene
+
+F\* uses by default a `fuel` and `ifuel` of 8, which is too much.
+A good hygiene for doing proofs with F\* is to use a fuel and ifuel as low as possible,
+ensuring stable and fast proofs.
+
+DY\* files should start by setting them to a low value, like this.
+
+```fstar
+#set-options "--fuel 0 --ifuel 0"
+```
+
+If a specific function or lemma need more fuel, do it like this.
+
+```fstar
+#push-options "--fuel 1 --ifuel 1 --z3rlimit 25"
+val f: ...
+let f = ...
+#pop-options
+```
+
+If every function of a file need non-zero fuel or ifuel
+(e.g. every function and lemma is recursive),
+then it is okay to set them to 1 at the beginning of the file.
+
+```fstar
+#set-options "--fuel 1 --ifuel 1"
+```
+
 # Code formatting
 
 Unfortunately, there is no code formatter for F\*.
