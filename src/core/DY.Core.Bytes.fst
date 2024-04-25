@@ -80,6 +80,10 @@ let rec length b =
     32
   | Dh sk pk ->
     32
+  | KdfExtract salt ikm ->
+    32
+  | KdfExpand prk info len ->
+    len
 
 /// Customizable functions stating how labels and usages evolve
 /// when using some cryptographic functions.
@@ -96,6 +100,64 @@ class crypto_usages = {
     (requires dh_unknown_peer_usage s1 =!= NoUsage)
     (ensures dh_known_peer_usage s1 s2 == dh_unknown_peer_usage s1)
   ;
+
+  /// HKDF.Extract is commonly used as a dual-PRF to mix two secrets keys,
+  /// thereby obtaining a new key that is as strong as the strongest input key.
+  /// This nature of being a dual-PRF means that one of the inputs must have the correct usage,
+  /// but we don't know statically which one.
+  /// This explains the "or" in the preconditions.
+
+  /// The usage of HKDF.Extract depends on both the usage and the content of its inputs.
+  kdf_extract_usage:
+    salt_usage:usage -> ikm_usage:usage ->
+    salt:bytes -> ikm:bytes ->
+    Pure usage (requires KdfExtractSaltKey? salt_usage \/ KdfExtractIkmKey? ikm_usage) (ensures fun _ -> True)
+  ;
+
+  /// The label of HKDF.Extract depends on the usage, the label and the content of its inputs.
+  kdf_extract_label:
+    salt_usage:usage -> ikm_usage:usage ->
+    salt_label:label -> ikm_label:label ->
+    salt:bytes -> ikm:bytes ->
+    Pure label (requires KdfExtractSaltKey? salt_usage \/ KdfExtractIkmKey? ikm_usage) (ensures fun _ -> True)
+  ;
+
+  /// The label of HKDF.Extract cannot be too secret.
+  kdf_extract_label_lemma:
+    tr:trace ->
+    salt_usage:usage -> ikm_usage:usage ->
+    salt_label:label -> ikm_label:label ->
+    salt:bytes -> ikm:bytes ->
+    Lemma
+    (requires KdfExtractSaltKey? salt_usage \/ KdfExtractIkmKey? ikm_usage)
+    (ensures (kdf_extract_label salt_usage ikm_usage salt_label ikm_label salt ikm) `can_flow tr` (salt_label `meet` ikm_label))
+  ;
+
+  /// HKDF.Expand is a more standard PRF to derive several keys from an initial one,
+  /// therefore we know that `prk` must have the correct usage.
+  /// In particular, it cannot be used to mix two secrets.
+  /// Note that the usage and the label do not depend on the `len` argument,
+  /// because `HKDF.Expand prk info len` is a prefix of `HKDF.Expand prk info (len+k)`.
+
+  /// The usage of HKDF.Expand depends on the prk usage and the info content.
+  kdf_expand_usage:
+    prk_usage:usage{KdfExpandKey? prk_usage} ->
+    info:bytes ->
+    usage;
+
+  /// The label of HKDF.Expand depends on the prk usage and label and the info content.
+  kdf_expand_label:
+    prk_usage:usage{KdfExpandKey? prk_usage} -> prk_label:label ->
+    info:bytes ->
+    label;
+
+  /// The label of HKDF.Expand cannot be too secret.
+  kdf_expand_label_lemma:
+    tr:trace ->
+    prk_usage:usage{KdfExpandKey? prk_usage} -> prk_label:label ->
+    info:bytes ->
+    Lemma ((kdf_expand_label prk_usage prk_label info) `can_flow tr` prk_label)
+  ;
 }
 
 /// Default (empty) usage functions, that can be used like this:
@@ -107,6 +169,14 @@ let default_crypto_usages = {
   dh_unknown_peer_usage = (fun s1 -> NoUsage);
   dh_known_peer_usage_commutes = (fun s1 s2 -> ());
   dh_unknown_peer_usage_implies = (fun s1 s2 -> ());
+
+  kdf_extract_usage = (fun salt_usg ikm_usg salt ikm -> NoUsage);
+  kdf_extract_label = (fun salt_usg ikm_usg salt_label ikm_label salt ikm -> salt_label `meet` ikm_label);
+  kdf_extract_label_lemma = (fun tr salt_usg ikm_usg salt_label ikm_label salt ikm -> ());
+
+  kdf_expand_usage = (fun prk_usage info -> NoUsage);
+  kdf_expand_label = (fun prk_usage prk_label info -> prk_label);
+  kdf_expand_label_lemma = (fun tr prk_usage prk_label info -> ());
 }
 
 /// Obtain the usage of a given bytestring.
@@ -133,6 +203,21 @@ let rec get_usage #cusages b =
     match get_usage sk with
     | DhKey s -> dh_unknown_peer_usage s
     | _ -> NoUsage
+  )
+  | KdfExtract salt ikm -> (
+    let salt_usage = get_usage salt in
+    let ikm_usage = get_usage ikm in
+    if KdfExtractSaltKey? salt_usage || KdfExtractIkmKey? ikm_usage then
+      kdf_extract_usage salt_usage ikm_usage salt ikm
+    else
+      NoUsage
+  )
+  | KdfExpand prk info len -> (
+    let prk_usage = get_usage prk in
+    if KdfExpandKey? prk_usage then
+      kdf_expand_usage prk_usage info
+    else
+      NoUsage
   )
   | _ -> NoUsage
 #pop-options
@@ -168,6 +253,20 @@ let rec get_label #cusages b =
     join (get_label sk1) (get_label sk2)
   | Dh sk pk ->
     public
+  | KdfExtract salt ikm ->
+    let salt_usage = get_usage salt in
+    let ikm_usage = get_usage ikm in
+    if KdfExtractSaltKey? salt_usage || KdfExtractIkmKey? ikm_usage then
+      kdf_extract_label salt_usage ikm_usage (get_label salt) (get_label ikm) salt ikm
+    else
+      meet (get_label salt) (get_label ikm)
+  | KdfExpand prk info len -> (
+    let prk_usage = get_usage prk in
+    if KdfExpandKey? prk_usage then
+      kdf_expand_label prk_usage (get_label prk) info
+    else
+      get_label prk
+  )
 #pop-options
 
 /// Obtain the label of the corresponding decryption key of an encryption key.
@@ -445,6 +544,38 @@ let rec bytes_invariant #cinvs tr b =
         (get_label sk) `can_flow tr` public
       )
     )
+  | KdfExtract salt ikm ->
+    bytes_invariant tr salt /\
+    bytes_invariant tr ikm /\
+    (
+      (
+        // Honest case:
+        // either salt or ikm has the correct usage
+        // (this is to model the extract function as a dual PRF)
+        KdfExtractSaltKey? (get_usage salt) \/
+        KdfExtractIkmKey? (get_usage ikm)
+      ) \/ (
+        // Attacker case:
+        // the attacker knows both salt and ikm
+        (get_label salt) `can_flow tr` public /\
+        (get_label ikm) `can_flow tr` public
+      )
+    )
+  | KdfExpand prk info len ->
+    bytes_invariant tr prk /\
+    bytes_invariant tr info /\
+    (
+      (
+        // Honest case:
+        // the prk has correct usage
+        KdfExpandKey? (get_usage prk)
+      ) \/ (
+        // Attacker case:
+        // the attacker knows both prk and info
+        (get_label prk) `can_flow tr` public /\
+        (get_label info) `can_flow tr` public
+      )
+    )
 
 /// The bytes invariant is preserved as the trace grows.
 
@@ -502,6 +633,12 @@ let rec bytes_invariant_later #cinvs tr1 tr2 msg =
   | Dh sk pk ->
     bytes_invariant_later tr1 tr2 pk;
     bytes_invariant_later tr1 tr2 sk
+  | KdfExtract salt ikm ->
+    bytes_invariant_later tr1 tr2 salt;
+    bytes_invariant_later tr1 tr2 ikm
+  | KdfExpand prk info len ->
+    bytes_invariant_later tr1 tr2 prk;
+    bytes_invariant_later tr1 tr2 info
 
 (*** Various predicates ***)
 
@@ -1027,6 +1164,7 @@ let pk_enc_preserves_publishability #cinvs tr pk nonce msg =
 
 /// Lemma for attacker knowledge theorem.
 
+#push-options "--z3rlimit 25"
 val pk_dec_preserves_publishability:
   {|crypto_invariants|} -> tr:trace ->
   sk:bytes -> msg:bytes ->
@@ -1045,6 +1183,7 @@ let pk_dec_preserves_publishability #cinvs tr sk msg =
   normalize_term_spec get_sk_label;
   normalize_term_spec bytes_invariant;
   normalize_term_spec get_label
+#pop-options
 
 /// User lemma (public encryption key bytes invariant).
 
@@ -1594,3 +1733,187 @@ let get_usage_dh_unknown_peer sk pk =
   normalize_term_spec get_usage;
   let DhKey sk_tag = get_usage sk in
   FStar.Classical.forall_intro (FStar.Classical.move_requires (dh_unknown_peer_usage_implies sk_tag))
+
+(*** KDF ***)
+
+/// Constructor.
+
+[@@"opaque_to_smt"]
+val kdf_extract: bytes -> bytes -> bytes
+let kdf_extract salt ikm =
+  KdfExtract salt ikm
+
+/// Constructor.
+
+[@@"opaque_to_smt"]
+val kdf_expand: bytes -> bytes -> len:nat{len <> 0} -> bytes
+let kdf_expand prk info len =
+  KdfExpand prk info len
+
+/// Lemma for attacker knowledge theorem.
+
+val kdf_extract_preserves_publishability:
+  {|crypto_invariants|} ->
+  tr:trace ->
+  salt:bytes -> ikm:bytes ->
+  Lemma
+  (requires
+    is_publishable tr salt /\
+    is_publishable tr ikm
+  )
+  (ensures is_publishable tr (kdf_extract salt ikm))
+let kdf_extract_preserves_publishability tr salt ikm =
+  reveal_opaque (`%kdf_extract) (kdf_extract);
+  normalize_term_spec bytes_invariant;
+  normalize_term_spec get_label;
+  let salt_usage = get_usage salt in
+  let ikm_usage = get_usage ikm in
+  if KdfExtractSaltKey? salt_usage || KdfExtractIkmKey? ikm_usage then
+    kdf_extract_label_lemma tr salt_usage ikm_usage (get_label salt) (get_label ikm) salt ikm
+  else ()
+
+/// Lemma for attacker knowledge theorem.
+
+val kdf_expand_preserves_publishability:
+  {|crypto_invariants|} ->
+  tr:trace ->
+  prk:bytes -> info:bytes -> len:nat{len <> 0} ->
+  Lemma
+  (requires
+    is_publishable tr prk /\
+    is_publishable tr info
+  )
+  (ensures is_publishable tr (kdf_expand prk info len))
+let kdf_expand_preserves_publishability tr prk info len =
+  reveal_opaque (`%kdf_expand) (kdf_expand);
+  normalize_term_spec bytes_invariant;
+  normalize_term_spec get_label;
+  let prk_usage = get_usage prk in
+  if KdfExpandKey? prk_usage then
+    kdf_expand_label_lemma tr prk_usage (get_label prk) info
+  else ()
+
+/// Lemma for attacker knowledge theorem.
+
+val kdf_expand_shorter_preserves_publishability:
+  {|crypto_invariants|} ->
+  tr:trace ->
+  prk:bytes -> info:bytes ->
+  len1:nat{len1 <> 0} -> len2:nat{len2 <> 0} ->
+  Lemma
+  (requires
+    len1 <= len2 /\
+    is_publishable tr (kdf_expand prk info len2)
+  )
+  (ensures is_publishable tr (kdf_expand prk info len1))
+let kdf_expand_shorter_preserves_publishability tr prk info len1 len2 =
+  reveal_opaque (`%kdf_expand) (kdf_expand);
+  normalize_term_spec bytes_invariant;
+  normalize_term_spec get_label
+
+/// User lemma (kdf_extract preserves bytes invariant)
+
+val bytes_invariant_kdf_extract:
+  {|crypto_invariants|} ->
+  tr:trace ->
+  salt:bytes -> ikm:bytes ->
+  Lemma
+  (requires
+    bytes_invariant tr salt /\
+    bytes_invariant tr ikm /\
+    (KdfExtractSaltKey? (get_usage salt) \/ KdfExtractIkmKey? (get_usage ikm))
+  )
+  (ensures bytes_invariant tr (kdf_extract salt ikm))
+  [SMTPat (bytes_invariant tr (kdf_extract salt ikm))]
+let bytes_invariant_kdf_extract tr salt ikm =
+  reveal_opaque (`%kdf_extract) (kdf_extract);
+  normalize_term_spec bytes_invariant
+
+/// User lemma (kdf_extract usage)
+
+val get_usage_kdf_extract:
+  {|crypto_invariants|} ->
+  salt:bytes -> ikm:bytes ->
+  Lemma
+  (requires
+    (KdfExtractSaltKey? (get_usage salt) \/ KdfExtractIkmKey? (get_usage ikm))
+  )
+  (ensures
+    get_usage (kdf_extract salt ikm) ==
+    kdf_extract_usage
+      (get_usage salt) (get_usage ikm)
+      salt ikm
+  )
+  [SMTPat (get_usage (kdf_extract salt ikm))]
+let get_usage_kdf_extract salt ikm =
+  reveal_opaque (`%kdf_extract) (kdf_extract);
+  normalize_term_spec get_usage
+
+/// User lemma (kdf_extract label)
+
+val get_label_kdf_extract:
+  {|crypto_invariants|} ->
+  salt:bytes -> ikm:bytes ->
+  Lemma
+  (requires
+    (KdfExtractSaltKey? (get_usage salt) \/ KdfExtractIkmKey? (get_usage ikm))
+  )
+  (ensures
+    get_label (kdf_extract salt ikm) ==
+    kdf_extract_label
+      (get_usage salt) (get_usage ikm)
+      (get_label salt) (get_label ikm)
+      salt ikm
+  )
+  [SMTPat (get_label (kdf_extract salt ikm))]
+let get_label_kdf_extract salt ikm =
+  reveal_opaque (`%kdf_extract) (kdf_extract);
+  normalize_term_spec get_label
+
+/// User lemma (kdf_expand preserves bytes invariant)
+
+val bytes_invariant_kdf_expand:
+  {|crypto_invariants|} ->
+  tr:trace ->
+  prk:bytes -> info:bytes -> len:nat{len <> 0} ->
+  Lemma
+  (requires
+    bytes_invariant tr prk /\
+    bytes_invariant tr info /\
+    KdfExpandKey? (get_usage prk)
+  )
+  (ensures bytes_invariant tr (kdf_expand prk info len))
+  [SMTPat (bytes_invariant tr (kdf_expand prk info len))]
+let bytes_invariant_kdf_expand tr prk info len =
+  reveal_opaque (`%kdf_expand) (kdf_expand);
+  normalize_term_spec bytes_invariant
+
+/// User lemma (kdf_expand usage)
+
+val get_usage_kdf_expand:
+  {|crypto_invariants|} ->
+  prk:bytes -> info:bytes -> len:nat{len <> 0} ->
+  Lemma
+  (requires KdfExpandKey? (get_usage prk))
+  (ensures (
+    get_usage (kdf_expand prk info len) == kdf_expand_usage (get_usage prk) info
+  ))
+  [SMTPat (get_usage (kdf_expand prk info len))]
+let get_usage_kdf_expand prk info len =
+  reveal_opaque (`%kdf_expand) (kdf_expand);
+  normalize_term_spec get_usage
+
+/// User lemma (kdf_expand label)
+
+val get_label_kdf_expand:
+  {|crypto_invariants|} ->
+  prk:bytes -> info:bytes -> len:nat{len <> 0} ->
+  Lemma
+  (requires KdfExpandKey? (get_usage prk))
+  (ensures (
+    get_label (kdf_expand prk info len) == kdf_expand_label (get_usage prk) (get_label prk) info
+  ))
+  [SMTPat (get_label (kdf_expand prk info len))]
+let get_label_kdf_expand prk info len =
+  reveal_opaque (`%kdf_expand) (kdf_expand);
+  normalize_term_spec get_label

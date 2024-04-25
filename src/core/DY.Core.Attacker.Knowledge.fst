@@ -123,6 +123,23 @@ let rec attacker_knows_aux step tr msg =
         msg == dh sk pk /\
         attacker_knows_aux (step-1) tr sk /\
         attacker_knows_aux (step-1) tr pk
+    ) \/
+    // KDF
+    (
+      exists salt ikm.
+        msg == kdf_extract salt ikm /\
+        attacker_knows_aux (step-1) tr salt /\
+        attacker_knows_aux (step-1) tr ikm
+    ) \/ (
+      exists prk info len.
+        msg == kdf_expand prk info len /\
+        attacker_knows_aux (step-1) tr prk /\
+        attacker_knows_aux (step-1) tr info
+    ) \/ (
+      exists prk info len1 len2.
+        len1 <= len2 /\
+        msg == kdf_expand prk info len1 /\
+        attacker_knows_aux (step-1) tr (kdf_expand prk info len2)
     )
   )
 
@@ -195,6 +212,9 @@ let rec attacker_only_knows_publishable_values_aux #invs step tr msg =
     FStar.Classical.forall_intro   (FStar.Classical.move_requires   (hash_preserves_publishability tr));
     FStar.Classical.forall_intro   (FStar.Classical.move_requires   (dh_pk_preserves_publishability tr));
     FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (dh_preserves_publishability tr));
+    FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (kdf_extract_preserves_publishability tr));
+    FStar.Classical.forall_intro_3 (FStar.Classical.move_requires_3 (kdf_expand_preserves_publishability tr));
+    FStar.Classical.forall_intro_4 (                move_requires_4 (kdf_expand_shorter_preserves_publishability tr));
     ()
   )
 #pop-options
