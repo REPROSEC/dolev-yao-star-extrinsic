@@ -53,6 +53,9 @@ let debug () : crypto (option unit)  =
   // Bob receive message 3
   prepare_msg4 bob_global_session_ids bob bob_session_id msg3_id;*
 
+  let* tr = get_trace in
+  let _ = IO.debug_print_string (trace_to_string tr) in
+
   return (Some ())
 
 //Run ``debug ()`` when the module loads

@@ -151,11 +151,6 @@ let labeled_state_was_set tr label prin sess_id content =
 [@@ "opaque_to_smt"]
 val set_labeled_state: string -> principal -> nat -> bytes -> crypto unit
 let set_labeled_state label prin sess_id content =
-  let* time = get_time in
-  let _ = IO.debug_print_string (
-      Printf.sprintf "{\"TraceID\": %d, \"Type\": \"Session\", \"SessionID\": %d, \"Tag\": \"%s\", \"Principal\": \"%s\", \"Content\": \"%s\"}\n"
-        time sess_id label prin (DY.Core.Printing.bytes_to_string content)
-    ) in
   let full_content = {label; content;} in
   let full_content_bytes = serialize session full_content in
   set_state prin sess_id full_content_bytes
