@@ -126,7 +126,7 @@ val lemma:
   [SMTPat (...)] //optional
 ```
 
-The when the `requires` or `ensures` span multiple lines,
+When the `requires` or `ensures` span multiple lines,
 the keywords `requires` and `ensures` live on their own line.
 In general the `requires` is a big conjunction,
 each hypothesis should be on a separate line.
