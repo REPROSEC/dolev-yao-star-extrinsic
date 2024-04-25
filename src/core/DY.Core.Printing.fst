@@ -92,6 +92,9 @@ let trace_event_to_string tr_event i =
       i prin tag (bytes_to_string content)
   )
 
+/// Helper function for `trace_to_string` to avoid calling `length` for each trace event,
+/// which would lead to quadratic complexity.
+
 val trace_to_string_helper: (tr:trace) -> (i:nat{i = length tr}) -> string
 let rec trace_to_string_helper tr i =
   match tr with
