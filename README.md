@@ -35,6 +35,10 @@ Two choices are possible:
 
 Running `make` will compile and verify DY\* and its examples.
 
+## How to contribute
+
+Please read the [CONTRIBUTING](CONTRIBUTING.md) document.
+
 ## Differences with DY\* with intrinsic proofs
 
 ### Structure for DY\*-style proofs
