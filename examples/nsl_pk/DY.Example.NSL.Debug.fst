@@ -18,7 +18,6 @@ let debug () : crypto (option unit)  =
   // Generate private key for Alice
   let* alice_global_session_priv_key_id = initialize_private_keys alice in
   generate_private_key alice alice_global_session_priv_key_id (PkDec "NSL.PublicKey");*
-  generate_private_key alice alice_global_session_priv_key_id (PkDec "NSL.PublicKey2");*
   
   // Generate private key for Bob
   let* bob_global_session_priv_key_id = initialize_private_keys bob in
