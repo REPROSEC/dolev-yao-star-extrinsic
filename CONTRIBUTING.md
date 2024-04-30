@@ -3,9 +3,10 @@
 - Discussions of features and bugs should take place in [**GitHub Issues**](https://github.com/REPROSEC/dolev-yao-star-extrinsic/issues). This also has the advantage that we can reference the specific issue in meetings.
 - Everybody should **create tasks** in the [GitHub Project](https://github.com/orgs/REPROSEC/projects/1) for their work and assign the tasks to themselves.
     - You can also create tasks from Issues and vice versa
-- Every change to DY* has to be developed in a separate branch
+- Every change to DY* has to be developed in a separate branch.
 - If a feature is ready to be merged into the main branch, you **must create a pull request**, and at least one person must review the code changes.
     - PRs are an essential process to guarantee the code quality of DY*.
+- After merging a PR, the corresponding branch must be deleted to keep the repository tidy.
 
 # Protocol Analysis
 
