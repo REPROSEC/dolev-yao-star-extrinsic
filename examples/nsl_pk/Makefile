@@ -1,4 +1,4 @@
-DY_HOME=../..
+DY_HOME ?= ../..
 include $(DY_HOME)/Makefile
 
 test:

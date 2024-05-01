@@ -90,14 +90,8 @@ let rec bytes_to_string b =
     Printf.sprintf "Dh(sk=(%s), pk=(%s))" (bytes_to_string sk) (bytes_to_string pk)
   )
 
-(*** State Parsing Helper Functions ***)
 
-val get_state_content: bytes -> bytes
-let get_state_content full_content_bytes =
-  let full_content = parse session full_content_bytes in
-  match full_content with
-  | Some ({label; content}) -> content
-  | None -> full_content_bytes
+(*** State Parsing Helper Functions ***)
 
 /// This section uses fully qualified names
 /// for some types because they are defined
@@ -134,48 +128,65 @@ let rec pki_types_to_string m =
     Printf.sprintf "%s [%s] = (%s)," (public_key_type_to_string hd.key.ty) hd.key.who (bytes_to_string hd.value.public_key)
   )
 
-/// This function converts the states containing
-/// private and public keys to nicely looking strings.
-/// If it is not such a state the function calls the
-/// user provided state parsing function. If that function
-/// also fails it calls the bytes_to_string function
-/// as a fallback.
+val default_private_keys_state_to_string: bytes -> option string
+let default_private_keys_state_to_string content_bytes =
+  let? state = parse (map DY.Lib.State.PrivateKeys.private_keys_types) content_bytes in
+  Some (Printf.sprintf "[%s]" (private_keys_types_to_string state.key_values))
 
-val state_to_str_helper: (bytes -> option string) -> bytes ->  string
-let state_to_str_helper state_to_str sess_bytes =
-  let sess = parse (map DY.Lib.State.PrivateKeys.private_keys_types) sess_bytes in
-  match sess with
-  | Some m -> Printf.sprintf "[%s]" (private_keys_types_to_string m.key_values)
-  | None -> (
-    let sess = parse (map DY.Lib.State.PKI.pki_types) sess_bytes in
-    match sess with
-    | Some m -> Printf.sprintf "[%s]" (pki_types_to_string m.key_values)
-    | None -> (
-      let str = state_to_str sess_bytes in
-      match str with
-      | Some s -> s
-      | None -> (bytes_to_string sess_bytes)
-    )
+val default_pki_state_to_string: bytes -> option string
+let default_pki_state_to_string content_bytes =
+  let? state = parse (map DY.Lib.State.PKI.pki_types) content_bytes in
+  Some (Printf.sprintf "[%s]" (pki_types_to_string state.key_values))
+
+/// Searches for a printer with the correct label
+/// and returns the first one it finds.
+
+val find_printer: list (string & (bytes -> option string)) -> string -> (bytes -> option string)
+let rec find_printer printer_list label =
+  match printer_list with
+  | [] -> (fun b -> Some (bytes_to_string b))
+  | (parser_label, parser) :: tl -> (
+    if parser_label = label then parser
+    else find_printer tl label
   )
 
-
-(*** Functions to Print the Trace ***)
-
-val option_to_str: (bytes -> option string) -> bytes -> string
-let option_to_str parse_fn elem =
+val option_to_string: (bytes -> option string) -> bytes -> string
+let option_to_string parse_fn elem =
   let parsed = parse_fn elem in
   match parsed with
   | Some str -> str
   | None -> bytes_to_string elem // Parse bytes with the default method as a fallback
 
+val state_to_string: list (string & (bytes -> option string)) -> bytes -> string
+let state_to_string printer_list full_content_bytes =
+  let full_content = parse session full_content_bytes in
+  match full_content with
+  | Some ({label; content}) -> (
+    let parser = find_printer printer_list label in
+    option_to_string parser content
+  )
+  | None -> bytes_to_string full_content_bytes
+
+
+(*** Record to Combine All Printer Functions ***)
+
+noeq type trace_to_string_printers = {
+  message_to_string:(bytes -> option string);
+  state_to_string:(list (string & (bytes -> option string)));
+  event_to_string:(list (string & (bytes -> option string)))
+}
+
+
+(*** Functions to Print the Trace ***)
+
 val trace_event_to_string: 
   trace_event -> nat -> 
-  (bytes -> option string) -> (bytes -> option string) -> (bytes -> option string) -> 
+  trace_to_string_printers -> 
   string
-let trace_event_to_string tr_event i message_to_str state_to_str event_to_str =
+let trace_event_to_string tr_event i printers =
   match tr_event with
   | MsgSent msg -> (
-    let msg_str = option_to_str message_to_str msg in
+    let msg_str = option_to_string printers.message_to_string msg in
     Printf.sprintf "{\"TraceID\": %d, \"Type\": \"Message\", \"Content\": \"%s\"}\n"
       i msg_str
   )
@@ -185,13 +196,13 @@ let trace_event_to_string tr_event i message_to_str state_to_str event_to_str =
   )
   | Corrupt prin sess_id -> ""
   | SetState prin sess_id full_content -> (
-    let content = get_state_content full_content in
-    let content_str = state_to_str_helper state_to_str content in
+    let content_str = state_to_string printers.state_to_string full_content in
     Printf.sprintf "{\"TraceID\": %d, \"Type\": \"Session\", \"SessionID\": %d, \"Principal\": \"%s\", \"Content\": \"%s\"}\n"
       i sess_id prin content_str
   )
   | Event prin tag content -> (
-    let content_str = option_to_str event_to_str content in
+    let printer = find_printer printers.event_to_string tag in
+    let content_str = option_to_string printer content in
     Printf.sprintf "{\"TraceID\": %d, \"Type\": \"Event\", \"Principal\": \"%s\", \"Tag\": \"%s\", \"Content\": \"%s\"}\n" 
       i prin tag content_str
   )
@@ -201,14 +212,13 @@ let trace_event_to_string tr_event i message_to_str state_to_str event_to_str =
 
 val trace_to_string_helper:
   (tr:trace) -> (i:nat{i = DY.Core.Trace.Type.length tr}) ->
-  (bytes -> option string) -> (bytes -> option string) -> (bytes -> option string) ->
-   string
-let rec trace_to_string_helper tr i message_to_str state_to_str event_to_str =
+  trace_to_string_printers ->
+  string
+let rec trace_to_string_helper tr i printers =
   match tr with
   | Nil -> ""
   | Snoc ptr ev -> (
-      trace_to_string_helper ptr (i-1) message_to_str state_to_str event_to_str ^ 
-      trace_event_to_string ev i message_to_str state_to_str event_to_str
+      trace_to_string_helper ptr (i-1) printers ^ trace_event_to_string ev i printers
   )
 
 (*** Functions for Users ***)
@@ -221,22 +231,44 @@ let rec trace_to_string_helper tr i message_to_str state_to_str event_to_str =
 ///
 /// Usage:
 /// let* tr = get_trace in
-/// let _ = IO.debug_print_string (
-///           trace_to_string tr default_message_to_str default_state_to_str default_event_to_str
-///         ) in
+/// let _ = IO.debug_print_string (trace_to_string tr default_trace_to_string_printers) in
 
-val trace_to_string: 
-  trace -> 
-  (bytes -> option string) -> (bytes -> option string) -> (bytes -> option string) ->
-  string
-let trace_to_string tr message_to_str state_to_str event_to_str =
-  trace_to_string_helper tr (DY.Core.Trace.Type.length tr) message_to_str state_to_str event_to_str
+val trace_to_string: trace -> trace_to_string_printers -> string
+let trace_to_string tr printers =
+  trace_to_string_helper tr (DY.Core.Trace.Type.length tr) printers
 
-val default_message_to_str: bytes -> option string
-let default_message_to_str b = Some (bytes_to_string b)
 
-val default_state_to_str: bytes -> option string
-let default_state_to_str b = Some (bytes_to_string b)
+(*** Helper Functions to Setup the Printer Functions Record ***)
 
-val default_event_to_str: bytes -> option string
-let default_event_to_str b = Some (bytes_to_string b)
+val default_message_to_string: bytes -> option string
+let default_message_to_string b = Some (bytes_to_string b)
+
+val default_state_to_string: list (string & (bytes -> option string))
+let default_state_to_string = []
+
+val default_event_to_string: list (string & (bytes -> option string))
+let default_event_to_string = []
+
+val trace_to_string_printers_builder:
+  (bytes -> option string) ->
+  list (string & (bytes -> option string)) ->
+  list (string & (bytes -> option string)) ->
+  trace_to_string_printers
+let trace_to_string_printers_builder message_to_string state_to_string event_to_string =
+  {
+    message_to_string = message_to_string;
+    state_to_string = (
+      List.append state_to_string (
+        [
+          (DY.Lib.State.PrivateKeys.private_keys_label, default_private_keys_state_to_string);
+          (DY.Lib.State.PKI.pki_label, default_pki_state_to_string)
+        ]
+      ) // User supplied functions will override the default functions because the
+        // find printer function will choose the first match.
+    );
+    event_to_string = event_to_string
+  }
+
+val default_trace_to_string_printers: trace_to_string_printers
+let default_trace_to_string_printers = 
+  trace_to_string_printers_builder default_message_to_string default_state_to_string default_event_to_string

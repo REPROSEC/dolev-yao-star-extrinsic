@@ -59,7 +59,9 @@ let debug () : crypto (option unit)  =
   prepare_msg4 bob_global_session_ids bob bob_session_id msg3_id;*
 
   let* tr = get_trace in
-  let _ = IO.debug_print_string (trace_to_string tr (message_to_str priv_key_alice priv_key_bob) default_state_to_str event_to_string) in
+  let _ = IO.debug_print_string (
+      trace_to_string tr (get_nsl_trace_to_string_printers priv_key_alice priv_key_bob)
+    ) in
 
   return (Some ())
 

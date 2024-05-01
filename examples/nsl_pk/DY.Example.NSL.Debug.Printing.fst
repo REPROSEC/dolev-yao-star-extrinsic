@@ -22,8 +22,8 @@ let decrypt_message sk_a sk_b msg_bytes =
     pk_dec sk_b msg_bytes
   )
 
-val message_to_str: bytes -> bytes -> bytes -> option string
-let message_to_str sk_a sk_b msg_bytes =
+val message_to_string: bytes -> bytes -> bytes -> option string
+let message_to_string sk_a sk_b msg_bytes =
   let? msg_plain = decrypt_message sk_a sk_b msg_bytes in
   let? msg = parse message msg_plain in
   match msg with
@@ -73,3 +73,13 @@ let event_to_string event_bytes =
   | Respond2 a b n_a n_b -> (
     Some (Printf.sprintf "[principal1=%s, principal2=(%s), n_a=(%s), n_b=(%s)]" a b (bytes_to_string n_a) (bytes_to_string n_b))
   )
+
+
+(*** Putting Everything Together ***)
+
+val get_nsl_trace_to_string_printers: bytes -> bytes -> trace_to_string_printers
+let get_nsl_trace_to_string_printers priv_key_alice priv_key_bob = 
+  trace_to_string_printers_builder 
+    (message_to_string priv_key_alice priv_key_bob)
+    [(nsl_session_label, session_to_string)]
+    [(event_nsl_event.tag, event_to_string)]
