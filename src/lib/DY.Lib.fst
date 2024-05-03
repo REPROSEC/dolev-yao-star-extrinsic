@@ -21,3 +21,6 @@ include DY.Lib.State.Typed
 include DY.Lib.State.Map
 include DY.Lib.State.PKI
 include DY.Lib.State.PrivateKeys
+
+/// Provide functions to print the trace
+include DY.Lib.Printing
