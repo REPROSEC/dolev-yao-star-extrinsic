@@ -82,6 +82,23 @@ Often, several arguments may be as generic as other arguments,
 in that case some arbitrary order must be chosen between them,
 but that order should be consistent across functions.
 
+When there as many arguments with the same genericity,
+it is good practice to create a record type for these arguments.
+This provides an approximation of named arguments,
+to avoid mixing their order when calling the function
+(which is crucial when the arguments have the same type
+hence are not distinguished by the typechecker).
+
+```fstar
+type f_inputs = {
+  my_dh_priv_key: bytes;
+  their_dh_pub_key: bytes;
+  current_ratchet_key: bytes;
+}
+
+val f: f_inputs -> ...
+```
+
 # Code formatting
 
 Unfortunately, there is no code formatter for F\*.
