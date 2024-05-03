@@ -180,10 +180,10 @@ noeq type trace_to_string_printers = {
 (*** Functions to Print the Trace ***)
 
 val trace_event_to_string: 
-  trace_event -> nat -> 
   trace_to_string_printers -> 
+  trace_event -> nat -> 
   string
-let trace_event_to_string tr_event i printers =
+let trace_event_to_string printers tr_event i =
   match tr_event with
   | MsgSent msg -> (
     let msg_str = option_to_string printers.message_to_string msg in
@@ -211,14 +211,14 @@ let trace_event_to_string tr_event i printers =
 /// which would lead to quadratic complexity.
 
 val trace_to_string_helper:
-  (tr:trace) -> (i:nat{i = DY.Core.Trace.Type.length tr}) ->
   trace_to_string_printers ->
+  (tr:trace) -> (i:nat{i = DY.Core.Trace.Type.length tr}) ->
   string
-let rec trace_to_string_helper tr i printers =
+let rec trace_to_string_helper printers tr i =
   match tr with
   | Nil -> ""
   | Snoc ptr ev -> (
-      trace_to_string_helper ptr (i-1) printers ^ trace_event_to_string ev i printers
+      trace_to_string_helper printers ptr (i-1) ^ trace_event_to_string printers ev i
   )
 
 (*** Functions for Users ***)
@@ -233,9 +233,9 @@ let rec trace_to_string_helper tr i printers =
 /// let* tr = get_trace in
 /// let _ = IO.debug_print_string (trace_to_string tr default_trace_to_string_printers) in
 
-val trace_to_string: trace -> trace_to_string_printers -> string
-let trace_to_string tr printers =
-  trace_to_string_helper tr (DY.Core.Trace.Type.length tr) printers
+val trace_to_string: trace_to_string_printers -> trace -> string
+let trace_to_string printers tr =
+  trace_to_string_helper printers tr (DY.Core.Trace.Type.length tr)
 
 
 (*** Helper Functions to Setup the Printer Functions Record ***)
