@@ -38,8 +38,8 @@ instance dh_event_instance: event dh_event = {
 
 (*** Setup for the stateful code ***)
 
-val dh_session_label: string
-let dh_session_label = "DH.Session"
+val dh_session_tag: string
+let dh_session_tag = "DH.Session"
 
 type dh_global_sess_ids = {
   pki: nat;
@@ -59,13 +59,13 @@ let prepare_msg1 alice bob =
   let* session_id = new_session_id alice in
   let* x = mk_rand (DhKey "DH.dh_key") (principal_state_label alice session_id) 32 in
   trigger_event alice (Initiate1 alice bob x);*
-  set_typed_state dh_session_label alice session_id (InitiatorSentMsg1 bob x <: dh_session);*
+  set_typed_state dh_session_tag alice session_id (InitiatorSentMsg1 bob x <: dh_session);*
   return session_id
 
 // Alice sends message 1
 val send_msg1: principal -> nat -> crypto (option nat)
 let send_msg1 alice session_id =
-  let*? session_state: dh_session = get_typed_state dh_session_label alice session_id in
+  let*? session_state: dh_session = get_typed_state dh_session_tag alice session_id in
   match session_state with
   | InitiatorSentMsg1 bob x -> (
     let msg = compute_message1 bob x in
@@ -83,13 +83,13 @@ let prepare_msg2 alice bob msg_id =
   let* y = mk_rand (DhKey "DH.dh_key") (principal_state_label bob session_id) 32 in
   let gy = dh_pk y in
   trigger_event bob (Respond1 alice bob msg1.gx gy y);*
-  set_typed_state dh_session_label bob session_id (ResponderSentMsg2 alice msg1.gx gy y <: dh_session);*
+  set_typed_state dh_session_tag bob session_id (ResponderSentMsg2 alice msg1.gx gy y <: dh_session);*
   return (Some session_id)
 
 // Bob sends message 2
 val send_msg2: dh_global_sess_ids -> principal -> nat -> crypto (option nat)
 let send_msg2 global_sess_id bob session_id =
-  let*? session_state: dh_session = get_typed_state dh_session_label bob session_id in
+  let*? session_state: dh_session = get_typed_state dh_session_tag bob session_id in
   match session_state with
   | ResponderSentMsg2 alice gx gy y -> (
     let*? sk_b = get_private_key bob global_sess_id.private_keys (Sign "DH.SigningKey") in
@@ -105,7 +105,7 @@ let send_msg2 global_sess_id bob session_id =
 // This function has to verify the signature from message 2
 val prepare_msg3: dh_global_sess_ids -> principal -> principal -> nat -> nat -> crypto (option unit)
 let prepare_msg3 global_sess_id alice bob msg_id session_id =
-  let*? session_state: dh_session = get_typed_state dh_session_label alice session_id in
+  let*? session_state: dh_session = get_typed_state dh_session_tag alice session_id in
   match session_state with
   | InitiatorSentMsg1 bob x -> (
     let*? pk_b = get_public_key alice global_sess_id.pki (Verify "DH.SigningKey") bob in
@@ -114,7 +114,7 @@ let prepare_msg3 global_sess_id alice bob msg_id session_id =
     let*? msg2: message2 = return (decode_message2 msg alice gx pk_b) in
     let k = dh x msg2.gy in
     trigger_event alice (Initiate2 alice bob gx msg2.gy k);*
-    set_typed_state dh_session_label alice session_id (InitiatorSendMsg3 bob gx msg2.gy k <: dh_session);*
+    set_typed_state dh_session_tag alice session_id (InitiatorSendMsg3 bob gx msg2.gy k <: dh_session);*
     return (Some ())
   )
   | _ -> return None
@@ -122,7 +122,7 @@ let prepare_msg3 global_sess_id alice bob msg_id session_id =
 // Alice send message 3
 val send_msg3: dh_global_sess_ids -> principal -> principal -> nat -> crypto (option nat)
 let send_msg3 global_sess_id alice bob session_id =
-  let*? session_state: dh_session = get_typed_state dh_session_label alice session_id in
+  let*? session_state: dh_session = get_typed_state dh_session_tag alice session_id in
   match session_state with
   | InitiatorSendMsg3 bob gx gy x -> (
     let*? sk_a = get_private_key alice global_sess_id.private_keys (Sign "DH.SigningKey") in
@@ -136,7 +136,7 @@ let send_msg3 global_sess_id alice bob session_id =
 // Bob verifies message 3
 val verify_msg3: dh_global_sess_ids -> principal -> principal -> nat -> nat -> crypto (option unit)
 let verify_msg3 global_sess_id alice bob msg_id session_id =
-  let*? session_state: dh_session = get_typed_state dh_session_label bob session_id in
+  let*? session_state: dh_session = get_typed_state dh_session_tag bob session_id in
   match session_state with
   | ResponderSentMsg2 alice gx gy y -> (
     let*? pk_a = get_public_key bob global_sess_id.pki (Verify "DH.SigningKey") alice in
@@ -144,7 +144,7 @@ let verify_msg3 global_sess_id alice bob msg_id session_id =
     let*? msg3: message3 = return (decode_message3 msg bob gx gy pk_a) in
     let k = dh y gx in
     trigger_event bob (Respond2 alice bob gx gy k);*
-    set_typed_state dh_session_label bob session_id (ResponderReceivedMsg3 alice gx gy k <: dh_session);*
+    set_typed_state dh_session_tag bob session_id (ResponderReceivedMsg3 alice gx gy k <: dh_session);*
     return (Some ())
   )
   | _ -> return None

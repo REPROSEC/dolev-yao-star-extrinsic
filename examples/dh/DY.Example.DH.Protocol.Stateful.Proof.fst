@@ -87,9 +87,9 @@ let dh_event_pred: event_predicate dh_event =
 /// List of all local state predicates.
 
 let all_sessions = [
-  (pki_label, typed_session_pred_to_session_pred (map_session_invariant pki_pred));
-  (private_keys_label, typed_session_pred_to_session_pred (map_session_invariant private_keys_pred));
-  (dh_session_label, typed_session_pred_to_session_pred dh_session_pred);
+  (pki_tag, typed_session_pred_to_session_pred (map_session_invariant pki_pred));
+  (private_keys_tag, typed_session_pred_to_session_pred (map_session_invariant private_keys_pred));
+  (dh_session_tag, typed_session_pred_to_session_pred dh_session_pred);
 ]
 
 /// List of all local event predicates.
@@ -124,8 +124,8 @@ let full_dh_session_pred_has_pki_invariant = all_sessions_has_all_sessions ()
 val full_dh_session_pred_has_private_keys_invariant: squash (has_private_keys_invariant dh_protocol_invs)
 let full_dh_session_pred_has_private_keys_invariant = all_sessions_has_all_sessions ()
 
-val full_dh_session_pred_has_nsl_invariant: squash (has_typed_session_pred dh_protocol_invs (dh_session_label, dh_session_pred))
-let full_dh_session_pred_has_nsl_invariant = all_sessions_has_all_sessions ()
+val full_dh_session_pred_has_dh_invariant: squash (has_typed_session_pred dh_protocol_invs (dh_session_tag, dh_session_pred))
+let full_dh_session_pred_has_dh_invariant = all_sessions_has_all_sessions ()
 
 /// Lemmas that the global event predicate contains all the local ones
 
@@ -137,5 +137,5 @@ let all_events_has_all_events () =
   let dumb_lemma (x:prop) (y:prop): Lemma (requires x /\ x == y) (ensures y) = () in
   dumb_lemma (for_allP (has_compiled_event_pred dh_protocol_invs) all_events) (norm [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP (has_compiled_event_pred dh_protocol_invs) all_events))
 
-val full_nsl_event_pred_has_nsl_invariant: squash (has_event_pred dh_protocol_invs dh_event_pred)
-let full_nsl_event_pred_has_nsl_invariant = all_events_has_all_events ()
+val full_dh_event_pred_has_dh_invariant: squash (has_event_pred dh_protocol_invs dh_event_pred)
+let full_dh_event_pred_has_dh_invariant = all_events_has_all_events ()

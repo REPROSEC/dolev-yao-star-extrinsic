@@ -63,6 +63,11 @@ let debug () : crypto (option unit)  =
   // Bob
   verify_msg3 bob_global_session_ids alice bob msg3_id bob_session_id;*
 
+  let* tr = get_trace in
+  let _ = IO.debug_print_string (
+      trace_to_string default_trace_to_string_printers tr
+    ) in
+
   return (Some ())
 
 //Run ``debug ()`` when the module loads
