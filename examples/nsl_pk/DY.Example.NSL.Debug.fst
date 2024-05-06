@@ -60,7 +60,7 @@ let debug () : crypto (option unit)  =
 
   let* tr = get_trace in
   let _ = IO.debug_print_string (
-      trace_to_string tr (get_nsl_trace_to_string_printers priv_key_alice priv_key_bob)
+      trace_to_string (get_nsl_trace_to_string_printers priv_key_alice priv_key_bob) tr
     ) in
 
   return (Some ())

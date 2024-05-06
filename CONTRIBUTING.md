@@ -15,7 +15,9 @@
 - An **example project** will show how to model a protocol in another repository sometime in the future, and it will be linked here.
 - For paper publication, you can either pack all the dependencies into one repository or use git submodules to reference a specific git commit in the public DY* and Comparse repositories.
 
-# Proof hygiene
+# Coding style
+
+## Proof hygiene
 
 F\* uses by default a `fuel` and `ifuel` of 8, which is too much.
 A good hygiene for doing proofs with F\* is to use a fuel and ifuel as low as possible,
@@ -42,6 +44,59 @@ then it is okay to set them to 1 at the beginning of the file.
 
 ```fstar
 #set-options "--fuel 1 --ifuel 1"
+```
+
+## Argument ordering
+
+Function arguments are written in some order,
+for example in
+
+```fstar
+val map:
+  #a:Type ->
+  f:(a -> b) -> l:list a ->
+  list b
+```
+
+the first argument is `#a:Type`,
+the second one is `f:(a -> b)`
+and the third one is `l:list a`.
+
+Arguments should be ordered from the most generic one to the most specific one.
+There are several reasons for that:
+
+- this helps with curryfication,
+  which is useful when doing proofs in F\*
+  (because it is much easier to do proofs on `map f` than `fun l -> map f l`)
+- this helps having a consistent argument order throughout the project
+
+In the example of `map`,
+the most generic parameter is `#a:Type`,
+because it cannot be changed without changing `f:(a -> b)` or `l:list a`.
+The second most generic parameter is `f:(a -> b)`
+because often one function is applied to many different lists.
+Finally, `l:list a` is the least generic argument (or, the most specific one).
+Hence the arguments of the `map` function above are well-ordered.
+
+Often, several arguments may be as generic as other arguments,
+in that case some arbitrary order must be chosen between them,
+but that order should be consistent across functions.
+
+When there are many arguments with the same genericity,
+it is good practice to create a record type for these arguments.
+This provides an approximation of named arguments,
+to avoid mixing their order when calling the function
+(which is crucial when the arguments have the same type
+hence are not distinguished by the typechecker).
+
+```fstar
+type f_inputs = {
+  my_dh_priv_key: bytes;
+  their_dh_pub_key: bytes;
+  current_ratchet_key: bytes;
+}
+
+val f: f_inputs -> ...
 ```
 
 # Code formatting
