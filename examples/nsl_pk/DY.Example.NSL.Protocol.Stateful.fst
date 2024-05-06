@@ -26,8 +26,8 @@ type nsl_session =
 instance nsl_session_parseable_serializeable: parseable_serializeable bytes nsl_session
  = mk_parseable_serializeable ps_nsl_session
 
-val nsl_session_label: string
-let nsl_session_label = "NSL.Session"
+val nsl_session_tag: string
+let nsl_session_tag = "NSL.Session"
 
 (*** Event type ***)
 
@@ -61,12 +61,12 @@ let prepare_msg1 alice bob =
   let* n_a = mk_rand NoUsage (join (principal_label alice) (principal_label bob)) 32 in
   trigger_event alice (Initiate1 alice bob n_a);*
   let* sess_id = new_session_id alice in
-  set_typed_state nsl_session_label alice sess_id (InitiatorSentMsg1 bob n_a <: nsl_session);*
+  set_typed_state nsl_session_tag alice sess_id (InitiatorSentMsg1 bob n_a <: nsl_session);*
   return sess_id
 
 val send_msg1: nsl_global_sess_ids -> principal -> nat -> crypto (option nat)
 let send_msg1 global_sess_id alice sess_id =
-  let*? st: nsl_session = get_typed_state nsl_session_label alice sess_id in
+  let*? st: nsl_session = get_typed_state nsl_session_tag alice sess_id in
   match st with
   | InitiatorSentMsg1 bob n_a -> (
     let*? pk_b = get_public_key alice global_sess_id.pki (PkEnc "NSL.PublicKey") bob in
@@ -85,12 +85,12 @@ let prepare_msg2 global_sess_id bob msg_id =
   let* n_b = mk_rand NoUsage (join (principal_label msg1.alice) (principal_label bob)) 32 in
   trigger_event bob (Respond1 msg1.alice bob msg1.n_a n_b);*
   let* sess_id = new_session_id bob in
-  set_typed_state nsl_session_label bob sess_id (ResponderSentMsg2 msg1.alice msg1.n_a n_b <: nsl_session);*
+  set_typed_state nsl_session_tag bob sess_id (ResponderSentMsg2 msg1.alice msg1.n_a n_b <: nsl_session);*
   return (Some sess_id)
 
 val send_msg2: nsl_global_sess_ids -> principal -> nat -> crypto (option nat)
 let send_msg2 global_sess_id bob sess_id =
-  let*? st: nsl_session = get_typed_state nsl_session_label bob sess_id in
+  let*? st: nsl_session = get_typed_state nsl_session_tag bob sess_id in
   match st with
   | ResponderSentMsg2 alice n_a n_b -> (
     let*? pk_a = get_public_key bob global_sess_id.pki (PkEnc "NSL.PublicKey") alice in
@@ -105,19 +105,19 @@ val prepare_msg3: nsl_global_sess_ids -> principal -> nat -> nat -> crypto (opti
 let prepare_msg3 global_sess_id alice sess_id msg_id =
   let*? msg = recv_msg msg_id in
   let*? sk_a = get_private_key alice global_sess_id.private_keys (PkDec "NSL.PublicKey") in
-  let*? st: nsl_session = get_typed_state nsl_session_label alice sess_id in
+  let*? st: nsl_session = get_typed_state nsl_session_tag alice sess_id in
   match st with
   | InitiatorSentMsg1 bob n_a -> (
     let*? msg2: message2 = return (decode_message2 alice bob msg sk_a n_a) in
     trigger_event alice (Initiate2 alice bob n_a msg2.n_b);*
-    set_typed_state nsl_session_label alice sess_id (InitiatorSentMsg3 bob n_a msg2.n_b <: nsl_session);*
+    set_typed_state nsl_session_tag alice sess_id (InitiatorSentMsg3 bob n_a msg2.n_b <: nsl_session);*
     return (Some ())
   )
   | _ -> return None
 
 val send_msg3: nsl_global_sess_ids -> principal -> nat -> crypto (option nat)
 let send_msg3 global_sess_id alice sess_id =
-  let*? st: nsl_session = get_typed_state nsl_session_label alice sess_id in
+  let*? st: nsl_session = get_typed_state nsl_session_tag alice sess_id in
   match st with
   | InitiatorSentMsg3 bob n_a n_b -> (
     let*? pk_b = get_public_key alice global_sess_id.pki (PkEnc "NSL.PublicKey") bob in
@@ -132,12 +132,12 @@ val prepare_msg4: nsl_global_sess_ids -> principal -> nat -> nat -> crypto (opti
 let prepare_msg4 global_sess_id bob sess_id msg_id =
   let*? msg = recv_msg msg_id in
   let*? sk_b = get_private_key bob global_sess_id.private_keys (PkDec "NSL.PublicKey") in
-  let*? st: nsl_session = get_typed_state nsl_session_label bob sess_id in
+  let*? st: nsl_session = get_typed_state nsl_session_tag bob sess_id in
   match st with
   | ResponderSentMsg2 alice n_a n_b -> (
     let*? msg3: message3 = return (decode_message3 alice bob msg sk_b n_b) in
     trigger_event bob (Respond2 alice bob n_a n_b);*
-    set_typed_state nsl_session_label bob sess_id (ResponderReceivedMsg3 alice n_a n_b <: nsl_session);*
+    set_typed_state nsl_session_tag bob sess_id (ResponderReceivedMsg3 alice n_a n_b <: nsl_session);*
     return (Some ())
   )
   | _ -> return None

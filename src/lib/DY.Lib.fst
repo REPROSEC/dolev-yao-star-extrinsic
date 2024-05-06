@@ -14,7 +14,7 @@ include DY.Lib.SplitPredicate
 include DY.Lib.Event.Typed
 
 /// User-friendly state API
-include DY.Lib.State.Labeled
+include DY.Lib.State.Tagged
 include DY.Lib.State.Typed
 
 /// Various state helpers
