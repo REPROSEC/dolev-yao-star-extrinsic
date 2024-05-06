@@ -65,7 +65,7 @@ let debug () : crypto (option unit)  =
 
   return (Some ())
 
-//Run ``main ()`` when the module loads
+//Run ``debug ()`` when the module loads
 #push-options "--warn_error -272"
 let _ = debug () Nil
 #pop-options
