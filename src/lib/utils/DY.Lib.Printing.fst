@@ -2,7 +2,7 @@ module DY.Lib.Printing
 
 open Comparse
 open DY.Core
-open DY.Lib.State.Labeled
+open DY.Lib.State.Tagged
 open DY.Lib.State.Map
 
 /// This module provides functions to convert types
@@ -138,16 +138,16 @@ let default_pki_state_to_string content_bytes =
   let? state = parse (map DY.Lib.State.PKI.pki_types) content_bytes in
   Some (Printf.sprintf "[%s]" (pki_types_to_string state.key_values))
 
-/// Searches for a printer with the correct label
+/// Searches for a printer with the correct tag
 /// and returns the first one it finds.
 
 val find_printer: list (string & (bytes -> option string)) -> string -> (bytes -> option string)
-let rec find_printer printer_list label =
+let rec find_printer printer_list tag =
   match printer_list with
   | [] -> (fun b -> Some (bytes_to_string b))
-  | (parser_label, parser) :: tl -> (
-    if parser_label = label then parser
-    else find_printer tl label
+  | (parser_tag, parser) :: tl -> (
+    if parser_tag = tag then parser
+    else find_printer tl tag
   )
 
 val option_to_string: (bytes -> option string) -> bytes -> string
@@ -161,8 +161,8 @@ val state_to_string: list (string & (bytes -> option string)) -> bytes -> string
 let state_to_string printer_list full_content_bytes =
   let full_content = parse session full_content_bytes in
   match full_content with
-  | Some ({label; content}) -> (
-    let parser = find_printer printer_list label in
+  | Some ({tag; content}) -> (
+    let parser = find_printer printer_list tag in
     option_to_string parser content
   )
   | None -> bytes_to_string full_content_bytes
@@ -260,8 +260,8 @@ let trace_to_string_printers_builder message_to_string state_to_string event_to_
     state_to_string = (
       List.append state_to_string (
         [
-          (DY.Lib.State.PrivateKeys.private_keys_label, default_private_keys_state_to_string);
-          (DY.Lib.State.PKI.pki_label, default_pki_state_to_string)
+          (DY.Lib.State.PrivateKeys.private_keys_tag, default_private_keys_state_to_string);
+          (DY.Lib.State.PKI.pki_tag, default_pki_state_to_string)
         ]
       ) // User supplied functions will override the default functions because the
         // find printer function will choose the first match.
