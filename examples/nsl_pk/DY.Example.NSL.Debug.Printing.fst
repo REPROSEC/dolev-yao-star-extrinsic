@@ -81,5 +81,5 @@ val get_nsl_trace_to_string_printers: bytes -> bytes -> trace_to_string_printers
 let get_nsl_trace_to_string_printers priv_key_alice priv_key_bob = 
   trace_to_string_printers_builder 
     (message_to_string priv_key_alice priv_key_bob)
-    [(nsl_session_label, session_to_string)]
+    [(nsl_session_tag, session_to_string)]
     [(event_nsl_event.tag, event_to_string)]
