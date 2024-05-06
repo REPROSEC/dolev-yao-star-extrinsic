@@ -104,31 +104,31 @@ let map_session_invariant #cinvs #mt mpred = {
 }
 
 val has_map_session_invariant: #mt:map_types -> protocol_invariants -> (string & map_predicate mt) -> prop
-let has_map_session_invariant #mt invs (label, mpred) =
-  has_typed_session_pred invs (label, (map_session_invariant mpred))
+let has_map_session_invariant #mt invs (tag, mpred) =
+  has_typed_session_pred invs (tag, (map_session_invariant mpred))
 
 (*** Map API ***)
 
 [@@ "opaque_to_smt"]
 val initialize_map:
-  mt:map_types -> label:string -> prin:principal ->
+  mt:map_types -> tag:string -> prin:principal ->
   crypto nat
-let initialize_map mt label prin =
+let initialize_map mt tag prin =
   let* sess_id = new_session_id prin in
   let session: map mt = { key_values = [] } in
-  set_typed_state label prin sess_id session;*
+  set_typed_state tag prin sess_id session;*
   return sess_id
 
 [@@ "opaque_to_smt"]
 val add_key_value:
-  mt:map_types -> label:string ->
+  mt:map_types -> tag:string ->
   prin:principal -> sess_id:nat ->
   key:mt.key -> value:mt.value ->
   crypto (option unit)
-let add_key_value mt label prin sess_id key value =
-  let*? the_map = get_typed_state label prin sess_id in
+let add_key_value mt tag prin sess_id key value =
+  let*? the_map = get_typed_state tag prin sess_id in
   let new_elem = {key; value;} in
-  set_typed_state label prin sess_id { key_values = new_elem::the_map.key_values };*
+  set_typed_state tag prin sess_id { key_values = new_elem::the_map.key_values };*
   return (Some ())
 
 #push-options "--fuel 1 --ifuel 1"
@@ -153,41 +153,41 @@ let rec find_value_aux #mt key l =
 
 [@@ "opaque_to_smt"]
 val find_value:
-  mt:map_types -> label:string ->
+  mt:map_types -> tag:string ->
   prin:principal -> sess_id:nat ->
   key:mt.key ->
   crypto (option mt.value)
-let find_value mt label prin sess_id key =
-  let*? the_map = get_typed_state label prin sess_id in
+let find_value mt tag prin sess_id key =
+  let*? the_map = get_typed_state tag prin sess_id in
   return (find_value_aux key the_map.key_values)
 
 #push-options "--fuel 1"
 val initialize_map_invariant:
   {|invs:protocol_invariants|} ->
-  mt:map_types -> mpred:map_predicate mt -> label:string ->
+  mt:map_types -> mpred:map_predicate mt -> tag:string ->
   prin:principal ->
   tr:trace ->
   Lemma
   (requires
     trace_invariant tr /\
-    has_map_session_invariant invs (label, mpred)
+    has_map_session_invariant invs (tag, mpred)
   )
   (ensures (
-    let (_, tr_out) = initialize_map mt label prin tr in
+    let (_, tr_out) = initialize_map mt tag prin tr in
     trace_invariant tr_out
   ))
-  [SMTPat (initialize_map mt label prin tr);
-   SMTPat (has_map_session_invariant invs (label, mpred));
+  [SMTPat (initialize_map mt tag prin tr);
+   SMTPat (has_map_session_invariant invs (tag, mpred));
    SMTPat (trace_invariant tr)
   ]
-let initialize_map_invariant #invs mt mpred label prin tr =
+let initialize_map_invariant #invs mt mpred tag prin tr =
   reveal_opaque (`%initialize_map) (initialize_map)
 #pop-options
 
 #push-options "--fuel 1"
 val add_key_value_invariant:
   {|invs:protocol_invariants|} ->
-  mt:map_types -> mpred:map_predicate mt -> label:string ->
+  mt:map_types -> mpred:map_predicate mt -> tag:string ->
   prin:principal -> sess_id:nat ->
   key:mt.key -> value:mt.value ->
   tr:trace ->
@@ -195,19 +195,19 @@ val add_key_value_invariant:
   (requires
     mpred.pred tr prin sess_id key value /\
     trace_invariant tr /\
-    has_map_session_invariant invs (label, mpred)
+    has_map_session_invariant invs (tag, mpred)
   )
   (ensures (
-    let (_, tr_out) = add_key_value mt label prin sess_id key value tr in
+    let (_, tr_out) = add_key_value mt tag prin sess_id key value tr in
     trace_invariant tr_out
   ))
-  [SMTPat (add_key_value mt label prin sess_id key value tr);
-   SMTPat (has_map_session_invariant invs (label, mpred));
+  [SMTPat (add_key_value mt tag prin sess_id key value tr);
+   SMTPat (has_map_session_invariant invs (tag, mpred));
    SMTPat (trace_invariant tr)
   ]
-let add_key_value_invariant #invs mt mpred label prin sess_id key value tr =
+let add_key_value_invariant #invs mt mpred tag prin sess_id key value tr =
   reveal_opaque (`%add_key_value) (add_key_value);
-  let (opt_the_map, tr) = get_typed_state #(map mt) label prin sess_id tr in
+  let (opt_the_map, tr) = get_typed_state #(map mt) tag prin sess_id tr in
   match opt_the_map with
   | None -> ()
   | Some the_map -> ()
@@ -215,17 +215,17 @@ let add_key_value_invariant #invs mt mpred label prin sess_id key value tr =
 
 val find_value_invariant:
   {|invs:protocol_invariants|} ->
-  mt:map_types -> mpred:map_predicate mt -> label:string ->
+  mt:map_types -> mpred:map_predicate mt -> tag:string ->
   prin:principal -> sess_id:nat ->
   key:mt.key ->
   tr:trace ->
   Lemma
   (requires
     trace_invariant tr /\
-    has_map_session_invariant invs (label, mpred)
+    has_map_session_invariant invs (tag, mpred)
   )
   (ensures (
-    let (opt_value, tr_out) = find_value mt label prin sess_id key tr in
+    let (opt_value, tr_out) = find_value mt tag prin sess_id key tr in
     tr_out == tr /\ (
       match opt_value with
       | None -> True
@@ -234,13 +234,13 @@ val find_value_invariant:
       )
     )
   ))
-  [SMTPat (find_value mt label prin sess_id key tr);
-   SMTPat (has_map_session_invariant invs (label, mpred));
+  [SMTPat (find_value mt tag prin sess_id key tr);
+   SMTPat (has_map_session_invariant invs (tag, mpred));
    SMTPat (trace_invariant tr);
   ]
-let find_value_invariant #invs mt mpred label prin sess_id key tr =
+let find_value_invariant #invs mt mpred tag prin sess_id key tr =
   reveal_opaque (`%find_value) (find_value);
-  let (opt_the_map, tr) = get_typed_state #(map mt) label prin sess_id tr in
+  let (opt_the_map, tr) = get_typed_state #(map mt) tag prin sess_id tr in
   match opt_the_map with
   | None -> ()
   | Some the_map -> (
