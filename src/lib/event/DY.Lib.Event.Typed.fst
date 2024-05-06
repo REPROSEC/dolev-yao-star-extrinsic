@@ -42,17 +42,17 @@ type event_predicate (a:Type0) {|event a|} =
   trace -> principal -> a -> prop
 
 let split_event_pred_func: split_predicate_input_values = {
-  labeled_data_t = trace & principal & string & bytes;
-  label_t = string;
-  encoded_label_t = string;
+  tagged_data_t = trace & principal & string & bytes;
+  tag_t = string;
+  encoded_tag_t = string;
   raw_data_t = trace & principal & bytes;
 
-  decode_labeled_data = (fun (tr, prin, tag, content) -> (
+  decode_tagged_data = (fun (tr, prin, tag, content) -> (
     Some (tag, (tr, prin, content))
   ));
 
-  encode_label = (fun s -> s);
-  encode_label_inj = (fun l1 l2 -> ());
+  encode_tag = (fun s -> s);
+  encode_tag_inj = (fun l1 l2 -> ());
 
   local_pred = trace -> principal -> bytes -> prop;
   global_pred = trace -> principal -> string -> bytes -> prop;
@@ -82,8 +82,8 @@ let compile_event_pred #a #ev epred tr prin content_bytes =
 
 val has_compiled_event_pred:
   protocol_invariants -> (string & compiled_event_predicate) -> prop
-let has_compiled_event_pred invs (label, epred) =
-  has_local_pred split_event_pred_func event_pred (label, epred)
+let has_compiled_event_pred invs (tag, epred) =
+  has_local_pred split_event_pred_func event_pred (tag, epred)
 
 val has_event_pred:
   #a:Type0 -> {|event a|} ->

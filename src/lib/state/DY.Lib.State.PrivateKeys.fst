@@ -58,12 +58,12 @@ let private_keys_pred #cinvs = {
   pred_knowable = (fun tr prin sess_id key value -> ());
 }
 
-val private_keys_label: string
-let private_keys_label = "DY.Lib.State.PrivateKeys"
+val private_keys_tag: string
+let private_keys_tag = "DY.Lib.State.PrivateKeys"
 
 val has_private_keys_invariant: protocol_invariants -> prop
 let has_private_keys_invariant invs =
-  has_map_session_invariant invs (private_keys_label, private_keys_pred)
+  has_map_session_invariant invs (private_keys_tag, private_keys_pred)
 
 val private_key_type_to_usage:
   private_key_type ->
@@ -77,18 +77,18 @@ let private_key_type_to_usage sk_type =
 
 [@@ "opaque_to_smt"]
 val initialize_private_keys: prin:principal -> crypto nat
-let initialize_private_keys = initialize_map private_keys_types private_keys_label
+let initialize_private_keys = initialize_map private_keys_types private_keys_tag
 
 [@@ "opaque_to_smt"]
 val generate_private_key: principal -> nat -> private_key_type -> crypto (option unit)
 let generate_private_key prin sess_id sk_type =
   let* sk = mk_rand (private_key_type_to_usage sk_type) (principal_label prin) 64 in //TODO
-  add_key_value private_keys_types private_keys_label prin sess_id sk_type ({private_key = sk;})
+  add_key_value private_keys_types private_keys_tag prin sess_id sk_type ({private_key = sk;})
 
 [@@ "opaque_to_smt"]
 val get_private_key: principal -> nat -> private_key_type -> crypto (option bytes)
 let get_private_key prin sess_id sk_type =
-  let*? res = find_value private_keys_types private_keys_label prin sess_id sk_type in
+  let*? res = find_value private_keys_types private_keys_tag prin sess_id sk_type in
   return (Some res.private_key)
 
 val initialize_private_keys_invariant:

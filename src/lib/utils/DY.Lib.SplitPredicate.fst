@@ -62,89 +62,89 @@ noeq type split_predicate_input_values = {
   // Input type for the global predicate
   raw_data_t: Type;
   // Input type for the local predicates
-  labeled_data_t: Type;
+  tagged_data_t: Type;
 
   // Apply a local predicate to its input
   apply_local_pred: local_pred -> raw_data_t -> prop;
   // Apply the global predicate to its input
-  apply_global_pred: global_pred -> labeled_data_t -> prop;
+  apply_global_pred: global_pred -> tagged_data_t -> prop;
   // Create a global predicate
-  mk_global_pred: (labeled_data_t -> prop) -> global_pred;
+  mk_global_pred: (tagged_data_t -> prop) -> global_pred;
   // Correctness theorem on creating and applying a global predicate
-  apply_mk_global_pred: bare:(labeled_data_t -> prop) -> x:labeled_data_t -> Lemma
+  apply_mk_global_pred: bare:(tagged_data_t -> prop) -> x:tagged_data_t -> Lemma
     (apply_global_pred (mk_global_pred bare) x == bare x);
 
-  // Two types of tag, that are related using `encode_label`:
-  // the label type that we use to define the predicate,
-  // and the label type that we obtain when decoding the global predicate input.
+  // Two types of tag, that are related using `encode_tag`:
+  // the tag type that we use to define the predicate,
+  // and the tag type that we obtain when decoding the global predicate input.
   // Having different types may be handy in some situations.
-  label_t: Type;
-  encoded_label_t: Type;
+  tag_t: Type;
+  encoded_tag_t: Type;
 
-  // We can encode the label, and this encoding must be injective.
-  encode_label: label_t -> encoded_label_t;
-  encode_label_inj: l1:label_t -> l2:label_t -> Lemma
-    (requires encode_label l1 == encode_label l2)
+  // We can encode the tag, and this encoding must be injective.
+  encode_tag: tag_t -> encoded_tag_t;
+  encode_tag_inj: l1:tag_t -> l2:tag_t -> Lemma
+    (requires encode_tag l1 == encode_tag l2)
     (ensures l1 == l2)
   ;
 
   // Finally, we can decode the global predicate input
-  // into an encoded label and a local predicate input
-  decode_labeled_data: labeled_data_t -> GTot (option (encoded_label_t & raw_data_t));
+  // into an encoded tag and a local predicate input
+  decode_tagged_data: tagged_data_t -> GTot (option (encoded_tag_t & raw_data_t));
 }
 
 /// Do a global predicate contain some given local predicate with some tag?
 /// This will be a crucial precondition for the correctness theorem `local_eq_global_lemma`.
 
-val has_local_pred: func:split_predicate_input_values -> func.global_pred -> (func.label_t & func.local_pred) -> prop
-let has_local_pred func gpred (the_label, lpred) =
-  forall labeled_data.
-    match func.decode_labeled_data labeled_data with
-    | Some (label, raw_data) ->
-      label == func.encode_label the_label ==> (func.apply_global_pred gpred labeled_data <==> func.apply_local_pred lpred raw_data)
+val has_local_pred: func:split_predicate_input_values -> func.global_pred -> (func.tag_t & func.local_pred) -> prop
+let has_local_pred func gpred (the_tag, lpred) =
+  forall tagged_data.
+    match func.decode_tagged_data tagged_data with
+    | Some (tag, raw_data) ->
+      tag == func.encode_tag the_tag ==> (func.apply_global_pred gpred tagged_data <==> func.apply_local_pred lpred raw_data)
     | None -> True
 
 type bare_global_pred (func:split_predicate_input_values) =
-  func.labeled_data_t -> prop
+  func.tagged_data_t -> prop
 type bare_local_pred (func:split_predicate_input_values) =
   func.raw_data_t -> prop
 
-val mk_global_pred_aux: func:split_predicate_input_values -> list (func.label_t & func.local_pred) -> bare_global_pred func
-let rec mk_global_pred_aux func l labeled_data =
+val mk_global_pred_aux: func:split_predicate_input_values -> list (func.tag_t & func.local_pred) -> bare_global_pred func
+let rec mk_global_pred_aux func l tagged_data =
   match l with
   | [] -> False
-  | (the_label, lpred)::t ->
+  | (the_tag, lpred)::t ->
     let cur_prop =
-      match func.decode_labeled_data labeled_data with
-      | Some (label, raw_data) ->
-        label == func.encode_label the_label /\ func.apply_local_pred lpred raw_data
+      match func.decode_tagged_data tagged_data with
+      | Some (tag, raw_data) ->
+        tag == func.encode_tag the_tag /\ func.apply_local_pred lpred raw_data
       | None -> False
     in
-    cur_prop \/ mk_global_pred_aux func t labeled_data
+    cur_prop \/ mk_global_pred_aux func t tagged_data
 
-/// Given a list of labels and local predicates, create the global predicate.
+/// Given a list of tags and local predicates, create the global predicate.
 
-val mk_global_pred: func:split_predicate_input_values -> list (func.label_t & func.local_pred) -> func.global_pred
+val mk_global_pred: func:split_predicate_input_values -> list (func.tag_t & func.local_pred) -> func.global_pred
 let mk_global_pred func l =
   func.mk_global_pred (mk_global_pred_aux func l)
 
-val mk_global_pred_aux_wrong_label:
+val mk_global_pred_aux_wrong_tag:
   func:split_predicate_input_values ->
-  the_label:func.label_t -> l:list (func.label_t & func.local_pred) -> labeled_data:func.labeled_data_t ->
+  the_tag:func.tag_t -> l:list (func.tag_t & func.local_pred) -> tagged_data:func.tagged_data_t ->
   Lemma
-  (requires ~(List.Tot.memP the_label (List.Tot.map fst l)))
+  (requires ~(List.Tot.memP the_tag (List.Tot.map fst l)))
   (ensures (
-    match func.decode_labeled_data labeled_data with
-    | Some (label, raw_data) ->
-      label == func.encode_label the_label ==> ~(mk_global_pred_aux func l labeled_data)
-    | None -> ~(mk_global_pred_aux func l labeled_data)
+    match func.decode_tagged_data tagged_data with
+    | Some (tag, raw_data) ->
+      tag == func.encode_tag the_tag ==> ~(mk_global_pred_aux func l tagged_data)
+    | None -> ~(mk_global_pred_aux func l tagged_data)
   ))
-let rec mk_global_pred_aux_wrong_label func the_label l labeled_data =
+let rec mk_global_pred_aux_wrong_tag func the_tag l tagged_data =
   match l with
   | [] -> ()
-  | (label, _)::t -> (
-    FStar.Classical.move_requires_2 func.encode_label_inj the_label label;
-    mk_global_pred_aux_wrong_label func the_label t labeled_data
+  | (tag, _)::t -> (
+    FStar.Classical.move_requires_2 func.encode_tag_inj the_tag tag;
+    mk_global_pred_aux_wrong_tag func the_tag t tagged_data
   )
 
 val disjointP: #a:Type -> list a -> list a -> prop
@@ -179,33 +179,33 @@ let rec memP_map #a #b f l x =
     with _. memP_map f t x
 
 val mk_global_pred_correct_aux:
-  func:split_predicate_input_values -> gpred:bare_global_pred func -> lpreds1:list (func.label_t & func.local_pred) -> lpreds2:list (func.label_t & func.local_pred) -> the_label:func.label_t -> lpred:func.local_pred ->
+  func:split_predicate_input_values -> gpred:bare_global_pred func -> lpreds1:list (func.tag_t & func.local_pred) -> lpreds2:list (func.tag_t & func.local_pred) -> the_tag:func.tag_t -> lpred:func.local_pred ->
   Lemma
   (requires
-    (forall labeled_data. (mk_global_pred_aux func lpreds1 labeled_data \/ mk_global_pred_aux func lpreds2 labeled_data) <==> gpred labeled_data) /\
+    (forall tagged_data. (mk_global_pred_aux func lpreds1 tagged_data \/ mk_global_pred_aux func lpreds2 tagged_data) <==> gpred tagged_data) /\
     List.Tot.no_repeats_p (List.Tot.map fst lpreds1) /\
     disjointP (List.Tot.map fst lpreds1) (List.Tot.map fst lpreds2) /\
-    List.Tot.memP (the_label, lpred) lpreds1
+    List.Tot.memP (the_tag, lpred) lpreds1
   )
-  (ensures has_local_pred func (func.mk_global_pred gpred) (the_label, lpred))
-let rec mk_global_pred_correct_aux func gpred lpreds1 lpreds2 the_label lpred =
+  (ensures has_local_pred func (func.mk_global_pred gpred) (the_tag, lpred))
+let rec mk_global_pred_correct_aux func gpred lpreds1 lpreds2 the_tag lpred =
   match lpreds1 with
   | [] -> ()
   | (h_lab, h_spred)::t -> (
-    eliminate h_lab == the_label \/ h_lab =!= the_label returns has_local_pred func (func.mk_global_pred gpred) (the_label, lpred) with _. (
-      introduce forall labeled_data. (
-        match func.decode_labeled_data labeled_data with
-        | Some (label, raw_data) ->
-          label == func.encode_label the_label ==> (gpred labeled_data <==> func.apply_local_pred lpred raw_data)
+    eliminate h_lab == the_tag \/ h_lab =!= the_tag returns has_local_pred func (func.mk_global_pred gpred) (the_tag, lpred) with _. (
+      introduce forall tagged_data. (
+        match func.decode_tagged_data tagged_data with
+        | Some (tag, raw_data) ->
+          tag == func.encode_tag the_tag ==> (gpred tagged_data <==> func.apply_local_pred lpred raw_data)
         | None -> True
       ) with (
-        match func.decode_labeled_data labeled_data with
-        | Some (label, raw_data) -> (
-          eliminate label == func.encode_label the_label \/ label =!= func.encode_label the_label returns _ with _. (
-            func.encode_label_inj the_label h_lab;
-            mk_global_pred_aux_wrong_label func the_label t labeled_data;
-            mk_global_pred_aux_wrong_label func the_label lpreds2 labeled_data;
-            FStar.Classical.move_requires_3 memP_map fst t (the_label, lpred)
+        match func.decode_tagged_data tagged_data with
+        | Some (tag, raw_data) -> (
+          eliminate tag == func.encode_tag the_tag \/ tag =!= func.encode_tag the_tag returns _ with _. (
+            func.encode_tag_inj the_tag h_lab;
+            mk_global_pred_aux_wrong_tag func the_tag t tagged_data;
+            mk_global_pred_aux_wrong_tag func the_tag lpreds2 tagged_data;
+            FStar.Classical.move_requires_3 memP_map fst t (the_tag, lpred)
           ) and _. ()
         )
         | None -> ()
@@ -213,7 +213,7 @@ let rec mk_global_pred_correct_aux func gpred lpreds1 lpreds2 the_label lpred =
       FStar.Classical.forall_intro (func.apply_mk_global_pred gpred)
     ) and _. (
       disjointP_cons h_lab (List.Tot.map fst t) (List.Tot.map fst lpreds2);
-      mk_global_pred_correct_aux func gpred t ((h_lab, h_spred)::lpreds2) the_label lpred
+      mk_global_pred_correct_aux func gpred t ((h_lab, h_spred)::lpreds2) the_tag lpred
     )
   )
 
@@ -227,36 +227,36 @@ let rec disjointP_nil #a l =
 /// the global predicate contains all the local predicates used to construct it.
 
 val mk_global_pred_correct:
-  func:split_predicate_input_values -> lpreds:list (func.label_t & func.local_pred) -> the_label:func.label_t -> lpred:func.local_pred ->
+  func:split_predicate_input_values -> lpreds:list (func.tag_t & func.local_pred) -> the_tag:func.tag_t -> lpred:func.local_pred ->
   Lemma
   (requires
     List.Tot.no_repeats_p (List.Tot.map fst lpreds) /\
-    List.Tot.memP (the_label, lpred) lpreds
+    List.Tot.memP (the_tag, lpred) lpreds
   )
-  (ensures has_local_pred func (mk_global_pred func lpreds) (the_label, lpred))
-let mk_global_pred_correct func lpreds the_label lpred =
+  (ensures has_local_pred func (mk_global_pred func lpreds) (the_tag, lpred))
+let mk_global_pred_correct func lpreds the_tag lpred =
   disjointP_nil (List.Tot.map fst lpreds);
-  mk_global_pred_correct_aux func (mk_global_pred_aux func lpreds) lpreds [] the_label lpred
+  mk_global_pred_correct_aux func (mk_global_pred_aux func lpreds) lpreds [] the_tag lpred
 
 val mk_global_pred_eq_aux:
-  func:split_predicate_input_values -> lpreds:list (func.label_t & func.local_pred) ->
-  labeled_data:func.labeled_data_t ->
+  func:split_predicate_input_values -> lpreds:list (func.tag_t & func.local_pred) ->
+  tagged_data:func.tagged_data_t ->
   Lemma
-  ((mk_global_pred_aux func lpreds) labeled_data <==> (
+  ((mk_global_pred_aux func lpreds) tagged_data <==> (
       exists lab lpred raw_data.
         List.Tot.memP (lab, lpred) lpreds /\
         func.apply_local_pred lpred raw_data /\
-        func.decode_labeled_data labeled_data == Some (func.encode_label lab, raw_data)
+        func.decode_tagged_data tagged_data == Some (func.encode_tag lab, raw_data)
     )
   )
-let rec mk_global_pred_eq_aux func lpreds labeled_data =
+let rec mk_global_pred_eq_aux func lpreds tagged_data =
   match lpreds with
   | [] -> ()
-  | (the_label, lpred)::tpreds ->
-    mk_global_pred_eq_aux func tpreds labeled_data;
-    match func.decode_labeled_data labeled_data with
+  | (the_tag, lpred)::tpreds ->
+    mk_global_pred_eq_aux func tpreds tagged_data;
+    match func.decode_tagged_data tagged_data with
     | None -> ()
-    | Some (label, raw_data) -> ()
+    | Some (tag, raw_data) -> ()
 
 /// Equivalence theorem for `mk_global_pred`.
 /// This may be useful to lift properties of the local predicates
@@ -264,32 +264,32 @@ let rec mk_global_pred_eq_aux func lpreds labeled_data =
 /// (e.g. the predicate stays true when the trace grows.)
 
 val mk_global_pred_eq:
-  func:split_predicate_input_values -> lpreds:list (func.label_t & func.local_pred) ->
-  labeled_data:func.labeled_data_t ->
+  func:split_predicate_input_values -> lpreds:list (func.tag_t & func.local_pred) ->
+  tagged_data:func.tagged_data_t ->
   Lemma
-  (func.apply_global_pred (mk_global_pred func lpreds) labeled_data <==> (
+  (func.apply_global_pred (mk_global_pred func lpreds) tagged_data <==> (
       exists lab lpred raw_data.
         List.Tot.memP (lab, lpred) lpreds /\
         func.apply_local_pred lpred raw_data /\
-        func.decode_labeled_data labeled_data == Some (func.encode_label lab, raw_data)
+        func.decode_tagged_data tagged_data == Some (func.encode_tag lab, raw_data)
     )
   )
-let mk_global_pred_eq func lpreds labeled_data =
-  func.apply_mk_global_pred (mk_global_pred_aux func lpreds) labeled_data;
-  mk_global_pred_eq_aux func lpreds labeled_data
+let mk_global_pred_eq func lpreds tagged_data =
+  func.apply_mk_global_pred (mk_global_pred_aux func lpreds) tagged_data;
+  mk_global_pred_eq_aux func lpreds tagged_data
 
 /// If a global predicate contains some local predicate,
-/// and the global predicate input decodes to a label for this local predicate,
+/// and the global predicate input decodes to a tag for this local predicate,
 /// then the global predicate is equivalent to the local predicate on this input.
 
 val local_eq_global_lemma:
   func:split_predicate_input_values ->
-  gpred:func.global_pred -> the_label:func.label_t -> lpred:func.local_pred ->
-  labeled_data:func.labeled_data_t -> raw_data:func.raw_data_t ->
+  gpred:func.global_pred -> the_tag:func.tag_t -> lpred:func.local_pred ->
+  tagged_data:func.tagged_data_t -> raw_data:func.raw_data_t ->
   Lemma
   (requires
-    func.decode_labeled_data labeled_data == Some (func.encode_label the_label, raw_data) /\
-    has_local_pred func gpred (the_label, lpred)
+    func.decode_tagged_data tagged_data == Some (func.encode_tag the_tag, raw_data) /\
+    has_local_pred func gpred (the_tag, lpred)
   )
-  (ensures func.apply_global_pred gpred labeled_data <==> func.apply_local_pred lpred raw_data)
-let local_eq_global_lemma func gpred the_label lpred labeled_data raw_data = ()
+  (ensures func.apply_global_pred gpred tagged_data <==> func.apply_local_pred lpred raw_data)
+let local_eq_global_lemma func gpred the_tag lpred tagged_data raw_data = ()

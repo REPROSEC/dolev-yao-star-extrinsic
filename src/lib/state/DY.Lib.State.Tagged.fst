@@ -1,4 +1,4 @@
-module DY.Lib.State.Labeled
+module DY.Lib.State.Tagged
 
 open Comparse
 open DY.Core
@@ -13,7 +13,7 @@ open DY.Lib.Comparse.Parsers
 [@@ with_bytes bytes]
 type session = {
   [@@@ with_parser #bytes ps_string]
-  label: string;
+  tag: string;
   content: bytes;
 }
 
@@ -41,19 +41,19 @@ type session_pred {|crypto_invariants|} = {
 }
 
 let split_session_pred_func {|crypto_invariants|} : split_predicate_input_values = {
-  labeled_data_t = trace & principal & nat & bytes;
-  label_t = string;
-  encoded_label_t = string;
+  tagged_data_t = trace & principal & nat & bytes;
+  tag_t = string;
+  encoded_tag_t = string;
   raw_data_t = trace & principal & nat & bytes;
 
-  decode_labeled_data = (fun (tr, prin, sess_id, sess_content) -> (
+  decode_tagged_data = (fun (tr, prin, sess_id, sess_content) -> (
     match parse session sess_content with
-    | Some ({label; content}) -> Some (label, (tr, prin, sess_id, content))
+    | Some ({tag; content}) -> Some (tag, (tr, prin, sess_id, content))
     | None -> None
   ));
 
-  encode_label = (fun s -> s);
-  encode_label_inj = (fun l1 l2 -> ());
+  encode_tag = (fun s -> s);
+  encode_tag_inj = (fun l1 l2 -> ());
 
   local_pred = session_pred;
   global_pred = trace -> principal -> nat -> bytes -> prop;
@@ -71,8 +71,8 @@ let split_session_pred_func {|crypto_invariants|} : split_predicate_input_values
 }
 
 val has_session_pred: protocol_invariants -> (string & session_pred) -> prop
-let has_session_pred invs (label, spred) =
-  has_local_pred split_session_pred_func (state_pred) (label, spred)
+let has_session_pred invs (tag, spred) =
+  has_local_pred split_session_pred_func (state_pred) (tag, spred)
 
 (*** Global session predicate builder ***)
 
@@ -100,10 +100,10 @@ let mk_global_session_pred_later cinvs lpreds tr1 tr2 prin sess_id full_content 
   eliminate exists lab lpred raw_data.
     List.Tot.memP (lab, lpred) lpreds /\
     split_session_pred_func.apply_local_pred lpred raw_data /\
-    split_session_pred_func.decode_labeled_data (tr1, prin, sess_id, full_content) == Some (split_session_pred_func.encode_label lab, raw_data)
+    split_session_pred_func.decode_tagged_data (tr1, prin, sess_id, full_content) == Some (split_session_pred_func.encode_tag lab, raw_data)
   returns mk_global_session_pred lpreds tr2 prin sess_id full_content
   with _. (
-    let Some (_, (_, _, _, content)) = split_session_pred_func.decode_labeled_data (tr1, prin, sess_id, full_content) in
+    let Some (_, (_, _, _, content)) = split_session_pred_func.decode_tagged_data (tr1, prin, sess_id, full_content) in
     lpred.pred_later tr1 tr2 prin sess_id content;
     mk_global_pred_eq split_session_pred_func lpreds (tr2, prin, sess_id, full_content);
     assert(split_session_pred_func.apply_local_pred lpred (tr2, prin, sess_id, content))
@@ -120,13 +120,13 @@ let mk_global_session_pred_knowable cinvs lpreds tr prin sess_id full_content =
   eliminate exists lab lpred raw_data.
     List.Tot.memP (lab, lpred) lpreds /\
     split_session_pred_func.apply_local_pred lpred raw_data /\
-    split_session_pred_func.decode_labeled_data (tr, prin, sess_id, full_content) == Some (split_session_pred_func.encode_label lab, raw_data)
+    split_session_pred_func.decode_tagged_data (tr, prin, sess_id, full_content) == Some (split_session_pred_func.encode_tag lab, raw_data)
   returns is_knowable_by (principal_state_label prin sess_id) tr full_content
   with _. (
-    let Some (label, (_, _, _, content)) = split_session_pred_func.decode_labeled_data (tr, prin, sess_id, full_content) in
+    let Some (tag, (_, _, _, content)) = split_session_pred_func.decode_tagged_data (tr, prin, sess_id, full_content) in
     lpred.pred_knowable tr prin sess_id content;
     serialize_parse_inv_lemma session full_content;
-    serialize_wf_lemma session (is_knowable_by (principal_state_label prin sess_id) tr) ({label; content})
+    serialize_wf_lemma session (is_knowable_by (principal_state_label prin sess_id) tr) ({tag; content})
   )
 
 val mk_state_predicate: cinvs:crypto_invariants -> list (string & session_pred) -> state_predicate cinvs
@@ -140,67 +140,67 @@ let mk_state_predicate cinvs lpreds =
 (*** Predicates on trace ***)
 
 [@@ "opaque_to_smt"]
-val labeled_state_was_set: trace -> string -> principal -> nat -> bytes -> prop
-let labeled_state_was_set tr label prin sess_id content =
-  let full_content = {label; content;} in
+val tagged_state_was_set: trace -> string -> principal -> nat -> bytes -> prop
+let tagged_state_was_set tr tag prin sess_id content =
+  let full_content = {tag; content;} in
   let full_content_bytes = serialize session full_content in
   state_was_set tr prin sess_id full_content_bytes
 
-(*** API for labeled sessions ***)
+(*** API for tagged sessions ***)
 
 [@@ "opaque_to_smt"]
-val set_labeled_state: string -> principal -> nat -> bytes -> crypto unit
-let set_labeled_state label prin sess_id content =
-  let full_content = {label; content;} in
+val set_tagged_state: string -> principal -> nat -> bytes -> crypto unit
+let set_tagged_state tag prin sess_id content =
+  let full_content = {tag; content;} in
   let full_content_bytes = serialize session full_content in
   set_state prin sess_id full_content_bytes
 
 [@@ "opaque_to_smt"]
-val get_labeled_state: string -> principal -> nat -> crypto (option bytes)
-let get_labeled_state lab prin sess_id =
+val get_tagged_state: string -> principal -> nat -> crypto (option bytes)
+let get_tagged_state the_tag prin sess_id =
   let*? full_content_bytes = get_state prin sess_id in
   match parse session full_content_bytes with
     | None -> return None
-    | Some ({label; content;}) ->
-      if label = lab then return (Some content)
+    | Some ({tag; content;}) ->
+      if tag = the_tag then return (Some content)
       else return None
 
-val set_labeled_state_invariant:
+val set_tagged_state_invariant:
   invs:protocol_invariants ->
-  label:string -> spred:session_pred ->
+  tag:string -> spred:session_pred ->
   prin:principal -> sess_id:nat -> content:bytes -> tr:trace ->
   Lemma
   (requires
     spred.pred tr prin sess_id content /\
     trace_invariant tr /\
-    has_session_pred invs (label, spred)
+    has_session_pred invs (tag, spred)
   )
   (ensures (
-    let ((), tr_out) = set_labeled_state label prin sess_id content tr in
+    let ((), tr_out) = set_tagged_state tag prin sess_id content tr in
     trace_invariant tr_out /\
-    labeled_state_was_set tr_out label prin sess_id content
+    tagged_state_was_set tr_out tag prin sess_id content
   ))
-  [SMTPat (set_labeled_state label prin sess_id content tr);
+  [SMTPat (set_tagged_state tag prin sess_id content tr);
    SMTPat (trace_invariant tr);
-   SMTPat (has_session_pred invs (label, spred))]
-let set_labeled_state_invariant invs label spred prin sess_id content tr =
-  reveal_opaque (`%set_labeled_state) (set_labeled_state);
-  reveal_opaque (`%labeled_state_was_set) (labeled_state_was_set);
-  let full_content = {label; content;} in
+   SMTPat (has_session_pred invs (tag, spred))]
+let set_tagged_state_invariant invs tag spred prin sess_id content tr =
+  reveal_opaque (`%set_tagged_state) (set_tagged_state);
+  reveal_opaque (`%tagged_state_was_set) (tagged_state_was_set);
+  let full_content = {tag; content;} in
   parse_serialize_inv_lemma #bytes session full_content;
-  local_eq_global_lemma split_session_pred_func state_pred label spred (tr, prin, sess_id, serialize _ full_content) (tr, prin, sess_id, content)
+  local_eq_global_lemma split_session_pred_func state_pred tag spred (tr, prin, sess_id, serialize _ full_content) (tr, prin, sess_id, content)
 
-val get_labeled_state_invariant:
+val get_tagged_state_invariant:
   invs:protocol_invariants ->
-  label:string -> spred:session_pred ->
+  tag:string -> spred:session_pred ->
   prin:principal -> sess_id:nat -> tr:trace ->
   Lemma
   (requires
     trace_invariant tr /\
-    has_session_pred invs (label, spred)
+    has_session_pred invs (tag, spred)
   )
   (ensures (
-    let (opt_content, tr_out) = get_labeled_state label prin sess_id tr in
+    let (opt_content, tr_out) = get_tagged_state tag prin sess_id tr in
     tr == tr_out /\ (
       match opt_content with
       | None -> True
@@ -209,38 +209,38 @@ val get_labeled_state_invariant:
       )
     )
   ))
-  [SMTPat (get_labeled_state label prin sess_id tr);
+  [SMTPat (get_tagged_state tag prin sess_id tr);
    SMTPat (trace_invariant tr);
-   SMTPat (has_session_pred invs (label, spred))]
-let get_labeled_state_invariant invs label spred prin sess_id tr =
-  reveal_opaque (`%get_labeled_state) (get_labeled_state);
-  let (opt_content, tr_out) = get_labeled_state label prin sess_id tr in
+   SMTPat (has_session_pred invs (tag, spred))]
+let get_tagged_state_invariant invs tag spred prin sess_id tr =
+  reveal_opaque (`%get_tagged_state) (get_tagged_state);
+  let (opt_content, tr_out) = get_tagged_state tag prin sess_id tr in
   match opt_content with
   | None -> ()
   | Some content ->
     let (Some full_content_bytes, tr) = get_state prin sess_id tr in
-    local_eq_global_lemma split_session_pred_func state_pred label spred (tr, prin, sess_id, full_content_bytes) (tr, prin, sess_id, content)
+    local_eq_global_lemma split_session_pred_func state_pred tag spred (tr, prin, sess_id, full_content_bytes) (tr, prin, sess_id, content)
 
 (*** Theorem ***)
 
-val labeled_state_was_set_implies_pred:
+val tagged_state_was_set_implies_pred:
   invs:protocol_invariants -> tr:trace ->
-  label:string -> spred:session_pred ->
+  tag:string -> spred:session_pred ->
   prin:principal -> sess_id:nat -> content:bytes ->
   Lemma
   (requires
-    labeled_state_was_set tr label prin sess_id content /\
+    tagged_state_was_set tr tag prin sess_id content /\
     trace_invariant tr /\
-    has_session_pred invs (label, spred)
+    has_session_pred invs (tag, spred)
   )
   (ensures spred.pred tr prin sess_id content)
-  [SMTPat (labeled_state_was_set tr label prin sess_id content);
+  [SMTPat (tagged_state_was_set tr tag prin sess_id content);
    SMTPat (trace_invariant tr);
-   SMTPat (has_session_pred invs (label, spred));
+   SMTPat (has_session_pred invs (tag, spred));
   ]
-let labeled_state_was_set_implies_pred invs tr label spred prin sess_id content =
-  reveal_opaque (`%labeled_state_was_set) (labeled_state_was_set);
-  let full_content = {label; content;} in
+let tagged_state_was_set_implies_pred invs tr tag spred prin sess_id content =
+  reveal_opaque (`%tagged_state_was_set) (tagged_state_was_set);
+  let full_content = {tag; content;} in
   parse_serialize_inv_lemma #bytes session full_content;
   let full_content_bytes: bytes = serialize session full_content in
-  local_eq_global_lemma split_session_pred_func state_pred label spred (tr, prin, sess_id, full_content_bytes) (tr, prin, sess_id, content)
+  local_eq_global_lemma split_session_pred_func state_pred tag spred (tr, prin, sess_id, full_content_bytes) (tr, prin, sess_id, content)
