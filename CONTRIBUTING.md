@@ -82,7 +82,7 @@ Often, several arguments may be as generic as other arguments,
 in that case some arbitrary order must be chosen between them,
 but that order should be consistent across functions.
 
-When there as many arguments with the same genericity,
+When there are many arguments with the same genericity,
 it is good practice to create a record type for these arguments.
 This provides an approximation of named arguments,
 to avoid mixing their order when calling the function
