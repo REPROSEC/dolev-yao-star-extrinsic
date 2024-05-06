@@ -27,6 +27,10 @@ open DY.Core.Label
 /// (see DY.Core.Attacker.Knowledge.attacker_only_knows_publishable_values),
 /// to ensure that the every bytestring obtained by the attacker by corruption are publishable.
 
+class state_functional_predicate = {
+  state_functional_pred: bytes -> prop;
+}
+
 noeq
 type state_predicate (cinvs:crypto_invariants) = {
   pred: trace -> principal -> nat -> bytes -> prop;
@@ -52,7 +56,7 @@ type state_predicate (cinvs:crypto_invariants) = {
 /// The parameters of the trace invariant.
 
 noeq
-type trace_invariants (cinvs:crypto_invariants) = {
+type trace_invariants {|state_functional_predicate|} (cinvs:crypto_invariants) = {
   state_pred: state_predicate cinvs;
   event_pred: trace -> principal -> string -> bytes -> prop;
 }
@@ -64,6 +68,8 @@ type trace_invariants (cinvs:crypto_invariants) = {
 /// that are used to prove a specific protocol secure.
 
 class protocol_invariants = {
+  [@@@FStar.Tactics.Typeclasses.tcinstance]
+  state_inv: state_functional_predicate;
   [@@@FStar.Tactics.Typeclasses.tcinstance]
   crypto_invs: crypto_invariants;
   trace_invs: trace_invariants crypto_invs;
@@ -79,6 +85,23 @@ let event_pred {|invs:protocol_invariants|} = invs.trace_invs.event_pred
 
 (*** Trace invariant definition ***)
 
+val trace_functional_event_invariant: {|state_functional_predicate|} -> trace_event -> prop
+let trace_functional_event_invariant #sfp event =
+  match event with
+  | SetState prin sess_id content -> (
+    state_functional_pred content
+  )
+  | _ -> True
+
+[@@ "opaque_to_smt"]
+val trace_functional_invariant: {|state_functional_predicate|} -> trace -> prop
+let rec trace_functional_invariant #sfp tr =
+  match tr with
+  | Nil -> True
+  | Snoc tr_init event ->
+    trace_functional_event_invariant event /\
+    trace_functional_invariant tr_init
+
 /// The invariant that must be satisfied by each event in the trace.
 
 val trace_event_invariant: {|protocol_invariants|} -> trace -> trace_event -> prop
@@ -89,6 +112,7 @@ let trace_event_invariant #invs tr event =
     is_publishable tr msg
   | SetState prin sess_id content -> (
     // Stored states satisfy the custom state predicate
+    invs.state_inv.state_functional_pred content /\
     invs.trace_invs.state_pred.pred tr prin sess_id content
   )
   | Event prin tag content -> (
@@ -109,6 +133,23 @@ let rec trace_invariant #invs tr =
   | Snoc tr_init event ->
     trace_event_invariant tr_init event /\
     trace_invariant tr_init
+
+(*** Lemma relating the full trace invariant and the functional trace invariant ***)
+
+val trace_invariant_implies_trace_functional_invariant:
+  {|protocol_invariants|} ->
+  tr:trace ->
+  Lemma
+  (requires trace_invariant tr)
+  (ensures trace_functional_invariant tr)
+  [SMTPat (trace_invariant tr)]
+let rec trace_invariant_implies_trace_functional_invariant #invs tr =
+  norm_spec [zeta; delta_only [`%trace_functional_invariant]] (trace_functional_invariant);
+  norm_spec [zeta; delta_only [`%trace_invariant]] (trace_invariant);
+  match tr with
+  | Nil -> ()
+  | Snoc tr_init event ->
+    trace_invariant_implies_trace_functional_invariant tr_init
 
 (*** Lemmas on the trace invariant ***)
 
@@ -165,13 +206,16 @@ val state_was_set_implies_pred:
     trace_invariant tr /\
     state_was_set tr prin sess_id content
   )
-  (ensures state_pred tr prin sess_id content)
+  (ensures
+    state_functional_pred content /\
+    state_pred tr prin sess_id content
+  )
   [SMTPat (state_was_set tr prin sess_id content);
    SMTPat (trace_invariant tr);
   ]
 let state_was_set_implies_pred #invs tr prin sess_id content =
   eliminate exists i. event_at tr i (SetState prin sess_id content)
-  returns invs.trace_invs.state_pred.pred tr prin sess_id content
+  returns state_functional_pred content /\ invs.trace_invs.state_pred.pred tr prin sess_id content
   with _. (
     event_at_implies_trace_event_invariant tr i (SetState prin sess_id content);
     invs.trace_invs.state_pred.pred_later (prefix tr i) tr prin sess_id content

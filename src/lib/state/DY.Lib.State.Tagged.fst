@@ -8,7 +8,7 @@ open DY.Lib.Comparse.Parsers
 
 #set-options "--fuel 1 --ifuel 1"
 
-(*** Session predicates ***)
+(*** Session type ***)
 
 [@@ with_bytes bytes]
 type session = {
@@ -21,6 +21,67 @@ type session = {
 %splice [ps_session_is_well_formed] (gen_is_well_formed_lemma (`session))
 
 instance parseable_serializeable_session: parseable_serializeable bytes session = mk_parseable_serializeable (ps_session)
+
+(*** Session functional predicate ***)
+
+noeq
+type session_functional_predicate = {
+  session_functional_pred: bytes -> prop;
+}
+
+let split_session_functional_predicate_func : split_predicate_input_values = {
+  tagged_data_t = bytes;
+  tag_t = string;
+  encoded_tag_t = string;
+  raw_data_t = bytes;
+
+  decode_tagged_data = (fun (sess_content) -> (
+    match parse session sess_content with
+    | Some ({tag; content}) -> Some (tag, content)
+    | None -> None
+  ));
+
+  encode_tag = (fun s -> s);
+  encode_tag_inj = (fun l1 l2 -> ());
+
+  local_pred = session_functional_predicate;
+  global_pred = state_functional_predicate;
+
+  apply_local_pred = (fun spred content ->
+    spred.session_functional_pred content
+  );
+  apply_global_pred = (fun spred content ->
+    spred.state_functional_pred content
+  );
+  mk_global_pred = (fun spred ->
+    { state_functional_pred = spred }
+  );
+  apply_mk_global_pred = (fun spred x -> ());
+}
+
+val has_session_functional_predicate: state_functional_predicate -> (string & session_functional_predicate) -> prop
+let has_session_functional_predicate sfp (tag, spred) =
+  (forall content. state_functional_pred content ==> Some? (parse session content)) /\
+  has_local_pred split_session_functional_predicate_func sfp (tag, spred)
+
+(*** Session functional predicate builder ***)
+
+val mk_global_session_functional_predicate: list (string & session_functional_predicate) -> state_functional_predicate
+let mk_global_session_functional_predicate l =
+  mk_global_pred split_session_functional_predicate_func l
+
+val mk_global_session_functional_predicate_correct: sfp:state_functional_predicate -> lpreds:list (string & session_functional_predicate) -> Lemma
+  (requires
+    sfp == mk_global_session_functional_predicate lpreds /\
+    List.Tot.no_repeats_p (List.Tot.map fst lpreds)
+  )
+  (ensures for_allP (has_session_functional_predicate sfp) lpreds)
+let mk_global_session_functional_predicate_correct invs lpreds =
+  for_allP_eq (has_session_functional_predicate invs) lpreds;
+  FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (mk_global_pred_correct split_session_functional_predicate_func lpreds));
+  FStar.Classical.forall_intro (FStar.Classical.move_requires (mk_global_pred_eq split_session_functional_predicate_func lpreds))
+
+(*** Session predicates ***)
 
 noeq
 type session_pred {|crypto_invariants|} = {
@@ -149,7 +210,7 @@ let tagged_state_was_set tr tag prin sess_id content =
 (*** API for tagged sessions ***)
 
 [@@ "opaque_to_smt"]
-val set_tagged_state: string -> principal -> nat -> bytes -> crypto unit
+val set_tagged_state:string -> principal -> nat -> bytes -> crypto unit
 let set_tagged_state tag prin sess_id content =
   let full_content = {tag; content;} in
   let full_content_bytes = serialize session full_content in
