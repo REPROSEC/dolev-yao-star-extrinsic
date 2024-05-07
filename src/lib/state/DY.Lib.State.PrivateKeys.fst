@@ -4,6 +4,8 @@ open Comparse
 open DY.Core
 open DY.Lib.Comparse.Glue
 open DY.Lib.Comparse.Parsers
+open DY.Lib.State.Tagged
+open DY.Lib.State.Typed
 open DY.Lib.State.Map
 
 #set-options "--fuel 1 --ifuel 1"
@@ -22,19 +24,26 @@ type private_key_type =
 %splice [ps_private_key_type] (gen_parser (`private_key_type))
 %splice [ps_private_key_type_is_well_formed] (gen_is_well_formed_lemma (`private_key_type))
 
-type private_key_value (bytes:Type0) {|bytes_like bytes|} = {
+[@@ with_bytes bytes]
+type private_key_key = {
+  ty:private_key_type;
+}
+
+%splice [ps_private_key_key] (gen_parser (`private_key_key))
+%splice [ps_private_key_key_is_well_formed] (gen_is_well_formed_lemma (`private_key_key))
+
+[@@ with_bytes bytes]
+type private_key_value = {
   private_key: bytes;
 }
 
 %splice [ps_private_key_value] (gen_parser (`private_key_value))
 %splice [ps_private_key_value_is_well_formed] (gen_is_well_formed_lemma (`private_key_value))
 
-val private_keys_types: map_types
-let private_keys_types = {
-  key = private_key_type;
-  ps_key = ps_private_key_type;
-  value = private_key_value bytes;
-  ps_value = ps_private_key_value;
+instance map_types_private_keys: map_types private_key_key private_key_value = {
+  tag = "DY.Lib.State.PrivateKeys";
+  ps_key_t = ps_private_key_key;
+  ps_value_t = ps_private_key_value;
 }
 
 val is_private_key_for:
@@ -49,21 +58,22 @@ let is_private_key_for #cinvs tr sk sk_type who =
     is_signature_key usg (principal_label who) tr sk
   )
 
-val private_keys_pred: {|crypto_invariants|} -> map_predicate private_keys_types
+// The `#_` at the end is a workaround for FStarLang/FStar#3286
+val private_keys_pred: {|crypto_invariants|} -> map_predicate private_key_key private_key_value #_
 let private_keys_pred #cinvs = {
-  pred = (fun tr prin sess_id (key:private_keys_types.key) value ->
-    is_private_key_for tr value.private_key key prin
+  pred = (fun tr prin sess_id key value ->
+    is_private_key_for tr value.private_key key.ty prin
   );
   pred_later = (fun tr1 tr2 prin sess_id key value -> ());
   pred_knowable = (fun tr prin sess_id key value -> ());
 }
 
-val private_keys_tag: string
-let private_keys_tag = "DY.Lib.State.PrivateKeys"
-
 val has_private_keys_invariant: protocol_invariants -> prop
 let has_private_keys_invariant invs =
-  has_map_session_invariant invs (private_keys_tag, private_keys_pred)
+  has_map_session_invariant invs private_keys_pred
+
+val private_keys_tag_and_invariant: {|crypto_invariants|} -> string & local_bytes_state_predicate
+let private_keys_tag_and_invariant #ci = (map_types_private_keys.tag, local_state_predicate_to_local_bytes_state_predicate (map_session_invariant private_keys_pred))
 
 val private_key_type_to_usage:
   private_key_type ->
@@ -77,18 +87,18 @@ let private_key_type_to_usage sk_type =
 
 [@@ "opaque_to_smt"]
 val initialize_private_keys: prin:principal -> crypto nat
-let initialize_private_keys = initialize_map private_keys_types private_keys_tag
+let initialize_private_keys = initialize_map private_key_key private_key_value #_ // another workaround for FStarLang/FStar#3286
 
 [@@ "opaque_to_smt"]
 val generate_private_key: principal -> nat -> private_key_type -> crypto (option unit)
 let generate_private_key prin sess_id sk_type =
   let* sk = mk_rand (private_key_type_to_usage sk_type) (principal_label prin) 64 in //TODO
-  add_key_value private_keys_types private_keys_tag prin sess_id sk_type ({private_key = sk;})
+  add_key_value prin sess_id ({ty = sk_type}) ({private_key = sk;})
 
 [@@ "opaque_to_smt"]
 val get_private_key: principal -> nat -> private_key_type -> crypto (option bytes)
 let get_private_key prin sess_id sk_type =
-  let*? res = find_value private_keys_types private_keys_tag prin sess_id sk_type in
+  let*? res = find_value prin sess_id ({ty = sk_type}) in
   return (Some res.private_key)
 
 val initialize_private_keys_invariant:
