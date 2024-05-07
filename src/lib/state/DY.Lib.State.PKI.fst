@@ -48,7 +48,7 @@ type pki_value = {
 %splice [ps_pki_value] (gen_parser (`pki_value))
 %splice [ps_pki_value_is_well_formed] (gen_is_well_formed_lemma (`pki_value))
 
-instance pki_types: map_types pki_key pki_value = {
+instance map_types_pki: map_types pki_key pki_value = {
   tag = "DY.Lib.State.PKI";
   ps_key_t = ps_pki_key;
   ps_value_t = ps_pki_value;
@@ -81,7 +81,7 @@ let has_pki_invariant invs =
   has_map_session_invariant invs pki_pred
 
 val pki_tag_and_invariant: {|crypto_invariants|} -> string & local_bytes_state_predicate
-let pki_tag_and_invariant #ci = (pki_types.tag, local_state_predicate_to_local_bytes_state_predicate (map_session_invariant pki_pred))
+let pki_tag_and_invariant #ci = (map_types_pki.tag, local_state_predicate_to_local_bytes_state_predicate (map_session_invariant pki_pred))
 
 (*** PKI API ***)
 

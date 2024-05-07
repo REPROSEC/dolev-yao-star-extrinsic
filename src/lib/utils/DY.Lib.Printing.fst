@@ -264,8 +264,8 @@ let trace_to_string_printers_builder message_to_string state_to_string event_to_
     state_to_string = (
       List.append state_to_string (
         [
-          (DY.Lib.State.PrivateKeys.private_keys_types.tag, default_private_keys_state_to_string);
-          (DY.Lib.State.PKI.pki_types.tag, default_pki_state_to_string)
+          (DY.Lib.State.PrivateKeys.map_types_private_keys.tag, default_private_keys_state_to_string);
+          (DY.Lib.State.PKI.map_types_pki.tag, default_pki_state_to_string)
         ]
       ) // User supplied functions will override the default functions because the
         // find printer function will choose the first match.

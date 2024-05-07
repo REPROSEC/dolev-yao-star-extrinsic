@@ -32,7 +32,7 @@ type private_key_value = {
 %splice [ps_private_key_value] (gen_parser (`private_key_value))
 %splice [ps_private_key_value_is_well_formed] (gen_is_well_formed_lemma (`private_key_value))
 
-instance private_keys_types: map_types private_key_type private_key_value = {
+instance map_types_private_keys: map_types private_key_type private_key_value = {
   tag = "DY.Lib.State.PrivateKeys";
   ps_key_t = ps_private_key_type;
   ps_value_t = ps_private_key_value;
@@ -65,7 +65,7 @@ let has_private_keys_invariant invs =
   has_map_session_invariant invs private_keys_pred
 
 val private_keys_tag_and_invariant: {|crypto_invariants|} -> string & local_bytes_state_predicate
-let private_keys_tag_and_invariant #ci = (private_keys_types.tag, local_state_predicate_to_local_bytes_state_predicate (map_session_invariant private_keys_pred))
+let private_keys_tag_and_invariant #ci = (map_types_private_keys.tag, local_state_predicate_to_local_bytes_state_predicate (map_session_invariant private_keys_pred))
 
 val private_key_type_to_usage:
   private_key_type ->
