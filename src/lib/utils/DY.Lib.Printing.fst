@@ -104,7 +104,8 @@ let private_key_type_to_string t =
   | DY.Lib.State.PrivateKeys.PkDec u -> "PkDec " ^ u
   | DY.Lib.State.PrivateKeys.Sign u -> "Sign " ^ u
 
-val private_keys_types_to_string: (list (map_elem DY.Lib.State.PrivateKeys.private_keys_types)) -> string
+// The `#_` at the end is a workaround for FStarLang/FStar#3286
+val private_keys_types_to_string: (list (map_elem DY.Lib.State.PrivateKeys.private_key_type DY.Lib.State.PrivateKeys.private_key_value #_)) -> string
 let rec private_keys_types_to_string m =
   match m with
   | [] -> ""
@@ -119,7 +120,8 @@ let public_key_type_to_string t =
   | DY.Lib.State.PKI.PkEnc u -> "PkEnc " ^ u
   | DY.Lib.State.PKI.Verify u -> "Verify " ^ u
 
-val pki_types_to_string: (list (map_elem DY.Lib.State.PKI.pki_types)) -> string
+// The `#_` at the end is a workaround for FStarLang/FStar#3286
+val pki_types_to_string: (list (map_elem DY.Lib.State.PKI.pki_key DY.Lib.State.PKI.pki_value #_)) -> string
 let rec pki_types_to_string m =
   match m with
   | [] -> ""
@@ -130,12 +132,14 @@ let rec pki_types_to_string m =
 
 val default_private_keys_state_to_string: bytes -> option string
 let default_private_keys_state_to_string content_bytes =
-  let? state = parse (map DY.Lib.State.PrivateKeys.private_keys_types) content_bytes in
+  // another workaround for FStarLang/FStar#3286
+  let? state = parse (map DY.Lib.State.PrivateKeys.private_key_type DY.Lib.State.PrivateKeys.private_key_value #_) content_bytes in
   Some (Printf.sprintf "[%s]" (private_keys_types_to_string state.key_values))
 
 val default_pki_state_to_string: bytes -> option string
 let default_pki_state_to_string content_bytes =
-  let? state = parse (map DY.Lib.State.PKI.pki_types) content_bytes in
+  // another workaround for FStarLang/FStar#3286
+  let? state = parse (map DY.Lib.State.PKI.pki_key DY.Lib.State.PKI.pki_value #_) content_bytes in
   Some (Printf.sprintf "[%s]" (pki_types_to_string state.key_values))
 
 /// Searches for a printer with the correct tag
@@ -260,8 +264,8 @@ let trace_to_string_printers_builder message_to_string state_to_string event_to_
     state_to_string = (
       List.append state_to_string (
         [
-          (DY.Lib.State.PrivateKeys.private_keys_tag, default_private_keys_state_to_string);
-          (DY.Lib.State.PKI.pki_tag, default_pki_state_to_string)
+          (DY.Lib.State.PrivateKeys.private_keys_types.tag, default_private_keys_state_to_string);
+          (DY.Lib.State.PKI.pki_types.tag, default_pki_state_to_string)
         ]
       ) // User supplied functions will override the default functions because the
         // find printer function will choose the first match.
