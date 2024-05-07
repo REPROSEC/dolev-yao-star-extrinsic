@@ -191,8 +191,8 @@ val mk_global_pred_correct_aux:
 let rec mk_global_pred_correct_aux func gpred lpreds1 lpreds2 the_tag lpred =
   match lpreds1 with
   | [] -> ()
-  | (h_lab, h_spred)::t -> (
-    eliminate h_lab == the_tag \/ h_lab =!= the_tag returns has_local_pred func (func.mk_global_pred gpred) (the_tag, lpred) with _. (
+  | (h_tag, h_spred)::t -> (
+    eliminate h_tag == the_tag \/ h_tag =!= the_tag returns has_local_pred func (func.mk_global_pred gpred) (the_tag, lpred) with _. (
       introduce forall tagged_data. (
         match func.decode_tagged_data tagged_data with
         | Some (tag, raw_data) ->
@@ -202,7 +202,7 @@ let rec mk_global_pred_correct_aux func gpred lpreds1 lpreds2 the_tag lpred =
         match func.decode_tagged_data tagged_data with
         | Some (tag, raw_data) -> (
           eliminate tag == func.encode_tag the_tag \/ tag =!= func.encode_tag the_tag returns _ with _. (
-            func.encode_tag_inj the_tag h_lab;
+            func.encode_tag_inj the_tag h_tag;
             mk_global_pred_aux_wrong_tag func the_tag t tagged_data;
             mk_global_pred_aux_wrong_tag func the_tag lpreds2 tagged_data;
             FStar.Classical.move_requires_3 memP_map fst t (the_tag, lpred)
@@ -212,8 +212,8 @@ let rec mk_global_pred_correct_aux func gpred lpreds1 lpreds2 the_tag lpred =
       );
       FStar.Classical.forall_intro (func.apply_mk_global_pred gpred)
     ) and _. (
-      disjointP_cons h_lab (List.Tot.map fst t) (List.Tot.map fst lpreds2);
-      mk_global_pred_correct_aux func gpred t ((h_lab, h_spred)::lpreds2) the_tag lpred
+      disjointP_cons h_tag (List.Tot.map fst t) (List.Tot.map fst lpreds2);
+      mk_global_pred_correct_aux func gpred t ((h_tag, h_spred)::lpreds2) the_tag lpred
     )
   )
 
@@ -243,10 +243,10 @@ val mk_global_pred_eq_aux:
   tagged_data:func.tagged_data_t ->
   Lemma
   ((mk_global_pred_aux func lpreds) tagged_data <==> (
-      exists lab lpred raw_data.
-        List.Tot.memP (lab, lpred) lpreds /\
+      exists tag lpred raw_data.
+        List.Tot.memP (tag, lpred) lpreds /\
         func.apply_local_pred lpred raw_data /\
-        func.decode_tagged_data tagged_data == Some (func.encode_tag lab, raw_data)
+        func.decode_tagged_data tagged_data == Some (func.encode_tag tag, raw_data)
     )
   )
 let rec mk_global_pred_eq_aux func lpreds tagged_data =
@@ -268,10 +268,10 @@ val mk_global_pred_eq:
   tagged_data:func.tagged_data_t ->
   Lemma
   (func.apply_global_pred (mk_global_pred func lpreds) tagged_data <==> (
-      exists lab lpred raw_data.
-        List.Tot.memP (lab, lpred) lpreds /\
+      exists tag lpred raw_data.
+        List.Tot.memP (tag, lpred) lpreds /\
         func.apply_local_pred lpred raw_data /\
-        func.decode_tagged_data tagged_data == Some (func.encode_tag lab, raw_data)
+        func.decode_tagged_data tagged_data == Some (func.encode_tag tag, raw_data)
     )
   )
 let mk_global_pred_eq func lpreds tagged_data =

@@ -97,10 +97,10 @@ val mk_global_session_pred_later:
   (ensures mk_global_session_pred lpreds tr2 prin sess_id full_content)
 let mk_global_session_pred_later cinvs lpreds tr1 tr2 prin sess_id full_content =
   mk_global_pred_eq split_session_pred_func lpreds (tr1, prin, sess_id, full_content);
-  eliminate exists lab lpred raw_data.
-    List.Tot.memP (lab, lpred) lpreds /\
+  eliminate exists tag lpred raw_data.
+    List.Tot.memP (tag, lpred) lpreds /\
     split_session_pred_func.apply_local_pred lpred raw_data /\
-    split_session_pred_func.decode_tagged_data (tr1, prin, sess_id, full_content) == Some (split_session_pred_func.encode_tag lab, raw_data)
+    split_session_pred_func.decode_tagged_data (tr1, prin, sess_id, full_content) == Some (split_session_pred_func.encode_tag tag, raw_data)
   returns mk_global_session_pred lpreds tr2 prin sess_id full_content
   with _. (
     let Some (_, (_, _, _, content)) = split_session_pred_func.decode_tagged_data (tr1, prin, sess_id, full_content) in
@@ -117,10 +117,10 @@ val mk_global_session_pred_knowable:
   (ensures is_knowable_by (principal_state_label prin sess_id) tr full_content)
 let mk_global_session_pred_knowable cinvs lpreds tr prin sess_id full_content =
   mk_global_pred_eq split_session_pred_func lpreds (tr, prin, sess_id, full_content);
-  eliminate exists lab lpred raw_data.
-    List.Tot.memP (lab, lpred) lpreds /\
+  eliminate exists tag lpred raw_data.
+    List.Tot.memP (tag, lpred) lpreds /\
     split_session_pred_func.apply_local_pred lpred raw_data /\
-    split_session_pred_func.decode_tagged_data (tr, prin, sess_id, full_content) == Some (split_session_pred_func.encode_tag lab, raw_data)
+    split_session_pred_func.decode_tagged_data (tr, prin, sess_id, full_content) == Some (split_session_pred_func.encode_tag tag, raw_data)
   returns is_knowable_by (principal_state_label prin sess_id) tr full_content
   with _. (
     let Some (tag, (_, _, _, content)) = split_session_pred_func.decode_tagged_data (tr, prin, sess_id, full_content) in
