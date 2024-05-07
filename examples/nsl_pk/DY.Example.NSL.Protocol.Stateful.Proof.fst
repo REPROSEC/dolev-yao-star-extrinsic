@@ -101,6 +101,7 @@ let nsl_trace_invs: trace_invariants (nsl_crypto_invs) = {
 }
 
 instance nsl_protocol_invs: protocol_invariants = {
+  state_inv = nsl_state_functional_predicate;
   crypto_invs = nsl_crypto_invs;
   trace_invs = nsl_trace_invs;
 }
