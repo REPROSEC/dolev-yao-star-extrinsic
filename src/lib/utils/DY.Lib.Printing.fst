@@ -105,13 +105,13 @@ let private_key_type_to_string t =
   | DY.Lib.State.PrivateKeys.Sign u -> "Sign " ^ u
 
 // The `#_` at the end is a workaround for FStarLang/FStar#3286
-val private_keys_types_to_string: (list (map_elem DY.Lib.State.PrivateKeys.private_key_type DY.Lib.State.PrivateKeys.private_key_value #_)) -> string
+val private_keys_types_to_string: (list (map_elem DY.Lib.State.PrivateKeys.private_key_key DY.Lib.State.PrivateKeys.private_key_value #_)) -> string
 let rec private_keys_types_to_string m =
   match m with
   | [] -> ""
   | hd :: tl -> (
     (private_keys_types_to_string tl) ^ 
-    Printf.sprintf "%s = (%s)," (private_key_type_to_string hd.key) (bytes_to_string hd.value.private_key)
+    Printf.sprintf "%s = (%s)," (private_key_type_to_string hd.key.ty) (bytes_to_string hd.value.private_key)
   )
 
 val public_key_type_to_string: DY.Lib.State.PKI.public_key_type -> string
@@ -133,7 +133,7 @@ let rec pki_types_to_string m =
 val default_private_keys_state_to_string: bytes -> option string
 let default_private_keys_state_to_string content_bytes =
   // another workaround for FStarLang/FStar#3286
-  let? state = parse (map DY.Lib.State.PrivateKeys.private_key_type DY.Lib.State.PrivateKeys.private_key_value #_) content_bytes in
+  let? state = parse (map DY.Lib.State.PrivateKeys.private_key_key DY.Lib.State.PrivateKeys.private_key_value #_) content_bytes in
   Some (Printf.sprintf "[%s]" (private_keys_types_to_string state.key_values))
 
 val default_pki_state_to_string: bytes -> option string

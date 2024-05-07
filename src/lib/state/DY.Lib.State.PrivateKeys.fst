@@ -25,6 +25,14 @@ type private_key_type =
 %splice [ps_private_key_type_is_well_formed] (gen_is_well_formed_lemma (`private_key_type))
 
 [@@ with_bytes bytes]
+type private_key_key = {
+  ty:private_key_type;
+}
+
+%splice [ps_private_key_key] (gen_parser (`private_key_key))
+%splice [ps_private_key_key_is_well_formed] (gen_is_well_formed_lemma (`private_key_key))
+
+[@@ with_bytes bytes]
 type private_key_value = {
   private_key: bytes;
 }
@@ -32,9 +40,9 @@ type private_key_value = {
 %splice [ps_private_key_value] (gen_parser (`private_key_value))
 %splice [ps_private_key_value_is_well_formed] (gen_is_well_formed_lemma (`private_key_value))
 
-instance map_types_private_keys: map_types private_key_type private_key_value = {
+instance map_types_private_keys: map_types private_key_key private_key_value = {
   tag = "DY.Lib.State.PrivateKeys";
-  ps_key_t = ps_private_key_type;
+  ps_key_t = ps_private_key_key;
   ps_value_t = ps_private_key_value;
 }
 
@@ -51,10 +59,10 @@ let is_private_key_for #cinvs tr sk sk_type who =
   )
 
 // The `#_` at the end is a workaround for FStarLang/FStar#3286
-val private_keys_pred: {|crypto_invariants|} -> map_predicate private_key_type private_key_value #_
+val private_keys_pred: {|crypto_invariants|} -> map_predicate private_key_key private_key_value #_
 let private_keys_pred #cinvs = {
   pred = (fun tr prin sess_id key value ->
-    is_private_key_for tr value.private_key key prin
+    is_private_key_for tr value.private_key key.ty prin
   );
   pred_later = (fun tr1 tr2 prin sess_id key value -> ());
   pred_knowable = (fun tr prin sess_id key value -> ());
@@ -79,18 +87,18 @@ let private_key_type_to_usage sk_type =
 
 [@@ "opaque_to_smt"]
 val initialize_private_keys: prin:principal -> crypto nat
-let initialize_private_keys = initialize_map private_key_type private_key_value #_ // another workaround for FStarLang/FStar#3286
+let initialize_private_keys = initialize_map private_key_key private_key_value #_ // another workaround for FStarLang/FStar#3286
 
 [@@ "opaque_to_smt"]
 val generate_private_key: principal -> nat -> private_key_type -> crypto (option unit)
 let generate_private_key prin sess_id sk_type =
   let* sk = mk_rand (private_key_type_to_usage sk_type) (principal_label prin) 64 in //TODO
-  add_key_value prin sess_id sk_type ({private_key = sk;})
+  add_key_value prin sess_id ({ty = sk_type}) ({private_key = sk;})
 
 [@@ "opaque_to_smt"]
 val get_private_key: principal -> nat -> private_key_type -> crypto (option bytes)
 let get_private_key prin sess_id sk_type =
-  let*? res = find_value prin sess_id sk_type in
+  let*? res = find_value prin sess_id ({ty = sk_type}) in
   return (Some res.private_key)
 
 val initialize_private_keys_invariant:
