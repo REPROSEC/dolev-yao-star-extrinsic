@@ -111,10 +111,11 @@ let mk_event_pred_correct invs lpreds =
 
 [@@ "opaque_to_smt"]
 val trigger_event:
+  {|state_functional_predicate|} ->
   #a:Type -> {|event a|} ->
   principal -> a ->
   crypto unit
-let trigger_event #a #ev prin e =
+let trigger_event #sfp #a #ev prin e =
   DY.Core.trigger_event prin ev.tag (serialize a e)
 
 [@@ "opaque_to_smt"]
@@ -152,7 +153,7 @@ val trigger_event_trace_invariant:
    SMTPat (has_event_pred invs epred);
    SMTPat (trace_invariant tr)]
 let trigger_event_trace_invariant #invs #a #ev epred prin e tr =
-  reveal_opaque (`%trigger_event) (trigger_event #a);
+  reveal_opaque (`%trigger_event) (trigger_event #_ #a);
   reveal_opaque (`%event_triggered_at) (event_triggered_at #a);
   local_eq_global_lemma split_event_pred_func event_pred ev.tag (compile_event_pred epred) (tr, prin, ev.tag, serialize _ e) (tr, prin, serialize _ e)
 

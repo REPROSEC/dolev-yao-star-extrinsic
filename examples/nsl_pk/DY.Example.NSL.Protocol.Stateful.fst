@@ -26,9 +26,15 @@ type nsl_session =
 instance nsl_session_parseable_serializeable: parseable_serializeable bytes nsl_session
  = mk_parseable_serializeable ps_nsl_session
 
+val nsl_session_pred: local_state_functional_predicate nsl_session
+let nsl_session_pred = {
+  pred = (fun _ -> True);
+}
+
 instance local_state_nsl_session: local_state nsl_session = {
   tag = "NSL.Session";
   format = nsl_session_parseable_serializeable;
+  pred = nsl_session_pred;
 }
 
 (*** Event type ***)
@@ -50,6 +56,33 @@ instance event_nsl_event: event nsl_event = {
   tag = "NSL.Event";
   format = mk_parseable_serializeable ps_nsl_event;
 }
+
+(*** Global state functional predicate ***)
+
+// The `#_` at the end are a workaround for FStarLang/FStar#3286
+let all_sessions = [
+  (map_types_pki.tag, local_state_functional_predicate_to_local_bytes_state_functional_predicate (map_has_local_state pki_key pki_value #_).pred);
+  (map_types_private_keys.tag, local_state_functional_predicate_to_local_bytes_state_functional_predicate (map_has_local_state private_key_key private_key_value #_).pred);
+  (local_state_nsl_session.tag, local_state_functional_predicate_to_local_bytes_state_functional_predicate nsl_session_pred);
+]
+
+instance nsl_state_functional_predicate: state_functional_predicate =
+  mk_global_state_functional_predicate all_sessions
+
+val all_sessions_has_all_sessions: unit -> Lemma (norm [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP (has_local_bytes_state_functional_predicate nsl_state_functional_predicate) all_sessions))
+let all_sessions_has_all_sessions () =
+  assert_norm(List.Tot.no_repeats_p (List.Tot.map fst (all_sessions)));
+  mk_global_state_functional_predicate_correct nsl_state_functional_predicate all_sessions;
+  norm_spec [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP (has_local_bytes_state_functional_predicate nsl_state_functional_predicate) all_sessions)
+
+val nsl_state_functional_pred_has_pki_invariant: squash (has_pki_functional_invariant nsl_state_functional_predicate)
+let nsl_state_functional_pred_has_pki_invariant = all_sessions_has_all_sessions ()
+
+val nsl_state_functional_pred_has_private_keys_invariant: squash (has_private_keys_functional_invariant nsl_state_functional_predicate)
+let nsl_state_functional_pred_has_private_keys_invariant = all_sessions_has_all_sessions ()
+
+val nsl_state_functional_pred_has_nsl_invariant: squash (has_local_state_functional_predicate nsl_state_functional_predicate nsl_session_pred)
+let nsl_state_functional_pred_has_nsl_invariant = all_sessions_has_all_sessions ()
 
 (*** Stateful code ***)
 

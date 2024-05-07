@@ -76,6 +76,10 @@ let pki_pred #cinvs = {
   pred_knowable = (fun tr prin sess_id key value -> ());
 }
 
+val has_pki_functional_invariant: state_functional_predicate -> prop
+let has_pki_functional_invariant sfp =
+  has_map_functional_state_invariant #pki_key #pki_value sfp
+
 val has_pki_invariant: protocol_invariants -> prop
 let has_pki_invariant invs =
   has_map_session_invariant invs pki_pred
@@ -86,16 +90,28 @@ let pki_tag_and_invariant #ci = (map_types_pki.tag, local_state_predicate_to_loc
 (*** PKI API ***)
 
 [@@ "opaque_to_smt"]
-val initialize_pki: prin:principal -> crypto nat
-let initialize_pki = initialize_map pki_key pki_value #_ // another workaround for FStarLang/FStar#3286
+val initialize_pki:
+  {|sfp:state_functional_predicate|} ->
+  #squash (has_pki_functional_invariant sfp) ->
+  prin:principal ->
+  crypto nat
+let initialize_pki #sfp #pf = initialize_map pki_key pki_value #_ #_ // another workaround for FStarLang/FStar#3286
 
 [@@ "opaque_to_smt"]
-val install_public_key: principal -> nat -> public_key_type -> principal -> bytes -> crypto (option unit)
+val install_public_key:
+  {|sfp:state_functional_predicate|} ->
+  #squash (has_pki_functional_invariant sfp) ->
+  principal -> nat -> public_key_type -> principal -> bytes ->
+  crypto (option unit)
 let install_public_key prin sess_id pk_type who pk =
   add_key_value prin sess_id ({ty = pk_type; who;}) ({public_key = pk;})
 
 [@@ "opaque_to_smt"]
-val get_public_key: principal -> nat -> public_key_type -> principal -> crypto (option bytes)
+val get_public_key:
+  {|sfp:state_functional_predicate|} ->
+  #squash (has_pki_functional_invariant sfp) ->
+  principal -> nat -> public_key_type -> principal ->
+  crypto (option bytes)
 let get_public_key prin sess_id pk_type who =
   let*? res = find_value prin sess_id ({ty = pk_type; who;}) in
   return (Some res.public_key)
@@ -106,7 +122,8 @@ val initialize_pki_invariant:
   Lemma
   (requires
     trace_invariant tr /\
-    has_pki_invariant invs
+    has_pki_invariant invs /\
+    has_pki_functional_invariant invs.state_inv
   )
   (ensures (
     let (_, tr_out) = initialize_pki prin tr in
@@ -125,7 +142,8 @@ val install_public_key_invariant:
   (requires
     is_public_key_for tr pk pk_type who /\
     trace_invariant tr /\
-    has_pki_invariant invs
+    has_pki_invariant invs /\
+    has_pki_functional_invariant invs.state_inv
   )
   (ensures (
     let (_, tr_out) = install_public_key prin sess_id pk_type who pk tr in
@@ -143,7 +161,8 @@ val get_public_key_invariant:
   Lemma
   (requires
     trace_invariant tr /\
-    has_pki_invariant invs
+    has_pki_invariant invs /\
+    has_pki_functional_invariant invs.state_inv
   )
   (ensures (
     let (opt_public_key, tr_out) = get_public_key prin sess_id pk_type who tr in

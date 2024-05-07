@@ -61,6 +61,7 @@ instance parseable_serializeable_map (key_t:eqtype) (value_t:Type0) {|map_types 
 instance map_has_local_state (key_t:eqtype) (value_t:Type0) {|mt:map_types key_t value_t|}: local_state (map key_t value_t) = {
   tag = mt.tag;
   format = (parseable_serializeable_map key_t value_t);
+  pred = { pred = (fun _ -> True) }; //TODO
 }
 
 val map_elem_invariant:
@@ -116,6 +117,13 @@ let map_session_invariant #cinvs #key_t #value_t #mt mpred = {
   );
 }
 
+val has_map_functional_state_invariant:
+  #key_t:eqtype -> #value_t:Type0 -> {|map_types key_t value_t|} ->
+  state_functional_predicate ->
+  prop
+let has_map_functional_state_invariant #key_t #value_t #mt sfp =
+  has_local_state_functional_predicate sfp (map_has_local_state key_t value_t).pred
+
 val has_map_session_invariant:
   #key_t:eqtype -> #value_t:Type0 -> {|map_types key_t value_t|} ->
   protocol_invariants -> map_predicate key_t value_t -> prop
@@ -126,11 +134,13 @@ let has_map_session_invariant #key_t #value_t #mt invs mpred =
 
 [@@ "opaque_to_smt"]
 val initialize_map:
+  {|sfp:state_functional_predicate|} ->
   key_t:eqtype -> value_t:Type0 ->
   {|map_types key_t value_t|} ->
+  #squash (has_map_functional_state_invariant #key_t #value_t sfp) ->
   prin:principal ->
   crypto nat
-let initialize_map key_t value_t #mt prin =
+let initialize_map #sfp key_t value_t #mt #pf prin =
   let* sess_id = new_session_id prin in
   let session: map key_t value_t = { key_values = [] } in
   set_state prin sess_id session;*
@@ -138,11 +148,13 @@ let initialize_map key_t value_t #mt prin =
 
 [@@ "opaque_to_smt"]
 val add_key_value:
+  {|sfp:state_functional_predicate|} ->
   #key_t:eqtype -> #value_t:Type0 -> {|map_types key_t value_t|} ->
+  #squash (has_map_functional_state_invariant #key_t #value_t sfp) ->
   prin:principal -> sess_id:nat ->
   key:key_t -> value:value_t ->
   crypto (option unit)
-let add_key_value #key_t #value_t #mt prin sess_id key value =
+let add_key_value #sfp #key_t #value_t #mt #pf prin sess_id key value =
   let*? the_map = get_state prin sess_id in
   let new_elem = {key; value;} in
   set_state prin sess_id { key_values = new_elem::the_map.key_values };*
@@ -173,11 +185,13 @@ let rec find_value_aux #key_t #value_t #mt key l =
 
 [@@ "opaque_to_smt"]
 val find_value:
+  {|sfp:state_functional_predicate|} ->
   #key_t:eqtype -> #value_t:Type0 -> {|map_types key_t value_t|} ->
+  #squash (has_map_functional_state_invariant #key_t #value_t sfp) ->
   prin:principal -> sess_id:nat ->
   key:key_t ->
   crypto (option value_t)
-let find_value #key_t #value_t #mt prin sess_id key =
+let find_value #sfp #key_t #value_t #mt #pf prin sess_id key =
   let*? the_map = get_state prin sess_id in
   return (find_value_aux key the_map.key_values)
 
@@ -191,7 +205,8 @@ val initialize_map_invariant:
   Lemma
   (requires
     trace_invariant tr /\
-    has_map_session_invariant invs mpred
+    has_map_session_invariant invs mpred /\
+    has_map_functional_state_invariant #key_t #value_t invs.state_inv
   )
   (ensures (
     let (_, tr_out) = initialize_map key_t value_t prin tr in
@@ -217,7 +232,8 @@ val add_key_value_invariant:
   (requires
     mpred.pred tr prin sess_id key value /\
     trace_invariant tr /\
-    has_map_session_invariant invs mpred
+    has_map_session_invariant invs mpred /\
+    has_map_functional_state_invariant #key_t #value_t invs.state_inv
   )
   (ensures (
     let (_, tr_out) = add_key_value prin sess_id key value tr in
@@ -228,7 +244,7 @@ val add_key_value_invariant:
    SMTPat (trace_invariant tr)
   ]
 let add_key_value_invariant #invs #key_t #value_t #mt mpred prin sess_id key value tr =
-  reveal_opaque (`%add_key_value) (add_key_value #key_t #value_t)
+  reveal_opaque (`%add_key_value) (add_key_value #_ #key_t #value_t)
 #pop-options
 
 val find_value_invariant:
@@ -241,7 +257,8 @@ val find_value_invariant:
   Lemma
   (requires
     trace_invariant tr /\
-    has_map_session_invariant invs mpred
+    has_map_session_invariant invs mpred /\
+    has_map_functional_state_invariant #key_t #value_t invs.state_inv
   )
   (ensures (
     let (opt_value, tr_out) = find_value prin sess_id key tr in
@@ -253,12 +270,12 @@ val find_value_invariant:
       )
     )
   ))
-  [SMTPat (find_value #key_t #value_t prin sess_id key tr);
+  [SMTPat (find_value #_ #key_t #value_t prin sess_id key tr);
    SMTPat (has_map_session_invariant invs mpred);
    SMTPat (trace_invariant tr);
   ]
 let find_value_invariant #invs #key_t #value_t #mt mpred prin sess_id key tr =
-  reveal_opaque (`%find_value) (find_value #key_t #value_t);
+  reveal_opaque (`%find_value) (find_value #_ #key_t #value_t);
   let (opt_the_map, tr) = get_state prin sess_id tr in
   match opt_the_map with
   | None -> ()

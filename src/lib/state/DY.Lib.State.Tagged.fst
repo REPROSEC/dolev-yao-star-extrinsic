@@ -22,21 +22,21 @@ type tagged_state = {
 
 instance parseable_serializeable_tagged_state: parseable_serializeable bytes tagged_state = mk_parseable_serializeable (ps_tagged_state)
 
-(*** Session functional predicate ***)
+(*** Tagged state functional predicate ***)
 
 noeq
-type session_functional_predicate = {
-  session_functional_pred: bytes -> prop;
+type local_bytes_state_functional_predicate = {
+  pred: bytes -> prop;
 }
 
-let split_session_functional_predicate_func : split_predicate_input_values = {
+let split_state_functional_predicate_func : split_predicate_input_values = {
   tagged_data_t = bytes;
   tag_t = string;
   encoded_tag_t = string;
   raw_data_t = bytes;
 
   decode_tagged_data = (fun (sess_content) -> (
-    match parse session sess_content with
+    match parse tagged_state sess_content with
     | Some ({tag; content}) -> Some (tag, content)
     | None -> None
   ));
@@ -44,11 +44,11 @@ let split_session_functional_predicate_func : split_predicate_input_values = {
   encode_tag = (fun s -> s);
   encode_tag_inj = (fun l1 l2 -> ());
 
-  local_pred = session_functional_predicate;
+  local_pred = local_bytes_state_functional_predicate;
   global_pred = state_functional_predicate;
 
   apply_local_pred = (fun spred content ->
-    spred.session_functional_pred content
+    spred.pred content
   );
   apply_global_pred = (fun spred content ->
     spred.state_functional_pred content
@@ -59,29 +59,29 @@ let split_session_functional_predicate_func : split_predicate_input_values = {
   apply_mk_global_pred = (fun spred x -> ());
 }
 
-val has_session_functional_predicate: state_functional_predicate -> (string & session_functional_predicate) -> prop
-let has_session_functional_predicate sfp (tag, spred) =
-  (forall content. state_functional_pred content ==> Some? (parse session content)) /\
-  has_local_pred split_session_functional_predicate_func sfp (tag, spred)
+val has_local_bytes_state_functional_predicate: state_functional_predicate -> (string & local_bytes_state_functional_predicate) -> prop
+let has_local_bytes_state_functional_predicate sfp (tag, spred) =
+  (forall content. state_functional_pred content ==> Some? (parse tagged_state content)) /\
+  has_local_pred split_state_functional_predicate_func sfp (tag, spred)
 
-(*** Session functional predicate builder ***)
+(*** State functional predicate builder ***)
 
-val mk_global_session_functional_predicate: list (string & session_functional_predicate) -> state_functional_predicate
-let mk_global_session_functional_predicate l =
-  mk_global_pred split_session_functional_predicate_func l
+val mk_global_state_functional_predicate: list (string & local_bytes_state_functional_predicate) -> state_functional_predicate
+let mk_global_state_functional_predicate l =
+  mk_global_pred split_state_functional_predicate_func l
 
-val mk_global_session_functional_predicate_correct: sfp:state_functional_predicate -> lpreds:list (string & session_functional_predicate) -> Lemma
+val mk_global_state_functional_predicate_correct: sfp:state_functional_predicate -> lpreds:list (string & local_bytes_state_functional_predicate) -> Lemma
   (requires
-    sfp == mk_global_session_functional_predicate lpreds /\
+    sfp == mk_global_state_functional_predicate lpreds /\
     List.Tot.no_repeats_p (List.Tot.map fst lpreds)
   )
-  (ensures for_allP (has_session_functional_predicate sfp) lpreds)
-let mk_global_session_functional_predicate_correct invs lpreds =
-  for_allP_eq (has_session_functional_predicate invs) lpreds;
-  FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (mk_global_pred_correct split_session_functional_predicate_func lpreds));
-  FStar.Classical.forall_intro (FStar.Classical.move_requires (mk_global_pred_eq split_session_functional_predicate_func lpreds))
+  (ensures for_allP (has_local_bytes_state_functional_predicate sfp) lpreds)
+let mk_global_state_functional_predicate_correct invs lpreds =
+  for_allP_eq (has_local_bytes_state_functional_predicate invs) lpreds;
+  FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (mk_global_pred_correct split_state_functional_predicate_func lpreds));
+  FStar.Classical.forall_intro (FStar.Classical.move_requires (mk_global_pred_eq split_state_functional_predicate_func lpreds))
 
-(*** Session predicates ***)
+(*** Tagged state predicates ***)
 
 noeq
 type local_bytes_state_predicate {|crypto_invariants|} = {
@@ -207,44 +207,51 @@ let tagged_state_was_set tr tag prin sess_id content =
   let full_content_bytes = serialize tagged_state full_content in
   state_was_set tr prin sess_id full_content_bytes
 
-(*** API for tagged sessions ***)
+(*** API for tagged state ***)
 
 [@@ "opaque_to_smt"]
-val set_tagged_state:string -> principal -> nat -> bytes -> crypto unit
-let set_tagged_state tag prin sess_id content =
+val set_tagged_state:
+  {|sfp:state_functional_predicate|} ->
+  tag:string -> lpred:local_bytes_state_functional_predicate{has_local_bytes_state_functional_predicate sfp (tag, lpred)} ->
+  principal -> nat -> content:bytes{lpred.pred content} -> crypto unit
+let set_tagged_state #sfp tag lpred prin sess_id content =
   let full_content = {tag; content;} in
-  let full_content_bytes = serialize tagged_state full_content in
+  let full_content_bytes: bytes = serialize tagged_state full_content in
   set_state prin sess_id full_content_bytes
 
 [@@ "opaque_to_smt"]
-val get_tagged_state: string -> principal -> nat -> crypto (option bytes)
-let get_tagged_state the_tag prin sess_id =
+val get_tagged_state:
+  {|sfp:state_functional_predicate|} ->
+  tag:string -> lpred:local_bytes_state_functional_predicate{has_local_bytes_state_functional_predicate sfp (tag, lpred)} ->
+  principal -> nat -> crypto (option (content:bytes{lpred.pred content}))
+let get_tagged_state the_tag lpred prin sess_id =
   let*? full_content_bytes = get_state prin sess_id in
-  match parse tagged_state full_content_bytes with
-    | None -> return None
-    | Some ({tag; content;}) ->
-      if tag = the_tag then return (Some content)
-      else return None
+  let Some ({tag; content}) = parse tagged_state full_content_bytes in
+  if tag = the_tag then
+    return (Some (content <: content:bytes{lpred.pred content}))
+  else
+    return None
 
 val set_tagged_state_invariant:
   invs:protocol_invariants ->
-  tag:string -> spred:local_bytes_state_predicate ->
-  prin:principal -> sess_id:nat -> content:bytes -> tr:trace ->
+  tag:string -> lpred:local_bytes_state_functional_predicate -> spred:local_bytes_state_predicate ->
+  prin:principal -> sess_id:nat -> content:bytes{lpred.pred content} -> tr:trace ->
   Lemma
   (requires
     spred.pred tr prin sess_id content /\
     trace_invariant tr /\
-    has_local_bytes_state_predicate invs (tag, spred)
+    has_local_bytes_state_predicate invs (tag, spred) /\
+    has_local_bytes_state_functional_predicate invs.state_inv (tag, lpred)
   )
   (ensures (
-    let ((), tr_out) = set_tagged_state tag prin sess_id content tr in
+    let ((), tr_out) = set_tagged_state tag lpred prin sess_id content tr in
     trace_invariant tr_out /\
     tagged_state_was_set tr_out tag prin sess_id content
   ))
-  [SMTPat (set_tagged_state tag prin sess_id content tr);
+  [SMTPat (set_tagged_state tag lpred prin sess_id content tr);
    SMTPat (trace_invariant tr);
    SMTPat (has_local_bytes_state_predicate invs (tag, spred))]
-let set_tagged_state_invariant invs tag spred prin sess_id content tr =
+let set_tagged_state_invariant invs tag lpred spred prin sess_id content tr =
   reveal_opaque (`%set_tagged_state) (set_tagged_state);
   reveal_opaque (`%tagged_state_was_set) (tagged_state_was_set);
   let full_content = {tag; content;} in
@@ -253,15 +260,16 @@ let set_tagged_state_invariant invs tag spred prin sess_id content tr =
 
 val get_tagged_state_invariant:
   invs:protocol_invariants ->
-  tag:string -> spred:local_bytes_state_predicate ->
+  tag:string -> lpred:local_bytes_state_functional_predicate -> spred:local_bytes_state_predicate ->
   prin:principal -> sess_id:nat -> tr:trace ->
   Lemma
   (requires
     trace_invariant tr /\
-    has_local_bytes_state_predicate invs (tag, spred)
+    has_local_bytes_state_predicate invs (tag, spred) /\
+    has_local_bytes_state_functional_predicate invs.state_inv (tag, lpred)
   )
   (ensures (
-    let (opt_content, tr_out) = get_tagged_state tag prin sess_id tr in
+    let (opt_content, tr_out) = get_tagged_state tag lpred prin sess_id tr in
     tr == tr_out /\ (
       match opt_content with
       | None -> True
@@ -270,12 +278,12 @@ val get_tagged_state_invariant:
       )
     )
   ))
-  [SMTPat (get_tagged_state tag prin sess_id tr);
+  [SMTPat (get_tagged_state tag lpred prin sess_id tr);
    SMTPat (trace_invariant tr);
    SMTPat (has_local_bytes_state_predicate invs (tag, spred))]
-let get_tagged_state_invariant invs tag spred prin sess_id tr =
+let get_tagged_state_invariant invs tag lpred spred prin sess_id tr =
   reveal_opaque (`%get_tagged_state) (get_tagged_state);
-  let (opt_content, tr_out) = get_tagged_state tag prin sess_id tr in
+  let (opt_content, tr_out) = get_tagged_state tag lpred prin sess_id tr in
   match opt_content with
   | None -> ()
   | Some content ->

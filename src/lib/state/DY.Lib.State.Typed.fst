@@ -5,19 +5,52 @@ open DY.Core
 open DY.Lib.Comparse.Glue
 open DY.Lib.State.Tagged
 
+(*** Local state typeclass ***)
+
+noeq
+type local_state_functional_predicate (a:Type) = {
+  pred: a -> prop;
+}
+
 class local_state (a:Type0) = {
   tag: string;
   [@@@FStar.Tactics.Typeclasses.tcinstance]
   format: parseable_serializeable bytes a;
+  pred: local_state_functional_predicate a;
 }
 
 val mk_local_state_instance:
-  #a:Type0 -> {|parseable_serializeable bytes a|} -> string ->
+  #a:Type0 -> {|parseable_serializeable bytes a|} ->
+  string -> local_state_functional_predicate a ->
   local_state a
-let mk_local_state_instance #a #format tag = {
+let mk_local_state_instance #a #format tag pred = {
   tag;
   format;
+  pred;
 }
+
+(*** Local state functional predicate ***)
+
+val local_state_functional_predicate_to_local_bytes_state_functional_predicate:
+  #a:Type -> {|parseable_serializeable bytes a|} ->
+  local_state_functional_predicate a -> local_bytes_state_functional_predicate
+let local_state_functional_predicate_to_local_bytes_state_functional_predicate #a #ps_a lpred =
+  {
+    pred = (fun content_bytes ->
+      match parse a content_bytes with
+      | None -> False
+      | Some content -> lpred.pred content
+    );
+  }
+
+val has_local_state_functional_predicate:
+  #a:Type -> {|local_state a|} ->
+  state_functional_predicate -> local_state_functional_predicate a ->
+  prop
+let has_local_state_functional_predicate #a #ls sfp lpred =
+  has_local_bytes_state_functional_predicate sfp (ls.tag, (local_state_functional_predicate_to_local_bytes_state_functional_predicate lpred))
+
+(*** Local state predicate ***)
 
 noeq
 type local_state_predicate {|crypto_invariants|} (a:Type) {|parseable_serializeable bytes a|} = {
@@ -67,6 +100,8 @@ val has_local_state_predicate:
 let has_local_state_predicate #a #ls invs spred =
   has_local_bytes_state_predicate invs (ls.tag, (local_state_predicate_to_local_bytes_state_predicate spred))
 
+(*** API for typed state ***)
+
 [@@ "opaque_to_smt"]
 val state_was_set:
   #a:Type -> {|local_state a|} ->
@@ -77,31 +112,35 @@ let state_was_set #a #ls tr prin sess_id content =
 
 [@@ "opaque_to_smt"]
 val set_state:
-  #a:Type -> {|local_state a|} ->
-  principal -> nat -> a -> crypto unit
-let set_state #a #ls prin sess_id content =
-  set_tagged_state ls.tag prin sess_id (serialize _ content)
+  {|sfp:state_functional_predicate|} ->
+  #a:Type -> {|ls:local_state a|} ->
+  #squash (has_local_state_functional_predicate sfp ls.pred) ->
+  principal -> nat -> x:a{ls.pred.pred x} -> crypto unit
+let set_state #sfp #a #ls #pf prin sess_id content =
+  set_tagged_state ls.tag (local_state_functional_predicate_to_local_bytes_state_functional_predicate ls.pred) prin sess_id (serialize _ content <: bytes)
 
 [@@ "opaque_to_smt"]
 val get_state:
-  #a:Type -> {|local_state a|} ->
-  principal -> nat -> crypto (option a)
-let get_state #a #ls prin sess_id =
-  let*? content_bytes = get_tagged_state ls.tag prin sess_id in
-  match parse a content_bytes with
-  | None -> return None
-  | Some content -> return (Some content)
+  {|sfp:state_functional_predicate|} ->
+  #a:Type -> {|ls:local_state a|} ->
+  #squash (has_local_state_functional_predicate sfp ls.pred) ->
+  principal -> nat -> crypto (option (x:a{ls.pred.pred x}))
+let get_state #sfp #a #ls #pf prin sess_id =
+  let*? content_bytes = get_tagged_state ls.tag (local_state_functional_predicate_to_local_bytes_state_functional_predicate ls.pred) prin sess_id in
+  let Some content = parse a content_bytes in
+  return (Some (content <: content:a{ls.pred.pred content}))
 
 val set_state_invariant:
-  #a:Type -> {|local_state a|} ->
+  #a:Type -> {|ls:local_state a|} ->
   {|invs:protocol_invariants|} ->
   spred:local_state_predicate a ->
-  prin:principal -> sess_id:nat -> content:a -> tr:trace ->
+  prin:principal -> sess_id:nat -> content:a{ls.pred.pred content} -> tr:trace ->
   Lemma
   (requires
     spred.pred tr prin sess_id content /\
     trace_invariant tr /\
-    has_local_state_predicate invs spred
+    has_local_state_predicate invs spred /\
+    has_local_state_functional_predicate invs.state_inv ls.pred
   )
   (ensures (
     let ((), tr_out) = set_state prin sess_id content tr in
@@ -112,19 +151,20 @@ val set_state_invariant:
    SMTPat (trace_invariant tr);
    SMTPat (has_local_state_predicate invs spred)]
 let set_state_invariant #a #ls #invs spred prin sess_id content tr =
-  reveal_opaque (`%set_state) (set_state #a);
+  reveal_opaque (`%set_state) (set_state #_ #a);
   reveal_opaque (`%state_was_set) (state_was_set #a);
   parse_serialize_inv_lemma #bytes a content
 
 val get_state_invariant:
-  #a:Type -> {|local_state a|} ->
+  #a:Type -> {|ls:local_state a|} ->
   {|invs:protocol_invariants|} ->
   spred:local_state_predicate a ->
   prin:principal -> sess_id:nat -> tr:trace ->
   Lemma
   (requires
     trace_invariant tr /\
-    has_local_state_predicate invs spred
+    has_local_state_predicate invs spred /\
+    has_local_state_functional_predicate invs.state_inv ls.pred
   )
   (ensures (
     let (opt_content, tr_out) = get_state prin sess_id tr in
@@ -136,11 +176,11 @@ val get_state_invariant:
       )
     )
   ))
-  [SMTPat (get_state #a prin sess_id tr);
+  [SMTPat (get_state #_ #a prin sess_id tr);
    SMTPat (trace_invariant tr);
    SMTPat (has_local_state_predicate invs spred)]
 let get_state_invariant #a #ls #invs spred prin sess_id tr =
-  reveal_opaque (`%get_state) (get_state #a)
+  reveal_opaque (`%get_state) (get_state #_ #a)
 
 val state_was_set_implies_pred:
   #a:Type -> {|local_state a|} ->

@@ -102,6 +102,14 @@ let rec trace_functional_invariant #sfp tr =
     trace_functional_event_invariant event /\
     trace_functional_invariant tr_init
 
+val trace_functional_invariant_empty_trace:
+  {|state_functional_predicate|} ->
+  Lemma
+  (ensures trace_functional_invariant Nil)
+  [SMTPat (trace_functional_invariant Nil)]
+let trace_functional_invariant_empty_trace #invs =
+  norm_spec [zeta; delta_only [`%trace_functional_invariant]] (trace_functional_invariant)
+
 /// The invariant that must be satisfied by each event in the trace.
 
 val trace_event_invariant: {|protocol_invariants|} -> trace -> trace_event -> prop
