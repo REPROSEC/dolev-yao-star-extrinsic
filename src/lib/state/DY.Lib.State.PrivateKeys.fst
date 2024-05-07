@@ -64,8 +64,8 @@ val has_private_keys_invariant: protocol_invariants -> prop
 let has_private_keys_invariant invs =
   has_map_session_invariant invs private_keys_pred
 
-val private_keys_tag_and_invariant: {|crypto_invariants|} -> string & session_pred
-let private_keys_tag_and_invariant #ci = (private_keys_types.tag, local_state_predicate_to_session_pred (map_session_invariant private_keys_pred))
+val private_keys_tag_and_invariant: {|crypto_invariants|} -> string & local_bytes_state_predicate
+let private_keys_tag_and_invariant #ci = (private_keys_types.tag, local_state_predicate_to_local_bytes_state_predicate (map_session_invariant private_keys_pred))
 
 val private_key_type_to_usage:
   private_key_type ->

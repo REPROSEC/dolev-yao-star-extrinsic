@@ -84,7 +84,7 @@ let nsl_event_pred: event_predicate nsl_event =
 let all_sessions = [
   pki_tag_and_invariant;
   private_keys_tag_and_invariant;
-  (local_state_nsl_session.tag, local_state_predicate_to_session_pred nsl_session_pred);
+  (local_state_nsl_session.tag, local_state_predicate_to_local_bytes_state_predicate nsl_session_pred);
 ]
 
 /// List of all local event predicates.
@@ -107,11 +107,11 @@ instance nsl_protocol_invs: protocol_invariants = {
 
 /// Lemmas that the global state predicate contains all the local ones
 
-val all_sessions_has_all_sessions: unit -> Lemma (norm [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP (has_session_pred nsl_protocol_invs) all_sessions))
+val all_sessions_has_all_sessions: unit -> Lemma (norm [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP (has_local_bytes_state_predicate nsl_protocol_invs) all_sessions))
 let all_sessions_has_all_sessions () =
   assert_norm(List.Tot.no_repeats_p (List.Tot.map fst (all_sessions)));
-  mk_global_session_pred_correct nsl_protocol_invs all_sessions;
-  norm_spec [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP (has_session_pred nsl_protocol_invs) all_sessions)
+  mk_global_local_bytes_state_predicate_correct nsl_protocol_invs all_sessions;
+  norm_spec [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP (has_local_bytes_state_predicate nsl_protocol_invs) all_sessions)
 
 val full_nsl_session_pred_has_pki_invariant: squash (has_pki_invariant nsl_protocol_invs)
 let full_nsl_session_pred_has_pki_invariant = all_sessions_has_all_sessions ()

@@ -163,7 +163,7 @@ let option_to_string parse_fn elem =
 
 val state_to_string: list (string & (bytes -> option string)) -> bytes -> string
 let state_to_string printer_list full_content_bytes =
-  let full_content = parse session full_content_bytes in
+  let full_content = parse tagged_state full_content_bytes in
   match full_content with
   | Some ({tag; content}) -> (
     let parser = find_printer printer_list tag in

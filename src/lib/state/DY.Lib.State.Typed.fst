@@ -37,11 +37,11 @@ type local_state_predicate {|crypto_invariants|} (a:Type) {|parseable_serializea
   ;
 }
 
-val local_state_predicate_to_session_pred:
+val local_state_predicate_to_local_bytes_state_predicate:
   {|crypto_invariants|} ->
   #a:Type -> {|parseable_serializeable bytes a|} ->
-  local_state_predicate a -> session_pred
-let local_state_predicate_to_session_pred #cinvs #a #ps_a tspred =
+  local_state_predicate a -> local_bytes_state_predicate
+let local_state_predicate_to_local_bytes_state_predicate #cinvs #a #ps_a tspred =
   {
     pred = (fun tr prin sess_id content_bytes ->
       match parse a content_bytes with
@@ -65,7 +65,7 @@ val has_local_state_predicate:
   invs:protocol_invariants -> local_state_predicate a ->
   prop
 let has_local_state_predicate #a #ls invs spred =
-  has_session_pred invs (ls.tag, (local_state_predicate_to_session_pred spred))
+  has_local_bytes_state_predicate invs (ls.tag, (local_state_predicate_to_local_bytes_state_predicate spred))
 
 [@@ "opaque_to_smt"]
 val state_was_set:
