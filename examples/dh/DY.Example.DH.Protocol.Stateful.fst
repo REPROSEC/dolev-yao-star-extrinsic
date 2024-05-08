@@ -68,7 +68,7 @@ let send_msg1 alice session_id =
   let*? session_state: dh_session = get_typed_state dh_session_tag alice session_id in
   match session_state with
   | InitiatorSentMsg1 bob x -> (
-    let msg = compute_message1 bob x in
+    let msg = compute_message1 alice x in
     let* msg_id = send_msg msg in
     return (Some msg_id)
   )
