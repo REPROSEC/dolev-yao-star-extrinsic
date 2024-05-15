@@ -128,7 +128,7 @@ let decode_message2 msg2_bytes alice gx pk_b =
   // value from Alice's state.
   let gy = msg2.gy in
   let sig_msg = SigMsg2 {a=alice; gx; gy} in
-  if verify pk_b (serialize sig_message sig_msg) msg2.sg then Some (msg2)
+  if verify pk_b (serialize sig_message sig_msg) msg2.sg then Some msg2
   else None
 
 // Alice generates message3

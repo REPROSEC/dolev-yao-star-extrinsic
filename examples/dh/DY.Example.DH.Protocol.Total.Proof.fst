@@ -18,7 +18,7 @@ val dh_crypto_preds: crypto_predicates dh_crypto_usages
 let dh_crypto_preds = {
   default_crypto_predicates dh_crypto_usages with
 
-  sign_pred = (fun tr vk sig_msg -> 
+  sign_pred = (fun tr vk sig_msg ->
     get_signkey_usage vk == SigKey "DH.SigningKey" /\
     (exists prin. get_signkey_label vk = principal_label prin /\ (
       match parse sig_message sig_msg with
@@ -56,6 +56,12 @@ let compute_message1_proof tr alice bob x si =
   let gx = dh_pk x in
   assert(is_publishable tr gx);
   let msg = Msg1 {alice; gx} in
+
+  // This lemma makes sure that the second argument
+  // (is_publishable tr) is true for the third argument
+  // (msg) before and after serialization. Without
+  // this lemma we would loose all the guarantees about
+  // the bytes after the message was serialized.
   serialize_wf_lemma message (is_publishable tr) msg;
 
   // The following code is not needed for the prove.
@@ -83,6 +89,12 @@ val decode_message1_proof:
 let decode_message1_proof tr alice bob msg_bytes =
   match decode_message1 msg_bytes with
     | Some msg1 -> (
+      // The second argument of the lemma parse_wf_lemma is a predicate defined
+      // on bytes (is_publishable tr).
+      // The lemma has the precondition that the predicate is true if the
+      // third argument is applied to the predicate.
+      // It then makes sure that the predicate is also true after
+      // parsing the third argument from bytes into a data type (message).
       FStar.Classical.move_requires (parse_wf_lemma message (is_publishable tr)) msg_bytes;
       FStar.Classical.move_requires (parse_wf_lemma message (bytes_invariant tr)) msg_bytes;
       
@@ -93,6 +105,7 @@ let decode_message1_proof tr alice bob msg_bytes =
     )
     | None -> ()
 
+//#push-options "--ifuel 8 --fuel 8 --z3rlimit 25"
 val compute_message2_proof:
   tr:trace -> si:nat ->
   alice:principal -> bob:principal ->
@@ -101,8 +114,9 @@ val compute_message2_proof:
   sk_b:bytes -> n_sig:bytes ->
   Lemma
   (requires
-    event_triggered tr bob (Respond1 bob alice msg1.gx gy y) /\
+    event_triggered tr bob (Respond1 alice bob msg1.gx gy y) /\
     is_publishable tr msg1.gx /\ is_publishable tr gy /\
+    gy == dh_pk y /\
     is_secret (principal_state_label bob si) tr y /\
     is_signature_key "DH.SigningKey" (principal_label bob) tr sk_b /\
     is_secret (principal_label bob) tr n_sig /\
@@ -115,27 +129,111 @@ let compute_message2_proof tr si alice bob msg1 gy y sk_b n_sig =
   let sig_msg = SigMsg2 {a=alice; gx=msg1.gx; gy} in
   serialize_wf_lemma sig_message (is_publishable tr) sig_msg;
   let sig_msg_bytes = serialize sig_message sig_msg in
-  assert(is_publishable tr sig_msg_bytes);
+  //assert(is_publishable tr sig_msg_bytes);
   let sg = sign sk_b n_sig sig_msg_bytes in
   
-  assert(bytes_invariant tr sk_b);
+  (*assert(bytes_invariant tr sk_b);
   assert(bytes_invariant tr n_sig);
-  assert(bytes_invariant tr (serialize sig_message sig_msg));
-  assume(SigKey? (get_signkey_usage (Vk sk_b)));
-  assume(dh_crypto_invs.preds.sign_pred tr (Vk sk_b) sig_msg_bytes);
+  assert(bytes_invariant tr sig_msg_bytes);
+  assert(get_usage sk_b == SigKey "DH.SigningKey");
+  assert(is_secret (principal_label bob) tr sk_b);
+  assert(SigKey? (get_usage sk_b));*)
+  
+  // The reveal_opaques is needed to look into the definition
+  // of get_signkey_usage and see that it simply calls
+  // get_usage on the given key.
+  //reveal_opaque (`%get_signkey_usage) (get_signkey_usage);
+  
+  (*assert(SigKey? (get_signkey_usage (Vk sk_b)));
+  assert(get_signkey_usage (Vk sk_b) == SigKey "DH.SigningKey");
+  assert((SigMsg2?.msg sig_msg).gy == (dh_pk y));*)
+
+  //reveal_opaque (`%get_signkey_label) (get_signkey_label);
+  (*assert(exists prin. get_signkey_label (Vk sk_b) = principal_label prin /\
+    (SigMsg2?.msg sig_msg).gy == (dh_pk y) /\ 
+    event_triggered tr prin (Respond1 (SigMsg2?.msg sig_msg).a prin (SigMsg2?.msg sig_msg).gx (SigMsg2?.msg sig_msg).gy y));
+  assert(dh_crypto_invs.preds.sign_pred tr (Vk sk_b) sig_msg_bytes) by (let open FStar.Tactics in dump "");
   assert(SigNonce? (get_usage n_sig));
   assert((get_label sig_msg_bytes) `can_flow tr` (get_label n_sig));
-
-  assume((get_label sk_b) `can_flow tr` public);
-  assume((get_label n_sig) `can_flow tr` public);
-  assert((get_label sig_msg_bytes) `can_flow tr` public);
   
-  assume(bytes_invariant tr sg);
+  assert(bytes_invariant tr sg);
 
-  assert(is_publishable tr sg);
+  assert(is_publishable tr sg);*)
   let msg = Msg2 {bob; gy; sg} in
   serialize_wf_lemma message (is_publishable tr) msg;
 
   let msg_bytes = compute_message2 alice bob msg1.gx gy sk_b n_sig in
-  assert(bytes_invariant tr msg_bytes);
+  //assert(bytes_invariant tr msg_bytes);
   ()
+
+//#push-options "--ifuel 20 --fuel 20 --z3rlimit 100"
+val decode_message2_proof:
+  tr:trace ->
+  alice:principal -> bob:principal ->
+  msg_bytes:bytes -> gx:bytes -> pk_b:bytes ->
+  Lemma
+  (requires
+    is_publishable tr msg_bytes /\
+    is_verification_key "DH.SigningKey" (principal_label bob) tr pk_b
+  )
+  (ensures (
+    match decode_message2 msg_bytes alice gx pk_b with
+    | Some msg2 -> (
+      let sig_msg = SigMsg2 {a=alice; gx; gy=msg2.gy} in
+      is_publishable tr msg2.gy /\
+      is_publishable tr msg2.sg /\
+      verify pk_b (serialize sig_message sig_msg) msg2.sg /\
+      (is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob) \/
+      (exists y. event_triggered tr bob (Respond1 alice bob gx msg2.gy y)))
+    )
+    | None -> True
+  ))
+let decode_message2_proof tr alice bob msg_bytes gx pk_b =
+  match decode_message2 msg_bytes alice gx pk_b with
+    | Some msg2 -> (
+      FStar.Classical.move_requires (parse_wf_lemma message (is_publishable tr)) msg_bytes;
+      //FStar.Classical.move_requires (parse_wf_lemma message (bytes_invariant tr)) msg_bytes;
+      
+      reveal_opaque (`%verify) (verify);
+
+      // Revealing a recursive function does not work with
+      // ``reveal_opaque``. That's why we need to use
+      // ``normalize_term_spec bytes_invariant;`` or 
+      // ``norm_spec [zeta; delta_only [`%bytes_invariant]](bytes_invariant);``
+      normalize_term_spec bytes_invariant;
+
+      (*assert(bytes_invariant tr msg_bytes);      
+      assert(bytes_invariant tr msg2.sg);
+
+      let sig_msg = SigMsg2 {a=alice; gx; gy=msg2.gy} in
+      
+      let sig_msg_bytes = serialize sig_message sig_msg in
+      assert(verify pk_b sig_msg_bytes msg2.sg = true);
+      
+      let open DY.Core.Bytes.Type in
+      let Sign sk nonce msg = msg2.sg in
+      assert(msg = sig_msg_bytes);
+      
+      assert(is_publishable tr msg2.sg);
+      assert(get_label msg2.sg `can_flow tr` get_label msg);
+      assert(get_label msg2.sg `can_flow tr` public);
+      
+      
+      normalize_term_spec get_label;
+
+      assert(bytes_invariant tr msg);
+      assert(is_publishable tr msg);
+      
+      FStar.Classical.move_requires (parse_wf_lemma sig_message (is_publishable tr)) msg;
+      FStar.Classical.move_requires (parse_wf_lemma sig_message (bytes_invariant tr)) msg;
+
+      assert(bytes_invariant tr gx);
+      assert(bytes_invariant tr msg2.gy);
+      
+      assert(is_corrupt tr (principal_label alice) \/
+        is_corrupt tr (principal_label bob) \/
+        (exists y. msg2.gy == dh_pk y /\ event_triggered tr bob (Respond1 alice bob gx msg2.gy y))
+      );*)
+      ()
+    )
+    | None -> ()
