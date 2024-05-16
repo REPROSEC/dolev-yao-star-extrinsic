@@ -13,6 +13,7 @@ open DY.Example.DH.Protocol.Stateful
 val dh_crypto_usages: crypto_usages
 instance dh_crypto_usages = default_crypto_usages
 
+#push-options "--ifuel 2 --fuel 0"
 val dh_crypto_preds: crypto_predicates dh_crypto_usages
 let dh_crypto_preds = {
   default_crypto_predicates dh_crypto_usages with
@@ -32,6 +33,7 @@ let dh_crypto_preds = {
   );
   sign_pred_later = (fun tr1 tr2 vk msg -> ())
 }
+#pop-options
 
 instance dh_crypto_invs: crypto_invariants = {
   usages = dh_crypto_usages;
