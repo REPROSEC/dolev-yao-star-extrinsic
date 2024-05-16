@@ -87,9 +87,9 @@ noeq type split_predicate_input_values = {
     (ensures l1 == l2)
   ;
   
-  // Types for the global predicate and the local predicates
-  global_pred: Type;
+  // Types for the local predicates and the global predicate
   local_pred: Type;
+  global_pred: Type;
 
   // Apply a local predicate to its input
   apply_local_pred: local_pred -> raw_data_t -> prop;
