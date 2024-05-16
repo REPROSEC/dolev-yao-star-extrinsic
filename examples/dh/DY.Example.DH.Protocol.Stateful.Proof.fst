@@ -18,7 +18,7 @@ let is_dh_shared_key tr a b k = exists si sj.
   is_secret (join (principal_state_label a si) (principal_state_label b sj)) tr k /\ 
   get_usage k == AeadKey "DH.aead_key"
 
-let dh_session_pred: typed_session_pred dh_session = {
+let dh_session_pred: local_state_predicate dh_session = {
   pred = (fun tr prin sess_id st ->
     match st with
     | InitiatorSentMsg1 bob x -> (
@@ -87,9 +87,9 @@ let dh_event_pred: event_predicate dh_event =
 /// List of all local state predicates.
 
 let all_sessions = [
-  (pki_tag, typed_session_pred_to_session_pred (map_session_invariant pki_pred));
-  (private_keys_tag, typed_session_pred_to_session_pred (map_session_invariant private_keys_pred));
-  (dh_session_tag, typed_session_pred_to_session_pred dh_session_pred);
+  pki_tag_and_invariant;
+  private_keys_tag_and_invariant;
+  (local_state_dh_session.tag, local_state_predicate_to_local_bytes_state_predicate dh_session_pred);
 ]
 
 /// List of all local event predicates.
@@ -112,11 +112,11 @@ instance dh_protocol_invs: protocol_invariants = {
 
 /// Lemmas that the global state predicate contains all the local ones
 
-val all_sessions_has_all_sessions: unit -> Lemma (norm [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP (has_session_pred dh_protocol_invs) all_sessions))
+val all_sessions_has_all_sessions: unit -> Lemma (norm [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP (has_local_bytes_state_predicate dh_protocol_invs) all_sessions))
 let all_sessions_has_all_sessions () =
   assert_norm(List.Tot.no_repeats_p (List.Tot.map fst (all_sessions)));
-  mk_global_session_pred_correct dh_protocol_invs all_sessions;
-  norm_spec [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP (has_session_pred dh_protocol_invs) all_sessions)
+  mk_global_local_bytes_state_predicate_correct dh_protocol_invs all_sessions;
+  norm_spec [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP (has_local_bytes_state_predicate dh_protocol_invs) all_sessions)
 
 val full_dh_session_pred_has_pki_invariant: squash (has_pki_invariant dh_protocol_invs)
 let full_dh_session_pred_has_pki_invariant = all_sessions_has_all_sessions ()
@@ -124,7 +124,7 @@ let full_dh_session_pred_has_pki_invariant = all_sessions_has_all_sessions ()
 val full_dh_session_pred_has_private_keys_invariant: squash (has_private_keys_invariant dh_protocol_invs)
 let full_dh_session_pred_has_private_keys_invariant = all_sessions_has_all_sessions ()
 
-val full_dh_session_pred_has_dh_invariant: squash (has_typed_session_pred dh_protocol_invs (dh_session_tag, dh_session_pred))
+val full_dh_session_pred_has_dh_invariant: squash (has_local_state_predicate dh_protocol_invs dh_session_pred)
 let full_dh_session_pred_has_dh_invariant = all_sessions_has_all_sessions ()
 
 /// Lemmas that the global event predicate contains all the local ones
