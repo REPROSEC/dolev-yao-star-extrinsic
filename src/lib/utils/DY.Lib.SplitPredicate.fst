@@ -19,9 +19,12 @@ module DY.Lib.SplitPredicate
 ///   (such as a generic state to store private keys)
 ///
 /// With this module, we can create a global predicate from several independent local predicates (see mk_global_pred).
-/// Then, proofs of theorems will take as parameter this global predicate,
+/// Then, proofs of theorems will take as parameter some global predicate,
 /// with the precondition that it contains a specific local predicate (see has_local_pred).
-/// (This is in contrast to a monolithic global predicate
+/// In this way, proofs will work for any global predicate
+/// as long as it contains the relevant local predicate.
+/// (This is in contrast to proofs reyling on
+/// a monolithic global predicate
 /// that is defined at the top of a file (using val and let).)
 ///
 /// This solves all the problems mentioned above:
