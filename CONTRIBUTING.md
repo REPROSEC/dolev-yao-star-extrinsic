@@ -99,6 +99,27 @@ type f_inputs = {
 val f: f_inputs -> ...
 ```
 
+## Names for Class Instances
+
+Instances of a typeclass are named as "class name" followed by "type", that is the same order as in the instance declaration.
+For example:
+```fstar
+instance integer_encodable_usage: integer_encodable usage = ...
+instance bytes_like_bytes: bytes_like bytes = ...
+```
+
+If the typeclass has more than one type argument,
+all arguments should be explicitly specified in the name of the instance
+in the order given in the instance declaration:
+```fstar
+instance parseable_serializeable_bytes_tagged_state: parseable_serializeable bytes tagged_state = ...
+```
+unless there is a natural way to combine the type arguments as in
+```fstar
+instance map_types_pki: map_types pki_key pki_value = ...
+```
+
+
 # Code formatting
 
 Unfortunately, there is no code formatter for F\*.
