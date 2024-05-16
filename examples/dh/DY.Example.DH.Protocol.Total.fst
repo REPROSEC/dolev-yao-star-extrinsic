@@ -148,5 +148,5 @@ let decode_message3 msg3_bytes bob gx gy pk_a =
   // Verify the signature contained in message 3
   // with the gx and gy values from Bob's state.
   let sig_msg = SigMsg3 {b=bob; gx; gy} in
-  if verify pk_a (serialize sig_message sig_msg) msg3.sg then Some (msg3)
+  if verify pk_a (serialize sig_message sig_msg) msg3.sg then Some msg3
   else None

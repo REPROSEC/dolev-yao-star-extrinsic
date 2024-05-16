@@ -99,7 +99,6 @@ let send_msg2 global_sess_id bob session_id =
     return (Some msg_id)
   )
   | _ -> return None
-
 // Alice prepares message 3
 //
 // This function has to verify the signature from message 2
