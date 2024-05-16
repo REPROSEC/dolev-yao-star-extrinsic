@@ -19,12 +19,16 @@ module DY.Lib.SplitPredicate
 ///   (such as a generic state to store private keys)
 ///
 /// With this module, we can create a global predicate from several independent local predicates (see mk_global_pred).
-/// Then, instead of proving theorems that use a top-level defined global predicate,
-/// theorems will take as parameter the global predicate,
-/// with the precondition that it contains some top-level defined local predicate (see has_local_pred).
-/// This solves all the problems mentioned aboves:
-/// predicates are defined where they belong,
-/// proofs are modular because this dependency on the global predicate is no more.
+/// Then, proofs of theorems will take as parameter this global predicate,
+/// with the precondition that it contains a specific local predicate (see has_local_pred).
+/// (This is in contrast to a monolithic global predicate
+/// that is defined at the top of a file (using val and let).)
+///
+/// This solves all the problems mentioned above:
+/// predicates are defined (locally) where they belong,
+/// proofs are modular because they only depend on
+/// the relevant local predicate being contained in the global predicate
+/// (a property that is not affected by other unrelated local predicates).
 ///
 /// Under the hood, the split predicate methodology
 /// is simply factorizing out a common pattern we see
@@ -59,9 +63,9 @@ noeq type split_predicate_input_values = {
   // Types for global and local predicates
   local_pred: Type;
   global_pred: Type;
-  // Input type for the global predicate
+  // Input type for the local predicate
   raw_data_t: Type;
-  // Input type for the local predicates
+  // Input type for the global predicates
   tagged_data_t: Type;
 
   // Apply a local predicate to its input
