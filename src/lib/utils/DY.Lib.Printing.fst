@@ -104,13 +104,14 @@ let private_key_type_to_string t =
   | DY.Lib.State.PrivateKeys.PkDec u -> "PkDec " ^ u
   | DY.Lib.State.PrivateKeys.Sign u -> "Sign " ^ u
 
-val private_keys_types_to_string: (list (map_elem DY.Lib.State.PrivateKeys.private_keys_types)) -> string
+// The `#_` at the end is a workaround for FStarLang/FStar#3286
+val private_keys_types_to_string: (list (map_elem DY.Lib.State.PrivateKeys.private_key_key DY.Lib.State.PrivateKeys.private_key_value #_)) -> string
 let rec private_keys_types_to_string m =
   match m with
   | [] -> ""
   | hd :: tl -> (
     (private_keys_types_to_string tl) ^ 
-    Printf.sprintf "%s = (%s)," (private_key_type_to_string hd.key) (bytes_to_string hd.value.private_key)
+    Printf.sprintf "%s = (%s)," (private_key_type_to_string hd.key.ty) (bytes_to_string hd.value.private_key)
   )
 
 val public_key_type_to_string: DY.Lib.State.PKI.public_key_type -> string
@@ -119,7 +120,8 @@ let public_key_type_to_string t =
   | DY.Lib.State.PKI.PkEnc u -> "PkEnc " ^ u
   | DY.Lib.State.PKI.Verify u -> "Verify " ^ u
 
-val pki_types_to_string: (list (map_elem DY.Lib.State.PKI.pki_types)) -> string
+// The `#_` at the end is a workaround for FStarLang/FStar#3286
+val pki_types_to_string: (list (map_elem DY.Lib.State.PKI.pki_key DY.Lib.State.PKI.pki_value #_)) -> string
 let rec pki_types_to_string m =
   match m with
   | [] -> ""
@@ -130,12 +132,14 @@ let rec pki_types_to_string m =
 
 val default_private_keys_state_to_string: bytes -> option string
 let default_private_keys_state_to_string content_bytes =
-  let? state = parse (map DY.Lib.State.PrivateKeys.private_keys_types) content_bytes in
+  // another workaround for FStarLang/FStar#3286
+  let? state = parse (map DY.Lib.State.PrivateKeys.private_key_key DY.Lib.State.PrivateKeys.private_key_value #_) content_bytes in
   Some (Printf.sprintf "[%s]" (private_keys_types_to_string state.key_values))
 
 val default_pki_state_to_string: bytes -> option string
 let default_pki_state_to_string content_bytes =
-  let? state = parse (map DY.Lib.State.PKI.pki_types) content_bytes in
+  // another workaround for FStarLang/FStar#3286
+  let? state = parse (map DY.Lib.State.PKI.pki_key DY.Lib.State.PKI.pki_value #_) content_bytes in
   Some (Printf.sprintf "[%s]" (pki_types_to_string state.key_values))
 
 /// Searches for a printer with the correct tag
@@ -159,7 +163,7 @@ let option_to_string parse_fn elem =
 
 val state_to_string: list (string & (bytes -> option string)) -> bytes -> string
 let state_to_string printer_list full_content_bytes =
-  let full_content = parse session full_content_bytes in
+  let full_content = parse tagged_state full_content_bytes in
   match full_content with
   | Some ({tag; content}) -> (
     let parser = find_printer printer_list tag in
@@ -260,8 +264,8 @@ let trace_to_string_printers_builder message_to_string state_to_string event_to_
     state_to_string = (
       List.append state_to_string (
         [
-          (DY.Lib.State.PrivateKeys.private_keys_tag, default_private_keys_state_to_string);
-          (DY.Lib.State.PKI.pki_tag, default_pki_state_to_string)
+          (DY.Lib.State.PrivateKeys.map_types_private_keys.tag, default_private_keys_state_to_string);
+          (DY.Lib.State.PKI.map_types_pki.tag, default_pki_state_to_string)
         ]
       ) // User supplied functions will override the default functions because the
         // find printer function will choose the first match.

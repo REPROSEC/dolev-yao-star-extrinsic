@@ -16,7 +16,7 @@ open DY.Example.NSL.Protocol.Stateful
 
 /// The (local) state predicate.
 
-let nsl_session_pred: typed_session_pred nsl_session = {
+let nsl_session_pred: local_state_predicate nsl_session = {
   pred = (fun tr prin sess_id st ->
     match st with
     | InitiatorSentMsg1 bob n_a -> (
@@ -82,9 +82,9 @@ let nsl_event_pred: event_predicate nsl_event =
 /// List of all local state predicates.
 
 let all_sessions = [
-  (pki_tag, typed_session_pred_to_session_pred (map_session_invariant pki_pred));
-  (private_keys_tag, typed_session_pred_to_session_pred (map_session_invariant private_keys_pred));
-  (nsl_session_tag, typed_session_pred_to_session_pred nsl_session_pred);
+  pki_tag_and_invariant;
+  private_keys_tag_and_invariant;
+  (local_state_nsl_session.tag, local_state_predicate_to_local_bytes_state_predicate nsl_session_pred);
 ]
 
 /// List of all local event predicates.
@@ -107,11 +107,11 @@ instance nsl_protocol_invs: protocol_invariants = {
 
 /// Lemmas that the global state predicate contains all the local ones
 
-val all_sessions_has_all_sessions: unit -> Lemma (norm [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP (has_session_pred nsl_protocol_invs) all_sessions))
+val all_sessions_has_all_sessions: unit -> Lemma (norm [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP (has_local_bytes_state_predicate nsl_protocol_invs) all_sessions))
 let all_sessions_has_all_sessions () =
   assert_norm(List.Tot.no_repeats_p (List.Tot.map fst (all_sessions)));
-  mk_global_session_pred_correct nsl_protocol_invs all_sessions;
-  norm_spec [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP (has_session_pred nsl_protocol_invs) all_sessions)
+  mk_global_local_bytes_state_predicate_correct nsl_protocol_invs all_sessions;
+  norm_spec [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP (has_local_bytes_state_predicate nsl_protocol_invs) all_sessions)
 
 val full_nsl_session_pred_has_pki_invariant: squash (has_pki_invariant nsl_protocol_invs)
 let full_nsl_session_pred_has_pki_invariant = all_sessions_has_all_sessions ()
@@ -119,7 +119,7 @@ let full_nsl_session_pred_has_pki_invariant = all_sessions_has_all_sessions ()
 val full_nsl_session_pred_has_private_keys_invariant: squash (has_private_keys_invariant nsl_protocol_invs)
 let full_nsl_session_pred_has_private_keys_invariant = all_sessions_has_all_sessions ()
 
-val full_nsl_session_pred_has_nsl_invariant: squash (has_typed_session_pred nsl_protocol_invs (nsl_session_tag, nsl_session_pred))
+val full_nsl_session_pred_has_nsl_invariant: squash (has_local_state_predicate nsl_protocol_invs nsl_session_pred)
 let full_nsl_session_pred_has_nsl_invariant = all_sessions_has_all_sessions ()
 
 /// Lemmas that the global event predicate contains all the local ones
@@ -159,7 +159,7 @@ val send_msg1_proof:
     trace_invariant tr_out
   ))
 let send_msg1_proof tr global_sess_id alice sess_id =
-  match get_typed_state #nsl_session nsl_session_tag alice sess_id tr with
+  match get_state alice sess_id tr with
   | (Some (InitiatorSentMsg1 bob n_a), tr) -> (
     match get_public_key alice global_sess_id.pki (PkEnc "NSL.PublicKey") bob tr with
     | (None, tr) -> ()
@@ -200,7 +200,7 @@ val send_msg2_proof:
     trace_invariant tr_out
   ))
 let send_msg2_proof tr global_sess_id bob sess_id =
-  match get_typed_state nsl_session_tag bob sess_id tr with
+  match get_state bob sess_id tr with
   | (Some (ResponderSentMsg2 alice n_a n_b), tr) -> (
     match get_public_key bob global_sess_id.pki (PkEnc "NSL.PublicKey") alice tr with
     | (None, tr) -> ()
@@ -227,7 +227,7 @@ let prepare_msg3_proof tr global_sess_id alice sess_id msg_id =
     match get_private_key alice global_sess_id.private_keys (PkDec "NSL.PublicKey") tr with
     | (None, tr) -> ()
     | (Some sk_a, tr) -> (
-      match get_typed_state nsl_session_tag alice sess_id tr with
+      match get_state alice sess_id tr with
       | (Some (InitiatorSentMsg1 bob n_a), tr) -> (
         decode_message2_proof tr alice bob msg sk_a n_a
       )
@@ -245,7 +245,7 @@ val send_msg3_proof:
     trace_invariant tr_out
   ))
 let send_msg3_proof tr global_sess_id alice sess_id =
-  match get_typed_state nsl_session_tag alice sess_id tr with
+  match get_state alice sess_id tr with
   | (Some (InitiatorSentMsg3 bob n_a n_b), tr) -> (
     match get_public_key alice global_sess_id.pki (PkEnc "NSL.PublicKey") bob tr with
     | (None, tr) -> ()
@@ -289,7 +289,7 @@ let prepare_msg4 tr global_sess_id bob sess_id msg_id =
     match get_private_key bob global_sess_id.private_keys (PkDec "NSL.PublicKey") tr with
     | (None, tr) -> ()
     | (Some sk_b, tr) -> (
-      match get_typed_state nsl_session_tag bob sess_id tr with
+      match get_state bob sess_id tr with
       | (Some (ResponderSentMsg2 alice n_a n_b), tr) -> (
         decode_message3_proof tr alice bob msg sk_b n_b;
 
