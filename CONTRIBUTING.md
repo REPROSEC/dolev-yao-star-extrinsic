@@ -99,7 +99,7 @@ type f_inputs = {
 val f: f_inputs -> ...
 ```
 
-## Names for Class Instances
+## Names for Typeclass Instances
 
 Instances of a typeclass are named as "class name" followed by "type", that is the same order as in the instance declaration.
 For example:
@@ -119,6 +119,13 @@ unless there is a natural way to combine the type arguments as in
 instance map_types_pki: map_types pki_key pki_value = ...
 ```
 
+For typeclasses without arguments,
+the typeclass has to be explicitly mentioned in the instance declaration (after the `:`) and
+the name of the instance begins with the class name
+followed by some identifier:
+```fstar
+instance crypto_invariants_nsl : crypto_invariants = ...
+```
 
 # Code formatting
 
