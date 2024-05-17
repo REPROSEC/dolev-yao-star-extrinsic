@@ -149,14 +149,14 @@ let tagged_state_was_set tr tag prin sess_id content =
 (*** API for tagged sessions ***)
 
 [@@ "opaque_to_smt"]
-val set_tagged_state: string -> principal -> nat -> bytes -> crypto unit
+val set_tagged_state: string -> principal -> nat -> bytes -> traceful unit
 let set_tagged_state tag prin sess_id content =
   let full_content = {tag; content;} in
   let full_content_bytes = serialize tagged_state full_content in
   set_state prin sess_id full_content_bytes
 
 [@@ "opaque_to_smt"]
-val get_tagged_state: string -> principal -> nat -> crypto (option bytes)
+val get_tagged_state: string -> principal -> nat -> traceful (option bytes)
 let get_tagged_state the_tag prin sess_id =
   let*? full_content_bytes = get_state prin sess_id in
   match parse tagged_state full_content_bytes with

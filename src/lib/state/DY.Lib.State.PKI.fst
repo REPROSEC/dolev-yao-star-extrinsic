@@ -86,16 +86,16 @@ let pki_tag_and_invariant #ci = (map_types_pki.tag, local_state_predicate_to_loc
 (*** PKI API ***)
 
 [@@ "opaque_to_smt"]
-val initialize_pki: prin:principal -> crypto nat
+val initialize_pki: prin:principal -> traceful nat
 let initialize_pki = initialize_map pki_key pki_value #_ // another workaround for FStarLang/FStar#3286
 
 [@@ "opaque_to_smt"]
-val install_public_key: principal -> nat -> public_key_type -> principal -> bytes -> crypto (option unit)
+val install_public_key: principal -> nat -> public_key_type -> principal -> bytes -> traceful (option unit)
 let install_public_key prin sess_id pk_type who pk =
   add_key_value prin sess_id ({ty = pk_type; who;}) ({public_key = pk;})
 
 [@@ "opaque_to_smt"]
-val get_public_key: principal -> nat -> public_key_type -> principal -> crypto (option bytes)
+val get_public_key: principal -> nat -> public_key_type -> principal -> traceful (option bytes)
 let get_public_key prin sess_id pk_type who =
   let*? res = find_value prin sess_id ({ty = pk_type; who;}) in
   return (Some res.public_key)

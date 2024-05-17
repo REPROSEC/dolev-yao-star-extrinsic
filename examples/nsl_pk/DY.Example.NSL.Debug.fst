@@ -9,7 +9,7 @@ open DY.Example.NSL.Debug.Printing
 
 (*** Example Protocol Run with Trace Printing ***)
 
-let debug () : crypto (option unit)  =
+let debug () : traceful (option unit)  =
   let _ = IO.debug_print_string "************* Trace *************\n" in
   (*** Initialize protocol run ***)
   let alice = "alice" in

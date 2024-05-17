@@ -113,7 +113,7 @@ let mk_event_pred_correct invs lpreds =
 val trigger_event:
   #a:Type -> {|event a|} ->
   principal -> a ->
-  crypto unit
+  traceful unit
 let trigger_event #a #ev prin e =
   DY.Core.trigger_event prin ev.tag (serialize a e)
 
