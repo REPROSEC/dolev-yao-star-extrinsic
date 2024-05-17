@@ -16,7 +16,7 @@ open DY.Example.NSL.Protocol.Stateful
 
 /// The (local) state predicate.
 
-let session_pred_nsl: local_state_predicate nsl_session = {
+let state_predicate_nsl: local_state_predicate nsl_session = {
   pred = (fun tr prin sess_id st ->
     match st with
     | InitiatorSentMsg1 bob n_a -> (
@@ -84,7 +84,7 @@ let event_predicate_nsl: event_predicate nsl_event =
 let all_sessions = [
   pki_tag_and_invariant;
   private_keys_tag_and_invariant;
-  (local_state_nsl_session.tag, local_state_predicate_to_local_bytes_state_predicate session_pred_nsl);
+  (local_state_nsl_session.tag, local_state_predicate_to_local_bytes_state_predicate state_predicate_nsl);
 ]
 
 /// List of all local event predicates.
@@ -119,7 +119,7 @@ let protocol_invariants_nsl_has_pki_invariant = all_sessions_has_all_sessions ()
 val protocol_invariants_nsl_has_private_keys_invariant: squash (has_private_keys_invariant protocol_invariants_nsl)
 let protocol_invariants_nsl_has_private_keys_invariant = all_sessions_has_all_sessions ()
 
-val protocol_invariants_nsl_has_nsl_session_invariant: squash (has_local_state_predicate protocol_invariants_nsl session_pred_nsl)
+val protocol_invariants_nsl_has_nsl_session_invariant: squash (has_local_state_predicate protocol_invariants_nsl state_predicate_nsl)
 let protocol_invariants_nsl_has_nsl_session_invariant = all_sessions_has_all_sessions ()
 
 /// Lemmas that the global event predicate contains all the local ones
