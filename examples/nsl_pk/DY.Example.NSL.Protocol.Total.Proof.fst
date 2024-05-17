@@ -14,13 +14,12 @@ open DY.Example.NSL.Protocol.Stateful
 
 (*** Cryptographic invariants ***)
 
-val nsl_crypto_usages: crypto_usages
-instance nsl_crypto_usages = default_crypto_usages
+instance crypto_usages_nsl : crypto_usages = default_crypto_usages
 
 #push-options "--ifuel 2 --fuel 0"
-val nsl_crypto_preds: crypto_predicates nsl_crypto_usages
-let nsl_crypto_preds = {
-  default_crypto_predicates nsl_crypto_usages with
+val crypto_predicates_nsl: crypto_predicates crypto_usages_nsl
+let crypto_predicates_nsl = {
+  default_crypto_predicates crypto_usages_nsl with
 
   pkenc_pred = (fun tr pk msg ->
     get_sk_usage pk == PkdecKey "NSL.PublicKey" /\
@@ -49,9 +48,9 @@ let nsl_crypto_preds = {
 }
 #pop-options
 
-instance nsl_crypto_invs = {
-  usages = nsl_crypto_usages;
-  preds = nsl_crypto_preds;
+instance crypto_invariants_nsl : crypto_invariants = {
+  usages = crypto_usages_nsl;
+  preds = crypto_predicates_nsl;
 }
 
 (*** Proofs ***)

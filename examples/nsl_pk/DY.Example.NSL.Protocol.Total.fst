@@ -64,7 +64,7 @@ type message =
 %splice [ps_message] (gen_parser (`message))
 %splice [ps_message_is_well_formed] (gen_is_well_formed_lemma (`message))
 
-instance parseable_serializeable_message: parseable_serializeable bytes message = mk_parseable_serializeable ps_message
+instance parseable_serializeable_bytes_message: parseable_serializeable bytes message = mk_parseable_serializeable ps_message
 
 (*** Message 1 ***)
 

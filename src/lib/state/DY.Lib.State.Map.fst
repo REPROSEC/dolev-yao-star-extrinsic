@@ -56,11 +56,11 @@ noeq type map (key_t:eqtype) (value_t:Type0) {|mt:map_types key_t value_t|} = {
 %splice [ps_map] (gen_parser (`map))
 %splice [ps_map_is_well_formed] (gen_is_well_formed_lemma (`map))
 
-instance parseable_serializeable_map (key_t:eqtype) (value_t:Type0) {|map_types key_t value_t|} : parseable_serializeable bytes (map key_t value_t) = mk_parseable_serializeable (ps_map key_t value_t)
+instance parseable_serializeable_bytes_map (key_t:eqtype) (value_t:Type0) {|map_types key_t value_t|} : parseable_serializeable bytes (map key_t value_t) = mk_parseable_serializeable (ps_map key_t value_t)
 
-instance map_has_local_state (key_t:eqtype) (value_t:Type0) {|mt:map_types key_t value_t|}: local_state (map key_t value_t) = {
+instance local_state_map (key_t:eqtype) (value_t:Type0) {|mt:map_types key_t value_t|}: local_state (map key_t value_t) = {
   tag = mt.tag;
-  format = (parseable_serializeable_map key_t value_t);
+  format = (parseable_serializeable_bytes_map key_t value_t);
 }
 
 val map_elem_invariant:
