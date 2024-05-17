@@ -20,7 +20,7 @@ type tagged_state = {
 %splice [ps_tagged_state] (gen_parser (`tagged_state))
 %splice [ps_tagged_state_is_well_formed] (gen_is_well_formed_lemma (`tagged_state))
 
-instance parseable_serializeable_tagged_state: parseable_serializeable bytes tagged_state = mk_parseable_serializeable (ps_tagged_state)
+instance parseable_serializeable_bytes_tagged_state: parseable_serializeable bytes tagged_state = mk_parseable_serializeable (ps_tagged_state)
 
 noeq
 type local_bytes_state_predicate {|crypto_invariants|} = {
