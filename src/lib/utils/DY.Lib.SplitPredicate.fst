@@ -19,12 +19,19 @@ module DY.Lib.SplitPredicate
 ///   (such as a generic state to store private keys)
 ///
 /// With this module, we can create a global predicate from several independent local predicates (see mk_global_pred).
-/// Then, instead of proving theorems that use a top-level defined global predicate,
-/// theorems will take as parameter the global predicate,
-/// with the precondition that it contains some top-level defined local predicate (see has_local_pred).
-/// This solves all the problems mentioned aboves:
-/// predicates are defined where they belong,
-/// proofs are modular because this dependency on the global predicate is no more.
+/// Then, proofs of theorems will take as parameter some global predicate,
+/// with the precondition that it contains a specific local predicate (see has_local_pred).
+/// In this way, proofs will work for any global predicate
+/// as long as it contains the relevant local predicate.
+/// (This is in contrast to proofs reyling on
+/// a monolithic global predicate
+/// that is defined at the top of a file (using val and let).)
+///
+/// This solves all the problems mentioned above:
+/// predicates are defined (locally) where they belong,
+/// proofs are modular because they only depend on
+/// the relevant local predicate being contained in the global predicate
+/// (a property that is not affected by other unrelated local predicates).
 ///
 /// Under the hood, the split predicate methodology
 /// is simply factorizing out a common pattern we see
@@ -56,13 +63,33 @@ module DY.Lib.SplitPredicate
 /// The parameters of the split predicate methodology.
 
 noeq type split_predicate_input_values = {
-  // Types for global and local predicates
+  // Input type for the global predicate
+  tagged_data_t: Type;
+
+  // Two types of tag, that are related using `encode_tag`:
+  // the tag type that we use to define the global predicate,
+  // and the tag type that we obtain when decoding the global predicate input.
+  // Having different types may be handy in some situations.
+  tag_t: Type;
+  encoded_tag_t: Type;
+
+  // Input type for the local predicates
+  raw_data_t: Type;
+
+  // We can decode the global predicate input
+  // into an encoded tag and a local predicate input
+  decode_tagged_data: tagged_data_t -> GTot (option (encoded_tag_t & raw_data_t));
+
+  // We can encode the tag, and this encoding must be injective.
+  encode_tag: tag_t -> encoded_tag_t;
+  encode_tag_inj: l1:tag_t -> l2:tag_t -> Lemma
+    (requires encode_tag l1 == encode_tag l2)
+    (ensures l1 == l2)
+  ;
+  
+  // Types for the local predicates and the global predicate
   local_pred: Type;
   global_pred: Type;
-  // Input type for the global predicate
-  raw_data_t: Type;
-  // Input type for the local predicates
-  tagged_data_t: Type;
 
   // Apply a local predicate to its input
   apply_local_pred: local_pred -> raw_data_t -> prop;
@@ -73,24 +100,6 @@ noeq type split_predicate_input_values = {
   // Correctness theorem on creating and applying a global predicate
   apply_mk_global_pred: bare:(tagged_data_t -> prop) -> x:tagged_data_t -> Lemma
     (apply_global_pred (mk_global_pred bare) x == bare x);
-
-  // Two types of tag, that are related using `encode_tag`:
-  // the tag type that we use to define the predicate,
-  // and the tag type that we obtain when decoding the global predicate input.
-  // Having different types may be handy in some situations.
-  tag_t: Type;
-  encoded_tag_t: Type;
-
-  // We can encode the tag, and this encoding must be injective.
-  encode_tag: tag_t -> encoded_tag_t;
-  encode_tag_inj: l1:tag_t -> l2:tag_t -> Lemma
-    (requires encode_tag l1 == encode_tag l2)
-    (ensures l1 == l2)
-  ;
-
-  // Finally, we can decode the global predicate input
-  // into an encoded tag and a local predicate input
-  decode_tagged_data: tagged_data_t -> GTot (option (encoded_tag_t & raw_data_t));
 }
 
 /// Do a global predicate contain some given local predicate with some tag?
