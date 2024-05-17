@@ -17,8 +17,8 @@ open DY.Example.NSL.Protocol.Stateful
 instance crypto_usages_nsl : crypto_usages = default_crypto_usages
 
 #push-options "--ifuel 2 --fuel 0"
-val nsl_crypto_preds: crypto_predicates crypto_usages_nsl
-let nsl_crypto_preds = {
+val crypto_predicates_nsl: crypto_predicates crypto_usages_nsl
+let crypto_predicates_nsl = {
   default_crypto_predicates crypto_usages_nsl with
 
   pkenc_pred = (fun tr pk msg ->
@@ -50,7 +50,7 @@ let nsl_crypto_preds = {
 
 instance crypto_invariants_nsl : crypto_invariants = {
   usages = crypto_usages_nsl;
-  preds = nsl_crypto_preds;
+  preds = crypto_predicates_nsl;
 }
 
 (*** Proofs ***)
