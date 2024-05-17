@@ -129,7 +129,7 @@ val initialize_map:
   key_t:eqtype -> value_t:Type0 ->
   {|map_types key_t value_t|} ->
   prin:principal ->
-  crypto nat
+  traceful nat
 let initialize_map key_t value_t #mt prin =
   let* sess_id = new_session_id prin in
   let session: map key_t value_t = { key_values = [] } in
@@ -141,7 +141,7 @@ val add_key_value:
   #key_t:eqtype -> #value_t:Type0 -> {|map_types key_t value_t|} ->
   prin:principal -> sess_id:nat ->
   key:key_t -> value:value_t ->
-  crypto (option unit)
+  traceful (option unit)
 let add_key_value #key_t #value_t #mt prin sess_id key value =
   let*? the_map = get_state prin sess_id in
   let new_elem = {key; value;} in
@@ -176,7 +176,7 @@ val find_value:
   #key_t:eqtype -> #value_t:Type0 -> {|map_types key_t value_t|} ->
   prin:principal -> sess_id:nat ->
   key:key_t ->
-  crypto (option value_t)
+  traceful (option value_t)
 let find_value #key_t #value_t #mt prin sess_id key =
   let*? the_map = get_state prin sess_id in
   return (find_value_aux key the_map.key_values)

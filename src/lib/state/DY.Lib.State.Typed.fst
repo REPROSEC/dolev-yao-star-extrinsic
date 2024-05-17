@@ -78,14 +78,14 @@ let state_was_set #a #ls tr prin sess_id content =
 [@@ "opaque_to_smt"]
 val set_state:
   #a:Type -> {|local_state a|} ->
-  principal -> nat -> a -> crypto unit
+  principal -> nat -> a -> traceful unit
 let set_state #a #ls prin sess_id content =
   set_tagged_state ls.tag prin sess_id (serialize _ content)
 
 [@@ "opaque_to_smt"]
 val get_state:
   #a:Type -> {|local_state a|} ->
-  principal -> nat -> crypto (option a)
+  principal -> nat -> traceful (option a)
 let get_state #a #ls prin sess_id =
   let*? content_bytes = get_tagged_state ls.tag prin sess_id in
   match parse a content_bytes with

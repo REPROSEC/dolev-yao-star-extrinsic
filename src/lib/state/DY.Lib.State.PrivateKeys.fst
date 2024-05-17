@@ -86,17 +86,17 @@ let private_key_type_to_usage sk_type =
 (*** Private Keys API ***)
 
 [@@ "opaque_to_smt"]
-val initialize_private_keys: prin:principal -> crypto nat
+val initialize_private_keys: prin:principal -> traceful nat
 let initialize_private_keys = initialize_map private_key_key private_key_value #_ // another workaround for FStarLang/FStar#3286
 
 [@@ "opaque_to_smt"]
-val generate_private_key: principal -> nat -> private_key_type -> crypto (option unit)
+val generate_private_key: principal -> nat -> private_key_type -> traceful (option unit)
 let generate_private_key prin sess_id sk_type =
   let* sk = mk_rand (private_key_type_to_usage sk_type) (principal_label prin) 64 in //TODO
   add_key_value prin sess_id ({ty = sk_type}) ({private_key = sk;})
 
 [@@ "opaque_to_smt"]
-val get_private_key: principal -> nat -> private_key_type -> crypto (option bytes)
+val get_private_key: principal -> nat -> private_key_type -> traceful (option bytes)
 let get_private_key prin sess_id sk_type =
   let*? res = find_value prin sess_id ({ty = sk_type}) in
   return (Some res.private_key)
