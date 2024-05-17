@@ -152,6 +152,54 @@ let prefix_grows tr i =
   reveal_opaque (`%grows) (grows);
   norm_spec [zeta; delta_only [`%prefix]] (prefix)
 
+val prefix_prefix_grows:
+  tr1:trace -> tr2:trace -> i1:nat -> i2:nat ->
+  Lemma
+  (requires
+    tr1 <$ tr2 /\
+    i1 <= length tr1 /\
+    i2 <= length tr2 /\
+    i1 <= i2
+  )
+  (ensures prefix tr1 i1 <$ prefix tr2 i2)
+  [SMTPat (prefix tr1 i1 <$ prefix tr2 i2)]
+  // Alternative SMT pattern if the above one doesn't trigger enough
+  // [SMTPat (prefix tr1 i1);
+  //  SMTPat (prefix tr2 i2);
+  //  SMTPat (tr1 <$ tr2)]
+let rec prefix_prefix_grows tr1 tr2 i1 i2 =
+  reveal_opaque (`%grows) (grows);
+  norm_spec [zeta; delta_only [`%prefix]] (prefix);
+  if i2 = length tr2 then ()
+  else if length tr1 = length tr2 then (
+    let Snoc tr1_init _ = tr1 in
+    let Snoc tr2_init _ = tr2 in
+    prefix_prefix_grows tr1_init tr2_init i1 i2
+  ) else (
+    let Snoc tr2_init _ = tr2 in
+    prefix_prefix_grows tr1 tr2_init i1 i2
+  )
+
+val prefix_prefix_eq:
+  tr1:trace -> tr2:trace -> i:nat ->
+  Lemma
+  (requires
+    tr1 <$ tr2 /\
+    i <= length tr1
+  )
+  (ensures prefix tr1 i == prefix tr2 i)
+  [SMTPat (prefix tr1 i);
+   SMTPat (prefix tr2 i);
+   SMTPat (tr1 <$ tr2)]
+let rec prefix_prefix_eq tr1 tr2 i =
+  reveal_opaque (`%grows) (grows);
+  norm_spec [zeta; delta_only [`%prefix]] (prefix);
+  if length tr1 = length tr2 then ()
+  else (
+    let Snoc tr2_init _ = tr2 in
+    prefix_prefix_eq tr1 tr2_init i
+  )
+
 (*** Event in the trace predicates ***)
 
 /// Retrieve the event at some timestamp in the trace.
