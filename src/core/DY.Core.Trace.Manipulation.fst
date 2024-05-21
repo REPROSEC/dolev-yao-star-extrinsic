@@ -313,16 +313,44 @@ let mk_rand_get_usage #invs usg lab len tr =
 
 (*** State ***)
 
-/// Set the state of a principal at a given state identifier.
+/// We have the following state model:
+/// * every principal has a (full) state
+/// * a state is a(n unordered) collection of sessions
+/// * a session is an ordered collection of versions
+/// * a version is a collection of fields that hold information
+///
+/// For example:
+/// a state of a principal may contain sessions for different purposes:
+/// * sessions storing private keys,
+/// * other sessions storing public keys,
+/// * sessions representing the state machine of one of (possibly several) protocol executions.
+///
+/// Sessions are append-only, the current version of a session is the latest entry.
+/// This models, keeping the whole history of sessions,
+/// which is useful in particular for protocol sessions.
+///
+/// On the trace, we only have entries for storing a single version (`SetVersion`).
+/// These entries contain the principal, the content of the version information and an identifier of the session to which this version belongs.
+/// The session and the state of a principal can be computed from those trace entries.
+/// (For example, the session of principal P with identifier x
+/// is the ordered collection of all `SetVersion` entries on the trace
+/// with P as principal and x as session identifier.)
+/// 
+
+/// Set a version of a given session of a principal.
 
 [@@ "opaque_to_smt"]
-val set_state: principal -> nat -> bytes -> traceful unit
-let set_state prin session_id content =
-  add_event (SetState prin session_id content)
+val set_version: principal -> nat -> bytes -> traceful unit
+let set_version prin session_id content =
+  add_event (SetVersion prin session_id content)
 
 val max: int -> int -> int
 let max x y =
   if x < y then y else x
+
+/// To add a new session to a state of a principal,
+/// we have to find a new identifier
+/// that is not used in the current state of the principal.
 
 val compute_new_session_id: principal -> trace -> nat
 let rec compute_new_session_id prin tr =
@@ -330,7 +358,7 @@ let rec compute_new_session_id prin tr =
   | Nil -> 0
   | Snoc tr_init evt -> (
     match evt with
-    | SetState prin' sess_id _ ->
+    | SetVersion prin' sess_id _ ->
       if prin = prin' then
         max (sess_id+1) (compute_new_session_id prin tr_init)
       else
@@ -341,21 +369,21 @@ let rec compute_new_session_id prin tr =
 // Sanity check
 val compute_new_session_id_correct:
   prin:principal -> tr:trace ->
-  sess_id:nat -> state_content:bytes ->
+  sess_id:nat -> version_content:bytes ->
   Lemma
-  (requires event_exists tr (SetState prin sess_id state_content))
+  (requires event_exists tr (SetVersion prin sess_id version_content))
   (ensures sess_id < compute_new_session_id prin tr)
-let rec compute_new_session_id_correct prin tr sess_id state_content =
+let rec compute_new_session_id_correct prin tr sess_id version_content =
   match tr with
   | Nil -> ()
   | Snoc tr_init evt -> (
-    if evt = SetState prin sess_id state_content then ()
+    if evt = SetVersion prin sess_id version_content then ()
     else (
-      compute_new_session_id_correct prin tr_init sess_id state_content
+      compute_new_session_id_correct prin tr_init sess_id version_content
     )
   )
 
-/// Compute a fresh state identifier for a principal.
+/// Compute a fresh session identifier for a principal.
 
 [@@ "opaque_to_smt"]
 val new_session_id: principal -> traceful nat
@@ -363,28 +391,30 @@ let new_session_id prin =
   let* tr = get_trace in
   return (compute_new_session_id prin tr)
 
-val get_state_aux: principal -> nat -> trace -> option bytes
-let rec get_state_aux prin sess_id tr =
+
+val get_latest_version_aux: principal -> nat -> trace -> option bytes
+let rec get_latest_version_aux prin sess_id tr =
   match tr with
   | Nil -> None
-  | Snoc tr_init (SetState prin' sess_id' content) -> (
+  | Snoc tr_init (SetVersion prin' sess_id' content) -> (
     if prin = prin' && sess_id = sess_id' then
       Some content
     else
-      get_state_aux prin sess_id tr_init
+      get_latest_version_aux prin sess_id tr_init
   )
   | Snoc tr_init _ ->
-      get_state_aux prin sess_id tr_init
+      get_latest_version_aux prin sess_id tr_init
 
-/// Retrieve the state stored by a principal at some state identifier.
+/// Retrieve the **latest** version of a specific session
+/// stored by a principal.
 
 [@@ "opaque_to_smt"]
-val get_state: principal -> nat -> traceful (option bytes)
-let get_state prin sess_id =
+val get_latest_version: principal -> nat -> traceful (option bytes)
+let get_latest_version prin sess_id =
   let* tr = get_trace in
-  return (get_state_aux prin sess_id tr)
+  return (get_latest_version_aux prin sess_id tr)
 
-/// Obtaining a new state identifier do not change the trace.
+/// Obtaining a new session identifier does not change the trace.
 
 val new_session_id_invariant:
   prin:principal -> tr:trace ->
@@ -397,11 +427,11 @@ val new_session_id_invariant:
 let new_session_id_invariant prin tr =
   normalize_term_spec new_session_id
 
-/// Storing a state preserves the trace invariant
-/// when the state satisfy the state predicate.
+/// Storing a version preserves the trace invariant
+/// when the version satisfies the state predicate.
 
 #push-options "--z3rlimit 15"
-val set_state_invariant:
+val set_version_invariant:
   {|protocol_invariants|} ->
   prin:principal -> sess_id:nat -> content:bytes -> tr:trace ->
   Lemma
@@ -410,17 +440,17 @@ val set_state_invariant:
     trace_invariant tr
   )
   (ensures (
-    let ((), tr_out) = set_state prin sess_id content tr in
+    let ((), tr_out) = set_version prin sess_id content tr in
     trace_invariant tr_out /\
-    state_was_set tr_out prin sess_id content
+    version_was_set tr_out prin sess_id content
   ))
-  [SMTPat (set_state prin sess_id content tr); SMTPat (trace_invariant tr)]
-let set_state_invariant #invs prin sess_id content tr =
-  add_event_invariant (SetState prin sess_id content) tr;
-  normalize_term_spec set_state
+  [SMTPat (set_version prin sess_id content tr); SMTPat (trace_invariant tr)]
+let set_version_invariant #invs prin sess_id content tr =
+  add_event_invariant (SetVersion prin sess_id content) tr;
+  normalize_term_spec set_version
 #pop-options
 
-val get_state_aux_state_invariant:
+val get_latest_version_aux_state_invariant:
   {|protocol_invariants|} ->
   prin:principal -> sess_id:nat -> tr:trace ->
   Lemma
@@ -428,36 +458,36 @@ val get_state_aux_state_invariant:
     trace_invariant tr
   )
   (ensures (
-    match get_state_aux prin sess_id tr with
+    match get_latest_version_aux prin sess_id tr with
     | None -> True
     | Some content -> state_pred tr prin sess_id content
   ))
-let rec get_state_aux_state_invariant #invs prin sess_id tr =
+let rec get_latest_version_aux_state_invariant #invs prin sess_id tr =
   reveal_opaque (`%grows) (grows);
   norm_spec [zeta; delta_only [`%trace_invariant]] (trace_invariant);
   norm_spec [zeta; delta_only [`%prefix]] (prefix);
   match tr with
   | Nil -> ()
-  | Snoc tr_init (SetState prin' sess_id' content) -> (
+  | Snoc tr_init (SetVersion prin' sess_id' content) -> (
     if prin = prin' && sess_id = sess_id' then (
       state_pred_later tr_init tr prin sess_id content
     ) else (
-      get_state_aux_state_invariant prin sess_id tr_init;
-      match get_state_aux prin sess_id tr_init with
+      get_latest_version_aux_state_invariant prin sess_id tr_init;
+      match get_latest_version_aux prin sess_id tr_init with
       | None -> ()
       | Some content -> state_pred_later tr_init tr prin sess_id content
     )
   )
   | Snoc tr_init _ ->
-    get_state_aux_state_invariant prin sess_id tr_init;
-    match get_state_aux prin sess_id tr_init with
+    get_latest_version_aux_state_invariant prin sess_id tr_init;
+    match get_latest_version_aux prin sess_id tr_init with
     | None -> ()
     | Some content -> state_pred_later tr_init tr prin sess_id content
 
 /// When the trace invariant holds,
-/// retrieved states satisfy the state predicate.
+/// retrieved versions satisfy the state predicate.
 
-val get_state_state_invariant:
+val get_latest_version_state_invariant:
   {|protocol_invariants|} ->
   prin:principal -> sess_id:nat -> tr:trace ->
   Lemma
@@ -465,17 +495,17 @@ val get_state_state_invariant:
     trace_invariant tr
   )
   (ensures (
-    let (opt_content, tr_out) = get_state prin sess_id tr in
+    let (opt_content, tr_out) = get_latest_version prin sess_id tr in
     tr == tr_out /\ (
       match opt_content with
       | None -> True
       | Some content -> state_pred tr prin sess_id content
     )
   ))
-  [SMTPat (get_state prin sess_id tr); SMTPat (trace_invariant tr)]
-let get_state_state_invariant #invs prin sess_id tr =
-  normalize_term_spec get_state;
-  get_state_aux_state_invariant prin sess_id tr
+  [SMTPat (get_latest_version prin sess_id tr); SMTPat (trace_invariant tr)]
+let get_latest_version_state_invariant #invs prin sess_id tr =
+  normalize_term_spec get_latest_version;
+  get_latest_version_aux_state_invariant prin sess_id tr
 
 (*** Event triggering ***)
 

@@ -35,11 +35,11 @@ let message_to_string sk_a sk_b msg_bytes =
   | Msg3 msg3 -> Some (Printf.sprintf "PkEnc[sk=(%s), msg=(n_b=(%s))]" (bytes_to_string sk_b) (bytes_to_string msg3.n_b))
 
 
-(*** Convert NSL Sessions to String ***)
+(*** Convert NSL Versions to String ***)
 
-val session_to_string: bytes -> option string
-let session_to_string sess_bytes =
-  let? sess = parse nsl_session sess_bytes in
+val version_to_string: bytes -> option string
+let version_to_string sess_bytes =
+  let? sess = parse nsl_version sess_bytes in
   match sess with
   | InitiatorSentMsg1 b n_a -> (
     Some (Printf.sprintf "[principal=%s, n_a=(%s)]" b (bytes_to_string n_a))
@@ -81,5 +81,5 @@ val get_nsl_trace_to_string_printers: bytes -> bytes -> trace_to_string_printers
 let get_nsl_trace_to_string_printers priv_key_alice priv_key_bob = 
   trace_to_string_printers_builder 
     (message_to_string priv_key_alice priv_key_bob)
-    [(local_state_nsl_session.tag, session_to_string)]
+    [(local_version_nsl_version.tag, version_to_string)]
     [(event_nsl_event.tag, event_to_string)]

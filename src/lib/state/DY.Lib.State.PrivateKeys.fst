@@ -10,7 +10,7 @@ open DY.Lib.State.Map
 
 #set-options "--fuel 1 --ifuel 1"
 
-/// This module defines a state to store private keys for a principal.
+/// This module defines a version to store private keys for a principal.
 /// Private keys can be generated with `generate_private_key`
 /// and obtained back with `get_private_key`.
 
@@ -70,10 +70,10 @@ let private_keys_pred #cinvs = {
 
 val has_private_keys_invariant: protocol_invariants -> prop
 let has_private_keys_invariant invs =
-  has_map_session_invariant invs private_keys_pred
+  has_map_state_predicate invs private_keys_pred
 
 val private_keys_tag_and_invariant: {|crypto_invariants|} -> string & local_bytes_state_predicate
-let private_keys_tag_and_invariant #ci = (map_types_private_keys.tag, local_state_predicate_to_local_bytes_state_predicate (map_session_invariant private_keys_pred))
+let private_keys_tag_and_invariant #ci = (map_types_private_keys.tag, local_state_predicate_to_local_bytes_state_predicate (map_state_predicate private_keys_pred))
 
 val private_key_type_to_usage:
   private_key_type ->

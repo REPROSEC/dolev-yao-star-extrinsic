@@ -11,16 +11,16 @@ open DY.Lib.Comparse.Parsers
 (*** Tagged state predicates ***)
 
 [@@ with_bytes bytes]
-type tagged_state = {
+type tagged_version = {
   [@@@ with_parser #bytes ps_string]
   tag: string;
   content: bytes;
 }
 
-%splice [ps_tagged_state] (gen_parser (`tagged_state))
-%splice [ps_tagged_state_is_well_formed] (gen_is_well_formed_lemma (`tagged_state))
+%splice [ps_tagged_version] (gen_parser (`tagged_version))
+%splice [ps_tagged_version_is_well_formed] (gen_is_well_formed_lemma (`tagged_version))
 
-instance parseable_serializeable_bytes_tagged_state: parseable_serializeable bytes tagged_state = mk_parseable_serializeable (ps_tagged_state)
+instance parseable_serializeable_bytes_tagged_version: parseable_serializeable bytes tagged_version = mk_parseable_serializeable (ps_tagged_version)
 
 noeq
 type local_bytes_state_predicate {|crypto_invariants|} = {
@@ -47,7 +47,7 @@ let split_local_bytes_state_predicate_func {|crypto_invariants|} : split_predica
   raw_data_t = trace & principal & nat & bytes;
 
   decode_tagged_data = (fun (tr, prin, sess_id, sess_content) -> (
-    match parse tagged_state sess_content with
+    match parse tagged_version sess_content with
     | Some ({tag; content}) -> Some (tag, (tr, prin, sess_id, content))
     | None -> None
   ));
@@ -125,8 +125,8 @@ let mk_global_local_bytes_state_predicate_knowable cinvs lpreds tr prin sess_id 
   with _. (
     let Some (tag, (_, _, _, content)) = split_local_bytes_state_predicate_func.decode_tagged_data (tr, prin, sess_id, full_content) in
     lpred.pred_knowable tr prin sess_id content;
-    serialize_parse_inv_lemma tagged_state full_content;
-    serialize_wf_lemma tagged_state (is_knowable_by (principal_state_label prin sess_id) tr) ({tag; content})
+    serialize_parse_inv_lemma tagged_version full_content;
+    serialize_wf_lemma tagged_version (is_knowable_by (principal_state_label prin sess_id) tr) ({tag; content})
   )
 
 val mk_state_predicate: cinvs:crypto_invariants -> list (string & local_bytes_state_predicate) -> state_predicate cinvs
@@ -140,32 +140,32 @@ let mk_state_predicate cinvs lpreds =
 (*** Predicates on trace ***)
 
 [@@ "opaque_to_smt"]
-val tagged_state_was_set: trace -> string -> principal -> nat -> bytes -> prop
-let tagged_state_was_set tr tag prin sess_id content =
+val tagged_version_was_set: trace -> string -> principal -> nat -> bytes -> prop
+let tagged_version_was_set tr tag prin sess_id content =
   let full_content = {tag; content;} in
-  let full_content_bytes = serialize tagged_state full_content in
-  state_was_set tr prin sess_id full_content_bytes
+  let full_content_bytes = serialize tagged_version full_content in
+  version_was_set tr prin sess_id full_content_bytes
 
-(*** API for tagged sessions ***)
+(*** API for tagged versions ***)
 
 [@@ "opaque_to_smt"]
-val set_tagged_state: string -> principal -> nat -> bytes -> traceful unit
-let set_tagged_state tag prin sess_id content =
+val set_tagged_version: string -> principal -> nat -> bytes -> traceful unit
+let set_tagged_version tag prin sess_id content =
   let full_content = {tag; content;} in
-  let full_content_bytes = serialize tagged_state full_content in
-  set_state prin sess_id full_content_bytes
+  let full_content_bytes = serialize tagged_version full_content in
+  set_version prin sess_id full_content_bytes
 
 [@@ "opaque_to_smt"]
-val get_tagged_state: string -> principal -> nat -> traceful (option bytes)
-let get_tagged_state the_tag prin sess_id =
-  let*? full_content_bytes = get_state prin sess_id in
-  match parse tagged_state full_content_bytes with
+val get_latest_tagged_version: string -> principal -> nat -> traceful (option bytes)
+let get_latest_tagged_version the_tag prin sess_id =
+  let*? full_content_bytes = get_latest_version prin sess_id in
+  match parse tagged_version full_content_bytes with
     | None -> return None
     | Some ({tag; content;}) ->
       if tag = the_tag then return (Some content)
       else return None
 
-val set_tagged_state_invariant:
+val set_tagged_version_invariant:
   invs:protocol_invariants ->
   tag:string -> spred:local_bytes_state_predicate ->
   prin:principal -> sess_id:nat -> content:bytes -> tr:trace ->
@@ -176,21 +176,21 @@ val set_tagged_state_invariant:
     has_local_bytes_state_predicate invs (tag, spred)
   )
   (ensures (
-    let ((), tr_out) = set_tagged_state tag prin sess_id content tr in
+    let ((), tr_out) = set_tagged_version tag prin sess_id content tr in
     trace_invariant tr_out /\
-    tagged_state_was_set tr_out tag prin sess_id content
+    tagged_version_was_set tr_out tag prin sess_id content
   ))
-  [SMTPat (set_tagged_state tag prin sess_id content tr);
+  [SMTPat (set_tagged_version tag prin sess_id content tr);
    SMTPat (trace_invariant tr);
    SMTPat (has_local_bytes_state_predicate invs (tag, spred))]
-let set_tagged_state_invariant invs tag spred prin sess_id content tr =
-  reveal_opaque (`%set_tagged_state) (set_tagged_state);
-  reveal_opaque (`%tagged_state_was_set) (tagged_state_was_set);
+let set_tagged_version_invariant invs tag spred prin sess_id content tr =
+  reveal_opaque (`%set_tagged_version) (set_tagged_version);
+  reveal_opaque (`%tagged_version_was_set) (tagged_version_was_set);
   let full_content = {tag; content;} in
-  parse_serialize_inv_lemma #bytes tagged_state full_content;
+  parse_serialize_inv_lemma #bytes tagged_version full_content;
   local_eq_global_lemma split_local_bytes_state_predicate_func state_pred tag spred (tr, prin, sess_id, serialize _ full_content) (tr, prin, sess_id, content)
 
-val get_tagged_state_invariant:
+val get_latest_tagged_version_invariant:
   invs:protocol_invariants ->
   tag:string -> spred:local_bytes_state_predicate ->
   prin:principal -> sess_id:nat -> tr:trace ->
@@ -200,7 +200,7 @@ val get_tagged_state_invariant:
     has_local_bytes_state_predicate invs (tag, spred)
   )
   (ensures (
-    let (opt_content, tr_out) = get_tagged_state tag prin sess_id tr in
+    let (opt_content, tr_out) = get_latest_tagged_version tag prin sess_id tr in
     tr == tr_out /\ (
       match opt_content with
       | None -> True
@@ -209,38 +209,38 @@ val get_tagged_state_invariant:
       )
     )
   ))
-  [SMTPat (get_tagged_state tag prin sess_id tr);
+  [SMTPat (get_latest_tagged_version tag prin sess_id tr);
    SMTPat (trace_invariant tr);
    SMTPat (has_local_bytes_state_predicate invs (tag, spred))]
-let get_tagged_state_invariant invs tag spred prin sess_id tr =
-  reveal_opaque (`%get_tagged_state) (get_tagged_state);
-  let (opt_content, tr_out) = get_tagged_state tag prin sess_id tr in
+let get_latest_tagged_version_invariant invs tag spred prin sess_id tr =
+  reveal_opaque (`%get_latest_tagged_version) (get_latest_tagged_version);
+  let (opt_content, tr_out) = get_latest_tagged_version tag prin sess_id tr in
   match opt_content with
   | None -> ()
   | Some content ->
-    let (Some full_content_bytes, tr) = get_state prin sess_id tr in
+    let (Some full_content_bytes, tr) = get_latest_version prin sess_id tr in
     local_eq_global_lemma split_local_bytes_state_predicate_func state_pred tag spred (tr, prin, sess_id, full_content_bytes) (tr, prin, sess_id, content)
 
 (*** Theorem ***)
 
-val tagged_state_was_set_implies_pred:
+val tagged_version_was_set_implies_pred:
   invs:protocol_invariants -> tr:trace ->
   tag:string -> spred:local_bytes_state_predicate ->
   prin:principal -> sess_id:nat -> content:bytes ->
   Lemma
   (requires
-    tagged_state_was_set tr tag prin sess_id content /\
+    tagged_version_was_set tr tag prin sess_id content /\
     trace_invariant tr /\
     has_local_bytes_state_predicate invs (tag, spred)
   )
   (ensures spred.pred tr prin sess_id content)
-  [SMTPat (tagged_state_was_set tr tag prin sess_id content);
+  [SMTPat (tagged_version_was_set tr tag prin sess_id content);
    SMTPat (trace_invariant tr);
    SMTPat (has_local_bytes_state_predicate invs (tag, spred));
   ]
-let tagged_state_was_set_implies_pred invs tr tag spred prin sess_id content =
-  reveal_opaque (`%tagged_state_was_set) (tagged_state_was_set);
+let tagged_version_was_set_implies_pred invs tr tag spred prin sess_id content =
+  reveal_opaque (`%tagged_version_was_set) (tagged_version_was_set);
   let full_content = {tag; content;} in
-  parse_serialize_inv_lemma #bytes tagged_state full_content;
-  let full_content_bytes: bytes = serialize tagged_state full_content in
+  parse_serialize_inv_lemma #bytes tagged_version full_content;
+  let full_content_bytes: bytes = serialize tagged_version full_content in
   local_eq_global_lemma split_local_bytes_state_predicate_func state_pred tag spred (tr, prin, sess_id, full_content_bytes) (tr, prin, sess_id, content)

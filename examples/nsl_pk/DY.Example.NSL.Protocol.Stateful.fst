@@ -9,26 +9,26 @@ open DY.Example.NSL.Protocol.Total
 /// This effectively connects the pure code of NSL to the outside world,
 /// by handling network connections, state storage, or random generation.
 
-(*** State type ***)
+(*** Version type ***)
 
 /// Type for the NSL state machine
 
 [@@ with_bytes bytes]
-type nsl_session =
-  | InitiatorSentMsg1: b:principal -> n_a:bytes -> nsl_session
-  | ResponderSentMsg2: a:principal -> n_a:bytes -> n_b:bytes -> nsl_session
-  | InitiatorSentMsg3: b:principal -> n_a:bytes -> n_b:bytes -> nsl_session
-  | ResponderReceivedMsg3: a:principal -> n_a:bytes -> n_b:bytes -> nsl_session
+type nsl_version =
+  | InitiatorSentMsg1: b:principal -> n_a:bytes -> nsl_version
+  | ResponderSentMsg2: a:principal -> n_a:bytes -> n_b:bytes -> nsl_version
+  | InitiatorSentMsg3: b:principal -> n_a:bytes -> n_b:bytes -> nsl_version
+  | ResponderReceivedMsg3: a:principal -> n_a:bytes -> n_b:bytes -> nsl_version
 
-%splice [ps_nsl_session] (gen_parser (`nsl_session))
-%splice [ps_nsl_session_is_well_formed] (gen_is_well_formed_lemma (`nsl_session))
+%splice [ps_nsl_version] (gen_parser (`nsl_version))
+%splice [ps_nsl_version_is_well_formed] (gen_is_well_formed_lemma (`nsl_version))
 
-instance parseable_serializeable_bytes_nsl_session: parseable_serializeable bytes nsl_session
- = mk_parseable_serializeable ps_nsl_session
+instance parseable_serializeable_bytes_nsl_version: parseable_serializeable bytes nsl_version
+ = mk_parseable_serializeable ps_nsl_version
 
-instance local_state_nsl_session: local_state nsl_session = {
-  tag = "NSL.Session";
-  format = parseable_serializeable_bytes_nsl_session;
+instance local_version_nsl_version: local_version nsl_version = {
+  tag = "NSL.Version";
+  format = parseable_serializeable_bytes_nsl_version;
 }
 
 (*** Event type ***)
@@ -63,12 +63,12 @@ let prepare_msg1 alice bob =
   let* n_a = mk_rand NoUsage (join (principal_label alice) (principal_label bob)) 32 in
   trigger_event alice (Initiate1 alice bob n_a);*
   let* sess_id = new_session_id alice in
-  set_state alice sess_id (InitiatorSentMsg1 bob n_a <: nsl_session);*
+  set_version alice sess_id (InitiatorSentMsg1 bob n_a <: nsl_version);*
   return sess_id
 
 val send_msg1: nsl_global_sess_ids -> principal -> nat -> traceful (option nat)
 let send_msg1 global_sess_id alice sess_id =
-  let*? st: nsl_session = get_state alice sess_id in
+  let*? st: nsl_version = get_latest_version alice sess_id in
   match st with
   | InitiatorSentMsg1 bob n_a -> (
     let*? pk_b = get_public_key alice global_sess_id.pki (PkEnc "NSL.PublicKey") bob in
@@ -87,12 +87,12 @@ let prepare_msg2 global_sess_id bob msg_id =
   let* n_b = mk_rand NoUsage (join (principal_label msg1.alice) (principal_label bob)) 32 in
   trigger_event bob (Respond1 msg1.alice bob msg1.n_a n_b);*
   let* sess_id = new_session_id bob in
-  set_state bob sess_id (ResponderSentMsg2 msg1.alice msg1.n_a n_b <: nsl_session);*
+  set_version bob sess_id (ResponderSentMsg2 msg1.alice msg1.n_a n_b <: nsl_version);*
   return (Some sess_id)
 
 val send_msg2: nsl_global_sess_ids -> principal -> nat -> traceful (option nat)
 let send_msg2 global_sess_id bob sess_id =
-  let*? st: nsl_session = get_state bob sess_id in
+  let*? st: nsl_version = get_latest_version bob sess_id in
   match st with
   | ResponderSentMsg2 alice n_a n_b -> (
     let*? pk_a = get_public_key bob global_sess_id.pki (PkEnc "NSL.PublicKey") alice in
@@ -107,19 +107,19 @@ val prepare_msg3: nsl_global_sess_ids -> principal -> nat -> nat -> traceful (op
 let prepare_msg3 global_sess_id alice sess_id msg_id =
   let*? msg = recv_msg msg_id in
   let*? sk_a = get_private_key alice global_sess_id.private_keys (PkDec "NSL.PublicKey") in
-  let*? st: nsl_session = get_state alice sess_id in
+  let*? st: nsl_version = get_latest_version alice sess_id in
   match st with
   | InitiatorSentMsg1 bob n_a -> (
     let*? msg2: message2 = return (decode_message2 alice bob msg sk_a n_a) in
     trigger_event alice (Initiate2 alice bob n_a msg2.n_b);*
-    set_state alice sess_id (InitiatorSentMsg3 bob n_a msg2.n_b <: nsl_session);*
+    set_version alice sess_id (InitiatorSentMsg3 bob n_a msg2.n_b <: nsl_version);*
     return (Some ())
   )
   | _ -> return None
 
 val send_msg3: nsl_global_sess_ids -> principal -> nat -> traceful (option nat)
 let send_msg3 global_sess_id alice sess_id =
-  let*? st: nsl_session = get_state alice sess_id in
+  let*? st: nsl_version = get_latest_version alice sess_id in
   match st with
   | InitiatorSentMsg3 bob n_a n_b -> (
     let*? pk_b = get_public_key alice global_sess_id.pki (PkEnc "NSL.PublicKey") bob in
@@ -134,12 +134,12 @@ val prepare_msg4: nsl_global_sess_ids -> principal -> nat -> nat -> traceful (op
 let prepare_msg4 global_sess_id bob sess_id msg_id =
   let*? msg = recv_msg msg_id in
   let*? sk_b = get_private_key bob global_sess_id.private_keys (PkDec "NSL.PublicKey") in
-  let*? st: nsl_session = get_state bob sess_id in
+  let*? st: nsl_version = get_latest_version bob sess_id in
   match st with
   | ResponderSentMsg2 alice n_a n_b -> (
     let*? msg3: message3 = return (decode_message3 alice bob msg sk_b n_b) in
     trigger_event bob (Respond2 alice bob n_a n_b);*
-    set_state bob sess_id (ResponderReceivedMsg3 alice n_a n_b <: nsl_session);*
+    set_version bob sess_id (ResponderReceivedMsg3 alice n_a n_b <: nsl_version);*
     return (Some ())
   )
   | _ -> return None
