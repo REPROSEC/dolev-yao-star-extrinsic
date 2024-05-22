@@ -28,8 +28,12 @@ open DY.Core.Label.Type
 ///   if Alice has finished a handshake with Bob,
 ///   then Bob must have initiated a handshake with Alice.
 
-/// The type for events in the trace.
+/// Type for session identifiers (see Trace.Manipulation for an explanation of our state model)
+
 type session_id = nat
+
+
+/// The type for events in the trace.
 
 type trace_event =
   // A message has been sent on the network.
