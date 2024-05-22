@@ -345,7 +345,7 @@ let rec compute_new_session_id prin tr =
 // Sanity check
 val compute_new_session_id_correct:
   prin:principal -> tr:trace ->
-  sess_id:session_id -> version_content:bytes ->
+  sess_id:session_id -> state_content:bytes ->
   Lemma
   (requires event_exists tr (SetState prin sess_id state_content))
   (ensures sess_id < compute_new_session_id prin tr)

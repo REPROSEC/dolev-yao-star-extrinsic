@@ -70,7 +70,7 @@ let has_local_state_predicate #a #ls invs spred =
 [@@ "opaque_to_smt"]
 val state_was_set:
   #a:Type -> {|local_state a|} ->
-  trace -> principal -> sess_id -> a ->
+  trace -> principal -> session_id -> a ->
   prop
 let state_was_set #a #ls tr prin sess_id content =
   tagged_state_was_set tr ls.tag prin sess_id (serialize _ content)
@@ -78,7 +78,7 @@ let state_was_set #a #ls tr prin sess_id content =
 [@@ "opaque_to_smt"]
 val set_state:
   #a:Type -> {|local_state a|} ->
-  principal -> sess_id -> a -> traceful unit
+  principal -> session_id -> a -> traceful unit
 let set_state #a #ls prin sess_id content =
   set_tagged_state ls.tag prin sess_id (serialize _ content)
 

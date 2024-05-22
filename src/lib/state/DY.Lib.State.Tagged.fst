@@ -140,7 +140,7 @@ let mk_state_predicate cinvs lpreds =
 (*** Predicates on trace ***)
 
 [@@ "opaque_to_smt"]
-val tagged_state_was_set: trace -> string -> principal -> sess_id -> bytes -> prop
+val tagged_state_was_set: trace -> string -> principal -> session_id -> bytes -> prop
 let tagged_state_was_set tr tag prin sess_id content =
   let full_content = {tag; content;} in
   let full_content_bytes = serialize tagged_state full_content in
