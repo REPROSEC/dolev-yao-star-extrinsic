@@ -22,7 +22,7 @@ let rec label_to_string l =
   | State pre_label -> (
     match pre_label with
     | P p -> Printf.sprintf "Principal %s" p
-    | S p s -> Printf.sprintf "Principal %s state %d" p s
+    | S p s -> Printf.sprintf "Principal %s state %d" p s.the_id
   ) 
   | Meet l1 l2 -> Printf.sprintf "Meet [%s; %s]" (label_to_string l1) (label_to_string l2)
   | Join l1 l2 -> Printf.sprintf "Join [%s; %s]" (label_to_string l1) (label_to_string l2)
@@ -202,7 +202,7 @@ let trace_event_to_string printers tr_event i =
   | SetState prin sess_id full_content -> (
     let content_str = state_to_string printers.state_to_string full_content in
     Printf.sprintf "{\"TraceID\": %d, \"Type\": \"Session\", \"SessionID\": %d, \"Principal\": \"%s\", \"Content\": \"%s\"}\n"
-      i sess_id prin content_str
+      i sess_id.the_id prin content_str
   )
   | Event prin tag content -> (
     let printer = find_printer printers.event_to_string tag in

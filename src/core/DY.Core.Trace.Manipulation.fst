@@ -210,7 +210,7 @@ let recv_msg_invariant #invs i tr =
 /// Corrupt a session of a principal.
 
 [@@ "opaque_to_smt"]
-val corrupt: principal -> session_id -> traceful unit
+val corrupt: principal -> state_id -> traceful unit
 let corrupt prin sess_id =
   add_event (Corrupt prin sess_id)
 
@@ -218,7 +218,7 @@ let corrupt prin sess_id =
 
 val corrupt_invariant:
   {|protocol_invariants|} ->
-  prin:principal -> sess_id:session_id -> tr:trace ->
+  prin:principal -> sess_id:state_id -> tr:trace ->
   Lemma
   (requires
     trace_invariant tr
@@ -316,7 +316,7 @@ let mk_rand_get_usage #invs usg lab len tr =
 /// Set the state of a principal at a given state identifier.
 
 [@@ "opaque_to_smt"]
-val set_state: principal -> session_id -> bytes -> traceful unit
+val set_state: principal -> state_id -> bytes -> traceful unit
 let set_state prin session_id content =
   add_event (SetState prin session_id content)
 
@@ -328,15 +328,16 @@ let max x y =
 /// we have to find a new identifier
 /// that is not used in the current state of the principal.
 
-val compute_new_session_id: principal -> trace -> session_id
+val compute_new_session_id: principal -> trace -> state_id
 let rec compute_new_session_id prin tr =
   match tr with
-  | Nil -> 0
+  | Nil -> {the_id = 0}
   | Snoc tr_init evt -> (
     match evt with
     | SetState prin' sess_id _ ->
       if prin = prin' then
-        max (sess_id+1) (compute_new_session_id prin tr_init)
+        {the_id = 
+             max (sess_id.the_id + 1) (compute_new_session_id prin tr_init).the_id}
       else
         compute_new_session_id prin tr_init
     | _ -> compute_new_session_id prin tr_init
@@ -345,10 +346,10 @@ let rec compute_new_session_id prin tr =
 // Sanity check
 val compute_new_session_id_correct:
   prin:principal -> tr:trace ->
-  sess_id:session_id -> state_content:bytes ->
+  sess_id:state_id -> state_content:bytes ->
   Lemma
   (requires event_exists tr (SetState prin sess_id state_content))
-  (ensures sess_id < compute_new_session_id prin tr)
+  (ensures sess_id.the_id < (compute_new_session_id prin tr).the_id)
 let rec compute_new_session_id_correct prin tr sess_id state_content =
   match tr with
   | Nil -> ()
@@ -362,12 +363,12 @@ let rec compute_new_session_id_correct prin tr sess_id state_content =
 /// Compute a fresh state identifier for a principal.
 
 [@@ "opaque_to_smt"]
-val new_session_id: principal -> traceful session_id
+val new_session_id: principal -> traceful state_id
 let new_session_id prin =
   let* tr = get_trace in
   return (compute_new_session_id prin tr)
 
-val get_state_aux: principal -> session_id -> trace -> option bytes
+val get_state_aux: principal -> state_id -> trace -> option bytes
 let rec get_state_aux prin sess_id tr =
   match tr with
   | Nil -> None
@@ -383,7 +384,7 @@ let rec get_state_aux prin sess_id tr =
 /// Retrieve the state stored by a principal at some state identifier.
 
 [@@ "opaque_to_smt"]
-val get_state: principal -> session_id -> traceful (option bytes)
+val get_state: principal -> state_id -> traceful (option bytes)
 let get_state prin sess_id =
   let* tr = get_trace in
   return (get_state_aux prin sess_id tr)
@@ -407,7 +408,7 @@ let new_session_id_invariant prin tr =
 #push-options "--z3rlimit 15"
 val set_state_invariant:
   {|protocol_invariants|} ->
-  prin:principal -> sess_id:session_id -> content:bytes -> tr:trace ->
+  prin:principal -> sess_id:state_id -> content:bytes -> tr:trace ->
   Lemma
   (requires
     state_pred tr prin sess_id content /\
@@ -426,7 +427,7 @@ let set_state_invariant #invs prin sess_id content tr =
 
 val get_state_aux_state_invariant:
   {|protocol_invariants|} ->
-  prin:principal -> sess_id:session_id -> tr:trace ->
+  prin:principal -> sess_id:state_id -> tr:trace ->
   Lemma
   (requires
     trace_invariant tr
@@ -463,7 +464,7 @@ let rec get_state_aux_state_invariant #invs prin sess_id tr =
 
 val get_state_state_invariant:
   {|protocol_invariants|} ->
-  prin:principal -> sess_id:session_id -> tr:trace ->
+  prin:principal -> sess_id:state_id -> tr:trace ->
   Lemma
   (requires
     trace_invariant tr

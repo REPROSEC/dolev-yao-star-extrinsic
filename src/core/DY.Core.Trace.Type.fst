@@ -28,10 +28,6 @@ open DY.Core.Label.Type
 ///   if Alice has finished a handshake with Bob,
 ///   then Bob must have initiated a handshake with Alice.
 
-/// Type for session identifiers (see Trace.Manipulation for an explanation of our state model)
-
-type session_id = nat
-
 
 /// The type for events in the trace.
 
@@ -41,9 +37,9 @@ type trace_event =
   // A random number has been generated, with some usage and label.
   | RandGen: usg:usage -> lab:label -> len:nat{len <> 0} -> trace_event
   // A state of a principal has been corrupt.
-  | Corrupt: prin:principal -> sess_id:nat -> trace_event
+  | Corrupt: prin:principal -> sess_id:state_id -> trace_event
   // A principal stored some state.
-  | SetState: prin:principal -> sess_id:nat -> content:bytes -> trace_event
+  | SetState: prin:principal -> sess_id:state_id -> content:bytes -> trace_event
   // A custom and protocol-specific event has been triggered by a principal.
   | Event: prin:principal -> tag:string -> content:bytes -> trace_event
 
@@ -267,13 +263,13 @@ let msg_sent_on_network tr msg =
 
 /// Has some state been stored by a principal?
 
-val state_was_set: trace -> principal -> session_id -> bytes -> prop
+val state_was_set: trace -> principal -> state_id -> bytes -> prop
 let state_was_set tr prin sess_id content =
   event_exists tr (SetState prin sess_id content)
 
 /// Has a principal been corrupt?
 
-val was_corrupt: trace -> principal -> session_id -> prop
+val was_corrupt: trace -> principal -> state_id -> prop
 let was_corrupt tr prin sess_id =
   event_exists tr (Corrupt prin sess_id)
 

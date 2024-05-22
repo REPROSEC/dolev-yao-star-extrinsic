@@ -29,18 +29,18 @@ open DY.Core.Label
 
 noeq
 type state_predicate (cinvs:crypto_invariants) = {
-  pred: trace -> principal -> session_id -> bytes -> prop;
+  pred: trace -> principal -> state_id -> bytes -> prop;
   // TODO: Do we want the later lemma?
   pred_later:
     tr1:trace -> tr2:trace ->
-    prin:principal -> sess_id:session_id -> content:bytes ->
+    prin:principal -> sess_id:state_id -> content:bytes ->
     Lemma
     (requires pred tr1 prin sess_id content /\ tr1 <$ tr2)
     (ensures pred tr2 prin sess_id content)
   ;
   pred_knowable:
     tr:trace ->
-    prin:principal -> sess_id:session_id -> content:bytes ->
+    prin:principal -> sess_id:state_id -> content:bytes ->
     Lemma
     (requires pred tr prin sess_id content)
     (ensures
@@ -159,7 +159,7 @@ let msg_sent_on_network_are_publishable #invs tr msg =
 
 val state_was_set_implies_pred:
   {|protocol_invariants|} -> tr:trace ->
-  prin:principal -> sess_id:session_id -> content:bytes ->
+  prin:principal -> sess_id:state_id -> content:bytes ->
   Lemma
   (requires
     trace_invariant tr /\
@@ -182,7 +182,7 @@ let state_was_set_implies_pred #invs tr prin sess_id content =
 
 val state_is_knowable_by:
   {|protocol_invariants|} -> tr:trace ->
-  prin:principal -> sess_id:session_id -> content:bytes ->
+  prin:principal -> sess_id:state_id -> content:bytes ->
   Lemma
   (requires
     trace_invariant tr /\

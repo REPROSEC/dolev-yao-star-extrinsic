@@ -154,7 +154,7 @@ let move_requires_4 #a #b #c #d #p #q pf x y z w =
 
 val corrupted_state_is_publishable:
   {|protocol_invariants|} ->
-  tr:trace -> prin:principal -> sess_id:session_id -> content:bytes ->
+  tr:trace -> prin:principal -> sess_id:state_id -> content:bytes ->
   Lemma
   (requires
     is_corrupt tr (principal_state_label prin sess_id) /\
