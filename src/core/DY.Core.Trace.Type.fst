@@ -40,10 +40,10 @@ type trace_event =
   | MsgSent: bytes -> trace_event
   // A random number has been generated, with some usage and label.
   | RandGen: usg:usage -> lab:label -> len:nat{len <> 0} -> trace_event
-  // A version of a specific session of a principal has been corrupt.
-  | Corrupt: prin:principal -> sess_id:session_id -> trace_event
-  // A principal stored a version of a specific sesson.
-  | SetVersion: prin:principal -> sess_id:session_id -> content:bytes -> trace_event
+  // A state of a principal has been corrupt.
+  | Corrupt: prin:principal -> sess_id:nat -> trace_event
+  // A principal stored some state.
+  | SetState: prin:principal -> sess_id:nat -> content:bytes -> trace_event
   // A custom and protocol-specific event has been triggered by a principal.
   | Event: prin:principal -> tag:string -> content:bytes -> trace_event
 
@@ -265,13 +265,13 @@ val msg_sent_on_network: trace -> bytes -> prop
 let msg_sent_on_network tr msg =
   event_exists tr (MsgSent msg)
 
-/// Has a version of a session been stored by a principal?
+/// Has some state been stored by a principal?
 
-val version_was_set: trace -> principal -> session_id -> bytes -> prop
-let version_was_set tr prin sess_id content =
-  event_exists tr (SetVersion prin sess_id content)
+val state_was_set: trace -> principal -> session_id -> bytes -> prop
+let state_was_set tr prin sess_id content =
+  event_exists tr (SetState prin sess_id content)
 
-/// Has a session of a principal been corrupt?
+/// Has a principal been corrupt?
 
 val was_corrupt: trace -> principal -> session_id -> prop
 let was_corrupt tr prin sess_id =

@@ -78,10 +78,10 @@ let pki_pred #cinvs = {
 
 val has_pki_invariant: protocol_invariants -> prop
 let has_pki_invariant invs =
-  has_map_state_predicate invs pki_pred
+  has_map_session_invariant invs pki_pred
 
 val pki_tag_and_invariant: {|crypto_invariants|} -> string & local_bytes_state_predicate
-let pki_tag_and_invariant #ci = (map_types_pki.tag, local_state_predicate_to_local_bytes_state_predicate (map_state_predicate pki_pred))
+let pki_tag_and_invariant #ci = (map_types_pki.tag, local_state_predicate_to_local_bytes_state_predicate (map_session_invariant pki_pred))
 
 (*** PKI API ***)
 

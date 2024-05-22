@@ -22,7 +22,7 @@ let rec label_to_string l =
   | State pre_label -> (
     match pre_label with
     | P p -> Printf.sprintf "Principal %s" p
-    | S p s -> Printf.sprintf "Principal %s session %d" p s
+    | S p s -> Printf.sprintf "Principal %s state %d" p s
   ) 
   | Meet l1 l2 -> Printf.sprintf "Meet [%s; %s]" (label_to_string l1) (label_to_string l2)
   | Join l1 l2 -> Printf.sprintf "Join [%s; %s]" (label_to_string l1) (label_to_string l2)
@@ -163,7 +163,7 @@ let option_to_string parse_fn elem =
 
 val state_to_string: list (string & (bytes -> option string)) -> bytes -> string
 let state_to_string printer_list full_content_bytes =
-  let full_content = parse tagged_version full_content_bytes in
+  let full_content = parse tagged_state full_content_bytes in
   match full_content with
   | Some ({tag; content}) -> (
     let parser = find_printer printer_list tag in
@@ -199,9 +199,9 @@ let trace_event_to_string printers tr_event i =
     i (usage_to_string usg) (label_to_string lab)
   )
   | Corrupt prin sess_id -> ""
-  | SetVersion prin sess_id full_content -> (
+  | SetState prin sess_id full_content -> (
     let content_str = state_to_string printers.state_to_string full_content in
-    Printf.sprintf "{\"TraceID\": %d, \"Type\": \"Version\", \"SessionID\": %d, \"Principal\": \"%s\", \"Content\": \"%s\"}\n"
+    Printf.sprintf "{\"TraceID\": %d, \"Type\": \"Session\", \"SessionID\": %d, \"Principal\": \"%s\", \"Content\": \"%s\"}\n"
       i sess_id prin content_str
   )
   | Event prin tag content -> (
