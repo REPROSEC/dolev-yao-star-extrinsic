@@ -29,6 +29,7 @@ open DY.Core.Label.Type
 ///   then Bob must have initiated a handshake with Alice.
 
 /// The type for events in the trace.
+type session_id = nat
 
 type trace_event =
   // A message has been sent on the network.
@@ -36,9 +37,9 @@ type trace_event =
   // A random number has been generated, with some usage and label.
   | RandGen: usg:usage -> lab:label -> len:nat{len <> 0} -> trace_event
   // A version of a specific session of a principal has been corrupt.
-  | Corrupt: prin:principal -> sess_id:nat -> trace_event
+  | Corrupt: prin:principal -> sess_id:session_id -> trace_event
   // A principal stored a version of a specific sesson.
-  | SetVersion: prin:principal -> sess_id:nat -> content:bytes -> trace_event
+  | SetVersion: prin:principal -> sess_id:session_id -> content:bytes -> trace_event
   // A custom and protocol-specific event has been triggered by a principal.
   | Event: prin:principal -> tag:string -> content:bytes -> trace_event
 
@@ -258,13 +259,13 @@ let msg_sent_on_network tr msg =
 
 /// Has a version of a session been stored by a principal?
 
-val version_was_set: trace -> principal -> nat -> bytes -> prop
+val version_was_set: trace -> principal -> session_id -> bytes -> prop
 let version_was_set tr prin sess_id content =
   event_exists tr (SetVersion prin sess_id content)
 
 /// Has a session of a principal been corrupt?
 
-val was_corrupt: trace -> principal -> nat -> prop
+val was_corrupt: trace -> principal -> session_id -> prop
 let was_corrupt tr prin sess_id =
   event_exists tr (Corrupt prin sess_id)
 

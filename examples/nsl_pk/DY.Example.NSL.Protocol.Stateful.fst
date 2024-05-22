@@ -58,7 +58,7 @@ type nsl_global_sess_ids = {
   private_keys: nat;
 }
 
-val prepare_msg1: principal -> principal -> traceful nat
+val prepare_msg1: principal -> principal -> traceful session_id
 let prepare_msg1 alice bob =
   let* n_a = mk_rand NoUsage (join (principal_label alice) (principal_label bob)) 32 in
   trigger_event alice (Initiate1 alice bob n_a);*
@@ -66,7 +66,7 @@ let prepare_msg1 alice bob =
   set_version alice sess_id (InitiatorSentMsg1 bob n_a <: nsl_version);*
   return sess_id
 
-val send_msg1: nsl_global_sess_ids -> principal -> nat -> traceful (option nat)
+val send_msg1: nsl_global_sess_ids -> principal -> session_id -> traceful (option nat)
 let send_msg1 global_sess_id alice sess_id =
   let*? st: nsl_version = get_latest_version alice sess_id in
   match st with
@@ -79,7 +79,7 @@ let send_msg1 global_sess_id alice sess_id =
   )
   | _ -> return None
 
-val prepare_msg2: nsl_global_sess_ids -> principal -> nat -> traceful (option nat)
+val prepare_msg2: nsl_global_sess_ids -> principal -> session_id -> traceful (option session_id)
 let prepare_msg2 global_sess_id bob msg_id =
   let*? msg = recv_msg msg_id in
   let*? sk_b = get_private_key bob global_sess_id.private_keys (PkDec "NSL.PublicKey") in
@@ -90,7 +90,7 @@ let prepare_msg2 global_sess_id bob msg_id =
   set_version bob sess_id (ResponderSentMsg2 msg1.alice msg1.n_a n_b <: nsl_version);*
   return (Some sess_id)
 
-val send_msg2: nsl_global_sess_ids -> principal -> nat -> traceful (option nat)
+val send_msg2: nsl_global_sess_ids -> principal -> session_id -> traceful (option nat)
 let send_msg2 global_sess_id bob sess_id =
   let*? st: nsl_version = get_latest_version bob sess_id in
   match st with
@@ -103,7 +103,7 @@ let send_msg2 global_sess_id bob sess_id =
   )
   | _ -> return None
 
-val prepare_msg3: nsl_global_sess_ids -> principal -> nat -> nat -> traceful (option unit)
+val prepare_msg3: nsl_global_sess_ids -> principal -> session_id -> nat -> traceful (option unit)
 let prepare_msg3 global_sess_id alice sess_id msg_id =
   let*? msg = recv_msg msg_id in
   let*? sk_a = get_private_key alice global_sess_id.private_keys (PkDec "NSL.PublicKey") in
@@ -117,7 +117,7 @@ let prepare_msg3 global_sess_id alice sess_id msg_id =
   )
   | _ -> return None
 
-val send_msg3: nsl_global_sess_ids -> principal -> nat -> traceful (option nat)
+val send_msg3: nsl_global_sess_ids -> principal -> session_id -> traceful (option nat)
 let send_msg3 global_sess_id alice sess_id =
   let*? st: nsl_version = get_latest_version alice sess_id in
   match st with
@@ -130,7 +130,7 @@ let send_msg3 global_sess_id alice sess_id =
   )
   | _ -> return None
 
-val prepare_msg4: nsl_global_sess_ids -> principal -> nat -> nat -> traceful (option unit)
+val prepare_msg4: nsl_global_sess_ids -> principal -> session_id -> nat -> traceful (option unit)
 let prepare_msg4 global_sess_id bob sess_id msg_id =
   let*? msg = recv_msg msg_id in
   let*? sk_b = get_private_key bob global_sess_id.private_keys (PkDec "NSL.PublicKey") in

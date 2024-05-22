@@ -210,7 +210,7 @@ let recv_msg_invariant #invs i tr =
 /// Corrupt a session of a principal.
 
 [@@ "opaque_to_smt"]
-val corrupt: principal -> nat -> traceful unit
+val corrupt: principal -> session_id -> traceful unit
 let corrupt prin sess_id =
   add_event (Corrupt prin sess_id)
 
@@ -218,7 +218,7 @@ let corrupt prin sess_id =
 
 val corrupt_invariant:
   {|protocol_invariants|} ->
-  prin:principal -> sess_id:nat -> tr:trace ->
+  prin:principal -> sess_id:session_id -> tr:trace ->
   Lemma
   (requires
     trace_invariant tr
@@ -337,10 +337,11 @@ let mk_rand_get_usage #invs usg lab len tr =
 /// with P as principal and x as session identifier.)
 /// 
 
+
 /// Set a version of a given session of a principal.
 
 [@@ "opaque_to_smt"]
-val set_version: principal -> nat -> bytes -> traceful unit
+val set_version: principal -> session_id -> bytes -> traceful unit
 let set_version prin session_id content =
   add_event (SetVersion prin session_id content)
 
@@ -352,7 +353,7 @@ let max x y =
 /// we have to find a new identifier
 /// that is not used in the current state of the principal.
 
-val compute_new_session_id: principal -> trace -> nat
+val compute_new_session_id: principal -> trace -> session_id
 let rec compute_new_session_id prin tr =
   match tr with
   | Nil -> 0
@@ -369,7 +370,7 @@ let rec compute_new_session_id prin tr =
 // Sanity check
 val compute_new_session_id_correct:
   prin:principal -> tr:trace ->
-  sess_id:nat -> version_content:bytes ->
+  sess_id:session_id -> version_content:bytes ->
   Lemma
   (requires event_exists tr (SetVersion prin sess_id version_content))
   (ensures sess_id < compute_new_session_id prin tr)
@@ -386,13 +387,13 @@ let rec compute_new_session_id_correct prin tr sess_id version_content =
 /// Compute a fresh session identifier for a principal.
 
 [@@ "opaque_to_smt"]
-val new_session_id: principal -> traceful nat
+val new_session_id: principal -> traceful session_id
 let new_session_id prin =
   let* tr = get_trace in
   return (compute_new_session_id prin tr)
 
 
-val get_latest_version_aux: principal -> nat -> trace -> option bytes
+val get_latest_version_aux: principal -> session_id -> trace -> option bytes
 let rec get_latest_version_aux prin sess_id tr =
   match tr with
   | Nil -> None
@@ -409,7 +410,7 @@ let rec get_latest_version_aux prin sess_id tr =
 /// stored by a principal.
 
 [@@ "opaque_to_smt"]
-val get_latest_version: principal -> nat -> traceful (option bytes)
+val get_latest_version: principal -> session_id -> traceful (option bytes)
 let get_latest_version prin sess_id =
   let* tr = get_trace in
   return (get_latest_version_aux prin sess_id tr)
@@ -433,7 +434,7 @@ let new_session_id_invariant prin tr =
 #push-options "--z3rlimit 15"
 val set_version_invariant:
   {|protocol_invariants|} ->
-  prin:principal -> sess_id:nat -> content:bytes -> tr:trace ->
+  prin:principal -> sess_id:session_id -> content:bytes -> tr:trace ->
   Lemma
   (requires
     state_pred tr prin sess_id content /\
@@ -452,7 +453,7 @@ let set_version_invariant #invs prin sess_id content tr =
 
 val get_latest_version_aux_state_invariant:
   {|protocol_invariants|} ->
-  prin:principal -> sess_id:nat -> tr:trace ->
+  prin:principal -> sess_id:session_id -> tr:trace ->
   Lemma
   (requires
     trace_invariant tr
@@ -489,7 +490,7 @@ let rec get_latest_version_aux_state_invariant #invs prin sess_id tr =
 
 val get_latest_version_state_invariant:
   {|protocol_invariants|} ->
-  prin:principal -> sess_id:nat -> tr:trace ->
+  prin:principal -> sess_id:session_id -> tr:trace ->
   Lemma
   (requires
     trace_invariant tr
