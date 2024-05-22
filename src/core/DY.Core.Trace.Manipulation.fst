@@ -127,7 +127,7 @@ let add_event_invariant #invs e tr =
 
 /// Get the current time (i.e. trace length).
 
-val get_time: traceful nat
+val get_time: traceful timestamp
 let get_time =
   let* tr = get_trace in
   return (DY.Core.Trace.Type.length tr)
@@ -137,7 +137,7 @@ let get_time =
 /// Send a message on the network.
 
 [@@ "opaque_to_smt"]
-val send_msg: bytes -> traceful nat
+val send_msg: bytes -> traceful timestamp
 let send_msg msg =
   let* time = get_time in
   add_event (MsgSent msg);*
@@ -167,7 +167,7 @@ let send_msg_invariant #invs msg tr =
 /// Receive a message from the network.
 
 [@@ "opaque_to_smt"]
-val recv_msg: nat -> traceful (option bytes)
+val recv_msg: timestamp -> traceful (option bytes)
 let recv_msg i =
   let* tr = get_trace in
   if i < DY.Core.Trace.Type.length tr then
@@ -182,7 +182,7 @@ let recv_msg i =
 
 val recv_msg_invariant:
   {|protocol_invariants|} ->
-  i:nat -> tr:trace ->
+  i:timestamp -> tr:trace ->
   Lemma
   (requires trace_invariant tr)
   (ensures (

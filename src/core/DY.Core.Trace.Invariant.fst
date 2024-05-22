@@ -117,7 +117,7 @@ let rec trace_invariant #invs tr =
 
 val event_at_implies_trace_event_invariant:
   {|protocol_invariants|} ->
-  tr:trace -> i:nat -> event:trace_event ->
+  tr:trace -> i:timestamp -> event:trace_event ->
   Lemma
   (requires
     event_at tr i event /\
@@ -196,7 +196,7 @@ let version_is_knowable_by #invs tr prin sess_id content =
 
 val event_triggered_at_implies_pred:
   {|protocol_invariants|} -> tr:trace ->
-  i:nat -> prin:principal -> tag:string -> content:bytes ->
+  i:timestamp -> prin:principal -> tag:string -> content:bytes ->
   Lemma
   (requires
     event_triggered_at tr i prin tag content /\

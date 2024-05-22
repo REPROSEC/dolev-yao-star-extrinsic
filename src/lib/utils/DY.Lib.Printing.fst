@@ -185,7 +185,7 @@ noeq type trace_to_string_printers = {
 
 val trace_event_to_string: 
   trace_to_string_printers -> 
-  trace_event -> nat -> 
+  trace_event -> timestamp -> 
   string
 let trace_event_to_string printers tr_event i =
   match tr_event with

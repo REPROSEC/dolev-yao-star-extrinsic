@@ -22,7 +22,7 @@ open DY.Example.NSL.Protocol.Stateful.Proof
 /// unless the attacker corrupted Alice or Bob.
 
 val initiator_authentication:
-  tr:trace -> i:nat ->
+  tr:trace -> i:timestamp ->
   alice:principal -> bob:principal -> n_a:bytes -> n_b:bytes ->
   Lemma
   (requires
@@ -40,7 +40,7 @@ let initiator_authentication tr i alice bob n_a n_b = ()
 /// unless the attacker corrupted Alice or Bob.
 
 val responder_authentication:
-  tr:trace -> i:nat ->
+  tr:trace -> i:timestamp ->
   alice:principal -> bob:principal -> n_a:bytes -> n_b:bytes ->
   Lemma
   (requires
