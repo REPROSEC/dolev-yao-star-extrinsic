@@ -48,3 +48,12 @@ let ps_principal #bytes #bl =
 [@@is_parser; is_parser_for (`%nat)]
 val ps_nat: #bytes:Type0 -> {|bytes_like bytes|} -> parser_serializer bytes nat
 let ps_nat #bytes #bl = ps_nat
+
+(*** Parser for state identifiers ***)
+
+[@@is_parser; is_parser_for (`%state_id)]
+val ps_state_id: #bytes:Type0 -> {|bytes_like bytes|} -> parser_serializer bytes state_id
+let ps_state_id #bytes #bl =
+  mk_isomorphism state_id ps_nat
+    (fun the_id -> { the_id; })
+    (fun { the_id; } -> the_id)
