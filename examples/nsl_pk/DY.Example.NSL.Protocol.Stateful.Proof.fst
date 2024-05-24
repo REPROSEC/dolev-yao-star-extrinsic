@@ -151,7 +151,7 @@ let prepare_msg1_proof tr alice bob =
 
 val send_msg1_proof:
   tr:trace ->
-  global_sess_id:nsl_global_sess_ids -> alice:principal -> sess_id:nat ->
+  global_sess_id:nsl_global_sess_ids -> alice:principal -> sess_id:state_id ->
   Lemma
   (requires trace_invariant tr)
   (ensures (
@@ -172,7 +172,7 @@ let send_msg1_proof tr global_sess_id alice sess_id =
 
 val prepare_msg2_proof:
   tr:trace ->
-  global_sess_id:nsl_global_sess_ids -> bob:principal -> msg_id:nat ->
+  global_sess_id:nsl_global_sess_ids -> bob:principal -> msg_id:timestamp ->
   Lemma
   (requires trace_invariant tr)
   (ensures (
@@ -192,7 +192,7 @@ let prepare_msg2_proof tr global_sess_id bob msg_id =
 
 val send_msg2_proof:
   tr:trace ->
-  global_sess_id:nsl_global_sess_ids -> bob:principal -> sess_id:nat ->
+  global_sess_id:nsl_global_sess_ids -> bob:principal -> sess_id:state_id ->
   Lemma
   (requires trace_invariant tr)
   (ensures (
@@ -213,7 +213,7 @@ let send_msg2_proof tr global_sess_id bob sess_id =
 
 val prepare_msg3_proof:
   tr:trace ->
-  global_sess_id:nsl_global_sess_ids -> alice:principal -> sess_id:nat -> msg_id:nat ->
+  global_sess_id:nsl_global_sess_ids -> alice:principal -> sess_id:state_id -> msg_id:timestamp ->
   Lemma
   (requires trace_invariant tr)
   (ensures (
@@ -237,7 +237,7 @@ let prepare_msg3_proof tr global_sess_id alice sess_id msg_id =
 
 val send_msg3_proof:
   tr:trace ->
-  global_sess_id:nsl_global_sess_ids -> alice:principal -> sess_id:nat ->
+  global_sess_id:nsl_global_sess_ids -> alice:principal -> sess_id:state_id ->
   Lemma
   (requires trace_invariant tr)
   (ensures (
@@ -275,7 +275,7 @@ let event_respond1_injective tr alice alice' bob n_a n_a' n_b = ()
 #push-options "--z3rlimit 50"
 val prepare_msg4:
   tr:trace ->
-  global_sess_id:nsl_global_sess_ids -> bob:principal -> sess_id:nat -> msg_id:nat ->
+  global_sess_id:nsl_global_sess_ids -> bob:principal -> sess_id:state_id -> msg_id:timestamp ->
   Lemma
   (requires trace_invariant tr)
   (ensures (

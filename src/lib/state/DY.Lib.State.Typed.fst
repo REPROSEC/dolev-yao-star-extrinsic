@@ -21,16 +21,16 @@ let mk_local_state_instance #a #format tag = {
 
 noeq
 type local_state_predicate {|crypto_invariants|} (a:Type) {|parseable_serializeable bytes a|} = {
-  pred: trace -> principal -> nat -> a -> prop;
+  pred: trace -> principal -> state_id -> a -> prop;
   pred_later:
     tr1:trace -> tr2:trace ->
-    prin:principal -> sess_id:nat -> content:a ->
+    prin:principal -> sess_id:state_id -> content:a ->
     Lemma
     (requires pred tr1 prin sess_id content /\ tr1 <$ tr2)
     (ensures pred tr2 prin sess_id content)
   ;
   pred_knowable:
-    tr:trace -> prin:principal -> sess_id:nat -> content:a ->
+    tr:trace -> prin:principal -> sess_id:state_id -> content:a ->
     Lemma
     (requires pred tr prin sess_id content)
     (ensures is_well_formed _ (is_knowable_by (principal_state_label prin sess_id) tr) content)
@@ -70,7 +70,7 @@ let has_local_state_predicate #a #ls invs spred =
 [@@ "opaque_to_smt"]
 val state_was_set:
   #a:Type -> {|local_state a|} ->
-  trace -> principal -> nat -> a ->
+  trace -> principal -> state_id -> a ->
   prop
 let state_was_set #a #ls tr prin sess_id content =
   tagged_state_was_set tr ls.tag prin sess_id (serialize _ content)
@@ -78,14 +78,14 @@ let state_was_set #a #ls tr prin sess_id content =
 [@@ "opaque_to_smt"]
 val set_state:
   #a:Type -> {|local_state a|} ->
-  principal -> nat -> a -> traceful unit
+  principal -> state_id -> a -> traceful unit
 let set_state #a #ls prin sess_id content =
   set_tagged_state ls.tag prin sess_id (serialize _ content)
 
 [@@ "opaque_to_smt"]
 val get_state:
   #a:Type -> {|local_state a|} ->
-  principal -> nat -> traceful (option a)
+  principal -> state_id -> traceful (option a)
 let get_state #a #ls prin sess_id =
   let*? content_bytes = get_tagged_state ls.tag prin sess_id in
   match parse a content_bytes with
@@ -96,7 +96,7 @@ val set_state_invariant:
   #a:Type -> {|local_state a|} ->
   {|invs:protocol_invariants|} ->
   spred:local_state_predicate a ->
-  prin:principal -> sess_id:nat -> content:a -> tr:trace ->
+  prin:principal -> sess_id:state_id -> content:a -> tr:trace ->
   Lemma
   (requires
     spred.pred tr prin sess_id content /\
@@ -120,7 +120,7 @@ val get_state_invariant:
   #a:Type -> {|local_state a|} ->
   {|invs:protocol_invariants|} ->
   spred:local_state_predicate a ->
-  prin:principal -> sess_id:nat -> tr:trace ->
+  prin:principal -> sess_id:state_id -> tr:trace ->
   Lemma
   (requires
     trace_invariant tr /\
@@ -146,7 +146,7 @@ val state_was_set_implies_pred:
   #a:Type -> {|local_state a|} ->
   invs:protocol_invariants -> tr:trace ->
   spred:local_state_predicate a ->
-  prin:principal -> sess_id:nat -> content:a ->
+  prin:principal -> sess_id:state_id -> content:a ->
   Lemma
   (requires
     state_was_set tr prin sess_id content /\

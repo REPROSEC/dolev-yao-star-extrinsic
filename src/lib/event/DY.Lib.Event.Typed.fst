@@ -120,7 +120,7 @@ let trigger_event #a #ev prin e =
 [@@ "opaque_to_smt"]
 val event_triggered_at:
   #a:Type -> {|event a|} ->
-  trace -> nat -> principal -> a ->
+  trace -> timestamp -> principal -> a ->
   prop
 let event_triggered_at #a #ev tr i prin e =
   DY.Core.event_triggered_at tr i prin ev.tag (serialize a e)
@@ -160,7 +160,7 @@ val event_triggered_at_implies_pred:
   {|invs:protocol_invariants|} ->
   #a:Type -> {|ev:event a|} ->
   epred:event_predicate a -> tr:trace ->
-  i:nat -> prin:principal -> e:a ->
+  i:timestamp -> prin:principal -> e:a ->
   Lemma
   (requires
     event_triggered_at tr i prin e /\
@@ -190,7 +190,7 @@ let event_triggered_grows #a #ev tr1 tr2 prin e =
 
 val event_triggered_at_implies_trace_event_at:
   #a:Type -> {|ev:event a|} ->
-  tr:trace -> i:nat -> prin:principal -> e:a  ->
+  tr:trace -> i:timestamp -> prin:principal -> e:a  ->
   Lemma
   (requires event_triggered_at tr i prin e)
   (ensures

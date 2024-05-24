@@ -86,17 +86,17 @@ let private_key_type_to_usage sk_type =
 (*** Private Keys API ***)
 
 [@@ "opaque_to_smt"]
-val initialize_private_keys: prin:principal -> traceful nat
+val initialize_private_keys: prin:principal -> traceful state_id
 let initialize_private_keys = initialize_map private_key_key private_key_value #_ // another workaround for FStarLang/FStar#3286
 
 [@@ "opaque_to_smt"]
-val generate_private_key: principal -> nat -> private_key_type -> traceful (option unit)
+val generate_private_key: principal -> state_id -> private_key_type -> traceful (option unit)
 let generate_private_key prin sess_id sk_type =
   let* sk = mk_rand (private_key_type_to_usage sk_type) (principal_label prin) 64 in //TODO
   add_key_value prin sess_id ({ty = sk_type}) ({private_key = sk;})
 
 [@@ "opaque_to_smt"]
-val get_private_key: principal -> nat -> private_key_type -> traceful (option bytes)
+val get_private_key: principal -> state_id -> private_key_type -> traceful (option bytes)
 let get_private_key prin sess_id sk_type =
   let*? res = find_value prin sess_id ({ty = sk_type}) in
   return (Some res.private_key)
@@ -121,7 +121,7 @@ let initialize_private_keys_invariant #invs prin tr =
 
 val generate_private_key_invariant:
   {|invs:protocol_invariants|} ->
-  prin:principal -> sess_id:nat -> sk_type:private_key_type -> tr:trace ->
+  prin:principal -> sess_id:state_id -> sk_type:private_key_type -> tr:trace ->
   Lemma
   (requires
     trace_invariant tr /\
@@ -139,7 +139,7 @@ let generate_private_key_invariant #invs prin sess_id sk_type tr =
 
 val get_private_key_invariant:
   {|invs:protocol_invariants|} ->
-  prin:principal -> sess_id:nat -> pk_type:private_key_type -> tr:trace ->
+  prin:principal -> sess_id:state_id -> pk_type:private_key_type -> tr:trace ->
   Lemma
   (requires
     trace_invariant tr /\
