@@ -14,10 +14,13 @@ include DY.Lib.SplitPredicate
 include DY.Lib.Event.Typed
 
 /// User-friendly state API
-include DY.Lib.State.Labeled
+include DY.Lib.State.Tagged
 include DY.Lib.State.Typed
 
 /// Various state helpers
 include DY.Lib.State.Map
 include DY.Lib.State.PKI
 include DY.Lib.State.PrivateKeys
+
+/// Provide functions to print the trace
+include DY.Lib.Printing

@@ -4,6 +4,8 @@ open Comparse
 open DY.Core
 open DY.Lib.Comparse.Glue
 open DY.Lib.Comparse.Parsers
+open DY.Lib.State.Tagged
+open DY.Lib.State.Typed
 open DY.Lib.State.Map
 
 #set-options "--fuel 1 --ifuel 1"
@@ -38,19 +40,18 @@ type pki_key = {
 %splice [ps_pki_key] (gen_parser (`pki_key))
 %splice [ps_pki_key_is_well_formed] (gen_is_well_formed_lemma (`pki_key))
 
-type pki_value (bytes:Type0) {|bytes_like bytes|} = {
+[@@ with_bytes bytes]
+type pki_value = {
   public_key: bytes;
 }
 
 %splice [ps_pki_value] (gen_parser (`pki_value))
 %splice [ps_pki_value_is_well_formed] (gen_is_well_formed_lemma (`pki_value))
 
-val pki_types: map_types
-let pki_types = {
-  key = pki_key;
-  ps_key = ps_pki_key;
-  value = pki_value bytes;
-  ps_value = ps_pki_value;
+instance map_types_pki: map_types pki_key pki_value = {
+  tag = "DY.Lib.State.PKI";
+  ps_key_t = ps_pki_key;
+  ps_value_t = ps_pki_value;
 }
 
 val is_public_key_for:
@@ -65,37 +66,38 @@ let is_public_key_for #cinvs tr pk pk_type who =
     is_verification_key usg (principal_label who) tr pk
   )
 
-val pki_pred: {|crypto_invariants|} -> map_predicate pki_types
+// The `#_` at the end is a workaround for FStarLang/FStar#3286
+val pki_pred: {|crypto_invariants|} -> map_predicate pki_key pki_value #_
 let pki_pred #cinvs = {
-  pred = (fun tr prin sess_id (key:pki_types.key) value ->
+  pred = (fun tr prin sess_id key value ->
     is_public_key_for tr value.public_key key.ty key.who
   );
   pred_later = (fun tr1 tr2 prin sess_id key value -> ());
   pred_knowable = (fun tr prin sess_id key value -> ());
 }
 
-val pki_label: string
-let pki_label = "DY.Lib.State.PKI"
-
 val has_pki_invariant: protocol_invariants -> prop
 let has_pki_invariant invs =
-  has_map_session_invariant invs (pki_label, pki_pred)
+  has_map_session_invariant invs pki_pred
+
+val pki_tag_and_invariant: {|crypto_invariants|} -> string & local_bytes_state_predicate
+let pki_tag_and_invariant #ci = (map_types_pki.tag, local_state_predicate_to_local_bytes_state_predicate (map_session_invariant pki_pred))
 
 (*** PKI API ***)
 
 [@@ "opaque_to_smt"]
-val initialize_pki: prin:principal -> crypto nat
-let initialize_pki = initialize_map pki_types pki_label
+val initialize_pki: prin:principal -> traceful state_id
+let initialize_pki = initialize_map pki_key pki_value #_ // another workaround for FStarLang/FStar#3286
 
 [@@ "opaque_to_smt"]
-val install_public_key: principal -> nat -> public_key_type -> principal -> bytes -> crypto (option unit)
+val install_public_key: principal -> state_id -> public_key_type -> principal -> bytes -> traceful (option unit)
 let install_public_key prin sess_id pk_type who pk =
-  add_key_value pki_types pki_label prin sess_id ({ty = pk_type; who;}) ({public_key = pk;})
+  add_key_value prin sess_id ({ty = pk_type; who;}) ({public_key = pk;})
 
 [@@ "opaque_to_smt"]
-val get_public_key: principal -> nat -> public_key_type -> principal -> crypto (option bytes)
+val get_public_key: principal -> state_id -> public_key_type -> principal -> traceful (option bytes)
 let get_public_key prin sess_id pk_type who =
-  let*? res = find_value pki_types pki_label prin sess_id ({ty = pk_type; who;}) in
+  let*? res = find_value prin sess_id ({ty = pk_type; who;}) in
   return (Some res.public_key)
 
 val initialize_pki_invariant:
@@ -118,7 +120,7 @@ let initialize_pki_invariant #invs prin tr =
 
 val install_public_key_invariant:
   {|invs:protocol_invariants|} ->
-  prin:principal -> sess_id:nat -> pk_type:public_key_type -> who:principal -> pk:bytes -> tr:trace ->
+  prin:principal -> sess_id:state_id -> pk_type:public_key_type -> who:principal -> pk:bytes -> tr:trace ->
   Lemma
   (requires
     is_public_key_for tr pk pk_type who /\
@@ -137,7 +139,7 @@ let install_public_key_invariant #invs prin sess_id pk_type who pk tr =
 
 val get_public_key_invariant:
   {|invs:protocol_invariants|} ->
-  prin:principal -> sess_id:nat -> pk_type:public_key_type -> who:principal -> tr:trace ->
+  prin:principal -> sess_id:state_id -> pk_type:public_key_type -> who:principal -> tr:trace ->
   Lemma
   (requires
     trace_invariant tr /\

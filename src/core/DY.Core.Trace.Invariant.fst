@@ -29,18 +29,18 @@ open DY.Core.Label
 
 noeq
 type state_predicate (cinvs:crypto_invariants) = {
-  pred: trace -> principal -> nat -> bytes -> prop;
+  pred: trace -> principal -> state_id -> bytes -> prop;
   // TODO: Do we want the later lemma?
   pred_later:
     tr1:trace -> tr2:trace ->
-    prin:principal -> sess_id:nat -> content:bytes ->
+    prin:principal -> sess_id:state_id -> content:bytes ->
     Lemma
     (requires pred tr1 prin sess_id content /\ tr1 <$ tr2)
     (ensures pred tr2 prin sess_id content)
   ;
   pred_knowable:
     tr:trace ->
-    prin:principal -> sess_id:nat -> content:bytes ->
+    prin:principal -> sess_id:state_id -> content:bytes ->
     Lemma
     (requires pred tr prin sess_id content)
     (ensures
@@ -117,7 +117,7 @@ let rec trace_invariant #invs tr =
 
 val event_at_implies_trace_event_invariant:
   {|protocol_invariants|} ->
-  tr:trace -> i:nat -> event:trace_event ->
+  tr:trace -> i:timestamp -> event:trace_event ->
   Lemma
   (requires
     event_at tr i event /\
@@ -159,7 +159,7 @@ let msg_sent_on_network_are_publishable #invs tr msg =
 
 val state_was_set_implies_pred:
   {|protocol_invariants|} -> tr:trace ->
-  prin:principal -> sess_id:nat -> content:bytes ->
+  prin:principal -> sess_id:state_id -> content:bytes ->
   Lemma
   (requires
     trace_invariant tr /\
@@ -182,7 +182,7 @@ let state_was_set_implies_pred #invs tr prin sess_id content =
 
 val state_is_knowable_by:
   {|protocol_invariants|} -> tr:trace ->
-  prin:principal -> sess_id:nat -> content:bytes ->
+  prin:principal -> sess_id:state_id -> content:bytes ->
   Lemma
   (requires
     trace_invariant tr /\
@@ -196,7 +196,7 @@ let state_is_knowable_by #invs tr prin sess_id content =
 
 val event_triggered_at_implies_pred:
   {|protocol_invariants|} -> tr:trace ->
-  i:nat -> prin:principal -> tag:string -> content:bytes ->
+  i:timestamp -> prin:principal -> tag:string -> content:bytes ->
   Lemma
   (requires
     event_triggered_at tr i prin tag content /\

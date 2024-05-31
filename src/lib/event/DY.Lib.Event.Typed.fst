@@ -42,17 +42,17 @@ type event_predicate (a:Type0) {|event a|} =
   trace -> principal -> a -> prop
 
 let split_event_pred_func: split_predicate_input_values = {
-  labeled_data_t = trace & principal & string & bytes;
-  label_t = string;
-  encoded_label_t = string;
+  tagged_data_t = trace & principal & string & bytes;
+  tag_t = string;
+  encoded_tag_t = string;
   raw_data_t = trace & principal & bytes;
 
-  decode_labeled_data = (fun (tr, prin, tag, content) -> (
+  decode_tagged_data = (fun (tr, prin, tag, content) -> (
     Some (tag, (tr, prin, content))
   ));
 
-  encode_label = (fun s -> s);
-  encode_label_inj = (fun l1 l2 -> ());
+  encode_tag = (fun s -> s);
+  encode_tag_inj = (fun l1 l2 -> ());
 
   local_pred = trace -> principal -> bytes -> prop;
   global_pred = trace -> principal -> string -> bytes -> prop;
@@ -82,8 +82,8 @@ let compile_event_pred #a #ev epred tr prin content_bytes =
 
 val has_compiled_event_pred:
   protocol_invariants -> (string & compiled_event_predicate) -> prop
-let has_compiled_event_pred invs (label, epred) =
-  has_local_pred split_event_pred_func event_pred (label, epred)
+let has_compiled_event_pred invs (tag, epred) =
+  has_local_pred split_event_pred_func event_pred (tag, epred)
 
 val has_event_pred:
   #a:Type0 -> {|event a|} ->
@@ -113,14 +113,14 @@ let mk_event_pred_correct invs lpreds =
 val trigger_event:
   #a:Type -> {|event a|} ->
   principal -> a ->
-  crypto unit
+  traceful unit
 let trigger_event #a #ev prin e =
   DY.Core.trigger_event prin ev.tag (serialize a e)
 
 [@@ "opaque_to_smt"]
 val event_triggered_at:
   #a:Type -> {|event a|} ->
-  trace -> nat -> principal -> a ->
+  trace -> timestamp -> principal -> a ->
   prop
 let event_triggered_at #a #ev tr i prin e =
   DY.Core.event_triggered_at tr i prin ev.tag (serialize a e)
@@ -160,7 +160,7 @@ val event_triggered_at_implies_pred:
   {|invs:protocol_invariants|} ->
   #a:Type -> {|ev:event a|} ->
   epred:event_predicate a -> tr:trace ->
-  i:nat -> prin:principal -> e:a ->
+  i:timestamp -> prin:principal -> e:a ->
   Lemma
   (requires
     event_triggered_at tr i prin e /\
@@ -190,7 +190,7 @@ let event_triggered_grows #a #ev tr1 tr2 prin e =
 
 val event_triggered_at_implies_trace_event_at:
   #a:Type -> {|ev:event a|} ->
-  tr:trace -> i:nat -> prin:principal -> e:a  ->
+  tr:trace -> i:timestamp -> prin:principal -> e:a  ->
   Lemma
   (requires event_triggered_at tr i prin e)
   (ensures

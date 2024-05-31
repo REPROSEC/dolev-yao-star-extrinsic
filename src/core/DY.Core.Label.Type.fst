@@ -8,6 +8,10 @@ module DY.Core.Label.Type
 
 type principal = string
 
+/// Type for session identifiers
+
+type state_id = { the_id: nat; }
+
 /// Pre-labels are used to refer to a particular state of a principal that may be compromised by the attacker,
 /// that is, a principal name and a session id (the `S` constructor).
 ///
@@ -31,7 +35,7 @@ type principal = string
 
 type pre_label =
   | P: principal -> pre_label
-  | S: principal -> nat -> pre_label
+  | S: principal -> state_id -> pre_label
 
 /// Labels are roughly a free lattice on pre-labels,
 /// with lower bound (meet) and upper bound (join),
@@ -50,7 +54,7 @@ instance integer_encodable_pre_label: integer_encodable pre_label = {
   encode = (fun x ->
     match x with
     | P p -> 0::(encode p)
-    | S p s -> 1::(encode [encode p; encode s])
+    | S p s -> 1::(encode [encode p; encode s.the_id])
   );
   encode_inj = (fun x y ->
     encode_inj_forall (list (list int)) ();

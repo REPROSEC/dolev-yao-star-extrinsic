@@ -1373,8 +1373,8 @@ val bytes_invariant_vk:
   sk:bytes ->
   Lemma
   (requires bytes_invariant tr sk)
-  (ensures bytes_invariant tr (pk sk))
-  [SMTPat (bytes_invariant tr (pk sk))]
+  (ensures bytes_invariant tr (vk sk))
+  [SMTPat (bytes_invariant tr (vk sk))]
 let bytes_invariant_vk #cinvs tr sk =
   normalize_term_spec vk;
   normalize_term_spec bytes_invariant
@@ -1425,7 +1425,6 @@ val bytes_invariant_sign:
     bytes_invariant tr sk /\
     bytes_invariant tr nonce /\
     bytes_invariant tr msg /\
-    bytes_invariant tr sk /\
     SigKey? (get_usage sk) /\
     SigNonce? (get_usage nonce) /\
     sign_pred tr (vk sk) msg /\
