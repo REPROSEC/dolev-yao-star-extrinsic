@@ -261,11 +261,34 @@ val msg_sent_on_network: trace -> bytes -> prop
 let msg_sent_on_network tr msg =
   event_exists tr (MsgSent msg)
 
+
+/// Has some state been stored by a principal at a given timestamp?
+
+val state_was_set_at: trace -> timestamp -> principal -> state_id -> bytes -> prop
+let state_was_set_at tr ts prin sess_id content =
+  event_at tr ts (SetState prin sess_id content)
+
 /// Has some state been stored by a principal?
 
 val state_was_set: trace -> principal -> state_id -> bytes -> prop
 let state_was_set tr prin sess_id content =
   event_exists tr (SetState prin sess_id content)
+
+val state_was_set_at_lemma : 
+  tr:trace -> ts:timestamp -> p:principal -> s_id:state_id -> cont:bytes ->
+  Lemma
+    (requires state_was_set_at tr ts p s_id cont)
+    (ensures state_was_set tr p s_id cont)
+    // [SMTPat (state_was_set_at tr ts p s_id cont)]
+let state_was_set_at_lemma tr ts p s_id cont = ()
+
+val state_was_set_lemma : 
+  tr:trace -> p:principal -> s_id:state_id -> cont:bytes ->
+  Lemma
+    (requires state_was_set tr p s_id cont)
+    (ensures exists ts. state_was_set_at tr ts p s_id cont)
+  [SMTPat (state_was_set tr p s_id cont)]
+let state_was_set_lemma tr p s_id cont = ()
 
 /// Has a principal been corrupt?
 

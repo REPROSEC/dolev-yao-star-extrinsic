@@ -76,6 +76,15 @@ let state_was_set #a #ls tr prin sess_id content =
   tagged_state_was_set tr ls.tag prin sess_id (serialize _ content)
 
 [@@ "opaque_to_smt"]
+val state_was_set_at:
+  #a:Type -> {|local_state a|} ->
+  trace -> timestamp -> principal -> state_id -> a ->
+  prop
+let state_was_set_at #a #ls tr ts prin sess_id content =
+  tagged_state_was_set_at tr ts ls.tag prin sess_id (serialize _ content)
+
+
+[@@ "opaque_to_smt"]
 val set_state:
   #a:Type -> {|local_state a|} ->
   principal -> state_id -> a -> traceful unit
@@ -142,22 +151,42 @@ val get_state_invariant:
 let get_state_invariant #a #ls #invs spred prin sess_id tr =
   reveal_opaque (`%get_state) (get_state #a)
 
+// val state_was_set_implies_pred:
+//   #a:Type -> {|local_state a|} ->
+//   invs:protocol_invariants -> tr:trace ->
+//   spred:local_state_predicate a ->
+//   prin:principal -> sess_id:state_id -> content:a ->
+//   Lemma
+//   (requires
+//     state_was_set tr prin sess_id content /\
+//     trace_invariant tr /\
+//     has_local_state_predicate invs spred
+//   )
+//   (ensures spred.pred tr prin sess_id content)
+//   [SMTPat (state_was_set tr prin sess_id content);
+//    SMTPat (trace_invariant tr);
+//    SMTPat (has_local_state_predicate invs spred);
+//   ]
+// let state_was_set_implies_pred #a #ls invs tr spred prin sess_id content =
+//   parse_serialize_inv_lemma #bytes a content;
+//   reveal_opaque (`%state_was_set) (state_was_set #a)
+
 val state_was_set_implies_pred:
   #a:Type -> {|local_state a|} ->
-  invs:protocol_invariants -> tr:trace ->
+  invs:protocol_invariants -> tr:trace -> ts:timestamp{ts <= DY.Core.Trace.Type.length tr} ->
   spred:local_state_predicate a ->
   prin:principal -> sess_id:state_id -> content:a ->
   Lemma
   (requires
-    state_was_set tr prin sess_id content /\
+    state_was_set_at tr ts prin sess_id content /\
     trace_invariant tr /\
     has_local_state_predicate invs spred
   )
-  (ensures spred.pred tr prin sess_id content)
-  [SMTPat (state_was_set tr prin sess_id content);
+  (ensures spred.pred (prefix tr ts) prin sess_id content)
+  [SMTPat (state_was_set_at tr ts prin sess_id content);
    SMTPat (trace_invariant tr);
    SMTPat (has_local_state_predicate invs spred);
   ]
-let state_was_set_implies_pred #a #ls invs tr spred prin sess_id content =
+let state_was_set_implies_pred #a #ls invs tr ts spred prin sess_id content =
   parse_serialize_inv_lemma #bytes a content;
-  reveal_opaque (`%state_was_set) (state_was_set #a)
+  reveal_opaque (`%state_was_set_at) (state_was_set_at #a)

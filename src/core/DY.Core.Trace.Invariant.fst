@@ -157,25 +157,46 @@ let msg_sent_on_network_are_publishable #invs tr msg =
 
 /// States stored satisfy the custom state predicate.
 
+// val state_was_set_implies_pred:
+//   {|protocol_invariants|} -> tr:trace ->
+//   prin:principal -> sess_id:state_id -> content:bytes ->
+//   Lemma
+//   (requires
+//     trace_invariant tr /\
+//     state_was_set tr prin sess_id content
+//   )
+//   (ensures state_pred tr prin sess_id content)
+//   [SMTPat (state_was_set tr prin sess_id content);
+//    SMTPat (trace_invariant tr);
+//   ]
+// let state_was_set_implies_pred #invs tr prin sess_id content =
+//   eliminate exists i. event_at tr i (SetState prin sess_id content)
+//   returns invs.trace_invs.state_pred.pred tr prin sess_id content
+//   with _. (
+//     event_at_implies_trace_event_invariant tr i (SetState prin sess_id content);
+//     invs.trace_invs.state_pred.pred_later (prefix tr i) tr prin sess_id content
+//   )
+
 val state_was_set_implies_pred:
-  {|protocol_invariants|} -> tr:trace ->
+  {|protocol_invariants|} -> tr:trace -> ts:timestamp ->
   prin:principal -> sess_id:state_id -> content:bytes ->
   Lemma
   (requires
     trace_invariant tr /\
-    state_was_set tr prin sess_id content
+    state_was_set_at tr ts prin sess_id content
   )
-  (ensures state_pred tr prin sess_id content)
-  [SMTPat (state_was_set tr prin sess_id content);
+  (ensures state_pred (prefix tr ts) prin sess_id content)
+  [SMTPat (state_was_set_at tr ts prin sess_id content);
    SMTPat (trace_invariant tr);
   ]
-let state_was_set_implies_pred #invs tr prin sess_id content =
-  eliminate exists i. event_at tr i (SetState prin sess_id content)
-  returns invs.trace_invs.state_pred.pred tr prin sess_id content
-  with _. (
-    event_at_implies_trace_event_invariant tr i (SetState prin sess_id content);
-    invs.trace_invs.state_pred.pred_later (prefix tr i) tr prin sess_id content
-  )
+let state_was_set_implies_pred #invs tr ts prin sess_id content =
+  // eliminate exists i. event_at tr i (SetState prin sess_id content)
+  // returns invs.trace_invs.state_pred.pred tr prin sess_id content
+  // with _. (
+    event_at_implies_trace_event_invariant tr ts (SetState prin sess_id content)
+//    invs.trace_invs.state_pred.pred_later (prefix tr ts) tr prin sess_id content
+  // )
+
 
 /// States stored are knowable by the corresponding principal and state identifier.
 // (This is a key lemma for attacker theorem.)
@@ -190,7 +211,15 @@ val state_is_knowable_by:
   )
   (ensures is_knowable_by (principal_state_label prin sess_id) tr content)
 let state_is_knowable_by #invs tr prin sess_id content =
+ // state_was_set_lemma tr prin sess_id content;
+  eliminate exists ts. event_at tr ts (SetState prin sess_id content)
+  returns (is_knowable_by #invs.crypto_invs (principal_state_label prin sess_id) tr content)
+  with _. (
+    event_at_implies_trace_event_invariant tr ts (SetState prin sess_id content);
+   invs.trace_invs.state_pred.pred_later (prefix tr ts) tr prin sess_id content;
   state_pred_knowable tr prin sess_id content
+  )
+  
 
 /// Triggered protocol events satisfy the event predicate.
 
