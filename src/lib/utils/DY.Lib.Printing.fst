@@ -28,17 +28,6 @@ let rec label_to_string l =
   | Join l1 l2 -> Printf.sprintf "Join [%s; %s]" (label_to_string l1) (label_to_string l2)
   | Public -> "Public"
 
-val usage_to_string: (u:usage) -> string
-let usage_to_string u =
-  match u with
-  | SigKey tag -> "SigKey " ^ tag
-  | SigNonce -> "SigNonce"
-  | PkdecKey tag -> "PkdecKey " ^ tag
-  | PkNonce -> "PkNonce"
-  | AeadKey tag -> "AeadKey " ^ tag
-  | DhKey tag -> "DhKey " ^ tag
-  | NoUsage -> "NoUsage"
-
 val uint_list_to_string: list FStar.UInt8.t -> string
 let rec uint_list_to_string seq =
   match seq with
@@ -50,8 +39,27 @@ let rec uint_list_to_string seq =
     else Printf.sprintf "%c%s" (FStar.Char.char_of_int (FStar.UInt8.v hd)) (uint_list_to_string tl)
   )
 
+// Allow the warning "Global binding 'DY.Lib.Printing.usage_to_string' is recursive but not used in its body",
+// because although `usage` and `bytes` are mutually recursive,
+// in practice the function `bytes_to_string` do not call the function `usage_to_string`.
+
+#push-options "--warn_error '+328'"
+val usage_to_string: (u:usage) -> string
 val bytes_to_string: (b:bytes) -> string
-let rec bytes_to_string b =
+let rec usage_to_string u =
+  match u with
+  | NoUsage -> "NoUsage"
+  | SigKey tag -> "SigKey " ^ tag
+  | SigNonce -> "SigNonce"
+  | PkdecKey tag -> "PkdecKey " ^ tag
+  | PkNonce -> "PkNonce"
+  | AeadKey tag -> "AeadKey " ^ tag
+  | DhKey tag -> "DhKey " ^ tag
+  | KdfExtractSaltKey tag data -> Printf.sprintf "KdfExtractSaltKey %s (data=(%s))" tag (bytes_to_string data)
+  | KdfExtractIkmKey tag data -> Printf.sprintf "KdfExtractIkmKey %s (data=(%s))" tag (bytes_to_string data)
+  | KdfExpandKey tag data -> Printf.sprintf "KdfExpandKey %s (data=(%s))" tag (bytes_to_string data)
+
+and bytes_to_string b =
   match b with
   | Literal s -> uint_list_to_string (FStar.Seq.seq_to_list s)
   
@@ -89,6 +97,11 @@ let rec bytes_to_string b =
   | Dh sk pk -> (
     Printf.sprintf "Dh(sk=(%s), pk=(%s))" (bytes_to_string sk) (bytes_to_string pk)
   )
+  | KdfExtract salt ikm ->
+    Printf.sprintf "KdfExtract(salt=(%s), ikm=(%s))" (bytes_to_string salt) (bytes_to_string ikm)
+  | KdfExpand prk info len ->
+    Printf.sprintf "KdfExpand(prk=(%s), info=(%s), len=(%d))" (bytes_to_string prk) (bytes_to_string info) len
+#pop-options
 
 
 (*** State Parsing Helper Functions ***)
