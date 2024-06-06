@@ -44,7 +44,7 @@ type state_predicate (cinvs:crypto_invariants) = {
     Lemma
     (requires pred tr prin sess_id content)
     (ensures
-      is_knowable_by (principal_state_label prin sess_id) tr content
+      is_knowable_by #cinvs (principal_state_label prin sess_id) tr content
     )
   ;
 }
