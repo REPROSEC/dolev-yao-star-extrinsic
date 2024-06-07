@@ -46,6 +46,9 @@ let split_event_pred_func: split_predicate_input_values = {
   tag_t = string;
   encoded_tag_t = string;
   raw_data_t = trace & principal & bytes;
+  output_t = prop;
+
+  default_global_pred = (fun tr prin tag content -> False);
 
   decode_tagged_data = (fun (tr, prin, tag, content) -> (
     Some (tag, (tr, prin, content))

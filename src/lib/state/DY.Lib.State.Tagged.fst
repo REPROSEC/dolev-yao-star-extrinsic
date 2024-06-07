@@ -45,6 +45,9 @@ let split_local_bytes_state_predicate_func {|crypto_invariants|} : split_predica
   tag_t = string;
   encoded_tag_t = string;
   raw_data_t = trace & principal & state_id & bytes;
+  output_t = prop;
+
+  default_global_pred = (fun tr prin sess_id sess_content -> False);
 
   decode_tagged_data = (fun (tr, prin, sess_id, sess_content) -> (
     match parse tagged_state sess_content with
@@ -97,17 +100,13 @@ val mk_global_local_bytes_state_predicate_later:
   (ensures mk_global_local_bytes_state_predicate lpreds tr2 prin sess_id full_content)
 let mk_global_local_bytes_state_predicate_later cinvs lpreds tr1 tr2 prin sess_id full_content =
   mk_global_pred_eq split_local_bytes_state_predicate_func lpreds (tr1, prin, sess_id, full_content);
-  eliminate exists tag lpred raw_data.
-    List.Tot.memP (tag, lpred) lpreds /\
-    split_local_bytes_state_predicate_func.apply_local_pred lpred raw_data /\
-    split_local_bytes_state_predicate_func.decode_tagged_data (tr1, prin, sess_id, full_content) == Some (split_local_bytes_state_predicate_func.encode_tag tag, raw_data)
-  returns mk_global_local_bytes_state_predicate lpreds tr2 prin sess_id full_content
-  with _. (
-    let Some (_, (_, _, _, content)) = split_local_bytes_state_predicate_func.decode_tagged_data (tr1, prin, sess_id, full_content) in
-    lpred.pred_later tr1 tr2 prin sess_id content;
-    mk_global_pred_eq split_local_bytes_state_predicate_func lpreds (tr2, prin, sess_id, full_content);
-    assert(split_local_bytes_state_predicate_func.apply_local_pred lpred (tr2, prin, sess_id, content))
-  )
+  mk_global_pred_eq split_local_bytes_state_predicate_func lpreds (tr2, prin, sess_id, full_content);
+  introduce forall lpred content. split_local_bytes_state_predicate_func.apply_local_pred lpred (tr1, prin, sess_id, content) ==> split_local_bytes_state_predicate_func.apply_local_pred lpred (tr2, prin, sess_id, content) with (
+    introduce _ ==> _ with _. lpred.pred_later tr1 tr2 prin sess_id content
+  );
+  match split_local_bytes_state_predicate_func.decode_tagged_data (tr1, prin, sess_id, full_content) with
+  | Some (_, (_, _, _, _)) -> ()
+  | None -> ()
 
 val mk_global_local_bytes_state_predicate_knowable:
   cinvs:crypto_invariants -> lpreds:list (string & local_bytes_state_predicate) ->
@@ -117,17 +116,17 @@ val mk_global_local_bytes_state_predicate_knowable:
   (ensures is_knowable_by (principal_state_label prin sess_id) tr full_content)
 let mk_global_local_bytes_state_predicate_knowable cinvs lpreds tr prin sess_id full_content =
   mk_global_pred_eq split_local_bytes_state_predicate_func lpreds (tr, prin, sess_id, full_content);
-  eliminate exists tag lpred raw_data.
-    List.Tot.memP (tag, lpred) lpreds /\
-    split_local_bytes_state_predicate_func.apply_local_pred lpred raw_data /\
-    split_local_bytes_state_predicate_func.decode_tagged_data (tr, prin, sess_id, full_content) == Some (split_local_bytes_state_predicate_func.encode_tag tag, raw_data)
-  returns is_knowable_by (principal_state_label prin sess_id) tr full_content
-  with _. (
-    let Some (tag, (_, _, _, content)) = split_local_bytes_state_predicate_func.decode_tagged_data (tr, prin, sess_id, full_content) in
-    lpred.pred_knowable tr prin sess_id content;
-    serialize_parse_inv_lemma tagged_state full_content;
-    serialize_wf_lemma tagged_state (is_knowable_by (principal_state_label prin sess_id) tr) ({tag; content})
+  match split_local_bytes_state_predicate_func.decode_tagged_data (tr, prin, sess_id, full_content) with
+  | Some (tag, (_, _, _, content)) -> (
+    match find_local_pred split_local_bytes_state_predicate_func lpreds tag with
+    | Some lpred -> (
+      lpred.pred_knowable tr prin sess_id content;
+      serialize_parse_inv_lemma tagged_state full_content;
+      serialize_wf_lemma tagged_state (is_knowable_by (principal_state_label prin sess_id) tr) ({tag; content})
+    )
+    | None -> ()
   )
+  | None -> ()
 
 val mk_state_predicate: cinvs:crypto_invariants -> list (string & local_bytes_state_predicate) -> state_predicate cinvs
 let mk_state_predicate cinvs lpreds =
