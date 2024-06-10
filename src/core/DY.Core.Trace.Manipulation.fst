@@ -1,6 +1,7 @@
 module DY.Core.Trace.Manipulation
 
 open DY.Core.Trace.Type
+open DY.Core.Trace.State.Aux
 open DY.Core.Trace.Invariant
 open DY.Core.Bytes.Type
 open DY.Core.Bytes
@@ -320,46 +321,6 @@ val set_state: principal -> state_id -> bytes -> traceful unit
 let set_state prin session_id content =
   add_event (SetState prin session_id content)
 
-val max: int -> int -> int
-let max x y =
-  if x < y then y else x
-
-/// To add a new session to a state of a principal,
-/// we have to find a new identifier
-/// that is not used in the current state of the principal.
-
-val compute_new_session_id: principal -> trace -> state_id
-let rec compute_new_session_id prin tr =
-  match tr with
-  | Nil -> {the_id = 0}
-  | Snoc tr_init evt -> (
-    match evt with
-    | SetState prin' sess_id _ ->
-      if prin = prin' then
-        {the_id = 
-             max (sess_id.the_id + 1) (compute_new_session_id prin tr_init).the_id}
-      else
-        compute_new_session_id prin tr_init
-    | _ -> compute_new_session_id prin tr_init
-  )
-
-// Sanity check
-val compute_new_session_id_correct:
-  prin:principal -> tr:trace ->
-  sess_id:state_id -> state_content:bytes ->
-  Lemma
-  (requires event_exists tr (SetState prin sess_id state_content))
-  (ensures sess_id.the_id < (compute_new_session_id prin tr).the_id)
-let rec compute_new_session_id_correct prin tr sess_id state_content =
-  match tr with
-  | Nil -> ()
-  | Snoc tr_init evt -> (
-    if evt = SetState prin sess_id state_content then ()
-    else (
-      compute_new_session_id_correct prin tr_init sess_id state_content
-    )
-  )
-
 /// Compute a fresh state identifier for a principal.
 
 [@@ "opaque_to_smt"]
@@ -368,18 +329,6 @@ let new_session_id prin =
   let* tr = get_trace in
   return (compute_new_session_id prin tr)
 
-val get_state_aux: principal -> state_id -> trace -> option bytes
-let rec get_state_aux prin sess_id tr =
-  match tr with
-  | Nil -> None
-  | Snoc tr_init (SetState prin' sess_id' content) -> (
-    if prin = prin' && sess_id = sess_id' then
-      Some content
-    else
-      get_state_aux prin sess_id tr_init
-  )
-  | Snoc tr_init _ ->
-      get_state_aux prin sess_id tr_init
 
 /// Retrieve the state stored by a principal at some state identifier.
 

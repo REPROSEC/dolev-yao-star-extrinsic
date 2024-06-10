@@ -2,6 +2,7 @@ module DY.Core.Trace.Experiments
 
 open DY.Core.Trace.Type
 open DY.Core.Trace.Invariant
+open DY.Core.Trace.State.Aux
 open DY.Core.Trace.Manipulation
 open DY.Core.Bytes.Type
 open DY.Core.Bytes

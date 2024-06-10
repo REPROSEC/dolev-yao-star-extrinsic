@@ -48,9 +48,13 @@ type trace_event =
 /// the trace is actually a reversed list.
 /// To avoid confusions, we define a custom inductive to swap the arguments of the "cons" constructor.
 
-type trace =
-  | Nil: trace
-  | Snoc: trace -> trace_event -> trace
+type rev_list (a:Type) =
+  | Nil : rev_list a
+  | Snoc: rev_list a -> a -> rev_list a
+
+type trace = rev_list trace_event
+  // | Nil: trace
+  // | Snoc: trace -> trace_event -> trace
 
 /// The length of a trace.
 

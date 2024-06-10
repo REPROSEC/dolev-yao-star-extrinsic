@@ -116,3 +116,4 @@ include DY.Core.Bytes
 include DY.Core.Bytes.Type
 
 include DY.Core.Trace.Experiments
+include DY.Core.Trace.State.Aux
