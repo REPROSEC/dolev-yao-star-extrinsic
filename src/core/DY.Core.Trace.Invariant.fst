@@ -1,10 +1,11 @@
 module DY.Core.Trace.Invariant
 
 open DY.Core.Trace.Type
+open DY.Core.Trace.State.Aux
 open DY.Core.Bytes.Type
 open DY.Core.Bytes
 open DY.Core.Label.Type
-open DY.Core.Label
+module L = DY.Core.Label
 
 /// This module contains the definition of the trace invariant `trace_invariant`.
 /// The trace invariant is at the heart of DY* methodology for protocol security proofs.
@@ -30,6 +31,10 @@ open DY.Core.Label
 noeq
 type state_predicate (cinvs:crypto_invariants) = {
   pred: trace -> principal -> state_id -> bytes -> prop;
+
+  session_pred: trace -> session_raw -> principal -> state_id -> state_raw -> prop;
+  full_state_pred: trace -> full_state_raw -> principal -> state_id -> state_raw -> prop;
+
   // TODO: Do we want the later lemma?
   pred_later:
     tr1:trace -> tr2:trace ->
@@ -44,10 +49,32 @@ type state_predicate (cinvs:crypto_invariants) = {
     Lemma
     (requires pred tr prin sess_id content)
     (ensures
-      is_knowable_by #cinvs (principal_state_label prin sess_id) tr content
+      is_knowable_by #cinvs (L.principal_state_label prin sess_id) tr content
     )
   ;
 }
+
+val session_pred_: {|cinvs: crypto_invariants|} -> {|sp:state_predicate cinvs|} -> trace -> option session_raw -> principal -> state_id -> state_raw -> prop
+let session_pred_ #cinvs #sp  tr session prin sid content =
+  match session with
+  | None -> True
+  | Some sess -> sp.session_pred tr sess prin sid content
+
+val full_state_pred_: {|cinvs: crypto_invariants|} -> {|sp:state_predicate cinvs|} -> trace -> option full_state_raw -> principal -> state_id -> state_raw -> prop
+let full_state_pred_ #cinvs #sp tr full_state prin sid content =
+  match full_state with
+  | None -> True
+  | Some full_st -> sp.full_state_pred tr full_st prin sid content
+
+
+val global_state_pred_: {|cinvs: crypto_invariants|} -> {|sp: state_predicate cinvs |} -> trace -> principal -> state_id -> state_raw -> prop
+let global_state_pred_ #cinvs #sp tr prin sid content =
+  let session = get_session prin sid tr in
+  let full_state = get_full_state prin tr in
+          sp.pred tr prin sid content
+        /\ session_pred_ tr session prin sid content
+        /\ full_state_pred_ tr full_state prin sid content 
+
 
 /// The parameters of the trace invariant.
 
@@ -73,8 +100,13 @@ class protocol_invariants = {
 // hence we simulate inheritance like this.
 
 let state_pred {|invs:protocol_invariants|} = invs.trace_invs.state_pred.pred
+let session_pred {|invs:protocol_invariants|} = invs.trace_invs.state_pred.session_pred
+let full_state_pred {|invs:protocol_invariants|} = invs.trace_invs.state_pred.full_state_pred
 let state_pred_later {|invs:protocol_invariants|} = invs.trace_invs.state_pred.pred_later
 let state_pred_knowable {|invs:protocol_invariants|} = invs.trace_invs.state_pred.pred_knowable
+let global_state_pred {|invs:protocol_invariants|} = global_state_pred_ #invs.crypto_invs #invs.trace_invs.state_pred
+let session_pred_opt {|invs:protocol_invariants|} = session_pred_ #_ #invs.trace_invs.state_pred
+let full_state_pred_opt {|invs:protocol_invariants|} = full_state_pred_ #_ #invs.trace_invs.state_pred
 let event_pred {|invs:protocol_invariants|} = invs.trace_invs.event_pred
 
 (*** Trace invariant definition ***)
@@ -89,7 +121,8 @@ let trace_event_invariant #invs tr event =
     is_publishable tr msg
   | SetState prin sess_id content -> (
     // Stored states satisfy the custom state predicate
-    invs.trace_invs.state_pred.pred tr prin sess_id content
+    global_state_pred tr prin sess_id content
+    // invs.trace_invs.state_pred.pred tr prin sess_id content
   )
   | Event prin tag content -> (
     // Triggered protocol events satisfy the custom event predicate
@@ -209,11 +242,11 @@ val state_is_knowable_by:
     trace_invariant tr /\
     state_was_set tr prin sess_id content
   )
-  (ensures is_knowable_by (principal_state_label prin sess_id) tr content)
+  (ensures is_knowable_by (L.principal_state_label prin sess_id) tr content)
 let state_is_knowable_by #invs tr prin sess_id content =
  // state_was_set_lemma tr prin sess_id content;
   eliminate exists ts. event_at tr ts (SetState prin sess_id content)
-  returns (is_knowable_by #invs.crypto_invs (principal_state_label prin sess_id) tr content)
+  returns (is_knowable_by #invs.crypto_invs (L.principal_state_label prin sess_id) tr content)
   with _. (
     event_at_implies_trace_event_invariant tr ts (SetState prin sess_id content);
    invs.trace_invs.state_pred.pred_later (prefix tr ts) tr prin sess_id content;

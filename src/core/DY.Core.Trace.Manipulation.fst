@@ -359,9 +359,14 @@ val set_state_invariant:
   {|protocol_invariants|} ->
   prin:principal -> sess_id:state_id -> content:bytes -> tr:trace ->
   Lemma
-  (requires
-    state_pred tr prin sess_id content /\
-    trace_invariant tr
+  (requires (
+      let sess = get_session prin sess_id tr in
+      let full_st = get_full_state prin tr in
+        trace_invariant tr
+      /\ state_pred tr prin sess_id content 
+      /\ session_pred_opt tr sess prin sess_id content
+      /\ full_state_pred_opt tr full_st prin sess_id content
+  )
   )
   (ensures (
     let ((), tr_out) = set_state prin sess_id content tr in

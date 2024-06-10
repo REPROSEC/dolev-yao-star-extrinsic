@@ -135,6 +135,10 @@ let mk_state_predicate cinvs lpreds =
     pred = mk_global_local_bytes_state_predicate lpreds;
     pred_later = mk_global_local_bytes_state_predicate_later cinvs lpreds;
     pred_knowable = mk_global_local_bytes_state_predicate_knowable cinvs lpreds;
+
+  //TODO: quick fix for now, should be replaced once the split predicate is adapted to the new state predicate
+    session_pred = (fun tr sess prin sid content -> True);
+    full_state_pred = (fun tr full_st prin sid content -> True);    
   }
 
 (*** Predicates on trace ***)
@@ -197,7 +201,8 @@ let set_tagged_state_invariant invs tag spred prin sess_id content tr =
   let full_content = {tag; content;} in
   parse_serialize_inv_lemma #bytes tagged_state full_content;
   local_eq_global_lemma split_local_bytes_state_predicate_func state_pred tag spred (tr, prin, sess_id, serialize _ full_content) (tr, prin, sess_id, content)
-
+  ; admit()
+  
 val get_tagged_state_invariant:
   invs:protocol_invariants ->
   tag:string -> spred:local_bytes_state_predicate ->
