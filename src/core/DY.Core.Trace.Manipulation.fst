@@ -379,40 +379,6 @@ let set_state_invariant #invs prin sess_id content tr =
   normalize_term_spec set_state
 #pop-options
 
-val get_state_aux_state_invariant:
-  {|protocol_invariants|} ->
-  prin:principal -> sess_id:state_id -> tr:trace ->
-  Lemma
-  (requires
-    trace_invariant tr
-  )
-  (ensures (
-    match get_state_aux prin sess_id tr with
-    | None -> True
-    | Some content -> state_pred tr prin sess_id content
-  ))
-let rec get_state_aux_state_invariant #invs prin sess_id tr =
-  reveal_opaque (`%grows) (grows);
-  norm_spec [zeta; delta_only [`%trace_invariant]] (trace_invariant);
-  norm_spec [zeta; delta_only [`%prefix]] (prefix);
-  match tr with
-  | Nil -> ()
-  | Snoc tr_init (SetState prin' sess_id' content) -> (
-    if prin = prin' && sess_id = sess_id' then (
-      state_pred_later tr_init tr prin sess_id content
-    ) else (
-      get_state_aux_state_invariant prin sess_id tr_init;
-      match get_state_aux prin sess_id tr_init with
-      | None -> ()
-      | Some content -> state_pred_later tr_init tr prin sess_id content
-    )
-  )
-  | Snoc tr_init _ ->
-    get_state_aux_state_invariant prin sess_id tr_init;
-    match get_state_aux prin sess_id tr_init with
-    | None -> ()
-    | Some content -> state_pred_later tr_init tr prin sess_id content
-
 
 //TODO: this should probably move somewhere else
 val prefix_before_event:
@@ -441,6 +407,21 @@ let rec prefix_before_event_invariant #invs the_ev tr =
            then ()
            else
              prefix_before_event_invariant the_ev init
+
+val prefix_before_event_is_prefix:
+  ev:trace_event -> tr:trace{event_exists tr ev} -> 
+  Lemma ((prefix_before_event ev tr) <$ tr)
+  [SMTPat (prefix_before_event ev tr)]
+let rec prefix_before_event_is_prefix the_ev tr =
+  reveal_opaque (`%grows) (grows);
+  norm_spec [zeta; delta_only [`%prefix]] (prefix);
+  match tr with
+  | Nil -> ()
+  | Snoc init ev ->
+         if ev = the_ev
+           then ()
+           else
+             prefix_before_event_is_prefix the_ev init
 
 val get_state_aux_state_was_set :
   p:principal -> sid:state_id -> tr:trace ->
@@ -499,10 +480,7 @@ let get_state_aux_global_state_invariant prin sid tr =
   | Some cont -> prefix_before_event_invariant (SetState prin sid cont) tr
 
 
-/// When the trace invariant holds,
-/// retrieved states satisfy the state predicate.
-
-val get_state_state_invariant:
+val get_state_aux_state_invariant:
   {|protocol_invariants|} ->
   prin:principal -> sess_id:state_id -> tr:trace ->
   Lemma
@@ -510,18 +488,15 @@ val get_state_state_invariant:
     trace_invariant tr
   )
   (ensures (
-    let (opt_content, tr_out) = get_state prin sess_id tr in
-    tr == tr_out /\ (
-      match opt_content with
-      | None -> True
-      | Some content -> state_pred tr prin sess_id content
-    )
+    match get_state_aux prin sess_id tr with
+    | None -> True
+    | Some content -> state_pred tr prin sess_id content
   ))
-  [SMTPat (get_state prin sess_id tr); SMTPat (trace_invariant tr)]
-let get_state_state_invariant #invs prin sess_id tr =
-  normalize_term_spec get_state;
-  get_state_aux_state_invariant prin sess_id tr
-
+let get_state_aux_state_invariant #invs prin sess_id tr =
+  get_state_aux_global_state_invariant prin sess_id tr;
+  match get_state_aux prin sess_id tr with
+  | None -> ()
+  | Some content -> state_pred_later (prefix_before_event (SetState prin sess_id content) tr) tr prin sess_id content
 
 val get_state_global_state_invariant:
   {|invs: protocol_invariants|} ->
@@ -542,6 +517,31 @@ val get_state_global_state_invariant:
 let get_state_global_state_invariant #invs prin sess_id tr =
   normalize_term_spec get_state;
   get_state_aux_global_state_invariant prin sess_id tr
+
+
+/// When the trace invariant holds,
+/// retrieved states satisfy the state predicate.
+
+val get_state_state_invariant:
+  {|invs: protocol_invariants|} ->
+  prin:principal -> sess_id:state_id -> tr:trace ->
+  Lemma
+  (requires
+    trace_invariant tr
+  )
+  (ensures (
+    let (opt_content, tr_out) = get_state prin sess_id tr in
+    tr == tr_out /\ (
+      match opt_content with
+      | None -> True
+      | Some content -> state_pred tr prin sess_id content
+    )
+  ))
+  [SMTPat (get_state prin sess_id tr); SMTPat (trace_invariant #invs tr)]
+let get_state_state_invariant #invs prin sess_id tr =
+  normalize_term_spec get_state;
+  get_state_aux_state_invariant prin sess_id tr
+
 
 (*** Event triggering ***)
 
