@@ -354,9 +354,8 @@ let new_session_id_invariant prin tr =
 /// Storing a state preserves the trace invariant
 /// when the state satisfy the state predicate.
 
-#push-options "--z3rlimit 15"
 val set_state_invariant:
-  {|protocol_invariants|} ->
+  {|invs:protocol_invariants|} ->
   prin:principal -> sess_id:state_id -> content:bytes -> tr:trace ->
   Lemma
   (requires (
@@ -373,11 +372,10 @@ val set_state_invariant:
     trace_invariant tr_out /\
     state_was_set tr_out prin sess_id content
   ))
-  [SMTPat (set_state prin sess_id content tr); SMTPat (trace_invariant tr)]
+  [SMTPat (set_state prin sess_id content tr); SMTPat (trace_invariant #invs tr)]
 let set_state_invariant #invs prin sess_id content tr =
   add_event_invariant (SetState prin sess_id content) tr;
   normalize_term_spec set_state
-#pop-options
 
 
 //TODO: this should probably move somewhere else
