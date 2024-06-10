@@ -64,32 +64,6 @@ let no_set_state_entry_for_prefix p sid tr1 tr2 =
     event_at_grows tr1 tr2 ts ev1
     end
 
-
-
-val get_state_aux_state_was_set :
-  p:principal -> sid:state_id -> tr:trace ->
-  Lemma
-    (requires True)
-    (ensures (
-       match (get_state_aux p sid tr) with
-       | None -> True
-       | Some v -> state_was_set tr p sid v
-      )
-    )
-    [SMTPat (get_state_aux p sid tr)]
-let rec get_state_aux_state_was_set p sid tr =
-  match tr with
-  | Nil -> ()
-  | Snoc init (SetState p' sid' v) ->
-     if p' = p && sid' = sid 
-       then begin
-         let ev = (SetState p' sid' v) in
-         assert(event_at tr (DY.Core.Trace.Type.length tr - 1) ev)
-       end
-       else get_state_aux_state_was_set p sid init
-  | Snoc init _ -> get_state_aux_state_was_set p sid init
-
-
 val suffix_after_event:
   ev:trace_event -> tr:trace{event_exists tr ev} -> trace
 let rec suffix_after_event the_ev tr =
@@ -98,7 +72,6 @@ let rec suffix_after_event the_ev tr =
       if ev <> the_ev 
         then Snoc (suffix_after_event the_ev init) ev
         else Nil
-
 
 #push-options "--fuel 2"
 let _ =

@@ -413,6 +413,92 @@ let rec get_state_aux_state_invariant #invs prin sess_id tr =
     | None -> ()
     | Some content -> state_pred_later tr_init tr prin sess_id content
 
+
+//TODO: this should probably move somewhere else
+val prefix_before_event:
+  ev:trace_event -> tr:trace{event_exists tr ev} -> trace
+let rec prefix_before_event the_ev tr =
+  match tr with
+  | Snoc init ev ->
+      if ev = the_ev 
+        then init
+        else prefix_before_event the_ev init
+
+
+val prefix_before_event_invariant:
+  {|invs: protocol_invariants|} ->
+  ev:trace_event -> tr:trace{event_exists tr ev} ->
+  Lemma 
+    (requires trace_invariant tr)
+    (ensures trace_event_invariant (prefix_before_event ev tr) ev /\ trace_invariant (prefix_before_event ev tr))
+let rec prefix_before_event_invariant #invs the_ev tr = 
+  match tr with
+  | Nil -> ()
+  | Snoc init ev -> 
+         reveal_opaque (`%trace_invariant) (trace_invariant);
+         norm_spec [zeta; delta_only [`%trace_invariant]] (trace_invariant);
+         if ev = the_ev
+           then ()
+           else
+             prefix_before_event_invariant the_ev init
+
+val get_state_aux_state_was_set :
+  p:principal -> sid:state_id -> tr:trace ->
+  Lemma
+    (requires True)
+    (ensures (
+       match (get_state_aux p sid tr) with
+       | None -> True
+       | Some v -> state_was_set tr p sid v
+      )
+    )
+    [SMTPat (get_state_aux p sid tr)]
+let rec get_state_aux_state_was_set p sid tr =
+  match tr with
+  | Nil -> ()
+  | Snoc init (SetState p' sid' v) ->
+     if p' = p && sid' = sid 
+       then begin
+         let ev = (SetState p' sid' v) in
+         assert(event_at tr (DY.Core.Trace.Type.length tr - 1) ev)
+       end
+       else get_state_aux_state_was_set p sid init
+  | Snoc init _ -> get_state_aux_state_was_set p sid init
+
+val get_state_state_was_set :
+  p:principal -> sid:state_id -> tr:trace ->
+  Lemma
+    (requires True)
+    (ensures (
+       let (opt_content, tr_out) = get_state p sid tr in
+       match opt_content with
+       | None -> True
+       | Some v -> state_was_set tr p sid v
+      )
+    )
+    [SMTPat (get_state p sid tr)]
+let  get_state_state_was_set p sid tr =
+  normalize_term_spec get_state
+
+
+val get_state_aux_global_state_invariant:
+  {|protocol_invariants|} ->
+  prin:principal -> sess_id:state_id -> tr:trace ->
+  Lemma
+  (requires
+    trace_invariant tr
+  )
+  (ensures (
+    match get_state_aux prin sess_id tr with
+    | None -> True
+    | Some content -> global_state_pred (prefix_before_event (SetState prin sess_id content) tr) prin sess_id content
+  ))
+let get_state_aux_global_state_invariant prin sid tr = 
+  match get_state_aux prin sid tr with
+  | None -> ()
+  | Some cont -> prefix_before_event_invariant (SetState prin sid cont) tr
+
+
 /// When the trace invariant holds,
 /// retrieved states satisfy the state predicate.
 
@@ -435,6 +521,27 @@ val get_state_state_invariant:
 let get_state_state_invariant #invs prin sess_id tr =
   normalize_term_spec get_state;
   get_state_aux_state_invariant prin sess_id tr
+
+
+val get_state_global_state_invariant:
+  {|invs: protocol_invariants|} ->
+  prin:principal -> sess_id:state_id -> tr:trace ->
+  Lemma
+  (requires
+    trace_invariant tr
+  )
+  (ensures (
+    let (opt_content, tr_out) = get_state prin sess_id tr in
+    tr == tr_out /\ (
+      match opt_content with
+      | None -> True
+      | Some content -> global_state_pred (prefix_before_event (SetState prin sess_id content) tr) prin sess_id content
+    )
+  ))
+  [SMTPat (get_state prin sess_id tr); SMTPat (trace_invariant #invs tr)]
+let get_state_global_state_invariant #invs prin sess_id tr =
+  normalize_term_spec get_state;
+  get_state_aux_global_state_invariant prin sess_id tr
 
 (*** Event triggering ***)
 
