@@ -111,3 +111,56 @@ let rec get_state_aux_returns_last_set_state p sid tr =
              get_state_aux_returns_last_set_state p sid init
     end
 #pop-options
+
+val get_state_returns_last_set_state : 
+  p:principal -> sid:state_id -> tr:trace ->
+  Lemma
+   (requires True)
+   (ensures (
+     match (get_state p sid tr) with
+     | (None,_) -> True
+     | (Some v,_) -> no_set_state_entry_for p sid 
+         (suffix_after_event (SetState p sid v) tr)
+     )
+   )
+   [SMTPat (get_state p sid tr)]
+let get_state_returns_last_set_state p sid tr =
+  reveal_opaque (`%get_state) (get_state)
+
+
+val get_state_aux_is_last_of_get_session_aux:
+  p:principal -> sid:state_id -> tr:trace ->
+  Lemma 
+    (requires True
+    )
+    (ensures (
+      let session = get_session_aux p sid tr in
+      match get_state_aux p sid tr with
+      | None -> Nil? session
+      | Some st -> Snoc? session /\ (let Snoc _ last = session in st = last)
+    )
+    )
+let rec get_state_aux_is_last_of_get_session_aux p sid tr = 
+  match tr with
+  | Nil -> ()
+  | Snoc init _ -> get_state_aux_is_last_of_get_session_aux p sid init
+
+
+
+val get_state_is_last_of_get_session:
+  p:principal -> sid:state_id -> tr:trace ->
+  Lemma 
+    (requires True
+    )
+    (ensures (
+      let opt_session = get_session p sid tr in
+      let (opt_state, _) = get_state p sid tr in
+      match opt_state with
+      | None -> None? opt_session
+      | Some st -> Some? opt_session /\ Snoc? (Some?.v opt_session) /\ (let Some (Snoc _ last) = opt_session in st = last)
+    )
+    )
+    [SMTPat (get_session p sid tr); SMTPat (get_state p sid tr)]
+let get_state_is_last_of_get_session p sid tr =
+    reveal_opaque (`%get_state) (get_state);
+    get_state_aux_is_last_of_get_session_aux p sid tr
