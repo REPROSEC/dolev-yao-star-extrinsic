@@ -2,7 +2,7 @@ module DY.Lib.Event.Typed
 
 open Comparse
 open DY.Core
-open DY.Lib.SplitPredicate
+open DY.Lib.SplitFunction
 open DY.Lib.Comparse.Glue
 
 /// This module defines user-friendly API for protocol events.
@@ -10,7 +10,7 @@ open DY.Lib.Comparse.Glue
 ///
 /// First, the API uses the split predicate methodology,
 /// so that the global event predicate can be defined modularly
-/// (see DY.Lib.SplitPredicate).
+/// (see DY.Lib.SplitFunction).
 ///
 /// Second, the API is integrated with Comparse,
 /// so that the event content is a high-level type
@@ -41,14 +41,14 @@ let mk_event_instance #a #format tag = {
 type event_predicate (a:Type0) {|event a|} =
   trace -> principal -> a -> prop
 
-let split_event_pred_func: split_predicate_input_values = {
+let split_event_pred_func: split_function_input_values = {
   tagged_data_t = trace & principal & string & bytes;
   tag_t = string;
   encoded_tag_t = string;
   raw_data_t = trace & principal & bytes;
   output_t = prop;
 
-  default_global_pred = (fun tr prin tag content -> False);
+  default_global_fun = (fun tr prin tag content -> False);
 
   decode_tagged_data = (fun (tr, prin, tag, content) -> (
     Some (tag, (tr, prin, content))
@@ -57,22 +57,22 @@ let split_event_pred_func: split_predicate_input_values = {
   encode_tag = (fun s -> s);
   encode_tag_inj = (fun l1 l2 -> ());
 
-  local_pred = trace -> principal -> bytes -> prop;
-  global_pred = trace -> principal -> string -> bytes -> prop;
+  local_fun = trace -> principal -> bytes -> prop;
+  global_fun = trace -> principal -> string -> bytes -> prop;
 
-  apply_local_pred = (fun epred (tr, prin, content) ->
+  apply_local_fun = (fun epred (tr, prin, content) ->
     epred tr prin content
   );
-  apply_global_pred = (fun epred (tr, prin, tag, content) ->
+  apply_global_fun = (fun epred (tr, prin, tag, content) ->
     epred tr prin tag content
   );
-  mk_global_pred = (fun spred -> fun tr prin tag content ->
+  mk_global_fun = (fun spred -> fun tr prin tag content ->
     spred (tr, prin, tag, content)
   );
-  apply_mk_global_pred = (fun spred x -> ());
+  apply_mk_global_fun = (fun spred x -> ());
 }
 
-type compiled_event_predicate = split_event_pred_func.local_pred
+type compiled_event_predicate = split_event_pred_func.local_fun
 
 val compile_event_pred:
   #a:Type0 -> {|event a|} ->
@@ -86,7 +86,7 @@ let compile_event_pred #a #ev epred tr prin content_bytes =
 val has_compiled_event_pred:
   protocol_invariants -> (string & compiled_event_predicate) -> prop
 let has_compiled_event_pred invs (tag, epred) =
-  has_local_pred split_event_pred_func event_pred (tag, epred)
+  has_local_fun split_event_pred_func event_pred (tag, epred)
 
 val has_event_pred:
   #a:Type0 -> {|event a|} ->
@@ -98,7 +98,7 @@ let has_event_pred #a #ev invs epred =
 
 val mk_event_pred: {|crypto_invariants|} -> list (string & compiled_event_predicate) -> trace -> principal -> string -> bytes -> prop
 let mk_event_pred #cinvs l =
-  mk_global_pred split_event_pred_func l
+  mk_global_fun split_event_pred_func l
 
 val mk_event_pred_correct: invs:protocol_invariants -> lpreds:list (string & compiled_event_predicate) -> Lemma
   (requires
@@ -108,7 +108,7 @@ val mk_event_pred_correct: invs:protocol_invariants -> lpreds:list (string & com
   (ensures for_allP (has_compiled_event_pred invs) lpreds)
 let mk_event_pred_correct invs lpreds =
   for_allP_eq (has_compiled_event_pred invs) lpreds;
-  FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (mk_global_pred_correct split_event_pred_func lpreds))
+  FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (mk_global_fun_correct split_event_pred_func lpreds))
 
 (*** Monadic functions ***)
 

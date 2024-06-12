@@ -99,7 +99,7 @@ The practice of defining this global protocol invariant monolithically somewhere
 - it make it difficult to create reusable components (such as a generic state to store private keys)
 
 We implement and use a library to create a global predicate from several independent local predicates,
-defined in `DY.Lib.SplitPredicate`.
+defined in `DY.Lib.SplitFunction`.
 Then, instead of implementing functions that use a top-level-defined global predicate,
 functions take as parameter the global predicate,
 with the precondition that it contains some top-level-defined local predicate.
