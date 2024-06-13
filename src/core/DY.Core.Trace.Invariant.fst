@@ -1,11 +1,11 @@
 module DY.Core.Trace.Invariant
 
-open DY.Core.Trace.Type
 open DY.Core.Trace.State.Aux
 open DY.Core.Bytes.Type
 open DY.Core.Bytes
 open DY.Core.Label.Type
 module L = DY.Core.Label
+open DY.Core.Trace.Type
 
 /// This module contains the definition of the trace invariant `trace_invariant`.
 /// The trace invariant is at the heart of DY* methodology for protocol security proofs.
@@ -52,6 +52,17 @@ type state_predicate (cinvs:crypto_invariants) = {
       is_knowable_by #cinvs (L.principal_state_label prin sess_id) tr content
     )
   ;
+
+  session_pred_grows: 
+    tr1:trace -> tr2:trace -> 
+    sess:session_raw -> prin:principal -> sess_id:state_id -> content:bytes ->
+    Lemma
+      (requires
+        tr1 <$ tr2 /\ session_pred tr1 sess prin sess_id content
+      )
+      (ensures
+        session_pred tr2 sess prin sess_id content
+      )
 }
 
 val session_pred_: {|cinvs: crypto_invariants|} -> {|sp:state_predicate cinvs|} -> trace -> option session_raw -> principal -> state_id -> state_raw -> prop
@@ -104,10 +115,27 @@ let session_pred {|invs:protocol_invariants|} = invs.trace_invs.state_pred.sessi
 let full_state_pred {|invs:protocol_invariants|} = invs.trace_invs.state_pred.full_state_pred
 let state_pred_later {|invs:protocol_invariants|} = invs.trace_invs.state_pred.pred_later
 let state_pred_knowable {|invs:protocol_invariants|} = invs.trace_invs.state_pred.pred_knowable
+let session_pred_grows {|invs:protocol_invariants|} = invs.trace_invs.state_pred.session_pred_grows
 let global_state_pred {|invs:protocol_invariants|} = global_state_pred_ #invs.crypto_invs #invs.trace_invs.state_pred
 let session_pred_opt {|invs:protocol_invariants|} = session_pred_ #_ #invs.trace_invs.state_pred
 let full_state_pred_opt {|invs:protocol_invariants|} = full_state_pred_ #_ #invs.trace_invs.state_pred
 let event_pred {|invs:protocol_invariants|} = invs.trace_invs.event_pred
+
+
+val session_pred_later:
+{|protocol_invariants |} ->
+  tr1:trace -> tr2:trace  -> p:principal -> sid:state_id -> cont:state_raw ->
+  Lemma
+    (requires 
+        tr1 <$ tr2 
+      /\ no_set_state_entry_for p sid (tr2 `suffix_after` tr1)
+      /\ session_pred tr1 (get_session_aux p sid tr1) p sid cont
+    )
+    (ensures session_pred tr2 (get_session_aux p sid tr2) p sid cont)
+let session_pred_later tr1 tr2 p sid cont =
+  get_session_aux_same p sid tr1 tr2;
+  let session = get_session_aux p sid tr1 in
+  session_pred_grows tr1 tr2 session p sid cont
 
 (*** Trace invariant definition ***)
 

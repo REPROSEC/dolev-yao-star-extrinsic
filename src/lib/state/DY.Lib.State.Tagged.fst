@@ -138,6 +138,7 @@ let mk_state_predicate cinvs lpreds =
 
   //TODO: quick fix for now, should be replaced once the split predicate is adapted to the new state predicate
     session_pred = (fun tr sess prin sid content -> True);
+    session_pred_grows = (fun tr1 tr2 sess p sid cont -> ());
     full_state_pred = (fun tr full_st prin sid content -> True);    
   }
 

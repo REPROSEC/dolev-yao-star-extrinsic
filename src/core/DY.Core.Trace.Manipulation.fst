@@ -541,6 +541,46 @@ let get_state_state_invariant #invs prin sess_id tr =
   get_state_aux_state_invariant prin sess_id tr
 
 
+
+
+val get_state_aux_is_last_of_get_session_aux:
+  p:principal -> sid:state_id -> tr:trace ->
+  Lemma 
+    (requires True
+    )
+    (ensures (
+      let session = get_session_aux p sid tr in
+      match get_state_aux p sid tr with
+      | None -> Nil? session
+      | Some st -> Snoc? session /\ (let Snoc _ last = session in st = last)
+    )
+    )
+let rec get_state_aux_is_last_of_get_session_aux p sid tr = 
+  match tr with
+  | Nil -> ()
+  | Snoc init _ -> get_state_aux_is_last_of_get_session_aux p sid init
+
+
+
+val get_state_is_last_of_get_session:
+  p:principal -> sid:state_id -> tr:trace ->
+  Lemma 
+    (requires True
+    )
+    (ensures (
+      let opt_session = get_session p sid tr in
+      let (opt_state, _) = get_state p sid tr in
+      match opt_state with
+      | None -> None? opt_session
+      | Some st -> Some? opt_session /\ Snoc? (Some?.v opt_session) /\ (let Some (Snoc _ last) = opt_session in st = last)
+    )
+    )
+    [SMTPat (get_session p sid tr); SMTPat (get_state p sid tr)]
+let get_state_is_last_of_get_session p sid tr =
+    reveal_opaque (`%get_state) (get_state);
+    get_state_aux_is_last_of_get_session_aux p sid tr
+
+
 (*** Event triggering ***)
 
 /// Trigger a protocol event.
