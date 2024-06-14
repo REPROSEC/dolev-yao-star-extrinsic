@@ -209,6 +209,9 @@ let rec prefix_prefix_eq tr1 tr2 i =
     prefix_prefix_eq tr1 tr2_init i
   )
 
+
+
+
 (*** Event in the trace predicates ***)
 
 /// Retrieve the event at some timestamp in the trace.
@@ -257,6 +260,34 @@ let rec event_at_grows tr1 tr2 i e =
     event_at_grows tr1 tr2_init i e
   )
 
+
+/// given an event on a trace, we often need the trace up until right before that entry
+
+val prefix_before_event:
+  ev:trace_event -> tr:trace{event_exists tr ev} -> trace
+let rec prefix_before_event the_ev tr =
+  match tr with
+  | Snoc init ev ->
+      if ev = the_ev 
+        then init
+        else prefix_before_event the_ev init
+        
+val prefix_before_event_is_prefix:
+  ev:trace_event -> tr:trace{event_exists tr ev} -> 
+  Lemma ((prefix_before_event ev tr) <$ tr)
+  [SMTPat (prefix_before_event ev tr)]
+let rec prefix_before_event_is_prefix the_ev tr =
+  reveal_opaque (`%grows) (grows);
+  norm_spec [zeta; delta_only [`%prefix]] (prefix);
+  match tr with
+  | Nil -> ()
+  | Snoc init ev ->
+         if ev = the_ev
+           then ()
+           else
+             prefix_before_event_is_prefix the_ev init
+
+
 /// Shorthand predicates.
 
 /// Has a message been sent on the network?
@@ -265,34 +296,11 @@ val msg_sent_on_network: trace -> bytes -> prop
 let msg_sent_on_network tr msg =
   event_exists tr (MsgSent msg)
 
-
-/// Has some state been stored by a principal at a given timestamp?
-
-val state_was_set_at: trace -> timestamp -> principal -> state_id -> bytes -> prop
-let state_was_set_at tr ts prin sess_id content =
-  event_at tr ts (SetState prin sess_id content)
-
 /// Has some state been stored by a principal?
 
 val state_was_set: trace -> principal -> state_id -> bytes -> prop
 let state_was_set tr prin sess_id content =
   event_exists tr (SetState prin sess_id content)
-
-val state_was_set_at_lemma : 
-  tr:trace -> ts:timestamp -> p:principal -> s_id:state_id -> cont:bytes ->
-  Lemma
-    (requires state_was_set_at tr ts p s_id cont)
-    (ensures state_was_set tr p s_id cont)
-    // [SMTPat (state_was_set_at tr ts p s_id cont)]
-let state_was_set_at_lemma tr ts p s_id cont = ()
-
-val state_was_set_lemma : 
-  tr:trace -> p:principal -> s_id:state_id -> cont:bytes ->
-  Lemma
-    (requires state_was_set tr p s_id cont)
-    (ensures exists ts. state_was_set_at tr ts p s_id cont)
-  [SMTPat (state_was_set tr p s_id cont)]
-let state_was_set_lemma tr p s_id cont = ()
 
 /// Has a principal been corrupt?
 
@@ -331,3 +339,4 @@ let rand_generated_at tr i b =
   | Rand usg lab len time ->
     time == i /\ event_at tr i (RandGen usg lab len)
   | _ -> False
+

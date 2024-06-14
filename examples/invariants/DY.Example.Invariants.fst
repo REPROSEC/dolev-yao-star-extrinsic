@@ -51,6 +51,7 @@ let new_idn prin = return 7
 //   | None -> return (1 <: nat)
 //   | Some fst -> return ((find_curr_max_id fst + 1)<:nat)
 
+/// iniitalize a new session with a new identifier and counter 0
 val init: principal -> traceful state_id
 let init prin =
   let* idn = new_idn prin in
@@ -59,23 +60,23 @@ let init prin =
   set_state prin new_sess_id (serialize p_state new_state);*
   return new_sess_id
 
+
+/// one step: send a message and increase the counter by 1
 val next: principal -> state_id -> traceful (option unit)
 let next prin sid =
   let*? curr_state = get_state prin sid in
-  match parse p_state curr_state with
-  | None -> return None
-  | Some (S idn c) -> (
-         send_msg (serialize message (M prin));*
-         set_state prin sid (serialize p_state (S idn (c+1)));*
-         return (Some ())
-  )
+  let*? S idn c = return (parse p_state curr_state) in
+  send_msg (serialize message (M prin));*
+  set_state prin sid (serialize p_state (S idn (c+1)));*
+  return (Some ())
 
 let p_cinvs = {
  usages = default_crypto_usages;
  preds = default_crypto_predicates default_crypto_usages
 }
 
-
+/// we only have a session predicate saying that the counter must increase
+/// and the identifier must stay the same
 let p_state_pred: state_predicate p_cinvs = {
     pred = (fun tr p sid cont -> is_knowable_by #p_cinvs (principal_state_label p sid) tr cont)
   ; session_pred = (fun tr sess prin sid cont -> 
@@ -88,9 +89,7 @@ let p_state_pred: state_predicate p_cinvs = {
           | (Some (S idn ctr), Some (S idn' ctr') ) -> ctr < ctr' /\ idn = idn'
       )
     )
-  ; full_state_pred = (fun tr fst_b p sid cont -> 
-      True
-  )
+  ; full_state_pred = (fun tr fst_b p sid cont -> True)
   ; pred_later = (fun t1 t2 p sid cont -> ())
   ; pred_knowable = (fun tr p sid cont -> ())
   ; session_pred_grows = (fun tr1 tr2 sess p sid cont -> ())

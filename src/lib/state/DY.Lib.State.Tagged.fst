@@ -151,12 +151,22 @@ let tagged_state_was_set tr tag prin sess_id content =
   let full_content_bytes = serialize tagged_state full_content in
   state_was_set tr prin sess_id full_content_bytes
 
-[@@ "opaque_to_smt"]
-val tagged_state_was_set_at: trace -> timestamp -> string -> principal -> state_id -> bytes -> prop
-let tagged_state_was_set_at tr ts tag prin sess_id content =
-  let full_content = {tag; content;} in
-  let full_content_bytes = serialize tagged_state full_content in
-  state_was_set_at tr ts prin sess_id full_content_bytes
+val tagged_state_was_set_event_exists: 
+  tr:trace -> tag:string -> p:principal -> sid:state_id -> content:state_raw -> 
+  Lemma
+  (requires
+    tagged_state_was_set tr tag p sid content
+  )
+  (ensures (
+    let full_content = {tag; content;} in
+    let full_content_bytes = serialize tagged_state full_content in
+    event_exists tr (SetState p sid full_content_bytes)
+    )    
+  )
+  [SMTPat (tagged_state_was_set tr tag p sid content)]
+let tagged_state_was_set_event_exists tr tag p sid cont = 
+  reveal_opaque (`%tagged_state_was_set) tagged_state_was_set
+
 
 
 (*** API for tagged sessions ***)
@@ -237,47 +247,54 @@ let get_tagged_state_invariant invs tag spred prin sess_id tr =
 
 (*** Theorem ***)
 
-// val tagged_state_was_set_implies_pred:
-//   invs:protocol_invariants -> tr:trace ->
-//   tag:string -> spred:local_bytes_state_predicate ->
-//   prin:principal -> sess_id:state_id -> content:bytes ->
-//   Lemma
-//   (requires
-//     tagged_state_was_set tr tag prin sess_id content /\
-//     trace_invariant tr /\
-//     has_local_bytes_state_predicate invs (tag, spred)
-//   )
-//   (ensures spred.pred tr prin sess_id content)
-//   [SMTPat (tagged_state_was_set tr tag prin sess_id content);
-//    SMTPat (trace_invariant tr);
-//    SMTPat (has_local_bytes_state_predicate invs (tag, spred));
-//   ]
-// let tagged_state_was_set_implies_pred invs tr tag spred prin sess_id content =
-//   reveal_opaque (`%tagged_state_was_set) (tagged_state_was_set);
-//   let full_content = {tag; content;} in
-//   parse_serialize_inv_lemma #bytes tagged_state full_content;
-//   let full_content_bytes: bytes = serialize tagged_state full_content in
-//   local_eq_global_lemma split_local_bytes_state_predicate_func state_pred tag spred (tr, prin, sess_id, full_content_bytes) (tr, prin, sess_id, content)
-
-
-val tagged_state_was_set_implies_pred:
-  invs:protocol_invariants -> tr:trace -> ts:timestamp{ts <= DY.Core.Trace.Type.length tr} ->
+val tagged_state_was_set_implies_global_state_pred:
+  invs:protocol_invariants -> tr:trace ->
   tag:string -> spred:local_bytes_state_predicate ->
   prin:principal -> sess_id:state_id -> content:bytes ->
   Lemma
   (requires
-    tagged_state_was_set_at tr ts tag prin sess_id content /\
+    tagged_state_was_set tr tag prin sess_id content /\
     trace_invariant tr /\
     has_local_bytes_state_predicate invs (tag, spred)
   )
-  (ensures spred.pred (prefix tr ts) prin sess_id content)
-  [SMTPat (tagged_state_was_set_at tr ts tag prin sess_id content);
+  (ensures (
+    let full_content = {tag; content;} in
+    let full_content_bytes: bytes = serialize tagged_state full_content in
+    global_state_pred (prefix_before_event (SetState prin sess_id full_content_bytes) tr) prin sess_id content
+  )
+  )
+  [SMTPat (tagged_state_was_set tr tag prin sess_id content);
    SMTPat (trace_invariant tr);
    SMTPat (has_local_bytes_state_predicate invs (tag, spred));
   ]
-let tagged_state_was_set_implies_pred invs tr ts tag spred prin sess_id content =
-  reveal_opaque (`%tagged_state_was_set_at) (tagged_state_was_set_at);
+let tagged_state_was_set_implies_global_state_pred invs tr tag spred prin sess_id content =
+  reveal_opaque (`%tagged_state_was_set) (tagged_state_was_set);
   let full_content = {tag; content;} in
   parse_serialize_inv_lemma #bytes tagged_state full_content;
   let full_content_bytes: bytes = serialize tagged_state full_content in
-  local_eq_global_lemma split_local_bytes_state_predicate_func state_pred tag spred (prefix tr ts, prin, sess_id, full_content_bytes) (prefix tr ts, prin, sess_id, content)
+  local_eq_global_lemma split_local_bytes_state_predicate_func state_pred tag spred (prefix_before_event (SetState prin sess_id full_content_bytes) tr, prin, sess_id, full_content_bytes) (prefix_before_event (SetState prin sess_id full_content_bytes) tr, prin, sess_id, content)
+  ; admit()
+
+
+val tagged_state_was_set_implies_pred:
+  invs:protocol_invariants -> tr:trace ->
+  tag:string -> spred:local_bytes_state_predicate ->
+  prin:principal -> sess_id:state_id -> content:bytes ->
+  Lemma
+  (requires
+    tagged_state_was_set tr tag prin sess_id content /\
+    trace_invariant tr /\
+    has_local_bytes_state_predicate invs (tag, spred)
+  )
+  (ensures spred.pred tr prin sess_id content)
+  [SMTPat (tagged_state_was_set tr tag prin sess_id content);
+   SMTPat (trace_invariant tr);
+   SMTPat (has_local_bytes_state_predicate invs (tag, spred));
+  ]
+let tagged_state_was_set_implies_pred invs tr tag spred prin sess_id content =
+  reveal_opaque (`%tagged_state_was_set) (tagged_state_was_set);
+  let full_content = {tag; content;} in
+  parse_serialize_inv_lemma #bytes tagged_state full_content;
+  let full_content_bytes: bytes = serialize tagged_state full_content in
+  local_eq_global_lemma split_local_bytes_state_predicate_func state_pred tag spred (tr, prin, sess_id, full_content_bytes) (tr, prin, sess_id, content)
+

@@ -69,21 +69,6 @@ val n_a_secrecy:
   )
   (ensures is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob))
 let n_a_secrecy tr alice bob n_a =
-  assume(forall p s_id (cont:nsl_session) . state_was_set tr p s_id cont ==> (exists (ts:timestamp{ts <= DY.Core.Trace.Type.length tr}). state_was_set_at tr ts p s_id cont));
-
-  introduce (exists (sess_id:state_id). state_was_set tr alice sess_id (InitiatorSentMsg1 bob n_a)) ==> event_triggered tr alice (Initiate1 alice bob n_a)
-  with _ . begin
-    eliminate exists (ts:timestamp{ts <= DY.Core.Trace.Type.length tr}) (sess_id:state_id). state_was_set_at tr ts alice sess_id (InitiatorSentMsg1 bob n_a) 
-    returns _
-    with _ . begin
-      state_predicate_nsl.pred_later (prefix tr ts) tr alice sess_id (InitiatorSentMsg1 bob n_a)
-    end
-  end;
-  introduce (exists (sess_id:state_id) (n_b:bytes). state_was_set tr alice sess_id (InitiatorSentMsg3 bob n_a n_b)) ==> (exists n_b . event_triggered tr alice (Initiate2 alice bob n_a n_b))
-  with _ . admit();
-  introduce (exists (sess_id:state_id) (n_b:bytes). state_was_set tr bob sess_id (ResponderReceivedMsg3 alice n_a n_b)) ==> (exists n_b . event_triggered tr bob (Respond2 alice bob n_a n_b) )
-  with _ . admit();
-
   attacker_only_knows_publishable_values tr n_a
 
 /// The nonce n_b is unknown to the attacker,
@@ -102,18 +87,4 @@ val n_b_secrecy:
   )
   (ensures is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob))
 let n_b_secrecy tr alice bob n_b =
- assume(forall p s_id (cont:nsl_session) . state_was_set tr p s_id cont ==> (exists (ts:timestamp{ts <= DY.Core.Trace.Type.length tr}). state_was_set_at tr ts p s_id cont));
-
-  introduce (exists (sess_id:state_id) n_a.  state_was_set tr bob sess_id (ResponderSentMsg2 alice n_a n_b)) ==> (exists n_a. event_triggered tr bob (Respond1 alice bob n_a n_b))
-  with _ . begin
-    eliminate exists (ts:timestamp{ts <= DY.Core.Trace.Type.length tr}) n_a (sess_id:state_id). state_was_set_at tr ts bob sess_id (ResponderSentMsg2 alice n_a n_b)
-    returns _
-    with _ . begin
-      state_predicate_nsl.pred_later (prefix tr ts) tr bob sess_id (ResponderSentMsg2 alice n_a n_b)
-    end
-  end;
-  introduce (exists (sess_id:state_id) (n_a:bytes). state_was_set tr bob sess_id (ResponderReceivedMsg3 alice n_a n_b)) ==> (exists n_a . event_triggered tr bob (Respond2 alice bob n_a n_b))
-  with _ . admit();
-  introduce (exists (sess_id:state_id) (n_a:bytes). state_was_set tr alice sess_id (InitiatorSentMsg3 bob n_a n_b)) ==> (exists n_a . event_triggered tr alice (Initiate2 alice bob n_a n_b) )
-  with _ . admit();
   attacker_only_knows_publishable_values tr n_b
