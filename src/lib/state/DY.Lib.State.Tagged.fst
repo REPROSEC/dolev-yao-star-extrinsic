@@ -260,7 +260,7 @@ val tagged_state_was_set_implies_global_state_pred:
   (ensures (
     let full_content = {tag; content;} in
     let full_content_bytes: bytes = serialize tagged_state full_content in
-    global_state_pred (prefix_before_event (SetState prin sess_id full_content_bytes) tr) prin sess_id content
+    global_state_pred (prefix_before_event (SetState prin sess_id full_content_bytes) tr) prin sess_id full_content_bytes
   )
   )
   [SMTPat (tagged_state_was_set tr tag prin sess_id content);
@@ -273,7 +273,6 @@ let tagged_state_was_set_implies_global_state_pred invs tr tag spred prin sess_i
   parse_serialize_inv_lemma #bytes tagged_state full_content;
   let full_content_bytes: bytes = serialize tagged_state full_content in
   local_eq_global_lemma split_local_bytes_state_predicate_func state_pred tag spred (prefix_before_event (SetState prin sess_id full_content_bytes) tr, prin, sess_id, full_content_bytes) (prefix_before_event (SetState prin sess_id full_content_bytes) tr, prin, sess_id, content)
-  ; admit()
 
 
 val tagged_state_was_set_implies_pred:
