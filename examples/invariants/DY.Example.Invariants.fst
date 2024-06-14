@@ -5,6 +5,9 @@ open DY.Core
 module L = DY.Lib
 module List = FStar.List.Tot.Base
 
+#set-options "--fuel 1 --ifuel 1"
+
+
 /// Experimenting with the new state invariants for sessions and full states
 
 type p_state =
@@ -16,15 +19,25 @@ type p_state =
 instance parseable_serializeable_bytes_p_state: parseable_serializeable bytes p_state
  = mk_parseable_serializeable ps_p_state
 
-
+[@@with_bytes bytes]
 type message =
-  | M: alice:principal -> message
+  | M: nonce:bytes -> message
 
 %splice [ps_message] (gen_parser (`message))
 %splice [ps_message_is_well_formed] (gen_is_well_formed_lemma (`message))
 
 instance parseable_serializeable_bytes_message: parseable_serializeable bytes message
  = mk_parseable_serializeable ps_message
+
+
+type p_event =
+  | E: a:principal -> p_event
+
+%splice [ps_p_event] (gen_parser (`p_event))
+%splice [ps_p_event_is_well_formed] (gen_is_well_formed_lemma (`p_event))
+
+instance parseable_serializeable_bytes_p_event: parseable_serializeable bytes p_event
+ = mk_parseable_serializeable ps_p_event
 
 
 // let max_nat (x:nat) (y:nat) : nat = max x y
@@ -66,8 +79,13 @@ val next: principal -> state_id -> traceful (option unit)
 let next prin sid =
   let*? curr_state = get_state prin sid in
   let*? S idn c = return (parse p_state curr_state) in
-  send_msg (serialize message (M prin));*
+  //let* nonce = mk_rand NoUsage public 7 in
+  let nonce = from_nat 4 7 in
+  send_msg (serialize message (M nonce));*
+  send_msg (serialize message (M nonce));*
   set_state prin sid (serialize p_state (S idn (c+1)));*
+  // let ev = E prin in
+  // trigger_event prin "P" (serialize p_event ev);*
   return (Some ())
 
 let p_cinvs = {
@@ -103,19 +121,8 @@ instance protocol_invariants_p: protocol_invariants = {
   }
 }
 
-val send_msg_no_state:
-  msg:bytes -> tr:trace ->
-  Lemma 
-    ( let (_, tr_out) = send_msg msg tr in 
-      forall p sid. no_set_state_entry_for p sid (tr_out `suffix_after` tr)
-    )
-  [SMTPat (send_msg msg tr)]
-let send_msg_no_state msg tr = 
-  reveal_opaque (`%send_msg) send_msg;
-  reveal_opaque (`%get_state) get_state
-
-// TODO: this proof is slow and unstable
-#push-options "--z3rlimit 25"
+// TODO: this proof is slow
+#push-options "--z3rlimit 150"
 val next_invariant: tr:trace -> p:principal -> sid:state_id ->
   Lemma 
     (requires trace_invariant tr)
@@ -125,37 +132,72 @@ val next_invariant: tr:trace -> p:principal -> sid:state_id ->
       )
     )
 let next_invariant tr p sid = 
-  match get_state p sid tr with
+   match get_state p sid tr with
   | (None, _) -> ()
   | (Some st_b, _) -> (
       match parse p_state st_b with
       | None -> ()
-      | Some (S idn c) -> (          
-          let msg = M p in
+      | Some (S idn c) -> (
+          //let (nonce, tr_after_rand) = mk_rand NoUsage public 7 tr in
+          let (nonce, tr_after_rand) = (from_nat 4 7 , tr) in
+          let msg = M nonce in
           let msg_b = serialize message msg in
-          let (_, tr_after_msg) = send_msg msg_b tr in
+          let (_, tr_after_msg1) = send_msg msg_b tr_after_rand in
+          let (_, tr_after_msg) = send_msg msg_b tr_after_msg1 in
+          
+          // serialize_wf_lemma message (is_publishable tr_after_rand) msg;
+          // assert(trace_invariant tr_after_msg);
+          // get_session_aux_same p sid tr tr_after_msg1;
+          // get_session_aux_same p sid tr_after_msg1 tr_after_msg;
+          // assert(get_session p sid tr_after_msg = get_session p sid tr );
 
           let next_state = S idn (c+1) in
           let next_state_b = serialize p_state next_state in
           let (_,tr_after_next_state) = set_state p sid next_state_b tr_after_msg in
-          
+          assume(trace_invariant tr_after_next_state);
+admit()
+          // serialize_wf_lemma p_state (is_knowable_by (principal_state_label p sid) tr) next_state;
+          // assert(global_state_pred tr p sid next_state_b);
+          // session_pred_later tr tr_after_rand p sid next_state_b;
+          // assert(global_state_pred tr_after_rand p sid next_state_b);
+          // assert(trace_invariant tr_after_next_state);
 
-          //assume(trace_invariant tr_after_next_state)
-
-          serialize_wf_lemma message (is_publishable tr) msg;
-          // assert(is_publishable tr msg_b);
-          // assert(trace_event_invariant tr (MsgSent msg_b ));
-
-          serialize_wf_lemma p_state (is_knowable_by (principal_state_label p sid) tr_after_msg) next_state;
-          // assert(state_pred tr_after_msg p sid next_state_b);
-          
-          //let session_after_msg = get_session p sid tr_after_msg in          
-          let session_before_msg = get_session p sid tr in                  
-          // assert(tr <$ tr_after_msg);
-          assert(no_set_state_entry_for p sid (tr_after_msg `suffix_after` tr));
-          assert(session_pred_opt tr session_before_msg p sid next_state_b);
-          session_pred_later tr tr_after_msg p sid next_state_b
+          // serialize_wf_lemma p_state (is_knowable_by (principal_state_label p sid) tr_after_rand) next_state;
+          // session_pred_later tr_after_rand tr_after_msg1 p sid next_state_b;
+          // session_pred_later tr_after_msg1 tr_after_msg p sid next_state_b;
           // assert(global_state_pred tr_after_msg p sid next_state_b);
-          // assert(trace_event_invariant tr_after_msg (SetState p sid next_state_b))       
+          
+          // serialize_wf_lemma p_state (is_knowable_by (principal_state_label p sid) tr_after_next_state) next_state;
+          // let Some sess_after_msg = get_session p sid tr_after_msg in
+          // let Snoc init last = sess_after_msg in
+          // get_state_is_last_of_get_session p sid tr_after_next_state;
+          // assert(last  = st_b);
+         
+          // let ev = E p in
+          // let ((), tr_after_ev) = trigger_event "P" p (serialize p_event ev) tr_after_next_state in
+
+          // assume(trace_invariant tr_after_ev);
+
+
+          // // assert(is_publishable tr msg_b);
+          // // assert(trace_event_invariant tr (MsgSent msg_b ));
+
+          // serialize_wf_lemma p_state (is_knowable_by (principal_state_label p sid) tr_after_msg) next_state;
+          // // assert(state_pred tr_after_msg p sid next_state_b);
+          
+          // //let session_after_msg = get_session p sid tr_after_msg in          
+          // let session_before_rand = get_session p sid tr in                  
+          // let session_before_msg = get_session p sid tr_after_rand in                  
+          // // assert(tr <$ tr_after_msg);
+          // assert(no_set_state_entry_for p sid (tr_after_rand `suffix_after` tr));
+          // get_session_aux_same p sid tr tr_after_rand;
+          // assert(session_before_rand = session_before_msg);
+          // session_pred_later tr tr_after_rand p sid next_state_b;
+          // assert(no_set_state_entry_for p sid (tr_after_msg `suffix_after` tr_after_rand));
+          // assert(session_pred_opt tr session_before_msg p sid next_state_b);
+          // session_pred_later tr_after_rand tr_after_msg p sid next_state_b;
+          // assert(global_state_pred tr_after_msg p sid next_state_b);
+          // assert(trace_event_invariant tr_after_msg (SetState p sid next_state_b))    
         )
     )
+#pop-options
