@@ -121,8 +121,6 @@ instance protocol_invariants_p: protocol_invariants = {
   }
 }
 
-open DY.Core.Trace.Experiments
-
 #push-options "--z3rlimit 25 --z3cliopt 'smt.qi.eager_threshold=50'"
 val next_invariant: tr:trace -> p:principal -> sid:state_id ->
   Lemma 

@@ -110,7 +110,7 @@ let append_to xys key elem =
     | [] -> Snoc Nil elem
     | Cons (k,elems) _ -> Snoc elems elem
     in
-  (key, new_key_elems) :: rest // re-ordering shouldn't matter, since key is included
+  (key, new_key_elems) :: rest // re-ordering shouldn't matter, since key is attached to elements
 
 let _ = 
   let xs = [(1, Snoc Nil 5); (5, Nil)] in
@@ -231,6 +231,33 @@ let no_set_state_entry_for_prefix p sid tr1 tr2 =
     event_at_grows tr1 tr2 ts ev1
     end
 
+
+/// concatenating traces without state entries
+/// results in no state entries
+#push-options "--fuel 2"
+val no_set_state_entry_for_concat:
+  p:principal -> sid:state_id ->
+  tr1: trace -> tr2:trace ->
+  Lemma
+    (requires 
+        no_set_state_entry_for p sid tr1
+      /\ no_set_state_entry_for p sid tr2
+    )
+    (ensures
+      no_set_state_entry_for p sid (tr1 `trace_concat` tr2)
+    )
+    // [SMTPat (no_set_state_entry_for p sid tr1)
+    // ; SMTPat (no_set_state_entry_for p sid tr2)]
+let rec no_set_state_entry_for_concat p sid tr1 tr2 =
+  match tr2 with
+  | Nil -> ()
+  | Snoc init2 ev2 -> 
+    init_is_prefix tr2;
+    assert(event_exists tr2 ev2);
+    no_set_state_entry_for_prefix p sid init2 tr2;
+    no_set_state_entry_for_concat p sid tr1 init2
+#pop-options
+
 /// definition of "trace substraction"
 /// (it holds: tr2 = tr1 ++ tr2 `suffix_after` tr1)
 
@@ -246,6 +273,19 @@ let rec suffix_after tr2 tr1 =
              norm_spec [zeta; delta_only [`%prefix]] (prefix);
              Snoc (suffix_after init tr1) ev
          end
+
+val suffix_after_splits_trace:
+  tr2:trace -> tr1:trace{tr1 <$ tr2} ->
+  Lemma (tr2 = tr1 `trace_concat` (tr2 `suffix_after` tr1))
+let rec suffix_after_splits_trace tr2 tr1 =
+  reveal_opaque (`%grows) grows; 
+  norm_spec [zeta; delta_only [`%prefix]] (prefix);
+  match tr2 with
+  | Nil -> ()
+  | Snoc init ev -> 
+         if length tr1 = length tr2 
+           then ()
+           else suffix_after_splits_trace init tr1
 
 /// for traces with tr1 <$ tr2 <$ tr3,
 /// the suffix after tr1 on tr2
@@ -267,6 +307,45 @@ let rec suffix_after_for_prefix tr3 tr2 tr1 =
       | Snoc init ev -> suffix_after_for_prefix init tr2 tr1
     end
 
+
+  
+/// for traces with tr1 <$ tr2 <$ tr3,
+/// the suffix after tr1 on tr3
+/// is the concat of the two pairwise suffixes
+#push-options "--fuel 2"
+val suffix_after_concat:
+  tr1:trace -> tr2:trace {tr1 <$ tr2} -> tr3:trace{tr2 <$ tr3} ->
+  Lemma
+  ( tr3 `suffix_after` tr1 == (tr2 `suffix_after` tr1) `trace_concat` (tr3 `suffix_after` tr2)
+  )
+let rec suffix_after_concat tr1 tr2 tr3 =     
+  reveal_opaque (`%grows) (grows);
+  norm_spec [zeta; delta_only [`%prefix]] (prefix);
+  match tr3 with
+  | Nil -> ()
+  | Snoc init ev -> 
+      if length tr2 = length tr3
+        then ()
+        else suffix_after_concat tr1 tr2 init
+#pop-options
+
+/// transitivity of `no_set_state_entry_for` on suffixes of growing traces
+val no_set_state_entry_for_suffixes_transitive:
+  p:principal -> sid:state_id ->
+  tr1:trace -> tr2:trace{tr1 <$ tr2} -> tr3:trace{tr2 <$ tr3} ->
+  Lemma
+  (requires
+      no_set_state_entry_for p sid (tr2 `suffix_after` tr1)
+    /\ no_set_state_entry_for p sid (tr3 `suffix_after` tr2)
+  )
+  (ensures
+    no_set_state_entry_for p sid (tr3 `suffix_after` tr1)
+  )
+let no_set_state_entry_for_suffixes_transitive p sid tr1 tr2 tr3 =
+  suffix_after_concat tr1 tr2 tr3;
+  no_set_state_entry_for_concat p sid (tr2 `suffix_after` tr1) (tr3 `suffix_after` tr2)
+
+#push-options "--fuel 2"
 
 /// the main property:
 /// if there are no more state entries,

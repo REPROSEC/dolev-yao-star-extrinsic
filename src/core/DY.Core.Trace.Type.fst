@@ -211,6 +211,42 @@ let rec prefix_prefix_eq tr1 tr2 i =
 
 
 
+val init_is_prefix:
+  tr:trace{Snoc? tr} ->
+  Lemma 
+  (let Snoc init _ = tr in
+    init <$ tr
+  )
+let init_is_prefix tr =
+    reveal_opaque (`%grows) (grows);
+    norm_spec [zeta; delta_only [`%prefix]] (prefix)
+
+
+/// concatenation of traces  
+let rec trace_concat tr1 tr2 =
+  match tr2 with
+  | Nil -> tr1
+  | Snoc init2 ev2 ->
+      Snoc (trace_concat tr1 init2) ev2
+      
+/// the first part of the concat is a prefix of the result
+val trace_concat_grows:
+  tr1:trace -> tr2:trace ->
+  Lemma (tr1 <$ trace_concat tr1 tr2)
+//  [SMTPat (trace_concat tr1 tr2)]
+let rec trace_concat_grows tr1 tr2 =
+    reveal_opaque (`%grows) (grows);
+    norm_spec [zeta; delta_only [`%prefix]] (prefix);
+    match tr2 with
+    | Nil -> ()
+    | Snoc init ev -> 
+           trace_concat_grows tr1 init
+
+val trace_concat_nil:
+  tr:trace ->
+  Lemma (tr `trace_concat` Nil = tr)
+  [SMTPat (tr `trace_concat` Nil)]
+let trace_concat_nil tr = ()
 
 (*** Event in the trace predicates ***)
 
