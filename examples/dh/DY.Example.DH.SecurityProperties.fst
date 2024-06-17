@@ -17,7 +17,7 @@ val initiator_correspondence_lemma: tr:trace -> i:nat -> alice:principal -> bob:
   Lemma
   (requires event_triggered_at tr i alice (Initiate2 alice bob gx gy k) /\ 
     trace_invariant tr)
-  (ensures is_corrupt tr (principal_label bob) \/
+  (ensures is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob) \/
     (exists y. event_triggered tr bob (Respond1 alice bob gx gy y) /\
     k == dh y gx)
   )
@@ -27,7 +27,7 @@ val responder_correspondence_lemma: tr:trace -> i:nat -> alice:principal -> bob:
   Lemma
   (requires event_triggered_at tr i bob (Respond2 alice bob gx gy k) /\
     trace_invariant tr)
-  (ensures is_corrupt tr (principal_label alice) \/ 
+  (ensures is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob) \/
     event_triggered tr alice (Initiate2 alice bob gx gy k))
 let responder_correspondence_lemma tr i alice bob gx gy k = ()
 
@@ -52,8 +52,9 @@ val initiator_forward_secrecy_lemma:
     attacker_knows tr k
   )
   (ensures
-    is_corrupt tr (principal_label bob) \/
-    (exists si sj. is_secret (join (principal_state_label alice si) (principal_state_label bob sj)) tr k /\
+    is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob) \/
+    (exists si sj. (is_secret (join (principal_state_label alice si) (principal_state_label bob sj)) tr k \/
+      is_secret (join (principal_state_label bob sj) (principal_state_label alice si)) tr k) /\
       (is_corrupt tr (principal_state_label alice si) \/ is_corrupt tr (principal_state_label bob sj))
     )
   )
@@ -69,8 +70,9 @@ val responder_forward_secrecy_lemma:
     attacker_knows tr k
   )
   (ensures
-    is_corrupt tr (principal_label alice) \/
-    (exists si sj. is_secret (join (principal_state_label alice si) (principal_state_label bob sj)) tr k /\
+    is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob) \/
+    (exists si sj. (is_secret (join (principal_state_label alice si) (principal_state_label bob sj)) tr k \/
+      is_secret (join (principal_state_label bob sj) (principal_state_label alice si)) tr k) /\
       (is_corrupt tr (principal_state_label alice si) \/ is_corrupt tr (principal_state_label bob sj))
     )
   )

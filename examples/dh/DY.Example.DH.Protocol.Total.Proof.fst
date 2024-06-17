@@ -11,7 +11,20 @@ open DY.Example.DH.Protocol.Stateful
 (*** Cryptographic invariants ***)
 
 val dh_crypto_usages: crypto_usages
-instance dh_crypto_usages = default_crypto_usages
+instance dh_crypto_usages = {
+  dh_known_peer_usage = (fun s1 s2 ->
+    match s1, s2 with
+    | "DH.dh_key", _ -> AeadKey "DH.aead_key"
+    | _, "DH.dh_key" -> AeadKey "DH.aead_key"
+    | _, _ -> NoUsage
+  );
+  dh_unknown_peer_usage = (fun s1 -> 
+    match s1 with
+    | "DH.dh_key" -> AeadKey "DH.aead_key"
+    | _ -> NoUsage);
+  dh_known_peer_usage_commutes = (fun s1 s2 -> ());
+  dh_unknown_peer_usage_implies = (fun s1 s2 -> ());
+}
 
 #push-options "--ifuel 2 --fuel 0"
 val dh_crypto_preds: crypto_predicates dh_crypto_usages
@@ -243,32 +256,31 @@ let decode_message2_proof tr alice bob msg_bytes gx pk_b =
 val compute_message3_proof:
   tr:trace -> si:nat ->
   alice:principal -> bob:principal ->
-  msg2:message2 -> gx:bytes -> x:bytes ->
+  gx:bytes -> gy:bytes ->
   sk_a:bytes -> n_sig:bytes ->
   Lemma
   (requires
-    (exists k. event_triggered tr alice (Initiate2 alice bob gx msg2.gy k)) /\
-    is_publishable tr gx /\ is_publishable tr msg2.gy /\
-    gx == dh_pk x /\
+    (exists x k. event_triggered tr alice (Initiate2 alice bob gx gy k) /\ gx = dh_pk x) /\
+    is_publishable tr gx /\ is_publishable tr gy /\
     is_signature_key "DH.SigningKey" (principal_label alice) tr sk_a /\
     is_secret (principal_label alice) tr n_sig /\
     SigNonce? (get_usage n_sig)
   )
   (ensures
-    is_publishable tr (compute_message3 alice bob gx msg2.gy sk_a n_sig)
+    is_publishable tr (compute_message3 alice bob gx gy sk_a n_sig)
   )
-let compute_message3_proof tr si alice bob msg2 gx x sk_a n_sig =
-  let sig_msg = SigMsg3 {b=bob; gx; gy=msg2.gy} in
+let compute_message3_proof tr si alice bob gx gy sk_a n_sig =
+  let sig_msg = SigMsg3 {b=bob; gx; gy} in
   serialize_wf_lemma sig_message (is_publishable tr) sig_msg;
-
+  
   (* Debugging code
   assert(is_publishable tr (serialize sig_message sig_msg));*)
-  let sg = sign sk_a n_sig (serialize sig_message sig_msg) in
+  let sg = sign sk_a n_sig (serialize sig_message sig_msg) in 
 
-  (* Debugging code
+  (* Debugging code 
   assert(get_label sg `can_flow tr` public);
   assert(bytes_invariant tr sg);
-  assert(is_publishable tr sg);*)
+  assert(is_publishable tr sg); *)
 
   let msg = Msg3 {sg} in
   serialize_wf_lemma message (is_publishable tr) msg;
@@ -293,7 +305,7 @@ val decode_message3_proof:
       let sig_msg = SigMsg3 {b=bob; gx; gy} in
       is_publishable tr msg3.sg /\
       verify pk_a (serialize sig_message sig_msg) msg3.sg /\
-      (is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob) \/
+      (is_corrupt tr (principal_label alice) \/
       (exists x k. gx == dh_pk x /\ event_triggered tr alice (Initiate2 alice bob gx gy k)))
     )
     | None -> True
