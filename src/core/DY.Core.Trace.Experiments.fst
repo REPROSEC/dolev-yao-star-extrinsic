@@ -80,6 +80,21 @@ let rec suffix_after_concat tr1 tr2 tr3 =
         else suffix_after_concat tr1 tr2 init
 #pop-options
 
+val no_set_state_entry_for_suffixes_transitive:
+  p:principal -> sid:state_id ->
+  tr1:trace -> tr2:trace{tr1 <$ tr2} -> tr3:trace{tr2 <$ tr3} ->
+  Lemma
+  (requires
+      no_set_state_entry_for p sid (tr2 `suffix_after` tr1)
+    /\ no_set_state_entry_for p sid (tr3 `suffix_after` tr2)
+  )
+  (ensures
+    no_set_state_entry_for p sid (tr3 `suffix_after` tr1)
+  )
+let no_set_state_entry_for_suffixes_transitive p sid tr1 tr2 tr3 =
+  suffix_after_concat tr1 tr2 tr3;
+  no_set_state_entry_for_concat p sid (tr2 `suffix_after` tr1) (tr3 `suffix_after` tr2)
+
 #push-options "--fuel 2"
 let _ = 
   let p = "p" in

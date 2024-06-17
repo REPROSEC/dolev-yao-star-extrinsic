@@ -149,10 +149,7 @@ let next_invariant tr p sid =
           // assert(trace_invariant tr_after_msg);
 
 
-          // ideally, the next two lemmas don't need to be called.
-          // What are the correct SMTPats for that?
-          suffix_after_concat tr tr_after_rand tr_after_msg1;
-          no_set_state_entry_for_concat p sid (tr_after_rand `suffix_after` tr) (tr_after_msg1 `suffix_after` tr_after_rand);
+          no_set_state_entry_for_suffixes_transitive p sid tr tr_after_rand tr_after_msg1;
           get_session_aux_same p sid tr tr_after_msg1;
           get_session_aux_same p sid tr_after_msg1 tr_after_msg;
           assert(get_session p sid tr_after_msg = get_session p sid tr );
