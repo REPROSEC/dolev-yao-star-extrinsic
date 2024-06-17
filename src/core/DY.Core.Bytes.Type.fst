@@ -24,15 +24,24 @@ open DY.Core.Label.Type
 /// or to distinguish keys from two sub-protocols running in parallel.
 /// At the end, this usage string may play a role in the security proof
 /// via the protocol invariants.
+///
+/// Although most usages only contain a usage string to disambiguate different keys,
+/// KDF keys additionally contains a full `bytes` in their usage.
+/// This is useful to do security proofs of protocols with complex key schedules,
+/// allowing the usage's `data` field and the label of the keys to evolve
+/// when calling kdf_extract and kdf_expand.
 
 type usage =
+  | NoUsage: usage // baked-in None
   | SigKey: tag:string -> usage
   | SigNonce: usage
   | PkdecKey: tag:string -> usage
   | PkNonce: usage
   | AeadKey: tag:string -> usage
   | DhKey: tag:string -> usage
-  | NoUsage: usage // baked-in None
+  | KdfExtractSaltKey: tag:string -> data:bytes -> usage
+  | KdfExtractIkmKey: tag:string -> data:bytes -> usage
+  | KdfExpandKey: tag:string -> data:bytes -> usage
 
 /// The bytes term.
 /// It is similar to the one you would find in other symbolic analysis tools.
@@ -73,6 +82,11 @@ and bytes =
   // Diffie-Hellman
   | DhPub: sk:bytes -> bytes
   | Dh: sk:bytes -> pk:bytes -> bytes
+
+  // Key Derivation Function
+  | KdfExtract: salt:bytes -> ikm:bytes -> bytes
+  | KdfExpand: prk:bytes -> info:bytes -> len:nat{len <> 0} -> bytes
+
   // ...
 
 open DY.Core.Internal.Ord
@@ -81,13 +95,16 @@ val encode_usage: usage -> list int
 val encode_bytes: bytes -> list int
 let rec encode_usage usg =
   match usg with
-  | SigKey tag -> 0::(encode_list [encode tag])
-  | SigNonce -> 1::[]
-  | PkdecKey tag -> 2::(encode_list [encode tag])
-  | PkNonce -> 3::[]
-  | AeadKey tag -> 4::(encode_list [encode tag])
-  | DhKey tag -> 5::(encode_list [encode tag])
-  | NoUsage -> 6::[]
+  | NoUsage -> 0::[]
+  | SigKey tag -> 1::(encode_list [encode tag])
+  | SigNonce -> 2::[]
+  | PkdecKey tag -> 3::(encode_list [encode tag])
+  | PkNonce -> 4::[]
+  | AeadKey tag -> 5::(encode_list [encode tag])
+  | DhKey tag -> 6::(encode_list [encode tag])
+  | KdfExtractSaltKey tag data -> 7::(encode_list [encode tag; encode_bytes data])
+  | KdfExtractIkmKey tag data -> 8::(encode_list [encode tag; encode_bytes data])
+  | KdfExpandKey tag data -> 9::(encode_list [encode tag; encode_bytes data])
 and encode_bytes b =
   match b with
   | Literal l -> 0::(encode_list [encode l])
@@ -101,46 +118,47 @@ and encode_bytes b =
   | Hash msg -> 8::(encode_list [encode_bytes msg])
   | DhPub sk -> 9::(encode_list [encode_bytes sk])
   | Dh sk pk -> 10::(encode_list [encode_bytes sk; encode_bytes pk])
+  | KdfExtract salt ikm -> 11::(encode_list [encode_bytes salt; encode_bytes ikm])
+  | KdfExpand prk info len -> 12::(encode_list [encode_bytes prk; encode_bytes info; encode (len <: nat)])
 
-#push-options "--z3rlimit 50"
+#push-options "--z3rlimit 25 --fuel 4 --ifuel 4"
 val encode_usage_inj: usg1:usage -> usg2:usage -> Lemma (requires encode_usage usg1 == encode_usage usg2) (ensures usg1 == usg2)
 val encode_bytes_inj: b1:bytes -> b2:bytes -> Lemma (requires encode_bytes b1 == encode_bytes b2) (ensures b1 == b2)
 let rec encode_usage_inj usg1 usg2 =
-  introduce forall b1 b2. b1 << usg1 /\ b2 << usg2 /\ encode_bytes b1 == encode_bytes b2 ==> b1 == b2 with (
-    introduce _ ==> _ with _. (
-      encode_bytes_inj b1 b2
-    )
-  );
   encode_inj_forall (list (list int)) ();
-  encode_inj_forall string ()
+  match usg1, usg2 with
+  | SigNonce, SigNonce
+  | PkNonce, PkNonce
+  | NoUsage, NoUsage -> ()
+  | SigKey tag1, SigKey tag2
+  | PkdecKey tag1, PkdecKey tag2
+  | AeadKey tag1, AeadKey tag2
+  | DhKey tag1, DhKey tag2 ->
+    encode_inj tag1 tag2
+  | KdfExtractSaltKey tag1 data1, KdfExtractSaltKey tag2 data2
+  | KdfExtractIkmKey tag1 data1, KdfExtractIkmKey tag2 data2
+  | KdfExpandKey tag1 data1, KdfExpandKey tag2 data2 -> (
+    encode_inj tag1 tag2;
+    encode_bytes_inj data1 data2
+  )
+
 and encode_bytes_inj b1 b2 =
-  introduce forall usg1 usg2. usg1 << b1 /\ usg2 << b2 /\ encode_usage usg1 == encode_usage usg2 ==> usg1 == usg2 with (
-    introduce _ ==> _ with _. (
-      encode_usage_inj usg1 usg2
-    )
-  );
-  // Do not introduce injectivity on bytes,
-  // this makes the SMT go crazy.
-  // Instead do the manual (but factorized) match below
-  //introduce forall b1' b2'. b1' << b1 /\ b2' << b2 /\ encode_bytes b1' == encode_bytes b2' ==> b1' == b2' with (
-  //  introduce _ ==> _ with _. (
-  //    encode_bytes_inj b1' b2'
-  //  )
-  //);
   encode_inj_forall (list (list int)) ();
-  encode_inj_forall (FStar.Seq.seq FStar.UInt8.t) ();
-  encode_inj_forall label ();
-  encode_inj_forall nat ();
   match b1, b2 with
-  | Literal _, Literal _ -> ()
-  | Rand _ _ _ _, Rand _ _ _ _ -> ()
+  | Literal x1, Literal x2 ->
+    encode_inj x1 x2
+  | Rand x1 x2 _ _, Rand y1 y2 _ _ ->
+    encode_usage_inj x1 y1;
+    encode_inj x2 y2
   | Pk x1, Pk y1
   | Vk x1, Vk y1
   | Hash x1, Hash y1
   | DhPub x1, DhPub y1 ->
     encode_bytes_inj x1 y1
   | Concat x1 x2, Concat y1 y2
-  | Dh x1 x2, Dh y1 y2 ->
+  | Dh x1 x2, Dh y1 y2
+  | KdfExtract x1 x2, KdfExtract y1 y2
+  | KdfExpand x1 x2 _, KdfExpand y1 y2 _ ->
     encode_bytes_inj x1 y1;
     encode_bytes_inj x2 y2
   | PkEnc x1 x2 x3, PkEnc y1 y2 y3

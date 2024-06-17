@@ -22,22 +22,11 @@ let rec label_to_string l =
   | State pre_label -> (
     match pre_label with
     | P p -> Printf.sprintf "Principal %s" p
-    | S p s -> Printf.sprintf "Principal %s state %d" p s
+    | S p s -> Printf.sprintf "Principal %s state %d" p s.the_id
   ) 
   | Meet l1 l2 -> Printf.sprintf "Meet [%s; %s]" (label_to_string l1) (label_to_string l2)
   | Join l1 l2 -> Printf.sprintf "Join [%s; %s]" (label_to_string l1) (label_to_string l2)
   | Public -> "Public"
-
-val usage_to_string: (u:usage) -> string
-let usage_to_string u =
-  match u with
-  | SigKey tag -> "SigKey " ^ tag
-  | SigNonce -> "SigNonce"
-  | PkdecKey tag -> "PkdecKey " ^ tag
-  | PkNonce -> "PkNonce"
-  | AeadKey tag -> "AeadKey " ^ tag
-  | DhKey tag -> "DhKey " ^ tag
-  | NoUsage -> "NoUsage"
 
 val uint_list_to_string: list FStar.UInt8.t -> string
 let rec uint_list_to_string seq =
@@ -89,6 +78,24 @@ let rec bytes_to_string b =
   | Dh sk pk -> (
     Printf.sprintf "Dh(sk=(%s), pk=(%s))" (bytes_to_string sk) (bytes_to_string pk)
   )
+  | KdfExtract salt ikm ->
+    Printf.sprintf "KdfExtract(salt=(%s), ikm=(%s))" (bytes_to_string salt) (bytes_to_string ikm)
+  | KdfExpand prk info len ->
+    Printf.sprintf "KdfExpand(prk=(%s), info=(%s), len=(%d))" (bytes_to_string prk) (bytes_to_string info) len
+
+val usage_to_string: (u:usage) -> string
+let usage_to_string u =
+  match u with
+  | NoUsage -> "NoUsage"
+  | SigKey tag -> "SigKey " ^ tag
+  | SigNonce -> "SigNonce"
+  | PkdecKey tag -> "PkdecKey " ^ tag
+  | PkNonce -> "PkNonce"
+  | AeadKey tag -> "AeadKey " ^ tag
+  | DhKey tag -> "DhKey " ^ tag
+  | KdfExtractSaltKey tag data -> Printf.sprintf "KdfExtractSaltKey %s (data=(%s))" tag (bytes_to_string data)
+  | KdfExtractIkmKey tag data -> Printf.sprintf "KdfExtractIkmKey %s (data=(%s))" tag (bytes_to_string data)
+  | KdfExpandKey tag data -> Printf.sprintf "KdfExpandKey %s (data=(%s))" tag (bytes_to_string data)
 
 
 (*** State Parsing Helper Functions ***)
@@ -185,7 +192,7 @@ noeq type trace_to_string_printers = {
 
 val trace_event_to_string: 
   trace_to_string_printers -> 
-  trace_event -> nat -> 
+  trace_event -> timestamp -> 
   string
 let trace_event_to_string printers tr_event i =
   match tr_event with
@@ -202,7 +209,7 @@ let trace_event_to_string printers tr_event i =
   | SetState prin sess_id full_content -> (
     let content_str = state_to_string printers.state_to_string full_content in
     Printf.sprintf "{\"TraceID\": %d, \"Type\": \"Session\", \"SessionID\": %d, \"Principal\": \"%s\", \"Content\": \"%s\"}\n"
-      i sess_id prin content_str
+      i sess_id.the_id prin content_str
   )
   | Event prin tag content -> (
     let printer = find_printer printers.event_to_string tag in

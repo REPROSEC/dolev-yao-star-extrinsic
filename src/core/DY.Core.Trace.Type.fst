@@ -28,6 +28,7 @@ open DY.Core.Label.Type
 ///   if Alice has finished a handshake with Bob,
 ///   then Bob must have initiated a handshake with Alice.
 
+
 /// The type for events in the trace.
 
 type trace_event =
@@ -36,9 +37,9 @@ type trace_event =
   // A random number has been generated, with some usage and label.
   | RandGen: usg:usage -> lab:label -> len:nat{len <> 0} -> trace_event
   // A state of a principal has been corrupt.
-  | Corrupt: prin:principal -> sess_id:nat -> trace_event
+  | Corrupt: prin:principal -> sess_id:state_id -> trace_event
   // A principal stored some state.
-  | SetState: prin:principal -> sess_id:nat -> content:bytes -> trace_event
+  | SetState: prin:principal -> sess_id:state_id -> content:bytes -> trace_event
   // A custom and protocol-specific event has been triggered by a principal.
   | Event: prin:principal -> tag:string -> content:bytes -> trace_event
 
@@ -59,12 +60,16 @@ let rec length tr =
   | Nil -> 0
   | Snoc init last -> length init + 1
 
+/// a type macro for timestamps (indices on the trace)
+
+type timestamp = nat
+
 (*** Prefix and trace extension ***)
 
 /// Compute the prefix of a trace.
 
 [@@ "opaque_to_smt"]
-val prefix: tr:trace -> i:nat{i <= length tr} -> trace
+val prefix: tr:trace -> i:timestamp{i <= length tr} -> trace
 let rec prefix tr i =
   if length tr = i then
     tr
@@ -117,7 +122,7 @@ let rec grows_transitive tr1 tr2 tr3 =
 /// The prefix function outputs traces of the correct length.
 
 val length_prefix:
-  tr:trace -> i:nat{i <= length tr} ->
+  tr:trace -> i:timestamp{i <= length tr} ->
   Lemma
   (ensures length (prefix tr i) == i)
   [SMTPat (length (prefix tr i))]
@@ -142,7 +147,7 @@ let length_grows tr1 tr2 =
 /// The prefix function outputs traces that are prefixes of the input.
 
 val prefix_grows:
-  tr:trace -> i:nat{i <= length tr} ->
+  tr:trace -> i:timestamp{i <= length tr} ->
   Lemma
   (ensures (prefix tr i) <$ tr)
   //TODO: is this SMTPat dangerous? Should we restrict it to the "safe" on below?
@@ -152,11 +157,59 @@ let prefix_grows tr i =
   reveal_opaque (`%grows) (grows);
   norm_spec [zeta; delta_only [`%prefix]] (prefix)
 
+val prefix_prefix_grows:
+  tr1:trace -> tr2:trace -> i1:timestamp -> i2:timestamp ->
+  Lemma
+  (requires
+    tr1 <$ tr2 /\
+    i1 <= length tr1 /\
+    i2 <= length tr2 /\
+    i1 <= i2
+  )
+  (ensures prefix tr1 i1 <$ prefix tr2 i2)
+  [SMTPat (prefix tr1 i1 <$ prefix tr2 i2)]
+  // Alternative SMT pattern if the above one doesn't trigger enough
+  // [SMTPat (prefix tr1 i1);
+  //  SMTPat (prefix tr2 i2);
+  //  SMTPat (tr1 <$ tr2)]
+let rec prefix_prefix_grows tr1 tr2 i1 i2 =
+  reveal_opaque (`%grows) (grows);
+  norm_spec [zeta; delta_only [`%prefix]] (prefix);
+  if i2 = length tr2 then ()
+  else if length tr1 = length tr2 then (
+    let Snoc tr1_init _ = tr1 in
+    let Snoc tr2_init _ = tr2 in
+    prefix_prefix_grows tr1_init tr2_init i1 i2
+  ) else (
+    let Snoc tr2_init _ = tr2 in
+    prefix_prefix_grows tr1 tr2_init i1 i2
+  )
+
+val prefix_prefix_eq:
+  tr1:trace -> tr2:trace -> i:timestamp ->
+  Lemma
+  (requires
+    tr1 <$ tr2 /\
+    i <= length tr1
+  )
+  (ensures prefix tr1 i == prefix tr2 i)
+  [SMTPat (prefix tr1 i);
+   SMTPat (prefix tr2 i);
+   SMTPat (tr1 <$ tr2)]
+let rec prefix_prefix_eq tr1 tr2 i =
+  reveal_opaque (`%grows) (grows);
+  norm_spec [zeta; delta_only [`%prefix]] (prefix);
+  if length tr1 = length tr2 then ()
+  else (
+    let Snoc tr2_init _ = tr2 in
+    prefix_prefix_eq tr1 tr2_init i
+  )
+
 (*** Event in the trace predicates ***)
 
 /// Retrieve the event at some timestamp in the trace.
 
-val get_event_at: tr:trace -> i:nat{i < length tr} -> trace_event
+val get_event_at: tr:trace -> i:timestamp{i < length tr} -> trace_event
 let rec get_event_at tr i =
   if i+1 = length tr then
     let Snoc _ last = tr in
@@ -168,7 +221,7 @@ let rec get_event_at tr i =
 
 /// Has some particular event been triggered at a some particular timestamp in the trace?
 
-val event_at: trace -> nat -> trace_event -> prop
+val event_at: trace -> timestamp -> trace_event -> prop
 let event_at tr i e =
   if i >= length tr then
     False
@@ -185,7 +238,7 @@ let event_exists tr e =
 
 val event_at_grows:
   tr1:trace -> tr2:trace ->
-  i:nat -> e:trace_event ->
+  i:timestamp -> e:trace_event ->
   Lemma
   (requires event_at tr1 i e /\ tr1 <$ tr2)
   (ensures event_at tr2 i e)
@@ -210,19 +263,19 @@ let msg_sent_on_network tr msg =
 
 /// Has some state been stored by a principal?
 
-val state_was_set: trace -> principal -> nat -> bytes -> prop
+val state_was_set: trace -> principal -> state_id -> bytes -> prop
 let state_was_set tr prin sess_id content =
   event_exists tr (SetState prin sess_id content)
 
 /// Has a principal been corrupt?
 
-val was_corrupt: trace -> principal -> nat -> prop
+val was_corrupt: trace -> principal -> state_id -> prop
 let was_corrupt tr prin sess_id =
   event_exists tr (Corrupt prin sess_id)
 
 /// Has a (custom, protocol-specific) event been triggered at some timestamp?
 
-val event_triggered_at: trace -> nat -> principal -> string -> bytes -> prop
+val event_triggered_at: trace -> timestamp -> principal -> string -> bytes -> prop
 let event_triggered_at tr i prin tag content =
   event_at tr i (Event prin tag content)
 
@@ -245,7 +298,7 @@ let event_triggered_grows tr1 tr2 prin tag content = ()
 
 /// Has a random bytestring been generated at some timestamp?
 
-val rand_generated_at: trace -> nat -> bytes -> prop
+val rand_generated_at: trace -> timestamp -> bytes -> prop
 let rand_generated_at tr i b =
   match b with
   | Rand usg lab len time ->

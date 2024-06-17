@@ -16,7 +16,7 @@ open DY.Example.NSL.Protocol.Stateful
 
 /// The (local) state predicate.
 
-let nsl_session_pred: local_state_predicate nsl_session = {
+let state_predicate_nsl: local_state_predicate nsl_session = {
   pred = (fun tr prin sess_id st ->
     match st with
     | InitiatorSentMsg1 bob n_a -> (
@@ -49,7 +49,7 @@ let nsl_session_pred: local_state_predicate nsl_session = {
 
 /// The (local) event predicate.
 
-let nsl_event_pred: event_predicate nsl_event =
+let event_predicate_nsl: event_predicate nsl_event =
   fun tr prin e ->
     match e with
     | Initiate1 alice bob n_a -> (
@@ -84,56 +84,56 @@ let nsl_event_pred: event_predicate nsl_event =
 let all_sessions = [
   pki_tag_and_invariant;
   private_keys_tag_and_invariant;
-  (local_state_nsl_session.tag, local_state_predicate_to_local_bytes_state_predicate nsl_session_pred);
+  (local_state_nsl_session.tag, local_state_predicate_to_local_bytes_state_predicate state_predicate_nsl);
 ]
 
 /// List of all local event predicates.
 
 let all_events = [
-  (event_nsl_event.tag, compile_event_pred nsl_event_pred)
+  (event_nsl_event.tag, compile_event_pred event_predicate_nsl)
 ]
 
 /// Create the global trace invariants.
 
-let nsl_trace_invs: trace_invariants (nsl_crypto_invs) = {
-  state_pred = mk_state_predicate nsl_crypto_invs all_sessions;
+let trace_invariants_nsl: trace_invariants (crypto_invariants_nsl) = {
+  state_pred = mk_state_predicate crypto_invariants_nsl all_sessions;
   event_pred = mk_event_pred all_events;
 }
 
-instance nsl_protocol_invs: protocol_invariants = {
-  crypto_invs = nsl_crypto_invs;
-  trace_invs = nsl_trace_invs;
+instance protocol_invariants_nsl: protocol_invariants = {
+  crypto_invs = crypto_invariants_nsl;
+  trace_invs = trace_invariants_nsl;
 }
 
 /// Lemmas that the global state predicate contains all the local ones
 
-val all_sessions_has_all_sessions: unit -> Lemma (norm [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP (has_local_bytes_state_predicate nsl_protocol_invs) all_sessions))
+val all_sessions_has_all_sessions: unit -> Lemma (norm [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP (has_local_bytes_state_predicate protocol_invariants_nsl) all_sessions))
 let all_sessions_has_all_sessions () =
   assert_norm(List.Tot.no_repeats_p (List.Tot.map fst (all_sessions)));
-  mk_global_local_bytes_state_predicate_correct nsl_protocol_invs all_sessions;
-  norm_spec [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP (has_local_bytes_state_predicate nsl_protocol_invs) all_sessions)
+  mk_global_local_bytes_state_predicate_correct protocol_invariants_nsl all_sessions;
+  norm_spec [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP (has_local_bytes_state_predicate protocol_invariants_nsl) all_sessions)
 
-val full_nsl_session_pred_has_pki_invariant: squash (has_pki_invariant nsl_protocol_invs)
-let full_nsl_session_pred_has_pki_invariant = all_sessions_has_all_sessions ()
+val protocol_invariants_nsl_has_pki_invariant: squash (has_pki_invariant protocol_invariants_nsl)
+let protocol_invariants_nsl_has_pki_invariant = all_sessions_has_all_sessions ()
 
-val full_nsl_session_pred_has_private_keys_invariant: squash (has_private_keys_invariant nsl_protocol_invs)
-let full_nsl_session_pred_has_private_keys_invariant = all_sessions_has_all_sessions ()
+val protocol_invariants_nsl_has_private_keys_invariant: squash (has_private_keys_invariant protocol_invariants_nsl)
+let protocol_invariants_nsl_has_private_keys_invariant = all_sessions_has_all_sessions ()
 
-val full_nsl_session_pred_has_nsl_invariant: squash (has_local_state_predicate nsl_protocol_invs nsl_session_pred)
-let full_nsl_session_pred_has_nsl_invariant = all_sessions_has_all_sessions ()
+val protocol_invariants_nsl_has_nsl_session_invariant: squash (has_local_state_predicate protocol_invariants_nsl state_predicate_nsl)
+let protocol_invariants_nsl_has_nsl_session_invariant = all_sessions_has_all_sessions ()
 
 /// Lemmas that the global event predicate contains all the local ones
 
-val all_events_has_all_events: unit -> Lemma (norm [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP (has_compiled_event_pred nsl_protocol_invs) all_events))
+val all_events_has_all_events: unit -> Lemma (norm [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP (has_compiled_event_pred protocol_invariants_nsl) all_events))
 let all_events_has_all_events () =
   assert_norm(List.Tot.no_repeats_p (List.Tot.map fst (all_events)));
-  mk_event_pred_correct nsl_protocol_invs all_events;
-  norm_spec [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP (has_compiled_event_pred nsl_protocol_invs) all_events);
+  mk_event_pred_correct protocol_invariants_nsl all_events;
+  norm_spec [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP (has_compiled_event_pred protocol_invariants_nsl) all_events);
   let dumb_lemma (x:prop) (y:prop): Lemma (requires x /\ x == y) (ensures y) = () in
-  dumb_lemma (for_allP (has_compiled_event_pred nsl_protocol_invs) all_events) (norm [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP (has_compiled_event_pred nsl_protocol_invs) all_events))
+  dumb_lemma (for_allP (has_compiled_event_pred protocol_invariants_nsl) all_events) (norm [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP (has_compiled_event_pred protocol_invariants_nsl) all_events))
 
-val full_nsl_event_pred_has_nsl_invariant: squash (has_event_pred nsl_protocol_invs nsl_event_pred)
-let full_nsl_event_pred_has_nsl_invariant = all_events_has_all_events ()
+val protocol_invariants_nsl_has_nsl_event_invariant: squash (has_event_pred protocol_invariants_nsl event_predicate_nsl)
+let protocol_invariants_nsl_has_nsl_event_invariant = all_events_has_all_events ()
 
 (*** Proofs ***)
 
@@ -151,7 +151,7 @@ let prepare_msg1_proof tr alice bob =
 
 val send_msg1_proof:
   tr:trace ->
-  global_sess_id:nsl_global_sess_ids -> alice:principal -> sess_id:nat ->
+  global_sess_id:nsl_global_sess_ids -> alice:principal -> sess_id:state_id ->
   Lemma
   (requires trace_invariant tr)
   (ensures (
@@ -172,7 +172,7 @@ let send_msg1_proof tr global_sess_id alice sess_id =
 
 val prepare_msg2_proof:
   tr:trace ->
-  global_sess_id:nsl_global_sess_ids -> bob:principal -> msg_id:nat ->
+  global_sess_id:nsl_global_sess_ids -> bob:principal -> msg_id:timestamp ->
   Lemma
   (requires trace_invariant tr)
   (ensures (
@@ -192,7 +192,7 @@ let prepare_msg2_proof tr global_sess_id bob msg_id =
 
 val send_msg2_proof:
   tr:trace ->
-  global_sess_id:nsl_global_sess_ids -> bob:principal -> sess_id:nat ->
+  global_sess_id:nsl_global_sess_ids -> bob:principal -> sess_id:state_id ->
   Lemma
   (requires trace_invariant tr)
   (ensures (
@@ -213,7 +213,7 @@ let send_msg2_proof tr global_sess_id bob sess_id =
 
 val prepare_msg3_proof:
   tr:trace ->
-  global_sess_id:nsl_global_sess_ids -> alice:principal -> sess_id:nat -> msg_id:nat ->
+  global_sess_id:nsl_global_sess_ids -> alice:principal -> sess_id:state_id -> msg_id:timestamp ->
   Lemma
   (requires trace_invariant tr)
   (ensures (
@@ -237,7 +237,7 @@ let prepare_msg3_proof tr global_sess_id alice sess_id msg_id =
 
 val send_msg3_proof:
   tr:trace ->
-  global_sess_id:nsl_global_sess_ids -> alice:principal -> sess_id:nat ->
+  global_sess_id:nsl_global_sess_ids -> alice:principal -> sess_id:state_id ->
   Lemma
   (requires trace_invariant tr)
   (ensures (
@@ -275,7 +275,7 @@ let event_respond1_injective tr alice alice' bob n_a n_a' n_b = ()
 #push-options "--z3rlimit 50"
 val prepare_msg4:
   tr:trace ->
-  global_sess_id:nsl_global_sess_ids -> bob:principal -> sess_id:nat -> msg_id:nat ->
+  global_sess_id:nsl_global_sess_ids -> bob:principal -> sess_id:state_id -> msg_id:timestamp ->
   Lemma
   (requires trace_invariant tr)
   (ensures (

@@ -41,7 +41,7 @@ let get_principal l =
   | P p -> Some p
   | S p _ -> Some p
 
-val get_session: pre_label -> option nat
+val get_session: pre_label -> option state_id
 let get_session l =
   match l with
   | P _ -> None
@@ -146,7 +146,7 @@ let principal_label prin =
   State (P prin)
 
 [@@"opaque_to_smt"]
-val principal_state_label: principal -> nat -> label
+val principal_state_label: principal -> state_id -> label
 let principal_state_label prin sess_id =
   State (S prin sess_id)
 
@@ -172,7 +172,7 @@ let principal_label_injective p =
   normalize_term_spec principal_label
 
 val principal_state_label_injective:
-  p:principal -> s:nat ->
+  p:principal -> s:state_id ->
   Lemma (extract_pre_label (principal_state_label p s) == Some (S p s))
   [SMTPat (principal_state_label p s)]
 let principal_state_label_injective p s =
@@ -273,7 +273,7 @@ let flow_to_public_eq tr prin =
 /// A principal flows to a particular state of this principal.
 
 val principal_flow_to_principal_state:
-  tr:trace -> prin:principal -> sess_id:nat ->
+  tr:trace -> prin:principal -> sess_id:state_id ->
   Lemma
   (ensures (principal_label prin) `can_flow tr` (principal_state_label prin sess_id))
   [SMTPat ((principal_label prin) `can_flow tr` (principal_state_label prin sess_id))]

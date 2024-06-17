@@ -25,12 +25,12 @@ class map_types (key_t:eqtype) (value_t:Type0) = {
 /// The map predicate relates a key and its associated value.
 
 noeq type map_predicate {|crypto_invariants|} (key_t:eqtype) (value_t:Type0) {|mt:map_types key_t value_t|} = {
-  pred: trace -> principal -> nat -> key_t -> value_t -> prop;
-  pred_later: tr1:trace -> tr2:trace -> prin:principal -> sess_id:nat -> key:key_t -> value:value_t -> Lemma
+  pred: trace -> principal -> state_id -> key_t -> value_t -> prop;
+  pred_later: tr1:trace -> tr2:trace -> prin:principal -> sess_id:state_id -> key:key_t -> value:value_t -> Lemma
     (requires pred tr1 prin sess_id key value /\ tr1 <$ tr2)
     (ensures pred tr2 prin sess_id key value)
   ;
-  pred_knowable: tr:trace -> prin:principal -> sess_id:nat -> key:key_t -> value:value_t -> Lemma
+  pred_knowable: tr:trace -> prin:principal -> sess_id:state_id -> key:key_t -> value:value_t -> Lemma
     (requires pred tr prin sess_id key value)
     (ensures is_well_formed_prefix mt.ps_key_t (is_knowable_by (principal_state_label prin sess_id) tr) key /\ is_well_formed_prefix mt.ps_value_t (is_knowable_by (principal_state_label prin sess_id) tr) value)
   ;
@@ -56,18 +56,18 @@ noeq type map (key_t:eqtype) (value_t:Type0) {|mt:map_types key_t value_t|} = {
 %splice [ps_map] (gen_parser (`map))
 %splice [ps_map_is_well_formed] (gen_is_well_formed_lemma (`map))
 
-instance parseable_serializeable_map (key_t:eqtype) (value_t:Type0) {|map_types key_t value_t|} : parseable_serializeable bytes (map key_t value_t) = mk_parseable_serializeable (ps_map key_t value_t)
+instance parseable_serializeable_bytes_map (key_t:eqtype) (value_t:Type0) {|map_types key_t value_t|} : parseable_serializeable bytes (map key_t value_t) = mk_parseable_serializeable (ps_map key_t value_t)
 
-instance map_has_local_state (key_t:eqtype) (value_t:Type0) {|mt:map_types key_t value_t|}: local_state (map key_t value_t) = {
+instance local_state_map (key_t:eqtype) (value_t:Type0) {|mt:map_types key_t value_t|}: local_state (map key_t value_t) = {
   tag = mt.tag;
-  format = (parseable_serializeable_map key_t value_t);
+  format = (parseable_serializeable_bytes_map key_t value_t);
 }
 
 val map_elem_invariant:
   {|crypto_invariants|} ->
   #key_t:eqtype -> #value_t:Type0 -> {|map_types key_t value_t|} ->
   map_predicate key_t value_t ->
-  trace -> principal -> nat -> map_elem key_t value_t ->
+  trace -> principal -> state_id -> map_elem key_t value_t ->
   prop
 let map_elem_invariant #cinvs #key_t #value_t #mt mpred tr prin sess_id x =
   mpred.pred tr prin sess_id x.key x.value
@@ -76,7 +76,7 @@ val map_invariant:
   {|crypto_invariants|} ->
   #key_t:eqtype -> #value_t:Type0 -> {|map_types key_t value_t|} ->
   map_predicate key_t value_t ->
-  trace -> principal -> nat -> map key_t value_t ->
+  trace -> principal -> state_id -> map key_t value_t ->
   prop
 let map_invariant #cinvs #key_t #value_t #mt mpred tr prin sess_id st =
   for_allP (map_elem_invariant mpred tr prin sess_id) st.key_values
@@ -85,7 +85,7 @@ val map_invariant_eq:
   {|crypto_invariants|} ->
   #key_t:eqtype -> #value_t:Type0 -> {|map_types key_t value_t|} ->
   mpred:map_predicate key_t value_t ->
-  tr:trace -> prin:principal -> sess_id:nat -> st:map key_t value_t ->
+  tr:trace -> prin:principal -> sess_id:state_id -> st:map key_t value_t ->
   Lemma
   (map_invariant mpred tr prin sess_id st <==> (forall x. List.Tot.memP x st.key_values ==> map_elem_invariant mpred tr prin sess_id x))
 let map_invariant_eq #cinvs #key_t #value_t #mt mpred tr prin sess_id st =
@@ -129,7 +129,7 @@ val initialize_map:
   key_t:eqtype -> value_t:Type0 ->
   {|map_types key_t value_t|} ->
   prin:principal ->
-  crypto nat
+  traceful state_id
 let initialize_map key_t value_t #mt prin =
   let* sess_id = new_session_id prin in
   let session: map key_t value_t = { key_values = [] } in
@@ -139,9 +139,9 @@ let initialize_map key_t value_t #mt prin =
 [@@ "opaque_to_smt"]
 val add_key_value:
   #key_t:eqtype -> #value_t:Type0 -> {|map_types key_t value_t|} ->
-  prin:principal -> sess_id:nat ->
+  prin:principal -> sess_id:state_id ->
   key:key_t -> value:value_t ->
-  crypto (option unit)
+  traceful (option unit)
 let add_key_value #key_t #value_t #mt prin sess_id key value =
   let*? the_map = get_state prin sess_id in
   let new_elem = {key; value;} in
@@ -174,9 +174,9 @@ let rec find_value_aux #key_t #value_t #mt key l =
 [@@ "opaque_to_smt"]
 val find_value:
   #key_t:eqtype -> #value_t:Type0 -> {|map_types key_t value_t|} ->
-  prin:principal -> sess_id:nat ->
+  prin:principal -> sess_id:state_id ->
   key:key_t ->
-  crypto (option value_t)
+  traceful (option value_t)
 let find_value #key_t #value_t #mt prin sess_id key =
   let*? the_map = get_state prin sess_id in
   return (find_value_aux key the_map.key_values)
@@ -210,7 +210,7 @@ val add_key_value_invariant:
   {|invs:protocol_invariants|} ->
   #key_t:eqtype -> #value_t:Type0 -> {|map_types key_t value_t|} ->
   mpred:map_predicate key_t value_t ->
-  prin:principal -> sess_id:nat ->
+  prin:principal -> sess_id:state_id ->
   key:key_t -> value:value_t ->
   tr:trace ->
   Lemma
@@ -235,7 +235,7 @@ val find_value_invariant:
   {|invs:protocol_invariants|} ->
   #key_t:eqtype -> #value_t:Type0 -> {|map_types key_t value_t|} ->
   mpred:map_predicate key_t value_t ->
-  prin:principal -> sess_id:nat ->
+  prin:principal -> sess_id:state_id ->
   key:key_t ->
   tr:trace ->
   Lemma

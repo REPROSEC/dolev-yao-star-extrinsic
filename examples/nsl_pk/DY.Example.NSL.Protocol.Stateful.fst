@@ -23,12 +23,12 @@ type nsl_session =
 %splice [ps_nsl_session] (gen_parser (`nsl_session))
 %splice [ps_nsl_session_is_well_formed] (gen_is_well_formed_lemma (`nsl_session))
 
-instance nsl_session_parseable_serializeable: parseable_serializeable bytes nsl_session
+instance parseable_serializeable_bytes_nsl_session: parseable_serializeable bytes nsl_session
  = mk_parseable_serializeable ps_nsl_session
 
 instance local_state_nsl_session: local_state nsl_session = {
   tag = "NSL.Session";
-  format = nsl_session_parseable_serializeable;
+  format = parseable_serializeable_bytes_nsl_session;
 }
 
 (*** Event type ***)
@@ -54,11 +54,11 @@ instance event_nsl_event: event nsl_event = {
 (*** Stateful code ***)
 
 type nsl_global_sess_ids = {
-  pki: nat;
-  private_keys: nat;
+  pki: state_id;
+  private_keys: state_id;
 }
 
-val prepare_msg1: principal -> principal -> crypto nat
+val prepare_msg1: principal -> principal -> traceful state_id
 let prepare_msg1 alice bob =
   let* n_a = mk_rand NoUsage (join (principal_label alice) (principal_label bob)) 32 in
   trigger_event alice (Initiate1 alice bob n_a);*
@@ -66,7 +66,7 @@ let prepare_msg1 alice bob =
   set_state alice sess_id (InitiatorSentMsg1 bob n_a <: nsl_session);*
   return sess_id
 
-val send_msg1: nsl_global_sess_ids -> principal -> nat -> crypto (option nat)
+val send_msg1: nsl_global_sess_ids -> principal -> state_id -> traceful (option timestamp)
 let send_msg1 global_sess_id alice sess_id =
   let*? st: nsl_session = get_state alice sess_id in
   match st with
@@ -79,7 +79,7 @@ let send_msg1 global_sess_id alice sess_id =
   )
   | _ -> return None
 
-val prepare_msg2: nsl_global_sess_ids -> principal -> nat -> crypto (option nat)
+val prepare_msg2: nsl_global_sess_ids -> principal -> timestamp -> traceful (option state_id)
 let prepare_msg2 global_sess_id bob msg_id =
   let*? msg = recv_msg msg_id in
   let*? sk_b = get_private_key bob global_sess_id.private_keys (PkDec "NSL.PublicKey") in
@@ -90,7 +90,7 @@ let prepare_msg2 global_sess_id bob msg_id =
   set_state bob sess_id (ResponderSentMsg2 msg1.alice msg1.n_a n_b <: nsl_session);*
   return (Some sess_id)
 
-val send_msg2: nsl_global_sess_ids -> principal -> nat -> crypto (option nat)
+val send_msg2: nsl_global_sess_ids -> principal -> state_id -> traceful (option timestamp)
 let send_msg2 global_sess_id bob sess_id =
   let*? st: nsl_session = get_state bob sess_id in
   match st with
@@ -103,7 +103,7 @@ let send_msg2 global_sess_id bob sess_id =
   )
   | _ -> return None
 
-val prepare_msg3: nsl_global_sess_ids -> principal -> nat -> nat -> crypto (option unit)
+val prepare_msg3: nsl_global_sess_ids -> principal -> state_id -> timestamp -> traceful (option unit)
 let prepare_msg3 global_sess_id alice sess_id msg_id =
   let*? msg = recv_msg msg_id in
   let*? sk_a = get_private_key alice global_sess_id.private_keys (PkDec "NSL.PublicKey") in
@@ -117,7 +117,7 @@ let prepare_msg3 global_sess_id alice sess_id msg_id =
   )
   | _ -> return None
 
-val send_msg3: nsl_global_sess_ids -> principal -> nat -> crypto (option nat)
+val send_msg3: nsl_global_sess_ids -> principal -> state_id -> traceful (option timestamp)
 let send_msg3 global_sess_id alice sess_id =
   let*? st: nsl_session = get_state alice sess_id in
   match st with
@@ -130,7 +130,7 @@ let send_msg3 global_sess_id alice sess_id =
   )
   | _ -> return None
 
-val prepare_msg4: nsl_global_sess_ids -> principal -> nat -> nat -> crypto (option unit)
+val prepare_msg4: nsl_global_sess_ids -> principal -> state_id -> timestamp -> traceful (option unit)
 let prepare_msg4 global_sess_id bob sess_id msg_id =
   let*? msg = recv_msg msg_id in
   let*? sk_b = get_private_key bob global_sess_id.private_keys (PkDec "NSL.PublicKey") in
