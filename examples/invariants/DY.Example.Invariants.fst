@@ -79,13 +79,13 @@ val next: principal -> state_id -> traceful (option unit)
 let next prin sid =
   let*? curr_state = get_state prin sid in
   let*? S idn c = return (parse p_state curr_state) in
-  //let* nonce = mk_rand NoUsage public 7 in
-  let nonce = from_nat 4 7 in
+  let* nonce = mk_rand NoUsage public 7 in
+  //let nonce = from_nat 4 7 in
   send_msg (serialize message (M nonce));*
   send_msg (serialize message (M nonce));*
   set_state prin sid (serialize p_state (S idn (c+1)));*
-  // let ev = E prin in
-  // trigger_event prin "P" (serialize p_event ev);*
+  let ev = E prin in
+  trigger_event prin "P" (serialize p_event ev);*
   return (Some ())
 
 let p_cinvs = {
@@ -121,8 +121,9 @@ instance protocol_invariants_p: protocol_invariants = {
   }
 }
 
-// TODO: this proof is slow
-#push-options "--z3rlimit 150"
+open DY.Core.Trace.Experiments
+
+#push-options "--z3rlimit 25 --z3cliopt 'smt.qi.eager_threshold=50'"
 val next_invariant: tr:trace -> p:principal -> sid:state_id ->
   Lemma 
     (requires trace_invariant tr)
@@ -138,66 +139,35 @@ let next_invariant tr p sid =
       match parse p_state st_b with
       | None -> ()
       | Some (S idn c) -> (
-          //let (nonce, tr_after_rand) = mk_rand NoUsage public 7 tr in
-          let (nonce, tr_after_rand) = (from_nat 4 7 , tr) in
+          let (nonce, tr_after_rand) = mk_rand NoUsage public 7 tr in
           let msg = M nonce in
           let msg_b = serialize message msg in
           let (_, tr_after_msg1) = send_msg msg_b tr_after_rand in
           let (_, tr_after_msg) = send_msg msg_b tr_after_msg1 in
           
-          // serialize_wf_lemma message (is_publishable tr_after_rand) msg;
+          serialize_wf_lemma message (is_publishable tr_after_rand) msg;
           // assert(trace_invariant tr_after_msg);
-          // get_session_aux_same p sid tr tr_after_msg1;
-          // get_session_aux_same p sid tr_after_msg1 tr_after_msg;
-          // assert(get_session p sid tr_after_msg = get_session p sid tr );
+
+
+          // ideally, the next two lemmas don't need to be called.
+          // What are the correct SMTPats for that?
+          suffix_after_concat tr tr_after_rand tr_after_msg1;
+          no_set_state_entry_for_concat p sid (tr_after_rand `suffix_after` tr) (tr_after_msg1 `suffix_after` tr_after_rand);
+          get_session_aux_same p sid tr tr_after_msg1;
+          get_session_aux_same p sid tr_after_msg1 tr_after_msg;
+          assert(get_session p sid tr_after_msg = get_session p sid tr );
 
           let next_state = S idn (c+1) in
-          let next_state_b = serialize p_state next_state in
-          let (_,tr_after_next_state) = set_state p sid next_state_b tr_after_msg in
-          assume(trace_invariant tr_after_next_state);
-admit()
-          // serialize_wf_lemma p_state (is_knowable_by (principal_state_label p sid) tr) next_state;
-          // assert(global_state_pred tr p sid next_state_b);
-          // session_pred_later tr tr_after_rand p sid next_state_b;
-          // assert(global_state_pred tr_after_rand p sid next_state_b);
+          // let next_state_b = serialize p_state next_state in
+          // let (_,tr_after_next_state) = set_state p sid next_state_b tr_after_msg in
+          serialize_wf_lemma p_state (is_knowable_by (principal_state_label p sid) tr) next_state;
           // assert(trace_invariant tr_after_next_state);
 
-          // serialize_wf_lemma p_state (is_knowable_by (principal_state_label p sid) tr_after_rand) next_state;
-          // session_pred_later tr_after_rand tr_after_msg1 p sid next_state_b;
-          // session_pred_later tr_after_msg1 tr_after_msg p sid next_state_b;
-          // assert(global_state_pred tr_after_msg p sid next_state_b);
-          
-          // serialize_wf_lemma p_state (is_knowable_by (principal_state_label p sid) tr_after_next_state) next_state;
-          // let Some sess_after_msg = get_session p sid tr_after_msg in
-          // let Snoc init last = sess_after_msg in
-          // get_state_is_last_of_get_session p sid tr_after_next_state;
-          // assert(last  = st_b);
-         
           // let ev = E p in
-          // let ((), tr_after_ev) = trigger_event "P" p (serialize p_event ev) tr_after_next_state in
-
-          // assume(trace_invariant tr_after_ev);
-
-
-          // // assert(is_publishable tr msg_b);
-          // // assert(trace_event_invariant tr (MsgSent msg_b ));
-
-          // serialize_wf_lemma p_state (is_knowable_by (principal_state_label p sid) tr_after_msg) next_state;
-          // // assert(state_pred tr_after_msg p sid next_state_b);
-          
-          // //let session_after_msg = get_session p sid tr_after_msg in          
-          // let session_before_rand = get_session p sid tr in                  
-          // let session_before_msg = get_session p sid tr_after_rand in                  
-          // // assert(tr <$ tr_after_msg);
-          // assert(no_set_state_entry_for p sid (tr_after_rand `suffix_after` tr));
-          // get_session_aux_same p sid tr tr_after_rand;
-          // assert(session_before_rand = session_before_msg);
-          // session_pred_later tr tr_after_rand p sid next_state_b;
-          // assert(no_set_state_entry_for p sid (tr_after_msg `suffix_after` tr_after_rand));
-          // assert(session_pred_opt tr session_before_msg p sid next_state_b);
-          // session_pred_later tr_after_rand tr_after_msg p sid next_state_b;
-          // assert(global_state_pred tr_after_msg p sid next_state_b);
-          // assert(trace_event_invariant tr_after_msg (SetState p sid next_state_b))    
+          // let ev_b = serialize p_event ev in
+          // let (_, tr_after_event) = trigger_event p "P" ev_b tr_after_next_state in
+          // assert(trace_invariant tr_after_event);
+()
         )
     )
 #pop-options

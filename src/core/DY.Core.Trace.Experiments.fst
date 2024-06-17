@@ -1,15 +1,25 @@
 module DY.Core.Trace.Experiments
 
-open DY.Core.Trace.Type
 open DY.Core.Trace.Invariant
 open DY.Core.Trace.State.Aux
 open DY.Core.Trace.Manipulation
 module BT = DY.Core.Bytes.Type
 module B = DY.Core.Bytes
 open DY.Core.Label.Type
+open DY.Core.Trace.Type
 
 #set-options "--fuel 1 --ifuel 1"
 
+val init_is_prefix:
+  tr:trace{Snoc? tr} ->
+  Lemma 
+  (let Snoc init _ = tr in
+    init <$ tr
+  )
+let init_is_prefix tr =
+    reveal_opaque (`%grows) (grows);
+    norm_spec [zeta; delta_only [`%prefix]] (prefix)
+    
 let rec trace_concat tr1 tr2 =
   match tr2 with
   | Nil -> tr1
@@ -20,7 +30,7 @@ let rec trace_concat tr1 tr2 =
 val trace_concat_grows:
   tr1:trace -> tr2:trace ->
   Lemma (tr1 <$ trace_concat tr1 tr2)
-  [SMTPat (trace_concat tr1 tr2)]
+//  [SMTPat (trace_concat tr1 tr2)]
 let rec trace_concat_grows tr1 tr2 =
     reveal_opaque (`%grows) (grows);
     norm_spec [zeta; delta_only [`%prefix]] (prefix);
@@ -29,14 +39,46 @@ let rec trace_concat_grows tr1 tr2 =
     | Snoc init ev -> 
            trace_concat_grows tr1 init
 
-val no_set_state_entry_for:
-  principal -> state_id -> trace -> prop
-let no_set_state_entry_for p sid tr = 
-  forall (ts:timestamp{ts < DY.Core.Trace.Type.length tr}).
-    match get_event_at tr ts with
-    | SetState p' sid' _ -> p' <> p \/ sid' <> sid
-    | _ -> True
+#push-options "--fuel 2"
+val no_set_state_entry_for_concat:
+  p:principal -> sid:state_id ->
+  tr1: trace -> tr2:trace ->
+  Lemma
+    (requires 
+        no_set_state_entry_for p sid tr1
+      /\ no_set_state_entry_for p sid tr2
+    )
+    (ensures
+      no_set_state_entry_for p sid (tr1 `trace_concat` tr2)
+    )
+    // [SMTPat (no_set_state_entry_for p sid tr1)
+    // ; SMTPat (no_set_state_entry_for p sid tr2)]
+let rec no_set_state_entry_for_concat p sid tr1 tr2 =
+  match tr2 with
+  | Nil -> ()
+  | Snoc init2 ev2 -> 
+    init_is_prefix tr2;
+    assert(event_exists tr2 ev2);
+    no_set_state_entry_for_prefix p sid init2 tr2;
+    no_set_state_entry_for_concat p sid tr1 init2
+#pop-options
 
+#push-options "--fuel 2"
+val suffix_after_concat:
+  tr1:trace -> tr2:trace {tr1 <$ tr2} -> tr3:trace{tr2 <$ tr3} ->
+  Lemma
+  ( tr3 `suffix_after` tr1 == (tr2 `suffix_after` tr1) `trace_concat` (tr3 `suffix_after` tr2)
+  )
+let rec suffix_after_concat tr1 tr2 tr3 =     
+  reveal_opaque (`%grows) (grows);
+  norm_spec [zeta; delta_only [`%prefix]] (prefix);
+  match tr3 with
+  | Nil -> ()
+  | Snoc init ev -> 
+      if length tr2 = length tr3
+        then ()
+        else suffix_after_concat tr1 tr2 init
+#pop-options
 
 #push-options "--fuel 2"
 let _ = 
@@ -50,19 +92,6 @@ let _ =
   assert(~(no_set_state_entry_for p sid tr'));
   assert(no_set_state_entry_for "b" sid tr')
 #pop-options
-
-val no_set_state_entry_for_prefix:
-  p:principal -> sid:state_id -> tr1:trace -> tr2:trace ->
-  Lemma 
-    (requires no_set_state_entry_for p sid tr2 /\ tr1 <$ tr2)
-    (ensures no_set_state_entry_for p sid tr1)
-    [SMTPat (no_set_state_entry_for p sid tr2); SMTPat (tr1 <$ tr2)]
-let no_set_state_entry_for_prefix p sid tr1 tr2 = 
-  introduce forall (ts:timestamp{ts < DY.Core.Trace.Type.length tr1}). get_event_at tr1 ts = get_event_at tr2 ts
-  with begin
-    let ev1 = get_event_at tr1 ts in
-    event_at_grows tr1 tr2 ts ev1
-    end
 
 val suffix_after_event:
   ev:trace_event -> tr:trace{event_exists tr ev} -> trace
@@ -97,7 +126,7 @@ val get_state_aux_returns_last_set_state :
          (suffix_after_event (SetState p sid v) tr)
      )
    )
-   [SMTPat (get_state_aux p sid tr)]
+   // [SMTPat (get_state_aux p sid tr)]
 let rec get_state_aux_returns_last_set_state p sid tr =
   match get_state_aux p sid tr with
   | None -> ()
@@ -123,61 +152,13 @@ val get_state_returns_last_set_state :
          (suffix_after_event (SetState p sid v) tr)
      )
    )
-   [SMTPat (get_state p sid tr)]
+   // [SMTPat (get_state p sid tr)]
 let get_state_returns_last_set_state p sid tr =
-  reveal_opaque (`%get_state) (get_state)
-
-
-val get_state_aux_is_last_of_get_session_aux:
-  p:principal -> sid:state_id -> tr:trace ->
-  Lemma 
-    (requires True
-    )
-    (ensures (
-      let session = get_session_aux p sid tr in
-      match get_state_aux p sid tr with
-      | None -> Nil? session
-      | Some st -> Snoc? session /\ (let Snoc _ last = session in st = last)
-    )
-    )
-let rec get_state_aux_is_last_of_get_session_aux p sid tr = 
-  match tr with
-  | Nil -> ()
-  | Snoc init _ -> get_state_aux_is_last_of_get_session_aux p sid init
+  reveal_opaque (`%get_state) (get_state);
+  get_state_aux_returns_last_set_state p sid tr
 
 
 
-val get_state_is_last_of_get_session:
-  p:principal -> sid:state_id -> tr:trace ->
-  Lemma 
-    (requires True
-    )
-    (ensures (
-      let opt_session = get_session p sid tr in
-      let (opt_state, _) = get_state p sid tr in
-      match opt_state with
-      | None -> None? opt_session
-      | Some st -> Some? opt_session /\ Snoc? (Some?.v opt_session) /\ (let Some (Snoc _ last) = opt_session in st = last)
-    )
-    )
-    [SMTPat (get_session p sid tr); SMTPat (get_state p sid tr)]
-let get_state_is_last_of_get_session p sid tr =
-    reveal_opaque (`%get_state) (get_state);
-    get_state_aux_is_last_of_get_session_aux p sid tr
-
-
-val suffix_after: tr2:trace -> tr1:trace{tr1 <$ tr2} -> trace
-let rec suffix_after tr2 tr1 = 
-  match tr2 with
-  | Nil -> Nil
-  | Snoc init ev -> 
-      if length tr2 = length tr1
-        then Nil
-        else begin 
-             reveal_opaque (`%grows) grows; 
-             norm_spec [zeta; delta_only [`%prefix]] (prefix);
-             Snoc (suffix_after init tr1) ev
-         end
 
 #push-options "--fuel 3"
 let _ = 
@@ -192,85 +173,3 @@ let _ =
   assert(tr1 <$ tr2);
   assert(tr2 `suffix_after` tr1 = Snoc (Snoc Nil ev2) ev3)
 #pop-options
-
-
-
-val suffix_after_for_prefix: 
-  tr3:trace -> tr2:trace {tr2 <$ tr3} -> tr1:trace {tr1 <$ tr2} ->
-  Lemma 
-    (tr2 `suffix_after` tr1 <$ tr3 `suffix_after` tr1
-    )
-let rec suffix_after_for_prefix tr3 tr2 tr1 = 
-  reveal_opaque (`%grows) grows; 
-  norm_spec [zeta; delta_only [`%prefix]] (prefix);
-  if length tr3 = length tr2 || length tr2 = length tr1
-    then ()
-    else begin
-      match tr3 with
-      | Nil -> ()
-      | Snoc init ev -> suffix_after_for_prefix init tr2 tr1
-    end
-
-val get_state_aux_same:
-  p:principal -> sid:state_id -> tr1:trace -> tr2:trace ->
-  Lemma
-    (requires
-      tr1 <$ tr2 /\ no_set_state_entry_for p sid (tr2 `suffix_after` tr1)
-    )
-    (ensures get_state_aux p sid tr1 = get_state_aux p sid tr2)
- //   [SMTPat (tr1 <$ tr2 /\ no_set_state_entry_for p sid (tr2 `suffix_after` tr1))]
-let rec get_state_aux_same p sid tr1 tr2 =
-  reveal_opaque (`%grows) grows; 
-  norm_spec [zeta; delta_only [`%prefix]] (prefix);
-
-  if tr1 = tr2 
-    then ()
-    else begin
-       match tr2 with
-       | Nil -> ()
-       | Snoc init ev -> 
-              assert(event_exists (tr2 `suffix_after` tr1) ev);
-              suffix_after_for_prefix tr2 init tr1;
-              get_state_aux_same p sid tr1 init
-    end
-
-val get_state_same:
-  p:principal -> sid:state_id -> tr1:trace -> tr2:trace ->
-  Lemma
-    (requires
-      tr1 <$ tr2 /\ no_set_state_entry_for p sid (tr2 `suffix_after` tr1)
-    )
-    (ensures (
-      let (s1,_) = get_state p sid tr1 in
-      let (s2,_) = get_state p sid tr2 in
-      s1 = s2
-      )
-    )
-    [SMTPat (get_state p sid tr1); SMTPat (get_state p sid tr2) ]
-let get_state_same p sid tr1 tr2 = 
-  reveal_opaque (`%get_state) get_state;
-  get_state_aux_same p sid tr1 tr2
-
-
-val get_session_aux_same:
-  p:principal -> sid:state_id -> tr1:trace -> tr2:trace ->
-  Lemma
-    (requires
-      tr1 <$ tr2 /\ no_set_state_entry_for p sid (tr2 `suffix_after` tr1)
-    )
-    (ensures get_session_aux p sid tr1 = get_session_aux p sid tr2)
- //   [SMTPat (tr1 <$ tr2 /\ no_set_state_entry_for p sid (tr2 `suffix_after` tr1))]
-let rec get_session_aux_same p sid tr1 tr2 =
-  reveal_opaque (`%grows) grows; 
-  norm_spec [zeta; delta_only [`%prefix]] (prefix);
-
-  if tr1 = tr2 
-    then ()
-    else begin
-       match tr2 with
-       | Nil -> ()
-       | Snoc init ev -> 
-              assert(event_exists (tr2 `suffix_after` tr1) ev);
-              suffix_after_for_prefix tr2 init tr1;
-              get_session_aux_same p sid tr1 init
-    end

@@ -383,7 +383,7 @@ val get_state_state_was_set :
     (requires True)
     (ensures (
        let (opt_content, tr_out) = get_state p sid tr in
-       tr = tr_out /\
+       tr == tr_out /\
        (match opt_content with
        | None -> True
        | Some v -> state_was_set tr p sid v
