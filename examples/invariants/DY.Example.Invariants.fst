@@ -69,8 +69,7 @@ val init: principal -> traceful state_id
 let init prin =
   let* idn = new_idn prin in
   let new_state = S idn 0 in
-  let* new_sess_id = new_session_id prin in
-  set_state prin new_sess_id (serialize p_state new_state);*
+  let* new_sess_id = set_new_session prin (serialize p_state new_state)in
   return new_sess_id
 
 
@@ -80,12 +79,16 @@ let next prin sid =
   let*? curr_state = get_state prin sid in
   let*? S idn c = return (parse p_state curr_state) in
   let* nonce = mk_rand NoUsage public 7 in
-  //let nonce = from_nat 4 7 in
   send_msg (serialize message (M nonce));*
   send_msg (serialize message (M nonce));*
   set_state prin sid (serialize p_state (S idn (c+1)));*
   let ev = E prin in
   trigger_event prin "P" (serialize p_event ev);*
+  
+  let other_sid = {the_id = sid.the_id + 1} in
+  let*? other_state = get_state prin other_sid in
+  let*? S other_idn other_c = return (parse p_state other_state) in
+  set_state prin other_sid (serialize p_state (S other_idn (other_c+1)));*
   return (Some ())
 
 let p_cinvs = {
@@ -121,7 +124,7 @@ instance protocol_invariants_p: protocol_invariants = {
   }
 }
 
-#push-options "--z3rlimit 25 --z3cliopt 'smt.qi.eager_threshold=50'"
+#push-options "--z3rlimit 25 --z3cliopt 'smt.qi.eager_threshold=100'"
 val next_invariant: tr:trace -> p:principal -> sid:state_id ->
   Lemma 
     (requires trace_invariant tr)
@@ -153,16 +156,36 @@ let next_invariant tr p sid =
           assert(get_session p sid tr_after_msg = get_session p sid tr );
 
           let next_state = S idn (c+1) in
-          // let next_state_b = serialize p_state next_state in
-          // let (_,tr_after_next_state) = set_state p sid next_state_b tr_after_msg in
+          let next_state_b = serialize p_state next_state in
+          let (_,tr_after_next_state) = set_state p sid next_state_b tr_after_msg in
           serialize_wf_lemma p_state (is_knowable_by (principal_state_label p sid) tr) next_state;
           // assert(trace_invariant tr_after_next_state);
 
-          // let ev = E p in
-          // let ev_b = serialize p_event ev in
-          // let (_, tr_after_event) = trigger_event p "P" ev_b tr_after_next_state in
-          // assert(trace_invariant tr_after_event);
+          let ev = E p in
+          let ev_b = serialize p_event ev in
+          let (_, tr_after_event) = trigger_event p "P" ev_b tr_after_next_state in
+          //assert(trace_invariant tr_after_event);
+
+          get_session_aux_same p sid tr_after_next_state tr_after_event;
+          // assert(get_session p sid tr_after_event = get_session p sid tr_after_next_state);
+
+          let other_sid = {the_id = sid.the_id + 1} in
+          match get_state p other_sid tr_after_event with
+          | (None, _ ) -> ()
+          | (Some ost_b, _) -> begin
+            match parse p_state ost_b with
+            | None -> ()
+            | Some (S other_idn other_c) ->
+               let other_state = S other_idn (other_c + 1) in
+               let other_state_b = serialize p_state other_state in
+               let (_, tr_after_other_session) = set_state p other_sid other_state_b tr_after_event in
+               serialize_wf_lemma p_state (is_knowable_by (principal_state_label p other_sid) tr) other_state;
+
+               set_state_no_set_state_for_others p other_sid other_state_b tr_after_event;
+               get_session_aux_same p sid tr_after_event tr_after_other_session;
+               // assert(get_session p sid tr_after_other_session = get_session p sid tr_after_next_state);
 ()
+            end
         )
     )
 #pop-options
