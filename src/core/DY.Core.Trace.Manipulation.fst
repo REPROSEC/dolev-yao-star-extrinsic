@@ -329,6 +329,12 @@ let new_session_id prin =
   let* tr = get_trace in
   return (compute_new_session_id prin tr)
 
+val set_new_session: principal -> state_raw -> traceful state_id
+let set_new_session prin content =
+    let* sid = new_session_id prin in
+    set_state prin sid content;*
+    return sid
+
 /// Retrieve the state stored by a principal at some state identifier.
 
 [@@ "opaque_to_smt"]
@@ -572,5 +578,12 @@ val trigger_event_no_state:
 let trigger_event_no_state p tag cont tr = 
   reveal_opaque (`%trigger_event) trigger_event
 
-
+val set_state_no_set_state_for_others:
+    p:principal -> sid:state_id -> content:state_raw -> tr:trace -> 
+    Lemma
+      (let (_, tr_out) = set_state p sid content tr in
+      forall p' sid'. p' <> p \/ sid' <> sid ==> no_set_state_entry_for p' sid' (tr_out `suffix_after` tr)
+      )
+let set_state_no_set_state_for_others p sid cont tr = 
+  reveal_opaque (`%set_state) set_state
 #pop-options
