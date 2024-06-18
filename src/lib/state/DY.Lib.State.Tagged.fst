@@ -2,7 +2,7 @@ module DY.Lib.State.Tagged
 
 open Comparse
 open DY.Core
-open DY.Lib.SplitPredicate
+open DY.Lib.SplitFunction
 open DY.Lib.Comparse.Glue
 open DY.Lib.Comparse.Parsers
 
@@ -40,11 +40,19 @@ type local_bytes_state_predicate {|crypto_invariants|} = {
   ;
 }
 
-let split_local_bytes_state_predicate_func {|crypto_invariants|} : split_predicate_input_values = {
+let split_local_bytes_state_predicate_func {|crypto_invariants|} : split_function_input_values = {
   tagged_data_t = trace & principal & state_id & bytes;
+
+  tag_set_t = string;
   tag_t = string;
-  encoded_tag_t = string;
+  is_disjoint = default_disjoint;
+  tag_belong_to = (fun dtag tag -> dtag = tag);
+  cant_belong_to_disjoint_sets = (fun dtag tag1 tag2 -> ());
+
   raw_data_t = trace & principal & state_id & bytes;
+  output_t = prop;
+
+  default_global_fun = (fun tr prin sess_id sess_content -> False);
 
   decode_tagged_data = (fun (tr, prin, sess_id, sess_content) -> (
     match parse tagged_state sess_content with
@@ -52,33 +60,30 @@ let split_local_bytes_state_predicate_func {|crypto_invariants|} : split_predica
     | None -> None
   ));
 
-  encode_tag = (fun s -> s);
-  encode_tag_inj = (fun l1 l2 -> ());
+  local_fun = local_bytes_state_predicate;
+  global_fun = trace -> principal -> state_id -> bytes -> prop;
 
-  local_pred = local_bytes_state_predicate;
-  global_pred = trace -> principal -> state_id -> bytes -> prop;
-
-  apply_local_pred = (fun spred (tr, prin, sess_id, content) ->
+  apply_local_fun = (fun spred (tr, prin, sess_id, content) ->
     spred.pred tr prin sess_id content
   );
-  apply_global_pred = (fun spred (tr, prin, sess_id, content) ->
+  apply_global_fun = (fun spred (tr, prin, sess_id, content) ->
     spred tr prin sess_id content
   );
-  mk_global_pred = (fun spred -> fun tr prin sess_id content ->
+  mk_global_fun = (fun spred -> fun tr prin sess_id content ->
     spred (tr, prin, sess_id, content)
   );
-  apply_mk_global_pred = (fun spred x -> ());
+  apply_mk_global_fun = (fun spred x -> ());
 }
 
 val has_local_bytes_state_predicate: protocol_invariants -> (string & local_bytes_state_predicate) -> prop
 let has_local_bytes_state_predicate invs (tag, spred) =
-  has_local_pred split_local_bytes_state_predicate_func (state_pred) (tag, spred)
+  has_local_fun split_local_bytes_state_predicate_func (state_pred) (tag, spred)
 
 (*** Global tagged state predicate builder ***)
 
 val mk_global_local_bytes_state_predicate: {|crypto_invariants|} -> list (string & local_bytes_state_predicate) -> trace -> principal -> state_id -> bytes -> prop
 let mk_global_local_bytes_state_predicate #cinvs l =
-  mk_global_pred split_local_bytes_state_predicate_func l
+  mk_global_fun split_local_bytes_state_predicate_func l
 
 val mk_global_local_bytes_state_predicate_correct: invs:protocol_invariants -> lpreds:list (string & local_bytes_state_predicate) -> Lemma
   (requires
@@ -87,8 +92,9 @@ val mk_global_local_bytes_state_predicate_correct: invs:protocol_invariants -> l
   )
   (ensures for_allP (has_local_bytes_state_predicate invs) lpreds)
 let mk_global_local_bytes_state_predicate_correct invs lpreds =
+  no_repeats_p_implies_all_disjoint (List.Tot.map fst lpreds);
   for_allP_eq (has_local_bytes_state_predicate invs) lpreds;
-  FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (mk_global_pred_correct split_local_bytes_state_predicate_func lpreds))
+  FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (mk_global_fun_correct split_local_bytes_state_predicate_func lpreds))
 
 val mk_global_local_bytes_state_predicate_later:
   cinvs:crypto_invariants -> lpreds:list (string & local_bytes_state_predicate) ->
@@ -96,18 +102,14 @@ val mk_global_local_bytes_state_predicate_later:
   (requires mk_global_local_bytes_state_predicate lpreds tr1 prin sess_id full_content /\ tr1 <$ tr2)
   (ensures mk_global_local_bytes_state_predicate lpreds tr2 prin sess_id full_content)
 let mk_global_local_bytes_state_predicate_later cinvs lpreds tr1 tr2 prin sess_id full_content =
-  mk_global_pred_eq split_local_bytes_state_predicate_func lpreds (tr1, prin, sess_id, full_content);
-  eliminate exists tag lpred raw_data.
-    List.Tot.memP (tag, lpred) lpreds /\
-    split_local_bytes_state_predicate_func.apply_local_pred lpred raw_data /\
-    split_local_bytes_state_predicate_func.decode_tagged_data (tr1, prin, sess_id, full_content) == Some (split_local_bytes_state_predicate_func.encode_tag tag, raw_data)
-  returns mk_global_local_bytes_state_predicate lpreds tr2 prin sess_id full_content
-  with _. (
-    let Some (_, (_, _, _, content)) = split_local_bytes_state_predicate_func.decode_tagged_data (tr1, prin, sess_id, full_content) in
-    lpred.pred_later tr1 tr2 prin sess_id content;
-    mk_global_pred_eq split_local_bytes_state_predicate_func lpreds (tr2, prin, sess_id, full_content);
-    assert(split_local_bytes_state_predicate_func.apply_local_pred lpred (tr2, prin, sess_id, content))
-  )
+  mk_global_fun_eq split_local_bytes_state_predicate_func lpreds (tr1, prin, sess_id, full_content);
+  mk_global_fun_eq split_local_bytes_state_predicate_func lpreds (tr2, prin, sess_id, full_content);
+  introduce forall lpred content. split_local_bytes_state_predicate_func.apply_local_fun lpred (tr1, prin, sess_id, content) ==> split_local_bytes_state_predicate_func.apply_local_fun lpred (tr2, prin, sess_id, content) with (
+    introduce _ ==> _ with _. lpred.pred_later tr1 tr2 prin sess_id content
+  );
+  match split_local_bytes_state_predicate_func.decode_tagged_data (tr1, prin, sess_id, full_content) with
+  | Some (_, (_, _, _, _)) -> ()
+  | None -> ()
 
 val mk_global_local_bytes_state_predicate_knowable:
   cinvs:crypto_invariants -> lpreds:list (string & local_bytes_state_predicate) ->
@@ -116,18 +118,18 @@ val mk_global_local_bytes_state_predicate_knowable:
   (requires mk_global_local_bytes_state_predicate lpreds tr prin sess_id full_content)
   (ensures is_knowable_by (principal_state_label prin sess_id) tr full_content)
 let mk_global_local_bytes_state_predicate_knowable cinvs lpreds tr prin sess_id full_content =
-  mk_global_pred_eq split_local_bytes_state_predicate_func lpreds (tr, prin, sess_id, full_content);
-  eliminate exists tag lpred raw_data.
-    List.Tot.memP (tag, lpred) lpreds /\
-    split_local_bytes_state_predicate_func.apply_local_pred lpred raw_data /\
-    split_local_bytes_state_predicate_func.decode_tagged_data (tr, prin, sess_id, full_content) == Some (split_local_bytes_state_predicate_func.encode_tag tag, raw_data)
-  returns is_knowable_by (principal_state_label prin sess_id) tr full_content
-  with _. (
-    let Some (tag, (_, _, _, content)) = split_local_bytes_state_predicate_func.decode_tagged_data (tr, prin, sess_id, full_content) in
-    lpred.pred_knowable tr prin sess_id content;
-    serialize_parse_inv_lemma tagged_state full_content;
-    serialize_wf_lemma tagged_state (is_knowable_by (principal_state_label prin sess_id) tr) ({tag; content})
+  mk_global_fun_eq split_local_bytes_state_predicate_func lpreds (tr, prin, sess_id, full_content);
+  match split_local_bytes_state_predicate_func.decode_tagged_data (tr, prin, sess_id, full_content) with
+  | Some (tag, (_, _, _, content)) -> (
+    match find_local_fun split_local_bytes_state_predicate_func lpreds tag with
+    | Some lpred -> (
+      lpred.pred_knowable tr prin sess_id content;
+      serialize_parse_inv_lemma tagged_state full_content;
+      serialize_wf_lemma tagged_state (is_knowable_by (principal_state_label prin sess_id) tr) ({tag; content})
+    )
+    | None -> ()
   )
+  | None -> ()
 
 val mk_state_predicate: cinvs:crypto_invariants -> list (string & local_bytes_state_predicate) -> state_predicate cinvs
 let mk_state_predicate cinvs lpreds =
@@ -188,7 +190,7 @@ let set_tagged_state_invariant invs tag spred prin sess_id content tr =
   reveal_opaque (`%tagged_state_was_set) (tagged_state_was_set);
   let full_content = {tag; content;} in
   parse_serialize_inv_lemma #bytes tagged_state full_content;
-  local_eq_global_lemma split_local_bytes_state_predicate_func state_pred tag spred (tr, prin, sess_id, serialize _ full_content) (tr, prin, sess_id, content)
+  local_eq_global_lemma split_local_bytes_state_predicate_func state_pred tag spred (tr, prin, sess_id, serialize _ full_content) tag (tr, prin, sess_id, content)
 
 val get_tagged_state_invariant:
   invs:protocol_invariants ->
@@ -219,7 +221,7 @@ let get_tagged_state_invariant invs tag spred prin sess_id tr =
   | None -> ()
   | Some content ->
     let (Some full_content_bytes, tr) = get_state prin sess_id tr in
-    local_eq_global_lemma split_local_bytes_state_predicate_func state_pred tag spred (tr, prin, sess_id, full_content_bytes) (tr, prin, sess_id, content)
+    local_eq_global_lemma split_local_bytes_state_predicate_func state_pred tag spred (tr, prin, sess_id, full_content_bytes) tag (tr, prin, sess_id, content)
 
 (*** Theorem ***)
 
@@ -243,4 +245,4 @@ let tagged_state_was_set_implies_pred invs tr tag spred prin sess_id content =
   let full_content = {tag; content;} in
   parse_serialize_inv_lemma #bytes tagged_state full_content;
   let full_content_bytes: bytes = serialize tagged_state full_content in
-  local_eq_global_lemma split_local_bytes_state_predicate_func state_pred tag spred (tr, prin, sess_id, full_content_bytes) (tr, prin, sess_id, content)
+  local_eq_global_lemma split_local_bytes_state_predicate_func state_pred tag spred (tr, prin, sess_id, full_content_bytes) tag (tr, prin, sess_id, content)
