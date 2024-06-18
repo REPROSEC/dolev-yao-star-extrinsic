@@ -43,8 +43,13 @@ type event_predicate (a:Type0) {|event a|} =
 
 let split_event_pred_func: split_function_input_values = {
   tagged_data_t = trace & principal & string & bytes;
+
+  tag_set_t = string;
   tag_t = string;
-  encoded_tag_t = string;
+  is_disjoint = default_disjoint;
+  tag_belong_to = (fun dtag tag -> dtag = tag);
+  cant_belong_to_disjoint_sets = (fun dtag tag1 tag2 -> ());
+
   raw_data_t = trace & principal & bytes;
   output_t = prop;
 
@@ -53,9 +58,6 @@ let split_event_pred_func: split_function_input_values = {
   decode_tagged_data = (fun (tr, prin, tag, content) -> (
     Some (tag, (tr, prin, content))
   ));
-
-  encode_tag = (fun s -> s);
-  encode_tag_inj = (fun l1 l2 -> ());
 
   local_fun = trace -> principal -> bytes -> prop;
   global_fun = trace -> principal -> string -> bytes -> prop;
@@ -107,6 +109,7 @@ val mk_event_pred_correct: invs:protocol_invariants -> lpreds:list (string & com
   )
   (ensures for_allP (has_compiled_event_pred invs) lpreds)
 let mk_event_pred_correct invs lpreds =
+  no_repeats_p_implies_all_disjoint (List.Tot.map fst lpreds);
   for_allP_eq (has_compiled_event_pred invs) lpreds;
   FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (mk_global_fun_correct split_event_pred_func lpreds))
 
@@ -157,7 +160,7 @@ val trigger_event_trace_invariant:
 let trigger_event_trace_invariant #invs #a #ev epred prin e tr =
   reveal_opaque (`%trigger_event) (trigger_event #a);
   reveal_opaque (`%event_triggered_at) (event_triggered_at #a);
-  local_eq_global_lemma split_event_pred_func event_pred ev.tag (compile_event_pred epred) (tr, prin, ev.tag, serialize _ e) (tr, prin, serialize _ e)
+  local_eq_global_lemma split_event_pred_func event_pred ev.tag (compile_event_pred epred) (tr, prin, ev.tag, serialize _ e) ev.tag (tr, prin, serialize _ e)
 
 val event_triggered_at_implies_pred:
   {|invs:protocol_invariants|} ->
@@ -177,7 +180,7 @@ val event_triggered_at_implies_pred:
   ]
 let event_triggered_at_implies_pred #invs #a #ev epred tr i prin e =
   reveal_opaque (`%event_triggered_at) (event_triggered_at #a);
-  local_eq_global_lemma split_event_pred_func event_pred ev.tag (compile_event_pred epred) ((prefix tr i), prin, ev.tag, serialize _ e) ((prefix tr i), prin, serialize _ e)
+  local_eq_global_lemma split_event_pred_func event_pred ev.tag (compile_event_pred epred) ((prefix tr i), prin, ev.tag, serialize _ e) ev.tag ((prefix tr i), prin, serialize _ e)
 
 val event_triggered_grows:
   #a:Type -> {|ev:event a|} ->
