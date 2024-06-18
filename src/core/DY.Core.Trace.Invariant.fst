@@ -166,8 +166,6 @@ let global_state_pred {|invs:protocol_invariants|} = global_state_pred_ #invs.cr
 let session_pred_later {|invs:protocol_invariants|} = session_pred_later_ #invs.crypto_invs #invs.trace_invs.state_pred
 let event_pred {|invs:protocol_invariants|} = invs.trace_invs.event_pred
 
-
-
 (*** Trace invariant definition ***)
 
 /// The invariant that must be satisfied by each event in the trace.
@@ -181,7 +179,6 @@ let trace_event_invariant #invs tr event =
   | SetState prin sess_id content -> (
     // Stored states satisfy the custom state predicate
     global_state_pred tr prin sess_id content
-    // invs.trace_invs.state_pred.pred tr prin sess_id content
   )
   | Event prin tag content -> (
     // Triggered protocol events satisfy the custom event predicate
@@ -202,8 +199,6 @@ let rec trace_invariant #invs tr =
     trace_event_invariant tr_init event /\
     trace_invariant tr_init
 
-
-
 (*** Lemmas on the trace invariant ***)
 
 
@@ -211,11 +206,11 @@ let rec trace_invariant #invs tr =
 
 val prefix_before_event_invariant:
   {|invs: protocol_invariants|} ->
-  ev:trace_event -> tr:trace{event_exists tr ev} ->
+  tr:trace -> ev:trace_event{event_exists tr ev} ->
   Lemma 
     (requires trace_invariant tr)
-    (ensures trace_event_invariant (prefix_before_event ev tr) ev /\ trace_invariant (prefix_before_event ev tr))
-let rec prefix_before_event_invariant #invs the_ev tr = 
+    (ensures trace_event_invariant (tr `prefix_before_event` ev) ev /\ trace_invariant (tr `prefix_before_event` ev))
+let rec prefix_before_event_invariant #invs tr the_ev = 
   match tr with
   | Nil -> ()
   | Snoc init ev -> 
@@ -223,7 +218,7 @@ let rec prefix_before_event_invariant #invs the_ev tr =
          norm_spec [zeta; delta_only [`%trace_invariant]] (trace_invariant);
          if ev = the_ev
            then ()
-           else prefix_before_event_invariant the_ev init
+           else prefix_before_event_invariant init the_ev
 
 /// If there is an event in the trace satisfying the invariants,
 /// then this event satisfy the trace event invariant.
@@ -279,13 +274,13 @@ val state_was_set_implies_global_state_pred:
       /\ state_was_set tr p sid content
     )
     (ensures
-      global_state_pred (prefix_before_event (SetState p sid content) tr) p sid content
+      global_state_pred (tr `prefix_before_event` (SetState p sid content)) p sid content
     )
     [SMTPat (state_was_set tr p sid content); 
      SMTPat (trace_invariant #invs tr);
     ]
 let state_was_set_implies_global_state_pred p sid cont tr =
-  prefix_before_event_invariant (SetState p sid cont) tr
+  prefix_before_event_invariant tr (SetState p sid cont)
 
 /// States stored satisfy the custom state predicate.
 // together with `pred_later` this even holds for the complete trace
@@ -310,7 +305,6 @@ let state_was_set_implies_pred #invs tr prin sess_id content =
     invs.trace_invs.state_pred.pred_later (prefix tr i) tr prin sess_id content
   )
 
-
 /// States stored are knowable by the corresponding principal and state identifier.
 // (This is a key lemma for attacker theorem.)
 
@@ -332,7 +326,6 @@ let state_is_knowable_by #invs tr prin sess_id content =
     state_pred_knowable tr prin sess_id content
   )
   
-
 /// Triggered protocol events satisfy the event predicate.
 
 val event_triggered_at_implies_pred:

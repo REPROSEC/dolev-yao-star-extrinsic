@@ -75,7 +75,6 @@ val state_was_set:
 let state_was_set #a #ls tr prin sess_id content =
   tagged_state_was_set tr ls.tag prin sess_id (serialize _ content)
 
-
 [@@ "opaque_to_smt"]
 val set_state:
   #a:Type -> {|local_state a|} ->

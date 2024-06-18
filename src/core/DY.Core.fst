@@ -115,4 +115,3 @@ include DY.Core.Trace.Type
 // include Bytes after Trace because of shadowing `length` function
 include DY.Core.Bytes
 include DY.Core.Bytes.Type
-

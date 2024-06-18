@@ -53,8 +53,6 @@ type rev_list (a:Type) =
   | Snoc: rev_list a -> a -> rev_list a
 
 type trace = rev_list trace_event
-  // | Nil: trace
-  // | Snoc: trace -> trace_event -> trace
 
 /// The length of a trace.
 
@@ -300,19 +298,19 @@ let rec event_at_grows tr1 tr2 i e =
 /// given an event on a trace, we often need the trace up until right before that entry
 
 val prefix_before_event:
-  ev:trace_event -> tr:trace{event_exists tr ev} -> trace
-let rec prefix_before_event the_ev tr =
+  tr:trace -> ev:trace_event{event_exists tr ev} -> trace
+let rec prefix_before_event tr the_ev =
   match tr with
   | Snoc init ev ->
       if ev = the_ev 
         then init
-        else prefix_before_event the_ev init
+        else init `prefix_before_event` the_ev
         
 val prefix_before_event_is_prefix:
-  ev:trace_event -> tr:trace{event_exists tr ev} -> 
-  Lemma ((prefix_before_event ev tr) <$ tr)
-  [SMTPat (prefix_before_event ev tr)]
-let rec prefix_before_event_is_prefix the_ev tr =
+  tr:trace -> ev:trace_event{event_exists tr ev} -> 
+  Lemma ((tr `prefix_before_event` ev) <$ tr)
+  [SMTPat (tr `prefix_before_event` ev)]
+let rec prefix_before_event_is_prefix tr the_ev =
   reveal_opaque (`%grows) (grows);
   norm_spec [zeta; delta_only [`%prefix]] (prefix);
   match tr with
@@ -321,7 +319,7 @@ let rec prefix_before_event_is_prefix the_ev tr =
          if ev = the_ev
            then ()
            else
-             prefix_before_event_is_prefix the_ev init
+             prefix_before_event_is_prefix init the_ev
 
 
 /// Shorthand predicates.
@@ -375,4 +373,3 @@ let rand_generated_at tr i b =
   | Rand usg lab len time ->
     time == i /\ event_at tr i (RandGen usg lab len)
   | _ -> False
-

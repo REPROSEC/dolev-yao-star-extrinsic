@@ -435,7 +435,7 @@ val get_state_aux_global_state_invariant:
   (ensures (
     match get_state_aux prin sess_id tr with
     | None -> True
-    | Some content -> global_state_pred (prefix_before_event (SetState prin sess_id content) tr) prin sess_id content
+    | Some content -> global_state_pred (tr `prefix_before_event` (SetState prin sess_id content)) prin sess_id content
   ))
 let get_state_aux_global_state_invariant prin sid tr = ()
 
@@ -452,7 +452,7 @@ val get_state_global_state_invariant:
     tr == tr_out /\ (
       match opt_content with
       | None -> True
-      | Some content -> global_state_pred (prefix_before_event (SetState prin sess_id content) tr) prin sess_id content
+      | Some content -> global_state_pred (tr `prefix_before_event` (SetState prin sess_id content)) prin sess_id content
     )
   ))
   [SMTPat (get_state prin sess_id tr); SMTPat (trace_invariant #invs tr)]
@@ -477,7 +477,7 @@ val get_state_aux_state_invariant:
 let get_state_aux_state_invariant #invs prin sess_id tr =
   match get_state_aux prin sess_id tr with
   | None -> ()
-  | Some content -> state_pred_later (prefix_before_event (SetState prin sess_id content) tr) tr prin sess_id content
+  | Some content -> state_pred_later (tr `prefix_before_event` (SetState prin sess_id content)) tr prin sess_id content
 
 val get_state_state_invariant:
   {|invs: protocol_invariants|} ->
@@ -498,9 +498,6 @@ val get_state_state_invariant:
 let get_state_state_invariant #invs prin sess_id tr =
   normalize_term_spec get_state;
   get_state_aux_state_invariant prin sess_id tr
-
-
-
 
 (*** Event triggering ***)
 
@@ -537,53 +534,54 @@ let trigger_event_trace_invariant #invs prin tag content tr =
 
 
 #push-options "--fuel 2"
-val send_msg_no_state:
+val send_msg_sets_no_state:
   msg:bytes -> tr:trace ->
   Lemma 
     ( let (_, tr_out) = send_msg msg tr in 
       forall p sid. no_set_state_entry_for p sid (tr_out `suffix_after` tr)
     )
   [SMTPat (send_msg msg tr)]
-let send_msg_no_state msg tr = 
+let send_msg_sets_no_state msg tr = 
   reveal_opaque (`%send_msg) send_msg
 
-val corrupt_no_state:
+val corrupt_sets_no_state:
   p:principal -> sid:state_id -> tr:trace ->
   Lemma 
     ( let (_, tr_out) = corrupt p sid tr in 
       forall p sid. no_set_state_entry_for p sid (tr_out `suffix_after` tr)
     )
   [SMTPat (corrupt p sid tr)]
-let corrupt_no_state p sid tr = 
+let corrupt_sets_no_state p sid tr = 
   reveal_opaque (`%corrupt) corrupt
 
 
-val mk_rand_no_state:
+val mk_rand_sets_no_state:
   u:usage -> lab:label -> len:nat{len <> 0} -> tr:trace ->
   Lemma 
     ( let (_, tr_out) = mk_rand u lab len tr in 
       forall p sid. no_set_state_entry_for p sid (tr_out `suffix_after` tr)
     )
   [SMTPat (mk_rand u lab len tr)]
-let mk_rand_no_state u lab len tr = 
+let mk_rand_sets_no_state u lab len tr = 
   reveal_opaque (`%mk_rand) mk_rand
 
-val trigger_event_no_state:
+val trigger_event_sets_no_state:
   p:principal -> tag:string -> cont:bytes -> tr:trace ->
   Lemma 
     ( let (_, tr_out) = trigger_event p tag cont tr in 
       forall p sid. no_set_state_entry_for p sid (tr_out `suffix_after` tr)
     )
   [SMTPat (trigger_event p tag cont tr)]
-let trigger_event_no_state p tag cont tr = 
+let trigger_event_sets_no_state p tag cont tr = 
   reveal_opaque (`%trigger_event) trigger_event
 
-val set_state_no_set_state_for_others:
+val set_state_sets_no_state_for_others:
     p:principal -> sid:state_id -> content:state_raw -> tr:trace -> 
     Lemma
       (let (_, tr_out) = set_state p sid content tr in
       forall p' sid'. p' <> p \/ sid' <> sid ==> no_set_state_entry_for p' sid' (tr_out `suffix_after` tr)
       )
-let set_state_no_set_state_for_others p sid cont tr = 
+      [SMTPat (set_state p sid content tr)]
+let set_state_sets_no_state_for_others p sid cont tr = 
   reveal_opaque (`%set_state) set_state
 #pop-options

@@ -12,7 +12,7 @@ open DY.Core.Trace.Type
 
 
 /// Type aliases for the internal state layout
-/// 
+ 
 type state_raw = bytes
 type session_raw = rev_list state_raw // the current state of a session is the last entry
 type full_state_raw = list (state_id * session_raw) 

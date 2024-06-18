@@ -73,7 +73,8 @@ let init prin =
   return new_sess_id
 
 
-/// one step: send a message and increase the counter by 1
+/// one step: trying out all trace manipulations there are
+/// (read latest state, send messages, set new states, trigger an event)
 val next: principal -> state_id -> traceful (option unit)
 let next prin sid =
   let*? curr_state = get_state prin sid in
@@ -102,7 +103,10 @@ let p_state_pred: state_predicate p_cinvs = {
     pred = (fun tr p sid cont -> is_knowable_by #p_cinvs (principal_state_label p sid) tr cont)
   ; session_pred = (fun tr sess prin sid cont -> 
       match sess with
-      | Nil -> True // session is empty -> delegate to (single state) pred
+      | Nil -> True // session is empty -> delegate to (single state) pred (no restriction here)
+      // this delegation should probably be enforced, 
+      // so that we have the lemma
+      // "pred tr p sid cont ==> session_pred tr Nil p sid cont"
       | Snoc init last -> (
           match (parse p_state last, parse p_state cont) with
           | (None,_) -> False
@@ -181,7 +185,7 @@ let next_invariant tr p sid =
                let (_, tr_after_other_session) = set_state p other_sid other_state_b tr_after_event in
                serialize_wf_lemma p_state (is_knowable_by (principal_state_label p other_sid) tr) other_state;
 
-               set_state_no_set_state_for_others p other_sid other_state_b tr_after_event;
+//               set_state_sets_no_state_for_others p other_sid other_state_b tr_after_event;
                get_session_aux_same p sid tr_after_event tr_after_other_session;
                // assert(get_session p sid tr_after_other_session = get_session p sid tr_after_next_state);
 ()
