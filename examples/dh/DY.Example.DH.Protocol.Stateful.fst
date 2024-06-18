@@ -44,8 +44,8 @@ instance local_state_dh_session: local_state dh_session = {
 }
 
 type dh_global_sess_ids = {
-  pki: nat;
-  private_keys: nat;
+  pki: state_id;
+  private_keys: state_id;
 }
 
 (*** Stateful code ***)
@@ -56,7 +56,7 @@ type dh_global_sess_ids = {
 // to give the attacker more flexibility. With this
 // separation an attacker can set a state without sending
 // a message over the network.
-val prepare_msg1: principal -> principal -> crypto nat
+val prepare_msg1: principal -> principal -> traceful state_id
 let prepare_msg1 alice bob =
   let* session_id = new_session_id alice in
   let* x = mk_rand (DhKey "DH.dh_key") (principal_state_label alice session_id) 32 in
@@ -65,7 +65,7 @@ let prepare_msg1 alice bob =
   return session_id
 
 // Alice sends message 1
-val send_msg1: principal -> nat -> crypto (option nat)
+val send_msg1: principal -> state_id -> traceful (option nat)
 let send_msg1 alice session_id =
   let*? session_state: dh_session = get_state alice session_id in
   match session_state with
@@ -77,7 +77,7 @@ let send_msg1 alice session_id =
   | _ -> return None
 
 // Bob prepares message 2
-val prepare_msg2: principal -> principal -> nat -> crypto (option nat)
+val prepare_msg2: principal -> principal -> nat -> traceful (option state_id)
 let prepare_msg2 alice bob msg_id =
   let*? msg = recv_msg msg_id in
   let*? msg1: message1 = return (decode_message1 msg) in
@@ -89,7 +89,7 @@ let prepare_msg2 alice bob msg_id =
   return (Some session_id)
 
 // Bob sends message 2
-val send_msg2: dh_global_sess_ids -> principal -> nat -> crypto (option nat)
+val send_msg2: dh_global_sess_ids -> principal -> state_id -> traceful (option nat)
 let send_msg2 global_sess_id bob session_id =
   let*? session_state: dh_session = get_state bob session_id in
   match session_state with
@@ -104,7 +104,7 @@ let send_msg2 global_sess_id bob session_id =
 // Alice prepares message 3
 //
 // This function has to verify the signature from message 2
-val prepare_msg3: dh_global_sess_ids -> principal -> principal -> nat -> nat -> crypto (option unit)
+val prepare_msg3: dh_global_sess_ids -> principal -> principal -> nat -> state_id -> traceful (option unit)
 let prepare_msg3 global_sess_id alice bob msg_id session_id =
   let*? session_state: dh_session = get_state alice session_id in
   match session_state with
@@ -121,7 +121,7 @@ let prepare_msg3 global_sess_id alice bob msg_id session_id =
   | _ -> return None
 
 // Alice send message 3
-val send_msg3: dh_global_sess_ids -> principal -> principal -> nat -> crypto (option nat)
+val send_msg3: dh_global_sess_ids -> principal -> principal -> state_id -> traceful (option nat)
 let send_msg3 global_sess_id alice bob session_id =
   let*? session_state: dh_session = get_state alice session_id in
   match session_state with
@@ -135,7 +135,7 @@ let send_msg3 global_sess_id alice bob session_id =
   | _ -> return None
 
 // Bob verifies message 3
-val verify_msg3: dh_global_sess_ids -> principal -> principal -> nat -> nat -> crypto (option unit)
+val verify_msg3: dh_global_sess_ids -> principal -> principal -> nat -> state_id -> traceful (option unit)
 let verify_msg3 global_sess_id alice bob msg_id session_id =
   let*? session_state: dh_session = get_state bob session_id in
   match session_state with

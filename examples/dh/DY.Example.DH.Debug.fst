@@ -11,10 +11,8 @@ open DY.Core
 open DY.Lib
 open DY.Example.DH.Protocol.Stateful
 
-val discard: bool -> crypto (option unit)
-let discard _ = return (Some ())
 
-let debug () : crypto (option unit)  =
+let debug () : traceful (option unit)  =
   let _ = IO.debug_print_string "************* Trace *************\n" in
   (*** Initialize protocol run ***)
   let alice = "alice" in

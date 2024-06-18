@@ -24,6 +24,14 @@ instance dh_crypto_usages = {
     | _ -> NoUsage);
   dh_known_peer_usage_commutes = (fun s1 s2 -> ());
   dh_unknown_peer_usage_implies = (fun s1 s2 -> ());
+
+  kdf_extract_usage = (fun salt_usg ikm_usg salt ikm -> NoUsage);
+  kdf_extract_label = (fun salt_usg ikm_usg salt_label ikm_label salt ikm -> salt_label `meet` ikm_label);
+  kdf_extract_label_lemma = (fun tr salt_usg ikm_usg salt_label ikm_label salt ikm -> ());
+
+  kdf_expand_usage = (fun prk_usage info -> NoUsage);
+  kdf_expand_label = (fun prk_usage prk_label info -> prk_label);
+  kdf_expand_label_lemma = (fun tr prk_usage prk_label info -> ());
 }
 
 #push-options "--ifuel 2 --fuel 0"
@@ -57,7 +65,7 @@ instance dh_crypto_invs: crypto_invariants = {
 
 val compute_message1_proof:
   tr:trace ->
-  alice:principal -> bob:principal -> x:bytes -> si:nat ->
+  alice:principal -> bob:principal -> x:bytes -> si:state_id ->
   Lemma
     (requires
       event_triggered tr alice (Initiate1 alice bob x) /\
@@ -120,7 +128,7 @@ let decode_message1_proof tr alice bob msg_bytes =
     | None -> ()
 
 val compute_message2_proof:
-  tr:trace -> si:nat ->
+  tr:trace -> si:state_id ->
   alice:principal -> bob:principal ->
   msg1:message1 ->
   gy:bytes -> y:bytes ->
@@ -254,7 +262,7 @@ let decode_message2_proof tr alice bob msg_bytes gx pk_b =
     | None -> ()
 
 val compute_message3_proof:
-  tr:trace -> si:nat ->
+  tr:trace ->
   alice:principal -> bob:principal ->
   gx:bytes -> gy:bytes ->
   sk_a:bytes -> n_sig:bytes ->
@@ -269,7 +277,7 @@ val compute_message3_proof:
   (ensures
     is_publishable tr (compute_message3 alice bob gx gy sk_a n_sig)
   )
-let compute_message3_proof tr si alice bob gx gy sk_a n_sig =
+let compute_message3_proof tr alice bob gx gy sk_a n_sig =
   let sig_msg = SigMsg3 {b=bob; gx; gy} in
   serialize_wf_lemma sig_message (is_publishable tr) sig_msg;
   

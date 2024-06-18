@@ -156,7 +156,7 @@ let prepare_msg1_proof tr alice bob = ()
 
 val send_msg1_proof:
   tr:trace ->
-  alice:principal -> bob:principal -> sess_id:nat ->
+  alice:principal -> bob:principal -> sess_id:state_id ->
   Lemma
   (requires trace_invariant tr)
   (ensures (
@@ -188,7 +188,7 @@ let prepare_msg2_proof tr alice bob msg_id =
 
 val send_msg2_proof:
   tr:trace ->
-  global_sess_id:dh_global_sess_ids -> bob:principal -> sess_id:nat ->
+  global_sess_id:dh_global_sess_ids -> bob:principal -> sess_id:state_id ->
   Lemma
   (requires trace_invariant tr)
   (ensures (
@@ -210,7 +210,7 @@ let send_msg2_proof tr global_sess_id bob sess_id =
 #push-options "--z3rlimit 30"
 val prepare_msg3_proof:
   tr:trace ->
-  global_sess_id:dh_global_sess_ids -> alice:principal -> bob:principal -> msg_id:nat -> sess_id:nat ->
+  global_sess_id:dh_global_sess_ids -> alice:principal -> bob:principal -> msg_id:nat -> sess_id:state_id ->
   Lemma
   (requires trace_invariant tr)
   (ensures (
@@ -261,9 +261,8 @@ let prepare_msg3_proof tr global_sess_id alice bob msg_id sess_id =
               normalize_term_spec get_label;
               reveal_opaque (`%dh) (dh);
               reveal_opaque (`%dh_pk) (dh_pk);
-              reveal_opaque (`%join) (join);
               assert(get_label (dh x msg2.gy) == join (get_label x) (get_dh_label msg2.gy) \/
-              get_label (dh x msg2.gy) == join (get_dh_label msg2.gy) (get_label x));
+                get_label (dh x msg2.gy) == join (get_dh_label msg2.gy) (get_label x));
               
               assert(exists si sj. is_secret (join (principal_state_label alice si) (principal_state_label bob sj)) tr k \/
                 is_secret (join (principal_state_label bob sj) (principal_state_label alice si)) tr k);
@@ -282,7 +281,7 @@ let prepare_msg3_proof tr global_sess_id alice bob msg_id sess_id =
 
 val send_msg3_proof:
   tr:trace ->
-  global_sess_id:dh_global_sess_ids -> alice:principal -> bob:principal -> sess_id:nat ->
+  global_sess_id:dh_global_sess_ids -> alice:principal -> bob:principal -> sess_id:state_id ->
   Lemma
   (requires trace_invariant tr)
   (ensures (
@@ -300,7 +299,7 @@ let send_msg3_proof tr global_sess_id alice bob sess_id =
       assert(event_triggered tr alice (Initiate2 alice bob gx gy k));
       assert(exists x. gx == dh_pk x); *)
 
-      compute_message3_proof tr sess_id alice bob gx gy sk_a n_sig;
+      compute_message3_proof tr alice bob gx gy sk_a n_sig;
       ()
     )
     | (None, tr) -> ()
@@ -327,10 +326,10 @@ let event_respond1_injective tr alice bob gx gy y y' =
   assert(y == y');
   ()
 
-#push-options "--z3rlimit 40"
+#push-options "--z3rlimit 70"
 val verify_msg3_proof:
   tr:trace ->
-  global_sess_id:dh_global_sess_ids -> alice:principal -> bob:principal -> msg_id:nat -> sess_id:nat ->
+  global_sess_id:dh_global_sess_ids -> alice:principal -> bob:principal -> msg_id:nat -> sess_id:state_id ->
   Lemma
   (requires trace_invariant tr)
   (ensures (
@@ -366,7 +365,7 @@ let verify_msg3_proof tr global_sess_id alice bob msg_id sess_id =
               assert(exists k'. event_triggered tr alice (Initiate2 alice bob gx gy k'));
               // We now introduce k' to concretely reason about it.
               eliminate exists k'. event_triggered tr alice (Initiate2 alice bob gx gy k')
-              returns _
+              returns event_triggered tr alice (Initiate2 alice bob gx gy k)
               with _. (
                 // From the Initiate2 event we know that there exists a Respond1 event with 
                 // gx, gy and some y'. To show that k equals k' it is enough to show that
@@ -375,7 +374,7 @@ let verify_msg3_proof tr global_sess_id alice bob msg_id sess_id =
                 
                 // To concretely reason about y' we introduce it via an elimination.
                 eliminate exists y'. gy == dh_pk y' /\ k' == dh y' gx /\ event_triggered tr bob (Respond1 alice bob gx gy y')
-                returns _
+                returns event_triggered tr alice (Initiate2 alice bob gx gy k)
                 with _. (
                   // The event_respond1_injective lemma gives us that the
                   // event triggered with y and y' is the same
