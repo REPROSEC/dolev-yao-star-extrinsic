@@ -15,8 +15,7 @@ open DY.Example.DH.Protocol.Stateful
 
 val is_dh_shared_key: trace -> principal -> principal -> bytes -> prop
 let is_dh_shared_key tr alice bob k = exists si sj.
-  (is_secret (join (principal_state_label alice si) (principal_state_label bob sj)) tr k \/
-  is_secret (join (principal_state_label bob sj) (principal_state_label alice si)) tr k) /\ 
+  get_label k `equivalent tr` join (principal_state_label alice si) (principal_state_label bob sj) /\ 
   get_usage k == AeadKey "DH.aead_key"
 
 let dh_session_pred: local_state_predicate dh_session = {
@@ -207,7 +206,6 @@ let send_msg2_proof tr global_sess_id bob sess_id =
   )
   | _ -> ()
 
-#push-options "--z3rlimit 30"
 val prepare_msg3_proof:
   tr:trace ->
   global_sess_id:dh_global_sess_ids -> alice:principal -> bob:principal -> msg_id:nat -> sess_id:state_id ->
@@ -242,7 +240,7 @@ let prepare_msg3_proof tr global_sess_id alice bob msg_id sess_id =
           with _. (
             assert(exists y k'. k' == dh y gx /\ msg2.gy == dh_pk y /\ event_triggered tr bob (Respond1 alice bob gx msg2.gy y));
             eliminate exists y k'. k' == dh y gx /\ event_triggered tr bob (Respond1 alice bob gx msg2.gy y)
-            returns _
+            returns exists y. k == dh y gx /\ is_dh_shared_key tr alice bob k /\ event_triggered tr bob (Respond1 alice bob gx msg2.gy y)
             with _. (
               assert(event_triggered tr bob (Respond1 alice bob gx msg2.gy y));
               
@@ -261,11 +259,11 @@ let prepare_msg3_proof tr global_sess_id alice bob msg_id sess_id =
               normalize_term_spec get_label;
               reveal_opaque (`%dh) (dh);
               reveal_opaque (`%dh_pk) (dh_pk);
+
               assert(get_label (dh x msg2.gy) == join (get_label x) (get_dh_label msg2.gy) \/
                 get_label (dh x msg2.gy) == join (get_dh_label msg2.gy) (get_label x));
               
-              assert(exists si sj. is_secret (join (principal_state_label alice si) (principal_state_label bob sj)) tr k \/
-                is_secret (join (principal_state_label bob sj) (principal_state_label alice si)) tr k);
+              assert(exists si sj. get_label k `equivalent tr` join (principal_state_label alice si) (principal_state_label bob sj));
               ()
             )
           )
@@ -277,7 +275,6 @@ let prepare_msg3_proof tr global_sess_id alice bob msg_id sess_id =
     | (None, tr) -> ()
   )
   | _ -> ()
-#pop-options
 
 val send_msg3_proof:
   tr:trace ->
@@ -326,7 +323,6 @@ let event_respond1_injective tr alice bob gx gy y y' =
   assert(y == y');
   ()
 
-#push-options "--z3rlimit 70"
 val verify_msg3_proof:
   tr:trace ->
   global_sess_id:dh_global_sess_ids -> alice:principal -> bob:principal -> msg_id:nat -> sess_id:state_id ->
@@ -392,8 +388,7 @@ let verify_msg3_proof tr global_sess_id alice bob msg_id sess_id =
             );
  
             assert(is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob) \/ 
-              (exists si sj. is_secret (join (principal_state_label alice si) (principal_state_label bob sj)) tr k \/
-                is_secret (join (principal_state_label bob sj) (principal_state_label alice si)) tr k));
+              (exists si sj. get_label k `equivalent tr` join (principal_state_label alice si) (principal_state_label bob sj)));
             assert(get_usage k == AeadKey "DH.aead_key");
             assert(is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob) \/
               (is_dh_shared_key tr alice bob k /\ event_triggered tr alice (Initiate2 alice bob gx gy k)));

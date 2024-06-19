@@ -53,13 +53,20 @@ val initiator_forward_secrecy_lemma:
   )
   (ensures
     is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob) \/
-    (exists si sj. (is_secret (join (principal_state_label alice si) (principal_state_label bob sj)) tr k \/
-      is_secret (join (principal_state_label bob sj) (principal_state_label alice si)) tr k) /\
+    (exists si sj. get_label k `equivalent tr` join (principal_state_label alice si) (principal_state_label bob sj) /\
       (is_corrupt tr (principal_state_label alice si) \/ is_corrupt tr (principal_state_label bob sj))
     )
   )
-let initiator_forward_secrecy_lemma tr i alice bob gx gy k = 
-  attacker_only_knows_publishable_values tr k
+let initiator_forward_secrecy_lemma tr i alice bob gx gy k =
+  attacker_only_knows_publishable_values tr k;
+  
+  (* Debugging code
+  assert(is_dh_shared_key tr alice bob k \/ is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob)); *)
+
+  normalize_term_spec is_corrupt;
+  reveal_opaque (`%can_flow) (can_flow);
+  reveal_opaque (`%join) (join);
+  ()
 
 val responder_forward_secrecy_lemma: 
   tr:trace -> i:nat -> alice:principal -> bob:principal -> gx:bytes -> gy:bytes -> k:bytes ->
@@ -71,10 +78,20 @@ val responder_forward_secrecy_lemma:
   )
   (ensures
     is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob) \/
-    (exists si sj. (is_secret (join (principal_state_label alice si) (principal_state_label bob sj)) tr k \/
-      is_secret (join (principal_state_label bob sj) (principal_state_label alice si)) tr k) /\
+    (exists si sj. get_label k `equivalent tr` join (principal_state_label alice si) (principal_state_label bob sj) /\
       (is_corrupt tr (principal_state_label alice si) \/ is_corrupt tr (principal_state_label bob sj))
     )
   )
 let responder_forward_secrecy_lemma tr i alice bob gx gy k = 
-  attacker_only_knows_publishable_values tr k
+  attacker_only_knows_publishable_values tr k;
+
+  (* Debugging code
+  assert(is_dh_shared_key tr alice bob k \/ 
+    is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob));
+  assert(event_triggered tr alice (Initiate2 alice bob gx gy k) \/ 
+    is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob)); *)
+ 
+  normalize_term_spec is_corrupt;
+  reveal_opaque (`%can_flow) (can_flow);
+  reveal_opaque (`%join) (join);
+  ()
