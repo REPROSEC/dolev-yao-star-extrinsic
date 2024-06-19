@@ -82,8 +82,6 @@ let dh_event_pred: event_predicate dh_event =
       event_triggered tr alice (Initiate2 alice bob gx gy k))
     )
 
-(* Couldn't we hide all of the following code in a function returning a record? *)
-
 /// List of all local state predicates.
 
 let all_sessions = [
@@ -386,7 +384,7 @@ let verify_msg3_proof tr global_sess_id alice bob msg_id sess_id =
                 )
               )
             );
- 
+
             assert(is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob) \/ 
               (exists si sj. get_label k `equivalent tr` join (principal_state_label alice si) (principal_state_label bob sj)));
             assert(get_usage k == AeadKey "DH.aead_key");

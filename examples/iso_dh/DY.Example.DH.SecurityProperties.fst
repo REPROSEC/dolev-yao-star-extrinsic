@@ -38,10 +38,16 @@ val key_secrecy_lemma: tr:trace -> k:bytes -> alice:principal -> bob:principal -
     attacker_knows tr k 
   )
   (ensures
-    forall si sj. is_secret (join (principal_state_label alice si) (principal_state_label bob sj)) tr k ==> 
+    forall si sj. get_label k `equivalent tr` join (principal_state_label alice si) (principal_state_label bob sj) ==> 
     (is_corrupt tr (principal_state_label alice si) \/ is_corrupt tr (principal_state_label bob sj))
   )
-let key_secrecy_lemma tr k alice bob = attacker_only_knows_publishable_values tr k
+let key_secrecy_lemma tr k alice bob = 
+  attacker_only_knows_publishable_values tr k;
+
+  normalize_term_spec is_corrupt;
+  reveal_opaque (`%can_flow) (can_flow);
+  reveal_opaque (`%join) (join);
+  ()
 
 val initiator_forward_secrecy_lemma: 
   tr:trace -> i:nat -> alice:principal -> bob:principal -> gx:bytes -> gy:bytes -> k:bytes ->

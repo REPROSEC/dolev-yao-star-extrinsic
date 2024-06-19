@@ -1,12 +1,5 @@
 module DY.Example.DH.Debug
 
-(*
-  Extract code by running:
-  1. make extract_lib
-  2. In the obj/ directory: OCAMLPATH=$FSTAR_HOME/lib ocamlbuild -use-ocamlfind -pkg batteries -pkg fstar.lib DY_Example_DH_Debug.native
-  3. ./DY_Example_DH_Debug.native 
-*)
-
 open DY.Core
 open DY.Lib
 open DY.Example.DH.Protocol.Stateful
