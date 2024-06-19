@@ -7,6 +7,9 @@ open DY.Lib
 (*
  *** ISO-DH Protocol ***
 
+ ISO/IEC 9798-3:2019(E): IT Security techniques — Entity authentication — Part
+ 3: Mechanisms using digital signature techniques. Tech. rep. (Jan 2019)
+
  A -> B: {A, gx}                            msg1
  B -> A: {B, gy, sign({A; gx; gy}, privB)}  msg2
  A -> B: {sign({B; gx; gy}, privA)}         msg3
