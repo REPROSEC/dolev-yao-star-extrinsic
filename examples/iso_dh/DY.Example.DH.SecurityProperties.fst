@@ -13,25 +13,30 @@ open DY.Example.DH.Protocol.Stateful.Proof
   TODO: In the intrinsic version we use method like corrupt_at
   and did_event_occur_before. Do we need these method here too?
 *)
-val initiator_correspondence_lemma: tr:trace -> i:nat -> alice:principal -> bob:principal -> gx:bytes -> gy:bytes -> k:bytes ->
+
+(*** Authentication Properties ***)
+
+val initiator_authentication: tr:trace -> i:nat -> alice:principal -> bob:principal -> gx:bytes -> gy:bytes -> k:bytes ->
   Lemma
   (requires event_triggered_at tr i alice (Initiate2 alice bob gx gy k) /\ 
     trace_invariant tr)
   (ensures is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob) \/
-    (exists y. event_triggered tr bob (Respond1 alice bob gx gy y) /\
+    (exists y. event_triggered (prefix tr i) bob (Respond1 alice bob gx gy y) /\
     k == dh y gx)
   )
-let initiator_correspondence_lemma tr i alice bob gx gy k = ()
+let initiator_authentication tr i alice bob gx gy k = ()
 
-val responder_correspondence_lemma: tr:trace -> i:nat -> alice:principal -> bob:principal -> gx:bytes -> gy:bytes -> k:bytes ->
+val responder_authentication: tr:trace -> i:nat -> alice:principal -> bob:principal -> gx:bytes -> gy:bytes -> k:bytes ->
   Lemma
   (requires event_triggered_at tr i bob (Respond2 alice bob gx gy k) /\
     trace_invariant tr)
   (ensures is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob) \/
-    event_triggered tr alice (Initiate2 alice bob gx gy k))
-let responder_correspondence_lemma tr i alice bob gx gy k = ()
+    event_triggered (prefix tr i) alice (Initiate2 alice bob gx gy k))
+let responder_authentication tr i alice bob gx gy k = ()
 
-val key_secrecy_lemma: tr:trace -> k:bytes -> alice:principal -> bob:principal ->
+(*** Key Secrecy Property ***)
+
+val key_secrecy: tr:trace -> k:bytes -> alice:principal -> bob:principal ->
   Lemma
   (requires 
     trace_invariant tr /\
@@ -41,7 +46,7 @@ val key_secrecy_lemma: tr:trace -> k:bytes -> alice:principal -> bob:principal -
     forall si sj. get_label k `equivalent tr` join (principal_state_label alice si) (principal_state_label bob sj) ==> 
     (is_corrupt tr (principal_state_label alice si) \/ is_corrupt tr (principal_state_label bob sj))
   )
-let key_secrecy_lemma tr k alice bob = 
+let key_secrecy tr k alice bob = 
   attacker_only_knows_publishable_values tr k;
 
   normalize_term_spec is_corrupt;
@@ -49,7 +54,9 @@ let key_secrecy_lemma tr k alice bob =
   reveal_opaque (`%join) (join);
   ()
 
-val initiator_forward_secrecy_lemma: 
+(*** Forward Secrecy Properties ***)
+
+val initiator_forward_secrecy: 
   tr:trace -> i:nat -> alice:principal -> bob:principal -> gx:bytes -> gy:bytes -> k:bytes ->
   Lemma
   (requires
@@ -63,7 +70,7 @@ val initiator_forward_secrecy_lemma:
       (is_corrupt tr (principal_state_label alice si) \/ is_corrupt tr (principal_state_label bob sj))
     )
   )
-let initiator_forward_secrecy_lemma tr i alice bob gx gy k =
+let initiator_forward_secrecy tr i alice bob gx gy k =
   attacker_only_knows_publishable_values tr k;
   
   (* Debugging code
@@ -74,7 +81,7 @@ let initiator_forward_secrecy_lemma tr i alice bob gx gy k =
   reveal_opaque (`%join) (join);
   ()
 
-val responder_forward_secrecy_lemma: 
+val responder_forward_secrecy: 
   tr:trace -> i:nat -> alice:principal -> bob:principal -> gx:bytes -> gy:bytes -> k:bytes ->
   Lemma
   (requires
@@ -88,7 +95,7 @@ val responder_forward_secrecy_lemma:
       (is_corrupt tr (principal_state_label alice si) \/ is_corrupt tr (principal_state_label bob sj))
     )
   )
-let responder_forward_secrecy_lemma tr i alice bob gx gy k = 
+let responder_forward_secrecy tr i alice bob gx gy k = 
   attacker_only_knows_publishable_values tr k;
 
   (* Debugging code

@@ -7,6 +7,7 @@ open DY.Lib
 (*
  *** ISO-DH Protocol ***
 
+ Diffie-Hellman key exchange protocol with digital signatures based on
  ISO/IEC 9798-3:2019(E): IT Security techniques — Entity authentication — Part
  3: Mechanisms using digital signature techniques. Tech. rep. (Jan 2019)
 
