@@ -15,6 +15,10 @@ open DY.Example.DH.Protocol.Stateful
 
 val is_dh_shared_key: trace -> principal -> principal -> bytes -> prop
 let is_dh_shared_key tr alice bob k = exists si sj.
+  // We are using the equivalent relation here because depending on the party we are looking at
+  // the label is either ``join (principal_state_label alice si) (principal_state_label bob sj)`` or
+  // ``join (principal_state_label bob sj) (principal_state_label alice si)``.
+  // This is because k is either build from ``dh x (dh_pk y)`` or ``dh y (dh_pk x)``.
   get_label k `equivalent tr` join (principal_state_label alice si) (principal_state_label bob sj) /\ 
   get_usage k == AeadKey "DH.aead_key"
 
@@ -234,11 +238,13 @@ let prepare_msg3_proof tr global_sess_id alice bob msg_id sess_id =
           assert(get_usage k = AeadKey "DH.aead_key");
           assert(exists si. is_knowable_by (principal_state_label alice si) tr k);
 
-          introduce (~(is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob))) ==> (exists y. k == dh y gx /\ is_dh_shared_key tr alice bob k /\ event_triggered tr bob (Respond1 alice bob gx msg2.gy y))
+          let alice_and_bob_not_corrupt = (~(is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob))) in
+          let dh_key_and_event_respond1 = (exists y. k == dh y gx /\ is_dh_shared_key tr alice bob k /\ event_triggered tr bob (Respond1 alice bob gx msg2.gy y)) in
+          introduce alice_and_bob_not_corrupt ==> dh_key_and_event_respond1 
           with _. (
             assert(exists y k'. k' == dh y gx /\ msg2.gy == dh_pk y /\ event_triggered tr bob (Respond1 alice bob gx msg2.gy y));
             eliminate exists y k'. k' == dh y gx /\ event_triggered tr bob (Respond1 alice bob gx msg2.gy y)
-            returns exists y. k == dh y gx /\ is_dh_shared_key tr alice bob k /\ event_triggered tr bob (Respond1 alice bob gx msg2.gy y)
+            returns dh_key_and_event_respond1
             with _. (
               assert(event_triggered tr bob (Respond1 alice bob gx msg2.gy y));
               
@@ -247,21 +253,10 @@ let prepare_msg3_proof tr global_sess_id alice bob msg_id sess_id =
               dh_shared_secret_lemma x y;
               assert(dh y gx == dh x msg2.gy);
               assert(k == k');
-
-              assert(exists si. is_secret (principal_state_label alice si) tr x);
-              assert(exists sj. is_secret (principal_state_label bob sj) tr y);
-              assert(exists si. get_label x == principal_state_label alice si);
-              assert(exists sj. get_label y == principal_state_label bob sj);
-              assert(exists si sj. join (get_label x) (get_label y) == join (principal_state_label alice si) (principal_state_label bob sj));
-
-              normalize_term_spec get_label;
-              reveal_opaque (`%dh) (dh);
-              reveal_opaque (`%dh_pk) (dh_pk);
-
-              assert(get_label (dh x msg2.gy) == join (get_label x) (get_dh_label msg2.gy) \/
-                get_label (dh x msg2.gy) == join (get_dh_label msg2.gy) (get_label x));
               
               assert(exists si sj. get_label k `equivalent tr` join (principal_state_label alice si) (principal_state_label bob sj));
+
+              assert(dh_key_and_event_respond1);
               ()
             )
           )
@@ -352,14 +347,17 @@ let verify_msg3_proof tr global_sess_id alice bob msg_id sess_id =
             assert(exists k'. event_triggered tr alice (Initiate2 alice bob gx gy k') \/ is_corrupt tr (principal_label alice));
 
             // Proof strategy: We want to work without the corruption case
-            // so we introduce this implication. 
-            introduce (~((principal_label alice) `can_flow tr` public \/ (principal_label bob) `can_flow tr` public)) ==> event_triggered tr alice (Initiate2 alice bob gx gy k) with _. (
+            // so we introduce this implication.
+            let alice_and_bob_not_corrupt = (~(is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob))) in
+            let event_initiate2 = event_triggered tr alice (Initiate2 alice bob gx gy k) in
+            introduce alice_and_bob_not_corrupt ==> event_initiate2
+            with _. (
               // We can now assert that there exists a k' such that the event Initiate2 has been triggered
               // without the corruption case.
               assert(exists k'. event_triggered tr alice (Initiate2 alice bob gx gy k'));
               // We now introduce k' to concretely reason about it.
               eliminate exists k'. event_triggered tr alice (Initiate2 alice bob gx gy k')
-              returns event_triggered tr alice (Initiate2 alice bob gx gy k)
+              returns event_initiate2
               with _. (
                 // From the Initiate2 event we know that there exists a Respond1 event with 
                 // gx, gy and some y'. To show that k equals k' it is enough to show that
@@ -378,8 +376,7 @@ let verify_msg3_proof tr global_sess_id alice bob msg_id sess_id =
                   assert(k == k');
                   // This gives us that the event Initiate2 has been triggered
                   // for our concrete k.
-                  assert(event_triggered tr alice (Initiate2 alice bob gx gy k));
-                  assert(event_triggered tr alice (Initiate2 alice bob gx gy k'));
+                  assert(event_initiate2);
                   ()
                 )
               )

@@ -9,10 +9,6 @@ open DY.Example.DH.Protocol.Stateful.Proof
 
 #set-options "--fuel 8 --ifuel 8 --z3rlimit 25  --z3cliopt 'smt.qi.eager_threshold=100'"
 
-(*
-  TODO: In the intrinsic version we use method like corrupt_at
-  and did_event_occur_before. Do we need these method here too?
-*)
 
 (*** Authentication Properties ***)
 
