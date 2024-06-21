@@ -45,10 +45,29 @@ val key_secrecy: tr:trace -> k:bytes -> alice:principal -> bob:principal ->
 let key_secrecy tr k alice bob = 
   attacker_only_knows_publishable_values tr k;
 
+  (*
+  We can reveal the following functions from the
+  core DY* to prove the lemma but we don't want
+  to break this abstraction barrier.
+
   normalize_term_spec is_corrupt;
   reveal_opaque (`%can_flow) (can_flow);
-  reveal_opaque (`%join) (join);
-  ()
+  reveal_opaque (`%join) (join); *)
+
+  // The following proof triggers the join_flow_to_public_eq lemma
+  // with the [SMTPat ((join x1 x2) `can_flow tr` public)]
+  introduce
+    forall si sj. get_label k `equivalent tr` join (principal_state_label alice si) (principal_state_label bob sj) ==> 
+    (is_corrupt tr (principal_state_label alice si) \/ is_corrupt tr (principal_state_label bob sj))
+  with (
+    introduce 
+      (is_corrupt tr (principal_state_label alice si) \/ is_corrupt tr (principal_state_label bob sj)) ==> 
+      (join (principal_state_label alice si) (principal_state_label bob sj) `can_flow tr` public )
+    with _. (
+      // This assert triggers the SMTPat of the join_flow_to_public_eq lemma
+      assert(join (principal_state_label alice si) (principal_state_label bob sj) `can_flow tr` public)
+    )
+  )
 
 (*** Forward Secrecy Properties ***)
 
@@ -69,12 +88,11 @@ val initiator_forward_secrecy:
 let initiator_forward_secrecy tr i alice bob gx gy k =
   attacker_only_knows_publishable_values tr k;
   
-  (* Debugging code
-  assert(is_dh_shared_key tr alice bob k \/ is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob)); *)
+  // The following code is not needed for the proof.
+  // It just shows what we need to show to prove the lemma.
+  assert(is_dh_shared_key tr alice bob k \/ is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob));
 
-  normalize_term_spec is_corrupt;
-  reveal_opaque (`%can_flow) (can_flow);
-  reveal_opaque (`%join) (join);
+  key_secrecy tr k alice bob;
   ()
 
 val responder_forward_secrecy: 
@@ -94,13 +112,12 @@ val responder_forward_secrecy:
 let responder_forward_secrecy tr i alice bob gx gy k = 
   attacker_only_knows_publishable_values tr k;
 
-  (* Debugging code
+  // The following code is not needed for the proof.
+  // It just shows what we need to show to prove the lemma.
   assert(is_dh_shared_key tr alice bob k \/ 
     is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob));
   assert(event_triggered tr alice (Initiate2 alice bob gx gy k) \/ 
-    is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob)); *)
+    is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob));
  
-  normalize_term_spec is_corrupt;
-  reveal_opaque (`%can_flow) (can_flow);
-  reveal_opaque (`%join) (join);
+  key_secrecy tr k alice bob;
   ()

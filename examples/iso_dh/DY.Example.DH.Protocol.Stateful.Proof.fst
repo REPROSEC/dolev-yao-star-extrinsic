@@ -53,8 +53,8 @@ let dh_session_pred: local_state_predicate dh_session = {
       is_knowable_by (principal_state_label bob sess_id) tr k /\
       event_triggered tr bob (Respond2 alice bob gx gy k) /\
       (is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob) \/
-      (is_dh_shared_key tr alice bob k /\ 
-      event_triggered tr alice (Initiate2 alice bob gx gy k)))
+        (is_dh_shared_key tr alice bob k /\ 
+        event_triggered tr alice (Initiate2 alice bob gx gy k)))
     )
   );
   pred_later = (fun tr1 tr2 prin sess_id st -> ());
@@ -78,12 +78,12 @@ let dh_event_pred: event_predicate dh_event =
       (exists x sess_id. is_secret (principal_state_label alice sess_id) tr x /\
       gx = dh_pk x) /\
       (is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob) \/
-      (exists y. k == dh y gx /\ is_dh_shared_key tr alice bob k /\ event_triggered tr bob (Respond1 alice bob gx gy y)))
+        (exists y. k == dh y gx /\ is_dh_shared_key tr alice bob k /\ event_triggered tr bob (Respond1 alice bob gx gy y)))
     )
     | Respond2 alice bob gx gy k -> (
       is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob) \/
       (is_dh_shared_key tr alice bob k /\
-      event_triggered tr alice (Initiate2 alice bob gx gy k))
+        event_triggered tr alice (Initiate2 alice bob gx gy k))
     )
 
 /// List of all local state predicates.
@@ -202,7 +202,7 @@ let send_msg2_proof tr global_sess_id bob sess_id =
     match get_private_key bob global_sess_id.private_keys (Sign "DH.SigningKey") tr with
     | (Some sk_b, tr) -> (
       let (n_sig, tr) = mk_rand SigNonce (principal_label bob) 32 tr in
-      compute_message2_proof tr sess_id alice bob {alice; gx} gy y sk_b n_sig
+      compute_message2_proof tr sess_id alice bob {alice; gx} y sk_b n_sig
     )
     | (None, tr) -> ()
   )
@@ -219,7 +219,7 @@ val prepare_msg3_proof:
   ))
 let prepare_msg3_proof tr global_sess_id alice bob msg_id sess_id =
   match get_state alice sess_id tr with
-    | (Some (InitiatorSentMsg1 bob x), tr) -> (
+  | (Some (InitiatorSentMsg1 bob x), tr) -> (
     match recv_msg msg_id tr with
     | (Some msg_bytes, tr) -> (
       match get_public_key alice global_sess_id.pki (Verify "DH.SigningKey") bob tr with
@@ -285,9 +285,10 @@ let send_msg3_proof tr global_sess_id alice bob sess_id =
     | (Some sk_a, tr) -> (
       let (n_sig, tr) = mk_rand SigNonce (principal_label alice) 32 tr in
 
-      (* Debugging code
+      // The following code is not needed for the proof.
+      // It just shows what we need to show to prove the lemma.
       assert(event_triggered tr alice (Initiate2 alice bob gx gy k));
-      assert(exists x. gx == dh_pk x); *)
+      assert(exists x. gx == dh_pk x);
 
       compute_message3_proof tr alice bob gx gy sk_a n_sig;
       ()
@@ -316,6 +317,8 @@ let event_respond1_injective tr alice bob gx gy y y' =
   assert(y == y');
   ()
 
+
+#set-options "--z3rlimit 50"
 val verify_msg3_proof:
   tr:trace ->
   global_sess_id:dh_global_sess_ids -> alice:principal -> bob:principal -> msg_id:nat -> sess_id:state_id ->

@@ -61,7 +61,7 @@ instance parseable_serializeable_message: parseable_serializeable bytes message 
 // Definition of signature terms
 [@@ with_bytes bytes]
 type sig_message2 = {
-  a:principal;
+  alice:principal;
   gx:bytes;
   gy:bytes;
 }
@@ -71,7 +71,7 @@ type sig_message2 = {
 
 [@@ with_bytes bytes]
 type sig_message3 = {
-  b:principal;
+  bob:principal;
   gx:bytes;
   gy:bytes;
 }
@@ -116,7 +116,7 @@ let decode_message1 msg1_bytes =
 // Bob generates message 2
 val compute_message2: principal -> principal -> bytes -> bytes -> bytes -> bytes -> bytes
 let compute_message2 alice bob gx gy sk_b n_sig =
-  let sig_msg = SigMsg2 {a=alice; gx; gy} in
+  let sig_msg = SigMsg2 {alice; gx; gy} in
   let sg = sign sk_b n_sig (serialize sig_message sig_msg) in
   let msg = Msg2 {bob; gy; sg} in
   serialize message msg
@@ -131,14 +131,14 @@ let decode_message2 msg2_bytes alice gx pk_b =
   // with the gy value from the message and the gx
   // value from Alice's state.
   let gy = msg2.gy in
-  let sig_msg = SigMsg2 {a=alice; gx; gy} in
+  let sig_msg = SigMsg2 {alice; gx; gy} in
   if verify pk_b (serialize sig_message sig_msg) msg2.sg then Some msg2
   else None
 
 // Alice generates message3
 val compute_message3: principal -> principal -> bytes -> bytes -> bytes -> bytes -> bytes
 let compute_message3 alice bob gx gy sk_a n_sig =
-  let sig_msg = SigMsg3 {b=bob; gx; gy} in
+  let sig_msg = SigMsg3 {bob; gx; gy} in
   let sg = sign sk_a n_sig (serialize sig_message sig_msg) in
   let msg = Msg3 {sg} in
   serialize message msg
@@ -151,6 +151,6 @@ let decode_message3 msg3_bytes bob gx gy pk_a =
   let msg3 = Msg3?.msg msg3_parsed in
   // Verify the signature contained in message 3
   // with the gx and gy values from Bob's state.
-  let sig_msg = SigMsg3 {b=bob; gx; gy} in
+  let sig_msg = SigMsg3 {bob; gx; gy} in
   if verify pk_a (serialize sig_message sig_msg) msg3.sg then Some msg3
   else None

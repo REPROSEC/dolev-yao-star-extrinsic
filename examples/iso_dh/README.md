@@ -7,8 +7,7 @@ standard. In this analysis, we prove the following
 properties of the ISO-DH protocol:
 
 1. Mutual authentication
-2. Secrecy of the key ``k``
-3. Forward secrecy of the key ``k`` 
+2. Forward secrecy of the key ``k`` 
   (as long as the private DH keys are secret, 
   the key ``k`` does not leak)
 
