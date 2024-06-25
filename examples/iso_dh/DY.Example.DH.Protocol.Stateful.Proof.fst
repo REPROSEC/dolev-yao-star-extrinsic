@@ -76,7 +76,7 @@ let dh_event_pred: event_predicate dh_event =
     | Initiate2 alice bob gx gy k -> (
       is_publishable tr gx /\ is_publishable tr gy /\
       (exists x sess_id. is_secret (principal_state_label alice sess_id) tr x /\
-      gx = dh_pk x) /\
+      gx = dh_pk x /\ k == dh x gy) /\
       (is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob) \/
         (exists y. k == dh y gx /\ is_dh_shared_key tr alice bob k /\ event_triggered tr bob (Respond1 alice bob gx gy y)))
     )
@@ -294,7 +294,7 @@ let send_msg3_proof tr global_sess_id alice bob sess_id =
       // The following code is not needed for the proof.
       // It just shows what we need to show to prove the lemma.
       assert(event_triggered tr alice (Initiate2 alice bob gx gy k));
-      assert(exists x. gx == dh_pk x);
+      assert(exists x. event_triggered tr alice (Initiate2 alice bob gx gy (dh x gy)) /\ gx = dh_pk x);
 
       compute_message3_proof tr alice bob gx gy sk_a n_sig;
       ()
@@ -302,27 +302,6 @@ let send_msg3_proof tr global_sess_id alice bob sess_id =
     | (None, tr) -> ()
   )
   | _ -> ()
-
-val event_respond1_injective:
-  tr:trace ->
-  alice:principal -> bob:principal ->
-  gx:bytes -> gy:bytes -> y:bytes -> y':bytes ->
-  Lemma
-  (requires 
-    trace_invariant tr /\
-    event_triggered tr bob (Respond1 alice bob gx gy y) /\
-    event_triggered tr bob (Respond1 alice bob gx gy y')
-  )
-  (ensures
-    y == y'
-  )
-let event_respond1_injective tr alice bob gx gy y y' =  
-  reveal_opaque (`%dh_pk) (dh_pk);
-  assert(gy == dh_pk y);
-  assert(gy == dh_pk y');
-  assert(y == y');
-  ()
-
 
 #set-options "--z3rlimit 50"
 val verify_msg3_proof:
@@ -354,7 +333,7 @@ let verify_msg3_proof tr global_sess_id alice bob msg_id sess_id =
             // the event Initiate2 has been triggered or alice is corrupt.
             // On a high level we need to show now that this event was triggered
             // for our concrete k.
-            assert(exists k'. event_triggered tr alice (Initiate2 alice bob gx gy k') \/ is_corrupt tr (principal_label alice));
+            assert(exists x. gx == dh_pk x /\ event_triggered tr alice (Initiate2 alice bob gx gy (dh x gy)) \/ is_corrupt tr (principal_label alice));
 
             // Proof strategy: We want to work without the corruption case
             // so we introduce this implication.
@@ -362,33 +341,16 @@ let verify_msg3_proof tr global_sess_id alice bob msg_id sess_id =
             let event_initiate2 = event_triggered tr alice (Initiate2 alice bob gx gy k) in
             introduce alice_and_bob_not_corrupt ==> event_initiate2
             with _. (
-              // We can now assert that there exists a k' such that the event Initiate2 has been triggered
+              // We can now assert that there exists a x such that the event Initiate2 has been triggered
               // without the corruption case.
-              assert(exists k'. event_triggered tr alice (Initiate2 alice bob gx gy k'));
-              // We now introduce k' to concretely reason about it.
-              eliminate exists k'. event_triggered tr alice (Initiate2 alice bob gx gy k')
+              assert(exists x. gx == dh_pk x /\ event_triggered tr alice (Initiate2 alice bob gx gy (dh x gy)));
+              // We now introduce x to concretely reason about it.
+              eliminate exists x. gx == dh_pk x /\ event_triggered tr alice (Initiate2 alice bob gx gy (dh x gy))
               returns event_initiate2
               with _. (
-                // From the Initiate2 event we know that there exists a Respond1 event with 
-                // gx, gy and some y'. To show that k equals k' it is enough to show that
-                // y' equals y since k = dh y gx.       
-                assert(exists y'. k' == dh y' gx /\ event_triggered tr bob (Respond1 alice bob gx gy y'));
-                
-                // To concretely reason about y' we introduce it via an elimination.
-                eliminate exists y'. gy == dh_pk y' /\ k' == dh y' gx /\ event_triggered tr bob (Respond1 alice bob gx gy y')
-                returns event_triggered tr alice (Initiate2 alice bob gx gy k)
-                with _. (
-                  // The event_respond1_injective lemma gives us that the
-                  // event triggered with y and y' is the same
-                  event_respond1_injective tr alice bob gx gy y y';
-                  // With the lemma above F* can automatically deduce that
-                  // k and k' must be equal.
-                  assert(k == k');
-                  // This gives us that the event Initiate2 has been triggered
-                  // for our concrete k.
-                  assert(event_initiate2);
-                  ()
-                )
+                // We use commutativity of DH to reconcile the (dh x gy) in our hypothesis,
+                // and the (dh y gx) in event_initiate2
+                dh_shared_secret_lemma x y
               )
             );
 

@@ -41,7 +41,7 @@ let dh_crypto_preds = {
         exists y. sig_msg2.gy == (dh_pk y) /\ event_triggered tr prin (Respond1 sig_msg2.alice prin sig_msg2.gx sig_msg2.gy y)
       )
       | Some (SigMsg3 sig_msg3) -> (
-        exists x k. sig_msg3.gx == (dh_pk x) /\ event_triggered tr prin (Initiate2 prin sig_msg3.bob sig_msg3.gx sig_msg3.gy k)
+        exists x. sig_msg3.gx == (dh_pk x) /\ event_triggered tr prin (Initiate2 prin sig_msg3.bob sig_msg3.gx sig_msg3.gy (dh x sig_msg3.gy))
       )
       | None -> False
     ))
@@ -214,7 +214,7 @@ val compute_message3_proof:
   sk_a:bytes -> n_sig:bytes ->
   Lemma
   (requires
-    (exists x k. event_triggered tr alice (Initiate2 alice bob gx gy k) /\ gx = dh_pk x) /\
+    (exists x. event_triggered tr alice (Initiate2 alice bob gx gy (dh x gy)) /\ gx = dh_pk x) /\
     is_publishable tr gx /\ is_publishable tr gy /\
     is_signature_key "DH.SigningKey" (principal_label alice) tr sk_a /\
     is_secret (principal_label alice) tr n_sig /\
@@ -262,7 +262,7 @@ val decode_message3_proof:
       let sig_msg = SigMsg3 {bob; gx; gy} in
       is_publishable tr msg3.sg /\
       (is_corrupt tr (principal_label alice) \/
-      (exists x k. gx == dh_pk x /\ event_triggered tr alice (Initiate2 alice bob gx gy k)))
+      (exists x. gx == dh_pk x /\ event_triggered tr alice (Initiate2 alice bob gx gy (dh x gy))))
     )
     | None -> True
   ))
