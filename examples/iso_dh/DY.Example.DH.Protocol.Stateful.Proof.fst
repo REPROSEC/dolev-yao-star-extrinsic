@@ -153,18 +153,20 @@ val prepare_msg1_proof:
     let (sess_id, tr_out) = prepare_msg1 alice bob tr in
     trace_invariant tr_out
   ))
+  [SMTPat (trace_invariant (snd (prepare_msg1 alice bob tr)))]
 let prepare_msg1_proof tr alice bob = ()
 
 val send_msg1_proof:
   tr:trace ->
-  alice:principal -> bob:principal -> sess_id:state_id ->
+  alice:principal -> sess_id:state_id ->
   Lemma
   (requires trace_invariant tr)
   (ensures (
     let (msg_id, tr_out) = send_msg1 alice sess_id tr in
     trace_invariant tr_out
   ))
-let send_msg1_proof tr alice bob sess_id =
+  [SMTPat (trace_invariant (snd (send_msg1 alice sess_id tr)))]
+let send_msg1_proof tr alice sess_id =
   match get_state alice sess_id tr with
   | (Some (InitiatorSentMsg1 bob x), tr) -> (
     compute_message1_proof tr alice bob x sess_id
@@ -180,6 +182,7 @@ val prepare_msg2_proof:
     let (msg_id, tr_out) = prepare_msg2 alice bob msg_id tr in
     trace_invariant tr_out
   ))
+  [SMTPat (trace_invariant (snd (prepare_msg2 alice bob msg_id tr)))]
 let prepare_msg2_proof tr alice bob msg_id =
   match recv_msg msg_id tr with
   | (Some msg, tr) -> (
@@ -196,6 +199,7 @@ val send_msg2_proof:
     let (msg_id, tr_out) = send_msg2 global_sess_id bob sess_id tr in
     trace_invariant tr_out
   ))
+  [SMTPat (trace_invariant (snd (send_msg2 global_sess_id bob sess_id tr)))]
 let send_msg2_proof tr global_sess_id bob sess_id =
   match get_state bob sess_id tr with
   | (Some (ResponderSentMsg2 alice gx gy y), tr) -> (
@@ -217,6 +221,7 @@ val prepare_msg3_proof:
     let (_, tr_out) = prepare_msg3 global_sess_id alice bob msg_id sess_id tr in
     trace_invariant tr_out
   ))
+  [SMTPat (trace_invariant (snd (prepare_msg3 global_sess_id alice bob msg_id sess_id tr)))]
 let prepare_msg3_proof tr global_sess_id alice bob msg_id sess_id =
   match get_state alice sess_id tr with
   | (Some (InitiatorSentMsg1 bob x), tr) -> (
@@ -278,6 +283,7 @@ val send_msg3_proof:
     let (_, tr_out) = send_msg3 global_sess_id alice bob sess_id tr in
     trace_invariant tr_out
   ))
+  [SMTPat (trace_invariant (snd (send_msg3 global_sess_id alice bob sess_id tr)))]
 let send_msg3_proof tr global_sess_id alice bob sess_id =
   match get_state alice sess_id tr with
   | (Some (InitiatorSendMsg3 bob gx gy k), tr) -> (
@@ -328,6 +334,7 @@ val verify_msg3_proof:
     let (_, tr_out) = verify_msg3 global_sess_id alice bob msg_id sess_id tr in
     trace_invariant tr_out
   ))
+  [SMTPat (trace_invariant (snd (verify_msg3 global_sess_id alice bob msg_id sess_id tr)))]
 let verify_msg3_proof tr global_sess_id alice bob msg_id sess_id =
   match get_state bob sess_id tr with
   | (Some (ResponderSentMsg2 alice gx gy y), tr) -> (
