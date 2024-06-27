@@ -20,7 +20,7 @@ val debug_proof:
   )
 let debug_proof tr = ()
 #pop-options
-
+ 
 /// Other ways to proof the debug function
 /// but I think the SMTPat way is the nicest one
 (*

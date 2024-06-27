@@ -132,8 +132,14 @@ let decode_message2 msg2_bytes alice gx pk_b =
   // value from Alice's state.
   let gy = msg2.gy in
   let sig_msg = SigMsg2 {alice; gx; gy} in
+  // These lines are the...
+  guard(verify pk_b (serialize sig_message sig_msg) msg2.sg);?
+  Some msg2
+  // ...short version of the following if-else block:
+  (*  
   if verify pk_b (serialize sig_message sig_msg) msg2.sg then Some msg2
   else None
+  *)
 
 // Alice generates message3
 val compute_message3: principal -> principal -> bytes -> bytes -> bytes -> bytes -> bytes
@@ -152,5 +158,5 @@ let decode_message3 msg3_bytes bob gx gy pk_a =
   // Verify the signature contained in message 3
   // with the gx and gy values from Bob's state.
   let sig_msg = SigMsg3 {bob; gx; gy} in
-  if verify pk_a (serialize sig_message sig_msg) msg3.sg then Some msg3
-  else None
+  guard(verify pk_a (serialize sig_message sig_msg) msg3.sg);?
+  Some msg3

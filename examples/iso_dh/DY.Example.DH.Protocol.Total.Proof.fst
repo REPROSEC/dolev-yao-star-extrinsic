@@ -169,7 +169,7 @@ let compute_message2_proof tr si alice bob msg1 y sk_b n_sig =
 
 val decode_message2_proof:
   tr:trace ->
-  alice:principal -> bob:principal ->
+  alice:principal -> alice_si:state_id -> bob:principal ->
   msg_bytes:bytes -> gx:bytes -> pk_b:bytes ->
   Lemma
   (requires
@@ -183,12 +183,12 @@ val decode_message2_proof:
       let sig_msg = SigMsg2 {alice; gx; gy=msg2.gy} in
       is_publishable tr msg2.gy /\
       is_publishable tr msg2.sg /\
-      (is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob) \/
+      (is_corrupt tr (principal_state_label alice alice_si) \/ is_corrupt tr (principal_label bob) \/
       (exists y. event_triggered tr bob (Respond1 alice bob gx msg2.gy y)))
     )
     | None -> True
   ))
-let decode_message2_proof tr alice bob msg_bytes gx pk_b =
+let decode_message2_proof tr alice alice_si bob msg_bytes gx pk_b =
   match decode_message2 msg_bytes alice gx pk_b with
     | Some msg2 -> (
       parse_wf_lemma message (is_publishable tr) msg_bytes;

@@ -42,8 +42,9 @@ let dh_session_pred: local_state_predicate dh_session = {
       let alice = prin in
       is_publishable tr gx /\ is_publishable tr gy /\
       is_knowable_by (principal_state_label alice sess_id) tr k /\
+      (exists x. gx == dh_pk x /\ k == dh x gy /\ is_secret (principal_state_label alice sess_id) tr x) /\
       event_triggered tr alice (Initiate2 alice bob gx gy k) /\
-      (is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob) \/
+      (is_corrupt tr (principal_label bob) \/ is_corrupt tr (principal_state_label alice sess_id) \/
       (exists y. k == dh y gx /\ is_dh_shared_key tr alice bob k /\ 
         event_triggered tr bob (Respond1 alice bob gx gy y)))
     )
@@ -51,8 +52,9 @@ let dh_session_pred: local_state_predicate dh_session = {
       let bob = prin in
       is_publishable tr gx /\ is_publishable tr gy /\
       is_knowable_by (principal_state_label bob sess_id) tr k /\
+      (exists y. gy == dh_pk y /\ k == dh y gx /\ is_secret (principal_state_label bob sess_id) tr y) /\
       event_triggered tr bob (Respond2 alice bob gx gy k) /\
-      (is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob) \/
+      (is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_state_label bob sess_id) \/
         (is_dh_shared_key tr alice bob k /\ 
         event_triggered tr alice (Initiate2 alice bob gx gy k)))
     )
@@ -77,11 +79,11 @@ let dh_event_pred: event_predicate dh_event =
       is_publishable tr gx /\ is_publishable tr gy /\
       (exists x sess_id. is_secret (principal_state_label alice sess_id) tr x /\
       gx = dh_pk x /\ k == dh x gy) /\
-      (is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob) \/
+      ((exists alice_si. is_corrupt tr (principal_state_label alice alice_si)) \/ is_corrupt tr (principal_label bob) \/
         (exists y. k == dh y gx /\ is_dh_shared_key tr alice bob k /\ event_triggered tr bob (Respond1 alice bob gx gy y)))
     )
     | Respond2 alice bob gx gy k -> (
-      is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob) \/
+      is_corrupt tr (principal_label alice) \/ (exists bob_si. is_corrupt tr (principal_state_label bob bob_si)) \/
       (is_dh_shared_key tr alice bob k /\
         event_triggered tr alice (Initiate2 alice bob gx gy k))
     )
@@ -153,7 +155,12 @@ val prepare_msg1_proof:
     let (sess_id, tr_out) = prepare_msg1 alice bob tr in
     trace_invariant tr_out
   ))
-  [SMTPat (trace_invariant (snd (prepare_msg1 alice bob tr)))]
+  // The SMTPat is used to automatically proof that
+  // the debug trace fulfills the trace invariants.
+  // The SMTPat says that if the trace invariants hold on tr
+  // and the function prepare_msg1 is called then instantiate
+  // this lemma.
+  [SMTPat (trace_invariant tr); SMTPat (prepare_msg1 alice bob tr)]
 let prepare_msg1_proof tr alice bob = ()
 
 val send_msg1_proof:
@@ -165,7 +172,7 @@ val send_msg1_proof:
     let (msg_id, tr_out) = send_msg1 alice sess_id tr in
     trace_invariant tr_out
   ))
-  [SMTPat (trace_invariant (snd (send_msg1 alice sess_id tr)))]
+  [SMTPat (trace_invariant tr); SMTPat (send_msg1 alice sess_id tr)]
 let send_msg1_proof tr alice sess_id =
   match get_state alice sess_id tr with
   | (Some (InitiatorSentMsg1 bob x), tr) -> (
@@ -182,7 +189,7 @@ val prepare_msg2_proof:
     let (msg_id, tr_out) = prepare_msg2 alice bob msg_id tr in
     trace_invariant tr_out
   ))
-  [SMTPat (trace_invariant (snd (prepare_msg2 alice bob msg_id tr)))]
+  [SMTPat (trace_invariant tr); SMTPat (prepare_msg2 alice bob msg_id tr)]
 let prepare_msg2_proof tr alice bob msg_id =
   match recv_msg msg_id tr with
   | (Some msg, tr) -> (
@@ -199,7 +206,7 @@ val send_msg2_proof:
     let (msg_id, tr_out) = send_msg2 global_sess_id bob sess_id tr in
     trace_invariant tr_out
   ))
-  [SMTPat (trace_invariant (snd (send_msg2 global_sess_id bob sess_id tr)))]
+  [SMTPat (trace_invariant tr); SMTPat (send_msg2 global_sess_id bob sess_id tr)]
 let send_msg2_proof tr global_sess_id bob sess_id =
   match get_state bob sess_id tr with
   | (Some (ResponderSentMsg2 alice gx gy y), tr) -> (
@@ -221,7 +228,7 @@ val prepare_msg3_proof:
     let (_, tr_out) = prepare_msg3 global_sess_id alice bob msg_id sess_id tr in
     trace_invariant tr_out
   ))
-  [SMTPat (trace_invariant (snd (prepare_msg3 global_sess_id alice bob msg_id sess_id tr)))]
+  [SMTPat (trace_invariant tr); SMTPat (prepare_msg3 global_sess_id alice bob msg_id sess_id tr)]
 let prepare_msg3_proof tr global_sess_id alice bob msg_id sess_id =
   match get_state alice sess_id tr with
   | (Some (InitiatorSentMsg1 bob x), tr) -> (
@@ -232,8 +239,12 @@ let prepare_msg3_proof tr global_sess_id alice bob msg_id sess_id =
         let gx = dh_pk x in
         match decode_message2 msg_bytes alice gx pk_b with
         | Some msg2 -> (
-          decode_message2_proof tr alice bob msg_bytes gx pk_b;
+          decode_message2_proof tr alice sess_id bob msg_bytes gx pk_b;
+
           let k = dh x msg2.gy in
+
+          assert((exists x. gx == dh_pk x /\ k == dh x msg2.gy /\ is_secret (principal_state_label alice sess_id) tr x));
+
           assert(is_publishable tr gx);
           assert(is_publishable tr msg2.gy);
           assert(is_knowable_by (principal_state_label alice sess_id) tr k);
@@ -243,7 +254,7 @@ let prepare_msg3_proof tr global_sess_id alice bob msg_id sess_id =
           assert(get_usage k = AeadKey "DH.aead_key");
           assert(exists si. is_knowable_by (principal_state_label alice si) tr k);
 
-          let alice_and_bob_not_corrupt = (~(is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob))) in
+          let alice_and_bob_not_corrupt = (~(is_corrupt tr (principal_state_label alice sess_id) \/ is_corrupt tr (principal_label bob))) in
           let dh_key_and_event_respond1 = (exists y. k == dh y gx /\ is_dh_shared_key tr alice bob k /\ event_triggered tr bob (Respond1 alice bob gx msg2.gy y)) in
           introduce alice_and_bob_not_corrupt ==> dh_key_and_event_respond1 
           with _. (
@@ -283,7 +294,7 @@ val send_msg3_proof:
     let (_, tr_out) = send_msg3 global_sess_id alice bob sess_id tr in
     trace_invariant tr_out
   ))
-  [SMTPat (trace_invariant (snd (send_msg3 global_sess_id alice bob sess_id tr)))]
+  [SMTPat (trace_invariant tr); SMTPat (send_msg3 global_sess_id alice bob sess_id tr)]
 let send_msg3_proof tr global_sess_id alice bob sess_id =
   match get_state alice sess_id tr with
   | (Some (InitiatorSendMsg3 bob gx gy k), tr) -> (
@@ -313,7 +324,7 @@ val verify_msg3_proof:
     let (_, tr_out) = verify_msg3 global_sess_id alice bob msg_id sess_id tr in
     trace_invariant tr_out
   ))
-  [SMTPat (trace_invariant (snd (verify_msg3 global_sess_id alice bob msg_id sess_id tr)))]
+  [SMTPat (trace_invariant tr); SMTPat (verify_msg3 global_sess_id alice bob msg_id sess_id tr)]
 let verify_msg3_proof tr global_sess_id alice bob msg_id sess_id =
   match get_state bob sess_id tr with
   | (Some (ResponderSentMsg2 alice gx gy y), tr) -> (
@@ -328,6 +339,8 @@ let verify_msg3_proof tr global_sess_id alice bob msg_id sess_id =
             
             let k = dh y gx in
 
+            assert(exists y. gy == dh_pk y /\ k == dh y gx /\ is_secret (principal_state_label bob sess_id) tr y);
+
             assert(event_triggered tr bob (Respond1 alice bob gx gy y));
             // The decode_message3_proof gives us that there exists a k' such that 
             // the event Initiate2 has been triggered or alice is corrupt.
@@ -337,7 +350,7 @@ let verify_msg3_proof tr global_sess_id alice bob msg_id sess_id =
 
             // Proof strategy: We want to work without the corruption case
             // so we introduce this implication.
-            let alice_and_bob_not_corrupt = (~(is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob))) in
+            let alice_and_bob_not_corrupt = (~(is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_state_label bob sess_id))) in
             let event_initiate2 = event_triggered tr alice (Initiate2 alice bob gx gy k) in
             introduce alice_and_bob_not_corrupt ==> event_initiate2
             with _. (
@@ -354,10 +367,10 @@ let verify_msg3_proof tr global_sess_id alice bob msg_id sess_id =
               )
             );
 
-            assert(is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob) \/ 
+            assert(is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_state_label bob sess_id) \/ 
               (exists si sj. get_label k `equivalent tr` join (principal_state_label alice si) (principal_state_label bob sj)));
             assert(get_usage k == AeadKey "DH.aead_key");
-            assert(is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob) \/
+            assert(is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_state_label bob sess_id) \/
               (is_dh_shared_key tr alice bob k /\ event_triggered tr alice (Initiate2 alice bob gx gy k)));
             ()
           )
