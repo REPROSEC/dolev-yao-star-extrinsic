@@ -4,6 +4,7 @@ open Comparse
 open DY.Core
 module L = DY.Lib
 module List = FStar.List.Tot.Base
+module Trace = DY.Core.Trace.Type
 
 /// Experimenting with the new state invariants for sessions and full states
 
@@ -102,11 +103,8 @@ val parse_full_state_lemma :
                    match List.index full_st i with
                    | (_, Nil) -> True
                    | (sid_i, (Snoc init_i last_i)) -> begin
-                      (match get_state p sid_i tr with
-                        | (None, _) -> True
-                        | (Some state_i, _) ->
-                               state_i = last_i
-                        )
+                       Some? (fst (get_state p sid_i tr))
+                       /\ Some?.v (fst (get_state p sid_i tr)) = last_i
                    end
             end
       end
@@ -152,7 +150,182 @@ instance protocol_invariants_p: protocol_invariants = {
   }
 }
 
-#push-options "--z3rlimit 25" // --z3cliopt 'smt.qi.eager_threshold=50'"
+
+val get_state_appears_in_full_state :
+  tr:trace -> p:principal -> sid:state_id ->
+  Lemma
+  (
+    match get_state p sid tr with
+    | (None, _) -> True
+    | (Some state, _) ->
+        match get_full_state p tr with
+        | None -> True
+        | Some full_state ->
+            exists i init . List.index full_state i = (sid, Snoc init state)
+  )
+let get_state_appears_in_full_state  tr p sid = admit()
+
+let rec forall_rev_list_bool (#a:Type) (p: a -> bool) (xs: rev_list a) : bool =
+  match xs with
+  | Nil -> true
+  | Snoc xs x -> p x && forall_rev_list_bool p xs
+
+
+val no_set_state_entry_for_bool:
+  principal -> state_id -> trace -> bool
+let no_set_state_entry_for_bool p sid tr = 
+  forall_rev_list_bool
+    (fun tr_ev ->
+    match tr_ev with
+    | SetState p' sid' _ -> p' <> p || sid' <> sid
+    | _ -> true
+    )
+    tr
+
+val no_set_state_entry_for_bool_prop:
+  p:principal -> sid:state_id -> tr:trace -> 
+  Lemma 
+    (requires
+      no_set_state_entry_for_bool p sid tr
+    )
+    (ensures
+      no_set_state_entry_for p sid tr
+    )
+let no_set_state_entry_for_bool_prop p sid tr = admit()
+
+// val lemma1:
+//   tr:trace -> p:principal -> sid:state_id -> idn:nat ->
+//   full_st:full_state_raw ->
+//   i:nat{i < List.length full_st} ->
+//   sid_i:state_id -> init_i:session_raw -> last_i:state_raw ->
+//   tr1:trace{tr1 <$ tr} -> tr2:trace{tr <$ tr2} ->
+//   Lemma
+//     (requires
+//       trace_invariant tr
+//       /\ List.index full_st i = (sid_i, Snoc init_i last_i)
+//       /\ sid_i <> sid
+//       /\ no_set_state_entry_for p sid_i (tr2 `suffix_after` tr1)
+//     )
+//     (ensures (
+//       match parse p_state last_i with
+//       | None -> True
+//       | Some last_i -> last_i.idn <> idn
+//       )
+//     )
+// let lemma1 tr p sid idn full_st i sid_i init_i last_i tr1 tr2 =
+//   get_state_aux_same p sid_i tr1 tr2;
+//   let (Some state_i, _) =  get_state p sid_i tr2 in
+//   assert(state_i = last_i );
+//   let (Some state_i_before_old, _) = get_state p sid_i tr1 in
+//   assert(state_i_before_old = state_i);
+//   admit();
+//   // match get_full_state p tr_before_old with
+//   // | None -> admit()
+//   // | Some full_state_before_old -> (
+//   // get_state_appears_in_full_state tr_before_old p sid_i;
+//   // assert(exists (j:nat{j < List.length full_state_before_old}) init. List.index full_state_before_old j = (sid_i, Snoc init state_i_before_old));
+//   // admit();
+//   // // assert(global_state_pred tr_before_old p sid oldst_b);
+//   ()
+//  // )
+
+//#push-options "--z3rlimit 25 --z3cliopt 'smt.qi.eager_threshold=50'"
+val next_full_state_pred:
+  tr:trace -> p:principal -> sid:state_id ->
+  Lemma 
+    (requires trace_invariant tr)
+    (ensures  (
+      let (_,tr_out) = next p sid tr in
+       match get_state p sid tr with
+  | (None, _) -> True
+  | (Some oldst_b, _) -> (
+      match parse p_state oldst_b with
+      | None -> True
+      | Some (S idn c) -> (          
+          let msg = M p in
+          let msg_b = serialize message msg in
+          let (_, tr_after_msg) = send_msg msg_b tr in
+
+          let next_state = S idn (c+1) in
+          let next_state_b = serialize p_state next_state in
+          let (_,tr_after_next_state) = set_state p sid next_state_b tr_after_msg in
+           match (get_full_state p tr_after_msg) with
+          | None -> True
+          | Some full_st_b -> full_state_pred tr_after_msg full_st_b p sid next_state_b
+      )
+    )
+    ))
+let next_full_state_pred tr p sid = 
+  match get_state p sid tr with
+  | (None, _) -> ()
+  | (Some oldst_b, _) -> (
+      match parse p_state oldst_b with
+      | None -> ()
+      | Some (S idn c) -> (          
+          let msg = M p in
+          let msg_b = serialize message msg in
+          let (_, tr_after_msg) = send_msg msg_b tr in
+
+          let next_state = S idn (c+1) in
+          let next_state_b = serialize p_state next_state in
+          let (_,tr_after_next_state) = set_state p sid next_state_b tr_after_msg in
+          
+          match (get_full_state p tr_after_msg) with
+          | None -> ()
+          | Some full_st_b -> begin
+              introduce forall (i:nat{i < List.length full_st_b}). 
+                match List.index full_st_b i with 
+                | (_, Nil) -> True
+                | (sid_i, Snoc init_i last_i) -> (
+                    match parse p_state last_i with
+                    | None -> True
+                    | Some last_i ->
+                        if sid_i = sid 
+                          then last_i.idn = idn
+                          else last_i.idn <> idn
+                  )
+              with begin
+                match List.index full_st_b i with 
+                  | (_, Nil) -> ()
+                  | (sid_i, (Snoc init_i last_i_b)) ->
+                       match parse p_state last_i_b with
+                       | None -> ()
+                       | Some last_i -> 
+                           parse_full_state_lemma tr_after_msg p i;
+                           get_state_aux_same p sid_i tr tr_after_msg;    
+                           reveal_opaque (`%get_state) (get_state);
+                           if sid_i = sid
+                           then assert(last_i = S idn c)
+                           else begin
+                             let (Some state_i, _) =  get_state p sid_i tr_after_msg in
+                             assert(state_i = last_i_b );
+                             let tr_before_old = tr_after_msg `prefix_before_event` (SetState p sid oldst_b) in
+                             assert(forall sid'. no_set_state_entry_for p sid' (tr_after_msg `suffix_after` tr));
+                               assert(global_state_pred (tr `prefix_before_event` (SetState p sid oldst_b)) p sid oldst_b);
+                               assume(tr_before_old = tr `prefix_before_event` (SetState p sid oldst_b));
+                               assert(global_state_pred tr_before_old p sid oldst_b);
+                             let tr_after_old = (tr_after_msg `suffix_after` tr_before_old) in
+                             if no_set_state_entry_for_bool p sid_i tr_after_old //state_i = state_i_before_old
+                               then (
+                                 no_set_state_entry_for_bool_prop p sid_i tr_after_old;
+                                 get_state_aux_same p sid_i tr_before_old tr_after_msg;
+                                 let (Some state_i_before_old, _) = get_state p sid_i tr_before_old in
+                                 assert(state_i_before_old = state_i);
+                                 match get_full_state p tr_before_old with
+                                 | None -> admit()
+                                 | Some full_state_before_old -> get_state_appears_in_full_state tr_before_old p sid_i  
+                                  )
+                               else 
+                                admit()
+                           end
+              end;
+            ()
+            end;
+          ()
+        )
+    )
+
+#push-options "--z3rlimit 25"
 val next_invariant: tr:trace -> p:principal -> sid:state_id ->
   Lemma 
     (requires trace_invariant tr)
@@ -164,8 +337,8 @@ val next_invariant: tr:trace -> p:principal -> sid:state_id ->
 let next_invariant tr p sid = 
   match get_state p sid tr with
   | (None, _) -> ()
-  | (Some st_b, _) -> (
-      match parse p_state st_b with
+  | (Some oldst_b, _) -> (
+      match parse p_state oldst_b with
       | None -> ()
       | Some (S idn c) -> (          
           let msg = M p in
@@ -180,61 +353,9 @@ let next_invariant tr p sid =
 
           serialize_wf_lemma p_state (is_knowable_by (principal_state_label p sid) tr_after_msg) next_state;
 
-          match (get_full_state p tr_after_msg) with
-          | None -> ()
-          | Some full_st_b -> begin
-              introduce
-               forall (i:nat{i < List.length full_st_b}). 
-            match List.index full_st_b i with 
-            | (_, Nil) -> True
-            | (sid_i, Snoc init_i last_i) -> begin
-                match parse p_state last_i with
-                | None -> True
-                | Some last_i ->
-                    if sid_i = sid 
-                      then last_i.idn = idn
-                      else last_i.idn <> idn
-            end
-              with begin
-                match List.index full_st_b i with 
-                  | (_, Nil) -> ()
-                  | (sid_i, (Snoc init_i last_i)) ->
-                     match parse p_state last_i with
-                     | None -> ()
-                     | Some last_i -> 
-                      parse_full_state_lemma tr_after_msg p i;
-                      get_state_aux_same p sid_i tr tr_after_msg;    
-                      reveal_opaque (`%get_state) (get_state);
-                    if sid_i = sid
-                      then (
-                        assert(last_i = S idn c)
-                      )
-                      else begin
-                        // let last_i_b = serialize p_state last_i in
-                        // assume(state_was_set tr_after_msg p sid_i last_i_b);
-                        // eliminate exists ts ts_i.
-                        //   event_at tr_after_msg ts (SetState p sid st_b)                          /\
-                        //   event_at tr_after_msg ts_i (SetState p sid_i last_i_b)
-                        // returns last_i.idn <> idn
-                        // with _  . begin
-                        // // TODO: WEITER HIER
-                        // introduce
-                        //    (tr_after_msg `prefix_before_event` (SetState p sid_i last_i_b )) <$  (tr `prefix_before_event` (SetState p sid st_b))
-                        //    ==> last_i.idn <> idn 
-                        // with _ . begin
-                        //   assert(global_state_pred (tr `prefix_before_event` (SetState p sid st_b)) p sid st_b);
-                        //   get_session_aux_same p sid_i  (tr `prefix_before_event` (SetState p sid st_b)) tr;
-                        //   ()
-                        // end;
-                            admit()
-                        // end
-                      end
-              end;
-          ()
-          end
-    ))
-
-
+          next_full_state_pred tr p sid
+        )
+    )
 #pop-options
 
 let rec forall_rev_list (#a:Type) (p: a -> prop) (xs: rev_list a) : prop =
