@@ -71,20 +71,10 @@ val principal_state_corrupt_implies_principal_corrupt:
   )
   [SMTPat (trace_invariant tr); SMTPat (is_corrupt tr (principal_state_label prin si))]
 let principal_state_corrupt_implies_principal_corrupt tr prin si = 
-  reveal_opaque (`%principal_state_label) (principal_state_label);
-  reveal_opaque (`%principal_label) (principal_label);
-  reveal_opaque (`%pre_is_corrupt) (pre_is_corrupt);
-  normalize_term_spec is_corrupt;
-  
-  // The following code is not needed for the proof.
-  // It just shows what we need to show to prove the lemma.
-  assert(is_corrupt tr (principal_state_label prin si));
-  assert(exists prin' si'. pre_can_flow (S prin si) (S prin' si'));
-  assert(pre_is_corrupt tr (S prin si));
-  assert(exists prin' si'. (S prin si) `pre_can_flow` (S prin' si') /\
-    was_corrupt tr prin' si');
-  assert(exists prin' si'. (P prin) `pre_can_flow` (S prin' si') /\
-    was_corrupt tr prin' si');
+  // Triggers principal_flow_to_principal_state
+  assert(principal_label prin `can_flow tr` principal_state_label prin si);
+  // Triggers flow_to_public_eq
+  assert(principal_label prin `can_flow tr` public);
   ()
 
 val initiator_forward_secrecy: 
@@ -99,9 +89,10 @@ val initiator_forward_secrecy:
     is_corrupt tr (principal_label bob) \/ is_corrupt tr (principal_state_label alice alice_si)
   )
 let initiator_forward_secrecy tr alice alice_si bob gx gy k =
-  assert(trace_invariant tr);
-  assert(attacker_knows tr k);
   attacker_only_knows_publishable_values tr k;
+
+  // The following code is not needed for the proof.
+  // It just shows what we need to show to prove the lemma.
   assert(is_publishable tr k);
   assert(is_corrupt tr (get_label k));
 
@@ -117,10 +108,14 @@ let initiator_forward_secrecy tr alice alice_si bob gx gy k =
     join (principal_state_label alice alice_si) (principal_state_label bob bob_si) \/ 
     is_corrupt tr (principal_label bob) \/
     is_corrupt tr (principal_state_label alice alice_si));
+
+  // This assert is needed for the proof
   assert(exists bob_si. join (principal_state_label alice alice_si) (principal_state_label bob bob_si)
     `can_flow tr` public \/ 
     is_corrupt tr (principal_label bob));
 
+  // The following code is not needed for the proof.
+  // It just shows what we need to show to prove the lemma.
   assert(principal_state_label alice alice_si `can_flow tr` public \/
     (exists bob_si. principal_state_label bob bob_si `can_flow tr` public) \/
     is_corrupt tr (principal_label bob));

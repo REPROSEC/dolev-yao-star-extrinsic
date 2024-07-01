@@ -58,16 +58,16 @@ type dh_global_sess_ids = {
 // a message over the network.
 val prepare_msg1: principal -> principal -> traceful state_id
 let prepare_msg1 alice bob =
-  let* session_id = new_session_id alice in
-  let* x = mk_rand (DhKey "DH.dh_key") (principal_state_label alice session_id) 32 in
+  let* alice_si = new_session_id alice in
+  let* x = mk_rand (DhKey "DH.dh_key") (principal_state_label alice alice_si) 32 in
   trigger_event alice (Initiate1 alice bob x);*
-  set_state alice session_id (InitiatorSentMsg1 bob x <: dh_session);*
-  return session_id
+  set_state alice alice_si (InitiatorSentMsg1 bob x <: dh_session);*
+  return alice_si
 
 // Alice sends message 1
 val send_msg1: principal -> state_id -> traceful (option nat)
-let send_msg1 alice session_id =
-  let*? session_state: dh_session = get_state alice session_id in
+let send_msg1 alice alice_si =
+  let*? session_state: dh_session = get_state alice alice_si in
   match session_state with
   | InitiatorSentMsg1 bob x -> (
     let msg = compute_message1 alice x in
@@ -81,17 +81,16 @@ val prepare_msg2: principal -> principal -> nat -> traceful (option state_id)
 let prepare_msg2 alice bob msg_id =
   let*? msg = recv_msg msg_id in
   let*? msg1: message1 = return (decode_message1 msg) in
-  let* session_id = new_session_id bob in
-  let* y = mk_rand (DhKey "DH.dh_key") (principal_state_label bob session_id) 32 in
-  let gy = dh_pk y in
-  trigger_event bob (Respond1 alice bob msg1.gx gy y);*
-  set_state bob session_id (ResponderSentMsg2 alice msg1.gx gy y <: dh_session);*
-  return (Some session_id)
+  let* bob_si = new_session_id bob in
+  let* y = mk_rand (DhKey "DH.dh_key") (principal_state_label bob bob_si) 32 in
+  trigger_event bob (Respond1 alice bob msg1.gx (dh_pk y) y);*
+  set_state bob bob_si (ResponderSentMsg2 alice msg1.gx (dh_pk y) y <: dh_session);*
+  return (Some bob_si)
 
 // Bob sends message 2
 val send_msg2: dh_global_sess_ids -> principal -> state_id -> traceful (option nat)
-let send_msg2 global_sess_id bob session_id =
-  let*? session_state: dh_session = get_state bob session_id in
+let send_msg2 global_sess_id bob bob_si =
+  let*? session_state: dh_session = get_state bob bob_si in
   match session_state with
   | ResponderSentMsg2 alice gx gy y -> (
     let*? sk_b = get_private_key bob global_sess_id.private_keys (Sign "DH.SigningKey") in
@@ -101,21 +100,20 @@ let send_msg2 global_sess_id bob session_id =
     return (Some msg_id)
   )
   | _ -> return None
+
 // Alice prepares message 3
 //
 // This function has to verify the signature from message 2
-val prepare_msg3: dh_global_sess_ids -> principal -> principal -> nat -> state_id -> traceful (option unit)
-let prepare_msg3 global_sess_id alice bob msg_id session_id =
-  let*? session_state: dh_session = get_state alice session_id in
+val prepare_msg3: dh_global_sess_ids -> principal -> state_id -> principal -> nat -> traceful (option unit)
+let prepare_msg3 global_sess_id alice alice_si bob msg_id =
+  let*? session_state: dh_session = get_state alice alice_si in
   match session_state with
   | InitiatorSentMsg1 bob x -> (
     let*? pk_b = get_public_key alice global_sess_id.pki (Verify "DH.SigningKey") bob in
     let*? msg = recv_msg msg_id in
-    let gx = dh_pk x in
-    let*? msg2: message2 = return (decode_message2 msg alice gx pk_b) in
-    let k = dh x msg2.gy in
-    trigger_event alice (Initiate2 alice bob gx msg2.gy k);*
-    set_state alice session_id (InitiatorSendMsg3 bob gx msg2.gy k <: dh_session);*
+    let*? res:verify_msg2_result = return (decode_and_verify_message2 msg alice x pk_b) in
+    trigger_event alice (Initiate2 alice bob res.gx res.gy res.k);*
+    set_state alice alice_si (InitiatorSendMsg3 bob res.gx res.gy res.k <: dh_session);*
     return (Some ())
   )
   | _ -> return None
@@ -142,10 +140,9 @@ let verify_msg3 global_sess_id alice bob msg_id session_id =
   | ResponderSentMsg2 alice gx gy y -> (
     let*? pk_a = get_public_key bob global_sess_id.pki (Verify "DH.SigningKey") alice in
     let*? msg = recv_msg msg_id in
-    let*? msg3: message3 = return (decode_message3 msg bob gx gy pk_a) in
-    let k = dh y gx in
-    trigger_event bob (Respond2 alice bob gx gy k);*
-    set_state bob session_id (ResponderReceivedMsg3 alice gx gy k <: dh_session);*
+    let*? res:verify_msg3_result = return (decode_and_verify_message3 msg bob gx gy y pk_a) in
+    trigger_event bob (Respond2 alice bob gx gy res.k);*
+    set_state bob session_id (ResponderReceivedMsg3 alice gx gy res.k <: dh_session);*
     return (Some ())
   )
   | _ -> return None

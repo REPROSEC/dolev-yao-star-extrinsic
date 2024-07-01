@@ -122,22 +122,25 @@ let compute_message2 alice bob gx gy sk_b n_sig =
   serialize message msg
 
 // Alice parses message 2
-val decode_message2: bytes -> principal -> bytes -> bytes -> option message2
-let decode_message2 msg2_bytes alice gx pk_b =
+type verify_msg2_result = {sg:bytes; gy:bytes; gx:bytes; k:bytes}
+val decode_and_verify_message2: bytes -> principal -> bytes -> bytes -> option verify_msg2_result
+let decode_and_verify_message2 msg2_bytes alice x pk_b =
   let? msg2_parsed = parse message msg2_bytes in
   guard (Msg2? msg2_parsed);?
   let msg2 = Msg2?.msg msg2_parsed in
   // Verify the signature contained in the message 2
   // with the gy value from the message and the gx
   // value from Alice's state.
+  let gx = dh_pk x in
   let gy = msg2.gy in
   let sig_msg = SigMsg2 {alice; gx; gy} in
   // These lines are the...
   guard(verify pk_b (serialize sig_message sig_msg) msg2.sg);?
-  Some msg2
+  let k = dh x gy in
+  Some {sg=msg2.sg; gy; gx; k}
   // ...short version of the following if-else block:
   (*  
-  if verify pk_b (serialize sig_message sig_msg) msg2.sg then Some msg2
+  if verify pk_b (serialize sig_message sig_msg) msg2.sg then Some {msg2; gx; k}
   else None
   *)
 
@@ -150,13 +153,15 @@ let compute_message3 alice bob gx gy sk_a n_sig =
   serialize message msg
 
 // Bob parses message3
-val decode_message3: bytes -> principal -> bytes -> bytes -> bytes -> option message3
-let decode_message3 msg3_bytes bob gx gy pk_a =
+type verify_msg3_result = {sg:bytes; k:bytes}
+val decode_and_verify_message3: bytes -> principal -> bytes -> bytes -> bytes -> bytes -> option verify_msg3_result
+let decode_and_verify_message3 msg3_bytes bob gx gy y pk_a =
   let? msg3_parsed = parse message msg3_bytes in
   guard (Msg3? msg3_parsed);?
-  let msg3 = Msg3?.msg msg3_parsed in
+  let msg3:message3 = Msg3?.msg msg3_parsed in
   // Verify the signature contained in message 3
   // with the gx and gy values from Bob's state.
   let sig_msg = SigMsg3 {bob; gx; gy} in
   guard(verify pk_a (serialize sig_message sig_msg) msg3.sg);?
-  Some msg3
+  let k = dh y gx in
+  Some {sg=msg3.sg; k}

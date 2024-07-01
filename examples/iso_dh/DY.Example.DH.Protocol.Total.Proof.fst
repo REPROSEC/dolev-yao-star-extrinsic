@@ -59,17 +59,17 @@ instance dh_crypto_invs: crypto_invariants = {
 
 val compute_message1_proof:
   tr:trace ->
-  alice:principal -> bob:principal -> x:bytes -> si:state_id ->
+  alice:principal -> bob:principal -> x:bytes ->
   Lemma
     (requires
       event_triggered tr alice (Initiate1 alice bob x) /\
-      is_secret (principal_state_label alice si) tr x /\
+      bytes_invariant tr x /\
       DhKey? (get_usage x)
     )
     (ensures 
       is_publishable tr (compute_message1 alice x)
     )
-let compute_message1_proof tr alice bob x si =
+let compute_message1_proof tr alice bob x =
   let gx = dh_pk x in
   assert(is_publishable tr gx);
   let msg = Msg1 {alice; gx} in
@@ -89,7 +89,6 @@ let compute_message1_proof tr alice bob x si =
 
 val decode_message1_proof:
   tr:trace ->
-  alice:principal -> bob:principal ->
   msg_bytes:bytes ->
   Lemma
   (requires is_publishable tr msg_bytes)
@@ -100,7 +99,7 @@ val decode_message1_proof:
     )
     | None -> True
   ))
-let decode_message1_proof tr alice bob msg_bytes =
+let decode_message1_proof tr msg_bytes =
   match decode_message1 msg_bytes with
     | Some msg1 -> (
       // This lemma
@@ -118,33 +117,28 @@ let decode_message1_proof tr alice bob msg_bytes =
     | None -> ()
 
 val compute_message2_proof:
-  tr:trace -> si:state_id ->
+  tr:trace -> 
   alice:principal -> bob:principal ->
-  msg1:message1 -> y:bytes ->
+  gx:bytes -> y:bytes ->
   sk_b:bytes -> n_sig:bytes ->
   Lemma
-  (requires (
-    let gy = dh_pk y in
-    event_triggered tr bob (Respond1 alice bob msg1.gx gy y) /\
-    is_publishable tr msg1.gx /\ is_publishable tr gy /\
-    gy == dh_pk y /\
-    is_secret (principal_state_label bob si) tr y /\
+  (requires
+    event_triggered tr bob (Respond1 alice bob gx (dh_pk y) y) /\
+    is_publishable tr gx /\
+    bytes_invariant tr y /\
     is_signature_key "DH.SigningKey" (principal_label bob) tr sk_b /\
     is_secret (principal_label bob) tr n_sig /\
     SigNonce? (get_usage n_sig)
-    )
   )
-  (ensures (
-    let gy = dh_pk y in
-    is_publishable tr (compute_message2 alice bob msg1.gx gy sk_b n_sig)
-    )
+  (ensures
+    is_publishable tr (compute_message2 alice bob gx (dh_pk y) sk_b n_sig)
   )
-let compute_message2_proof tr si alice bob msg1 y sk_b n_sig =
+let compute_message2_proof tr alice bob gx y sk_b n_sig =
   // Proof that the SigMsg2 is publishable
   // From the precondition we know that
   // msg1.gx and gy are publishable.
   let gy = dh_pk y in
-  let sig_msg = SigMsg2 {alice; gx=msg1.gx; gy} in
+  let sig_msg = SigMsg2 {alice; gx; gy} in
   serialize_wf_lemma sig_message (is_publishable tr) sig_msg;
   let sig_msg_bytes = serialize sig_message sig_msg in
 
@@ -164,66 +158,72 @@ let compute_message2_proof tr si alice bob msg1 y sk_b n_sig =
   serialize_wf_lemma message (is_publishable tr) msg;
 
   // This proves the post-condition
-  assert(is_publishable tr (compute_message2 alice bob msg1.gx gy sk_b n_sig));
+  assert(is_publishable tr (compute_message2 alice bob gx gy sk_b n_sig));
   ()
 
-val decode_message2_proof:
+#push-options "--ifuel 1 --z3rlimit 10"
+val decode_and_verify_message2_proof:
   tr:trace ->
+  msg_bytes:bytes ->
   alice:principal -> alice_si:state_id -> bob:principal ->
-  msg_bytes:bytes -> gx:bytes -> pk_b:bytes ->
+  x:bytes -> pk_b:bytes ->
   Lemma
   (requires
     is_publishable tr msg_bytes /\
-    is_publishable tr gx /\
+    is_secret (principal_state_label alice alice_si) tr x /\
     is_verification_key "DH.SigningKey" (principal_label bob) tr pk_b
   )
   (ensures (
-    match decode_message2 msg_bytes alice gx pk_b with
-    | Some msg2 -> (
-      let sig_msg = SigMsg2 {alice; gx; gy=msg2.gy} in
-      is_publishable tr msg2.gy /\
-      is_publishable tr msg2.sg /\
+    match decode_and_verify_message2 msg_bytes alice x pk_b with
+    | Some res -> (
+      let sig_msg = SigMsg2 {alice; gx=(dh_pk x); gy=res.gy} in
+      is_publishable tr res.gy /\
+      is_publishable tr res.sg /\
       (is_corrupt tr (principal_state_label alice alice_si) \/ is_corrupt tr (principal_label bob) \/
-      (exists y. event_triggered tr bob (Respond1 alice bob gx msg2.gy y)))
+      (exists y. event_triggered tr bob (Respond1 alice bob (dh_pk x) res.gy y)))
     )
     | None -> True
   ))
-let decode_message2_proof tr alice alice_si bob msg_bytes gx pk_b =
-  match decode_message2 msg_bytes alice gx pk_b with
-    | Some msg2 -> (
+let decode_and_verify_message2_proof tr msg_bytes alice alice_si bob  x pk_b =
+  match decode_and_verify_message2 msg_bytes alice x pk_b with
+    | Some res -> (
       parse_wf_lemma message (is_publishable tr) msg_bytes;
-      serialize_wf_lemma sig_message (bytes_invariant tr) (SigMsg2 {alice; gx; gy = msg2.gy});
+      let gx = dh_pk x in
+      let gy = res.gy in
+      serialize_wf_lemma sig_message (bytes_invariant tr) (SigMsg2 {alice; gx; gy});
 
       // The following code is not needed for the proof.
       // It just shows what we need to show to prove the lemma.
-      assert(is_publishable tr msg2.sg);
-      assert(is_publishable tr msg2.gy);
+      assert(is_publishable tr res.sg);
+      assert(is_publishable tr res.gy);
       
       assert(is_corrupt tr (principal_label alice) \/
         is_corrupt tr (principal_label bob) \/
-        (exists y. msg2.gy == dh_pk y /\ event_triggered tr bob (Respond1 alice bob gx msg2.gy y))
+        (exists y. res.gy == dh_pk y /\ event_triggered tr bob (Respond1 alice bob gx gy y))
       );
       ()
     )
     | None -> ()
+#pop-options
 
 val compute_message3_proof:
   tr:trace ->
   alice:principal -> bob:principal ->
-  gx:bytes -> gy:bytes ->
+  gx:bytes -> gy:bytes -> x:bytes ->
   sk_a:bytes -> n_sig:bytes ->
   Lemma
   (requires
-    (exists x. event_triggered tr alice (Initiate2 alice bob gx gy (dh x gy)) /\ gx = dh_pk x) /\
+    event_triggered tr alice (Initiate2 alice bob (dh_pk x) gy (dh x gy)) /\
     is_publishable tr gx /\ is_publishable tr gy /\
+    gx = dh_pk x /\
     is_signature_key "DH.SigningKey" (principal_label alice) tr sk_a /\
     is_secret (principal_label alice) tr n_sig /\
     SigNonce? (get_usage n_sig)
   )
   (ensures
-    is_publishable tr (compute_message3 alice bob gx gy sk_a n_sig)
+    is_publishable tr (compute_message3 alice bob (dh_pk x) gy sk_a n_sig)
   )
-let compute_message3_proof tr alice bob gx gy sk_a n_sig =
+let compute_message3_proof tr alice bob gx gy x sk_a n_sig =
   let sig_msg = SigMsg3 {bob; gx; gy} in
   serialize_wf_lemma sig_message (is_publishable tr) sig_msg;
   
@@ -246,31 +246,37 @@ let compute_message3_proof tr alice bob gx gy sk_a n_sig =
   assert(is_publishable tr (serialize message msg));
   ()
 
-val decode_message3_proof:
-  tr:trace -> alice:principal -> bob:principal ->
-  gx:bytes -> gy:bytes -> msg_bytes:bytes -> pk_a:bytes ->
+#push-options "--ifuel 1 --z3rlimit 10"
+val decode_and_verify_message3_proof:
+  tr:trace ->
+  msg_bytes:bytes ->
+  alice:principal -> bob:principal -> bob_si:state_id ->
+  gx:bytes -> y:bytes -> pk_a:bytes ->
   Lemma
   (requires
     is_publishable tr msg_bytes /\
     is_publishable tr gx /\
-    is_publishable tr gy /\
+    is_secret (principal_state_label bob bob_si) tr y /\
     is_verification_key "DH.SigningKey" (principal_label alice) tr pk_a
   )
   (ensures (
-    match decode_message3 msg_bytes bob gx gy pk_a with
-    | Some msg3 -> (
+    let gy = dh_pk y in
+    match decode_and_verify_message3 msg_bytes bob gx gy y pk_a with
+    | Some res -> (
       let sig_msg = SigMsg3 {bob; gx; gy} in
-      is_publishable tr msg3.sg /\
-      (is_corrupt tr (principal_label alice) \/
+      is_publishable tr res.sg /\
+      (is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_state_label bob bob_si) \/
       (exists x. gx == dh_pk x /\ event_triggered tr alice (Initiate2 alice bob gx gy (dh x gy))))
     )
     | None -> True
   ))
-let decode_message3_proof tr alice bob gx gy msg_bytes pk_a =
-  match decode_message3 msg_bytes bob gx gy pk_a with
-    | Some msg3 -> (
+let decode_and_verify_message3_proof tr msg_bytes alice bob bob_si gx y pk_a =
+  let gy = dh_pk y in
+  match decode_and_verify_message3 msg_bytes bob gx gy y pk_a with
+    | Some res -> (
       parse_wf_lemma message (is_publishable tr) msg_bytes;
       serialize_wf_lemma sig_message (is_publishable tr) (SigMsg3 {bob; gx; gy});
       ()
     )
     | None -> ()
+#pop-options

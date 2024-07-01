@@ -48,7 +48,7 @@ let debug () : traceful (option unit)  =
   let*? msg2_id = send_msg2 bob_global_session_ids bob bob_session_id in
 
   // Alice
-  prepare_msg3 alice_global_session_ids alice bob msg2_id alice_session_id;*
+  prepare_msg3 alice_global_session_ids alice alice_session_id bob msg2_id;*
   let*? msg3_id = send_msg3 alice_global_session_ids alice bob alice_session_id in
 
   // Bob
