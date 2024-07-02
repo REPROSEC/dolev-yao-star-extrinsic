@@ -120,8 +120,8 @@ let prepare_msg3 global_sess_id alice alice_si bob msg_id =
 
 // Alice send message 3
 val send_msg3: dh_global_sess_ids -> principal -> principal -> state_id -> traceful (option nat)
-let send_msg3 global_sess_id alice bob session_id =
-  let*? session_state: dh_session = get_state alice session_id in
+let send_msg3 global_sess_id alice bob alice_si =
+  let*? session_state: dh_session = get_state alice alice_si in
   match session_state with
   | InitiatorSendMsg3 bob gx gy x -> (
     let*? sk_a = get_private_key alice global_sess_id.private_keys (Sign "DH.SigningKey") in
@@ -134,15 +134,15 @@ let send_msg3 global_sess_id alice bob session_id =
 
 // Bob verifies message 3
 val verify_msg3: dh_global_sess_ids -> principal -> principal -> nat -> state_id -> traceful (option unit)
-let verify_msg3 global_sess_id alice bob msg_id session_id =
-  let*? session_state: dh_session = get_state bob session_id in
+let verify_msg3 global_sess_id alice bob msg_id bob_si =
+  let*? session_state: dh_session = get_state bob bob_si in
   match session_state with
   | ResponderSentMsg2 alice gx gy y -> (
     let*? pk_a = get_public_key bob global_sess_id.pki (Verify "DH.SigningKey") alice in
     let*? msg = recv_msg msg_id in
     let*? res:verify_msg3_result = return (decode_and_verify_message3 msg bob gx gy y pk_a) in
     trigger_event bob (Respond2 alice bob gx gy res.k);*
-    set_state bob session_id (ResponderReceivedMsg3 alice gx gy res.k <: dh_session);*
+    set_state bob bob_si (ResponderReceivedMsg3 alice gx gy res.k <: dh_session);*
     return (Some ())
   )
   | _ -> return None

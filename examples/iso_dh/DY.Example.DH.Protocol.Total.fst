@@ -122,7 +122,7 @@ let compute_message2 alice bob gx gy sk_b n_sig =
   serialize message msg
 
 // Alice parses message 2
-type verify_msg2_result = {sg:bytes; gy:bytes; gx:bytes; k:bytes}
+type verify_msg2_result = {gy:bytes; gx:bytes; k:bytes}
 val decode_and_verify_message2: bytes -> principal -> bytes -> bytes -> option verify_msg2_result
 let decode_and_verify_message2 msg2_bytes alice x pk_b =
   let? msg2_parsed = parse message msg2_bytes in
@@ -137,11 +137,14 @@ let decode_and_verify_message2 msg2_bytes alice x pk_b =
   // These lines are the...
   guard(verify pk_b (serialize sig_message sig_msg) msg2.sg);?
   let k = dh x gy in
-  Some {sg=msg2.sg; gy; gx; k}
+  Some {gy; gx; k}
   // ...short version of the following if-else block:
   (*  
-  if verify pk_b (serialize sig_message sig_msg) msg2.sg then Some {msg2; gx; k}
-  else None
+  if verify pk_b (serialize sig_message sig_msg) msg2.sg then 
+    let k = dh x gy in
+    Some {gy; gx; k}
+  else 
+    None
   *)
 
 // Alice generates message3
@@ -153,7 +156,7 @@ let compute_message3 alice bob gx gy sk_a n_sig =
   serialize message msg
 
 // Bob parses message3
-type verify_msg3_result = {sg:bytes; k:bytes}
+type verify_msg3_result = {k:bytes}
 val decode_and_verify_message3: bytes -> principal -> bytes -> bytes -> bytes -> bytes -> option verify_msg3_result
 let decode_and_verify_message3 msg3_bytes bob gx gy y pk_a =
   let? msg3_parsed = parse message msg3_bytes in
@@ -164,4 +167,4 @@ let decode_and_verify_message3 msg3_bytes bob gx gy y pk_a =
   let sig_msg = SigMsg3 {bob; gx; gy} in
   guard(verify pk_a (serialize sig_message sig_msg) msg3.sg);?
   let k = dh y gx in
-  Some {sg=msg3.sg; k}
+  Some {k}

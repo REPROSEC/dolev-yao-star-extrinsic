@@ -89,24 +89,24 @@ let compute_message1_proof tr alice bob x =
 
 val decode_message1_proof:
   tr:trace ->
-  msg_bytes:bytes ->
+  msg1_bytes:bytes ->
   Lemma
-  (requires is_publishable tr msg_bytes)
+  (requires is_publishable tr msg1_bytes)
   (ensures (
-    match decode_message1 msg_bytes with
+    match decode_message1 msg1_bytes with
     | Some msg1 -> (
       is_publishable tr msg1.gx
     )
     | None -> True
   ))
-let decode_message1_proof tr msg_bytes =
-  match decode_message1 msg_bytes with
+let decode_message1_proof tr msg1_bytes =
+  match decode_message1 msg1_bytes with
     | Some msg1 -> (
       // This lemma
       // - requires that msg_bytes is publishable
       // - ensures that `msg1.gx` is publishable
       //   (`msg1` being the result of parsing `msg_bytes` to the type `message1`)
-      parse_wf_lemma message (is_publishable tr) msg_bytes;
+      parse_wf_lemma message (is_publishable tr) msg1_bytes;
       
       // The following code is not needed for the proof.
       // It just shows what we need to show to prove the lemma.
@@ -164,37 +164,35 @@ let compute_message2_proof tr alice bob gx y sk_b n_sig =
 #push-options "--ifuel 1 --z3rlimit 10"
 val decode_and_verify_message2_proof:
   tr:trace ->
-  msg_bytes:bytes ->
+  msg2_bytes:bytes ->
   alice:principal -> alice_si:state_id -> bob:principal ->
   x:bytes -> pk_b:bytes ->
   Lemma
   (requires
-    is_publishable tr msg_bytes /\
+    is_publishable tr msg2_bytes /\
     is_secret (principal_state_label alice alice_si) tr x /\
     is_verification_key "DH.SigningKey" (principal_label bob) tr pk_b
   )
   (ensures (
-    match decode_and_verify_message2 msg_bytes alice x pk_b with
+    match decode_and_verify_message2 msg2_bytes alice x pk_b with
     | Some res -> (
       let sig_msg = SigMsg2 {alice; gx=(dh_pk x); gy=res.gy} in
       is_publishable tr res.gy /\
-      is_publishable tr res.sg /\
       (is_corrupt tr (principal_state_label alice alice_si) \/ is_corrupt tr (principal_label bob) \/
       (exists y. event_triggered tr bob (Respond1 alice bob (dh_pk x) res.gy y)))
     )
     | None -> True
   ))
-let decode_and_verify_message2_proof tr msg_bytes alice alice_si bob  x pk_b =
-  match decode_and_verify_message2 msg_bytes alice x pk_b with
+let decode_and_verify_message2_proof tr msg2_bytes alice alice_si bob x pk_b =
+  match decode_and_verify_message2 msg2_bytes alice x pk_b with
     | Some res -> (
-      parse_wf_lemma message (is_publishable tr) msg_bytes;
+      parse_wf_lemma message (is_publishable tr) msg2_bytes;
       let gx = dh_pk x in
       let gy = res.gy in
       serialize_wf_lemma sig_message (bytes_invariant tr) (SigMsg2 {alice; gx; gy});
 
       // The following code is not needed for the proof.
       // It just shows what we need to show to prove the lemma.
-      assert(is_publishable tr res.sg);
       assert(is_publishable tr res.gy);
       
       assert(is_corrupt tr (principal_label alice) \/
@@ -249,32 +247,31 @@ let compute_message3_proof tr alice bob gx gy x sk_a n_sig =
 #push-options "--ifuel 1 --z3rlimit 10"
 val decode_and_verify_message3_proof:
   tr:trace ->
-  msg_bytes:bytes ->
+  msg3_bytes:bytes ->
   alice:principal -> bob:principal -> bob_si:state_id ->
   gx:bytes -> y:bytes -> pk_a:bytes ->
   Lemma
   (requires
-    is_publishable tr msg_bytes /\
+    is_publishable tr msg3_bytes /\
     is_publishable tr gx /\
     is_secret (principal_state_label bob bob_si) tr y /\
     is_verification_key "DH.SigningKey" (principal_label alice) tr pk_a
   )
   (ensures (
     let gy = dh_pk y in
-    match decode_and_verify_message3 msg_bytes bob gx gy y pk_a with
+    match decode_and_verify_message3 msg3_bytes bob gx gy y pk_a with
     | Some res -> (
       let sig_msg = SigMsg3 {bob; gx; gy} in
-      is_publishable tr res.sg /\
       (is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_state_label bob bob_si) \/
       (exists x. gx == dh_pk x /\ event_triggered tr alice (Initiate2 alice bob gx gy (dh x gy))))
     )
     | None -> True
   ))
-let decode_and_verify_message3_proof tr msg_bytes alice bob bob_si gx y pk_a =
+let decode_and_verify_message3_proof tr msg3_bytes alice bob bob_si gx y pk_a =
   let gy = dh_pk y in
-  match decode_and_verify_message3 msg_bytes bob gx gy y pk_a with
+  match decode_and_verify_message3 msg3_bytes bob gx gy y pk_a with
     | Some res -> (
-      parse_wf_lemma message (is_publishable tr) msg_bytes;
+      parse_wf_lemma message (is_publishable tr) msg3_bytes;
       serialize_wf_lemma sig_message (is_publishable tr) (SigMsg3 {bob; gx; gy});
       ()
     )

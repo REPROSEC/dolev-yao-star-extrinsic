@@ -321,26 +321,26 @@ let send_msg3_proof tr global_sess_id alice alice_si bob =
 #push-options "--z3rlimit 50"
 val verify_msg3_proof:
   tr:trace ->
-  global_sess_id:dh_global_sess_ids -> alice:principal -> bob:principal -> msg_id:nat -> sess_id:state_id ->
+  global_sess_id:dh_global_sess_ids -> alice:principal -> bob:principal -> msg_id:nat -> bob_si:state_id ->
   Lemma
   (requires trace_invariant tr)
   (ensures (
-    let (_, tr_out) = verify_msg3 global_sess_id alice bob msg_id sess_id tr in
+    let (_, tr_out) = verify_msg3 global_sess_id alice bob msg_id bob_si tr in
     trace_invariant tr_out
   ))
-  [SMTPat (trace_invariant tr); SMTPat (verify_msg3 global_sess_id alice bob msg_id sess_id tr)]
-let verify_msg3_proof tr global_sess_id alice bob msg_id sess_id =
-  match get_state bob sess_id tr with
+  [SMTPat (trace_invariant tr); SMTPat (verify_msg3 global_sess_id alice bob msg_id bob_si tr)]
+let verify_msg3_proof tr global_sess_id alice bob msg_id bob_si =
+  match get_state bob bob_si tr with
   | (Some (ResponderSentMsg2 alice gx gy y), tr) -> (
     match recv_msg msg_id tr with
     | (Some msg_bytes, tr) -> (
       match get_public_key bob global_sess_id.pki (Verify "DH.SigningKey") alice tr with
       | (Some pk_a, tr) -> (
-          decode_and_verify_message3_proof tr msg_bytes alice bob sess_id gx y pk_a;
+          decode_and_verify_message3_proof tr msg_bytes alice bob bob_si gx y pk_a;
           
           match decode_and_verify_message3 msg_bytes bob gx gy y pk_a with
           | Some res -> (
-            assert(exists y. gy == dh_pk y /\ res.k == dh y gx /\ is_secret (principal_state_label bob sess_id) tr y);
+            assert(exists y. gy == dh_pk y /\ res.k == dh y gx /\ is_secret (principal_state_label bob bob_si) tr y);
 
             assert(event_triggered tr bob (Respond1 alice bob gx gy y));
             // The decode_message3_proof gives us that there exists a k' such that 
@@ -348,11 +348,11 @@ let verify_msg3_proof tr global_sess_id alice bob msg_id sess_id =
             // On a high level we need to show now that this event was triggered
             // for our concrete k.
             assert(exists x. gx == dh_pk x /\ event_triggered tr alice (Initiate2 alice bob gx gy (dh x gy)) \/ 
-              is_corrupt tr (principal_label alice)  \/ is_corrupt tr (principal_state_label bob sess_id));
+              is_corrupt tr (principal_label alice)  \/ is_corrupt tr (principal_state_label bob bob_si));
 
             // Proof strategy: We want to work without the corruption case
             // so we introduce this implication.
-            let alice_and_bob_not_corrupt = (~(is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_state_label bob sess_id))) in
+            let alice_and_bob_not_corrupt = (~(is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_state_label bob bob_si))) in
             let event_initiate2 = event_triggered tr alice (Initiate2 alice bob gx gy res.k) in
             introduce alice_and_bob_not_corrupt ==> event_initiate2
             with _. (
@@ -369,10 +369,10 @@ let verify_msg3_proof tr global_sess_id alice bob msg_id sess_id =
               )
             );
 
-            assert(is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_state_label bob sess_id) \/ 
-              (exists si. get_label res.k `equivalent tr` join (principal_state_label alice si) (principal_state_label bob sess_id)));
+            assert(is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_state_label bob bob_si) \/ 
+              (exists si. get_label res.k `equivalent tr` join (principal_state_label alice si) (principal_state_label bob bob_si)));
             assert(get_usage res.k == AeadKey "DH.aead_key");
-            assert(is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_state_label bob sess_id) \/
+            assert(is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_state_label bob bob_si) \/
               (is_dh_shared_key tr alice bob res.k /\ event_triggered tr alice (Initiate2 alice bob gx gy res.k)));
             ()
           )
