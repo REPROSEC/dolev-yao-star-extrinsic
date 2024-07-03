@@ -16,7 +16,7 @@ we can find functions and theorems built on top of [`DY.Core`](src/core/DY.Core.
 ### Examples
 
 The NSL protocol has been proven secure in the namespace [`DY.Example.NSL`](examples/nsl_pk/DY.Example.NSL.SecurityProperties.fst), and the ISO-DH protocol has been
-proven secure in the namespace [`DY.Example.DH`](examples/iso_dh/DY.Example.DH.SecurityProperties.fst).
+proven secure in the namespace [`DY.Example.DH`](examples/iso_dh).
 
 ## How to build
 
