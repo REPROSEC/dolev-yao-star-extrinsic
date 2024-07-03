@@ -35,10 +35,17 @@ module contains helper lemmas about the total functions
 used in the stateful proof to prove that every
 stateful function fulfills the trace invariants.
 
-The two modules that are left are the ``DY.Example.DH.SecurityProperties``
-module and the ``DY.Example.DH.Debug`` module. The former
-defines and proves the security properties, and the latter generates 
-an example trace of an honest protocol run.
+The module ``DY.Example.DH.SecurityProperties`` formalizes the
+above-mentioned security properties and proves them with the
+protocol invariants.
+
+To see whether the protocol has been modeled correctly the module
+``DY.Example.DH.Debug`` provides an implementation of an honest
+protocol run. This module can be extracted to OCaml code to
+print an example trace to the console.
+The module ``DY.Example.DH.Debug.Proof`` proves that the
+honest protocol run fulfills the protocol invariants.
+This proof serves as a sanity check for the protocol invariants.
 
 ## Check and Run the Model
 To verify the F* code you can call ``make`` from either this 
