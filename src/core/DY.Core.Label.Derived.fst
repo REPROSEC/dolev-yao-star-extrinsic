@@ -88,3 +88,16 @@ val right_flows_to_meet:
   [SMTPat (l2 `can_flow tr` (l1 `meet` l2))]
 let right_flows_to_meet tr l1 l2 =
   meet_eq tr (meet l1 l2) l1 l2
+
+val can_flow_propagates_is_corrupt:
+  tr:trace -> l1:label -> l2:label ->
+  Lemma
+  (requires
+    is_corrupt tr l2 /\
+    l1 `can_flow tr` l2
+  )
+  (ensures is_corrupt tr l1)
+  [SMTPat (is_corrupt tr l2); SMTPat (l1 `can_flow tr` l2)]
+let can_flow_propagates_is_corrupt tr l1 l2 =
+  flow_to_public_eq tr l1;
+  flow_to_public_eq tr l2

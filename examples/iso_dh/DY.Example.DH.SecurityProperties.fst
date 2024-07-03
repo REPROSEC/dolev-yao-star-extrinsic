@@ -7,7 +7,7 @@ open DY.Example.DH.Protocol.Total.Proof
 open DY.Example.DH.Protocol.Stateful
 open DY.Example.DH.Protocol.Stateful.Proof
 
-#set-options "--fuel 8 --ifuel 8 --z3rlimit 25  --z3cliopt 'smt.qi.eager_threshold=100'"
+#set-options "--fuel 0 --ifuel 0 --z3rlimit 25  --z3cliopt 'smt.qi.eager_threshold=100'"
 
 
 (*** Authentication Properties ***)
@@ -47,36 +47,6 @@ let responder_authentication tr i alice bob gx gy k = ()
 
 (*** Forward Secrecy Properties ***)
 
-/// This lemma is needed to proof the forward secrecy
-/// security properties.
-/// It is never explicitly called but automatically
-/// instantiated via the SMTPat.
-/// In the forward secrecy security property the problem
-/// is that we do not explicitly have the session id
-/// available. That is the reason for using the SMTPat.
-///
-/// Alternatively the SMTPat of the lemma 
-/// principal_flow_to_principal_state in DY.Core.Label
-/// could be extended with this SMTPat to proof the
-/// forward secrecy security properties.
-val principal_state_corrupt_implies_principal_corrupt:
-  tr:trace -> prin:principal -> si:state_id -> 
-  Lemma
-  (requires
-    trace_invariant tr /\
-    is_corrupt tr (principal_state_label prin si)
-  )
-  (ensures
-    is_corrupt tr (principal_label prin)
-  )
-  [SMTPat (trace_invariant tr); SMTPat (is_corrupt tr (principal_state_label prin si))]
-let principal_state_corrupt_implies_principal_corrupt tr prin si = 
-  // Triggers principal_flow_to_principal_state
-  assert(principal_label prin `can_flow tr` principal_state_label prin si);
-  // Triggers flow_to_public_eq
-  assert(principal_label prin `can_flow tr` public);
-  ()
-
 val initiator_forward_secrecy: 
   tr:trace -> alice:principal -> alice_si:state_id -> bob:principal -> gx:bytes -> gy:bytes -> k:bytes ->
   Lemma
@@ -91,40 +61,40 @@ val initiator_forward_secrecy:
 let initiator_forward_secrecy tr alice alice_si bob gx gy k =
   attacker_only_knows_publishable_values tr k;
 
-  // The following code is not needed for the proof.
-  // It just shows what we need to show to prove the lemma.
-  assert(is_publishable tr k);
-  assert(is_corrupt tr (get_label k));
+  // We derive the following fact from InitiatorSendMsg3 state invariant
+  // and Respond1 event invariant
+  // (this assert is not needed and only there for pedagogical purposes)
+  assert(
+    (exists x. gx == dh_pk x /\ k == dh x gy /\ is_secret (principal_state_label alice alice_si) tr x) /\
+    (
+      is_corrupt tr (principal_label bob) \/
+      is_corrupt tr (principal_state_label alice alice_si) \/
+      (exists y.
+        (exists bob_si. is_secret (principal_state_label bob bob_si) tr y) /\
+        gy = dh_pk y
+      )
+    )
+  );
 
-  assert(get_label k `can_flow tr` public);
-  assert(is_corrupt tr (get_label k));
-  assert(get_label k `can_flow tr` join (principal_state_label alice alice_si) (principal_label bob));
-  assert(get_label k `can_flow tr` principal_state_label alice alice_si);
-  assert(get_label k `can_flow tr` principal_label bob);
-
-  assert(is_dh_shared_key tr alice bob k \/ is_corrupt tr (principal_label bob) \/
-    is_corrupt tr (principal_state_label alice alice_si));
-  assert(exists bob_si. get_label k `equivalent tr` 
-    join (principal_state_label alice alice_si) (principal_state_label bob bob_si) \/ 
+  // We can deduce from it the label of `k`, up to some corruption
+  // (this assert is not needed and only there for pedagogical purposes)
+  assert(
     is_corrupt tr (principal_label bob) \/
-    is_corrupt tr (principal_state_label alice alice_si));
+    is_corrupt tr (principal_state_label alice alice_si) \/
+    (exists bob_si. get_label k `equivalent tr` join (principal_state_label alice alice_si) (principal_state_label bob bob_si))
+  );
 
-  // This assert is needed for the proof
-  assert(exists bob_si. join (principal_state_label alice alice_si) (principal_state_label bob bob_si)
-    `can_flow tr` public \/ 
-    is_corrupt tr (principal_label bob));
+  // We deduce from the following this assertion,
+  // that will trigger transitivity of `can_flow tr` from `join ...` to `get_label k` to `public`
+  assert(
+    is_corrupt tr (principal_label bob) \/
+    is_corrupt tr (principal_state_label alice alice_si) \/
+    (exists bob_si. join (principal_state_label alice alice_si) (principal_state_label bob bob_si) `can_flow tr` public)
+  );
 
-  // The following code is not needed for the proof.
-  // It just shows what we need to show to prove the lemma.
-  assert(principal_state_label alice alice_si `can_flow tr` public \/
-    (exists bob_si. principal_state_label bob bob_si `can_flow tr` public) \/
-    is_corrupt tr (principal_label bob));
-  assert(exists bob_si. is_corrupt tr (join (principal_state_label alice alice_si) (principal_state_label bob bob_si)) \/ 
-    is_corrupt tr (principal_label bob));
-  
-  assert(is_corrupt tr (principal_state_label alice alice_si) \/
-    (exists bob_si. is_corrupt tr (principal_state_label bob bob_si)) \/
-    is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob));
+  // This assert allows to deduce corruption of principal bob from corruption state bob_si of principal bob
+  assert(forall bob_si. principal_label bob `can_flow tr` principal_state_label bob bob_si);
+
   ()
 
 val responder_forward_secrecy: 
@@ -141,30 +111,43 @@ val responder_forward_secrecy:
 let responder_forward_secrecy tr alice bob bob_si gx gy k = 
   attacker_only_knows_publishable_values tr k;
 
-  // The following code is not needed for the proof.
-  // It just shows what we need to show to prove the lemma.
-  assert(is_dh_shared_key tr alice bob k \/ is_corrupt tr (principal_label alice) \/
-    is_corrupt tr (principal_state_label bob bob_si));
+  // We derive the following fact from ResponderReceivedMsg3 state invariant
+  // and Initiate2 event invariant
+  // (this assert is not needed and only there for pedagogical purposes)
+  assert(
+    (exists y. gy == dh_pk y /\ k == dh y gx /\ is_secret (principal_state_label bob bob_si) tr y) /\
+    (
+      is_corrupt tr (principal_label alice) \/
+      is_corrupt tr (principal_state_label bob bob_si) \/
+      (exists x.
+        (exists alice_si. is_secret (principal_state_label alice alice_si) tr x) /\
+        k == dh x gy
+      )
+    )
+  );
 
-  assert(exists alice_si. get_label k `equivalent tr` 
-    join (principal_state_label alice alice_si) (principal_state_label bob bob_si) \/ 
+  // We can deduce from it the label of `k`, up to some corruption
+  // (this assert is not needed and only there for pedagogical purposes)
+  assert(
     is_corrupt tr (principal_label alice) \/
-    is_corrupt tr (principal_state_label bob bob_si));
-  
+    is_corrupt tr (principal_state_label bob bob_si) \/
+    (exists alice_si. get_label k `equivalent tr` join (principal_state_label alice alice_si) (principal_state_label bob bob_si))
+  );
+
+  // We deduce from the following this assertion,
+  // that will trigger transitivity of `can_flow tr` from `join ...` to `get_label k` to `public`
+  assert(
+    is_corrupt tr (principal_label alice) \/
+    is_corrupt tr (principal_state_label bob bob_si) \/
+    (exists alice_si. join (principal_state_label alice alice_si) (principal_state_label bob bob_si) `can_flow tr` public)
+  );
+
   // This assert is needed for the proof
   assert(exists alice_si. join (principal_state_label alice alice_si) (principal_state_label bob bob_si)
     `can_flow tr` public \/ 
     is_corrupt tr (principal_label alice));
 
-  // The following code is not needed for the proof.
-  // It just shows what we need to show to prove the lemma.
-  assert(principal_state_label bob bob_si `can_flow tr` public \/
-    (exists alice_si. principal_state_label alice alice_si `can_flow tr` public) \/
-    is_corrupt tr (principal_label alice));
-  assert(exists alice_si. is_corrupt tr (join (principal_state_label alice alice_si) (principal_state_label bob bob_si)) \/ 
-    is_corrupt tr (principal_label alice));
+  // This assert allows to deduce corruption of principal alice from corruption state alice_si of principal alice
+  assert(forall alice_si. principal_label alice `can_flow tr` principal_state_label alice alice_si);
 
-  assert(is_corrupt tr (principal_state_label bob bob_si) \/
-    (exists alice_si. is_corrupt tr (principal_state_label alice alice_si)) \/
-    is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob));
   ()
