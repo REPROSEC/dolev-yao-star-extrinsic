@@ -216,6 +216,9 @@ In general the `requires` is a big conjunction,
 each hypothesis should be on a separate line.
 The `ensures` often contains a `let`, a `match`,
 in that case extra parenthesis are needed for F\*'s parser.
+Defining variables with the `let` keyword should be 
+replaced by inlining the statement directly into the function that 
+requires the variable if it does not blow up the statement too much.
 
 When the lemma is very short, it may be written on one line.
 
