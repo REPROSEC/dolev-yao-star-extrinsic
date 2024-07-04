@@ -6,6 +6,7 @@
 - Every change to DY* has to be developed in a separate branch.
 - If a feature is ready to be merged into the main branch, you **must create a pull request**, and at least one person must review the code changes.
     - PRs are an essential process to guarantee the code quality of DY*.
+- PRs are merged via GitHub's `Squash and merge` option to keep the commit history clean.
 - After merging a PR, the corresponding branch must be deleted to keep the repository tidy.
 
 # Protocol Analysis
