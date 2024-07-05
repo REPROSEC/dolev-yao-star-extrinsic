@@ -165,74 +165,6 @@ val get_state_appears_in_full_state :
   )
 let get_state_appears_in_full_state  tr p sid = admit()
 
-let rec forall_rev_list_bool (#a:Type) (p: a -> bool) (xs: rev_list a) : bool =
-  match xs with
-  | Nil -> true
-  | Snoc xs x -> p x && forall_rev_list_bool p xs
-
-
-val no_set_state_entry_for_bool:
-  principal -> state_id -> trace -> bool
-let no_set_state_entry_for_bool p sid tr = 
-  forall_rev_list_bool
-    (fun tr_ev ->
-    match tr_ev with
-    | SetState p' sid' _ -> p' <> p || sid' <> sid
-    | _ -> true
-    )
-    tr
-
-val no_set_state_entry_for_bool_prop:
-  p:principal -> sid:state_id -> tr:trace -> 
-  Lemma 
-    (
-      no_set_state_entry_for_bool p sid tr
-   <==>
-      no_set_state_entry_for p sid tr
-    )
-let no_set_state_entry_for_bool_prop p sid tr = admit()
-
-// val lemma1:
-//   tr:trace -> p:principal -> sid:state_id -> idn:nat ->
-//   full_st:full_state_raw ->
-//   i:nat{i < List.length full_st} ->
-//   sid_i:state_id -> init_i:session_raw -> last_i:state_raw ->
-//   tr1:trace{tr1 <$ tr} -> tr2:trace{tr <$ tr2} ->
-//   Lemma
-//     (requires
-//       trace_invariant tr
-//       /\ List.index full_st i = (sid_i, Snoc init_i last_i)
-//       /\ sid_i <> sid
-//       /\ no_set_state_entry_for p sid_i (tr2 `suffix_after` tr1)
-//     )
-//     (ensures (
-//       match parse p_state last_i with
-//       | None -> True
-//       | Some last_i -> last_i.idn <> idn
-//       )
-//     )
-// let lemma1 tr p sid idn full_st i sid_i init_i last_i tr1 tr2 =
-//   get_state_aux_same p sid_i tr1 tr2;
-//   let (Some state_i, _) =  get_state p sid_i tr2 in
-//   assert(state_i = last_i );
-//   let (Some state_i_before_old, _) = get_state p sid_i tr1 in
-//   assert(state_i_before_old = state_i);
-//   admit();
-//   // match get_full_state p tr_before_old with
-//   // | None -> admit()
-//   // | Some full_state_before_old -> (
-//   // get_state_appears_in_full_state tr_before_old p sid_i;
-//   // assert(exists (j:nat{j < List.length full_state_before_old}) init. List.index full_state_before_old j = (sid_i, Snoc init state_i_before_old));
-//   // admit();
-//   // // assert(global_state_pred tr_before_old p sid oldst_b);
-//   ()
-//  // )
-
-val append_to_non_empty:
-  #a:eqtype -> #b:eqtype -> key:a -> elem:b ->
-  Lemma (forall xys. [] <> append_to xys key elem)
-let append_to_non_empty key elem = ()
-
 
 val state_was_set_full_state_some:
   tr:trace -> p:principal -> sid:state_id -> cont:state_raw ->
@@ -377,10 +309,6 @@ let rec no_set_state_entry_for_on_suffix (tr:trace) (suff:trace) (p:principal) (
                 no_set_state_entry_for_on_suffix tr_init suff_init p sid;
                 assert(event_exists tr tr_ev)
 
-let suffix_at_event (tr:trace) (ev:trace_event{event_exists tr ev}) =
-  let tr_before = tr `prefix_before_event` ev in
-  tr `suffix_after` tr_before
-
 let rec suffix_after_is_suffix (tr:trace) (pref:trace{pref <$ tr}):
   Lemma
   (tr `has_suffix` (tr `suffix_after` pref)
@@ -401,51 +329,6 @@ let rec suffix_after_is_suffix (tr:trace) (pref:trace{pref <$ tr}):
 
 
 
-let suffix_at_event_is_suffix (tr:trace) (ev:trace_event{event_exists tr ev}) :
-  Lemma
-  (
-   tr `has_suffix` (tr `suffix_at_event` ev) 
-  )
-  = () //suffix_after_is_suffix tr ( tr `prefix_before_event` ev )
-
-let grows_nil (tr:trace):
-  Lemma (Nil <$ tr)
-  [SMTPat (Nil <$ tr)]
-  = 
-  reveal_opaque (`%grows) grows 
-
-let rec suffix_after_nil (tr:trace):
-  Lemma 
-  ( tr `suffix_after` Nil = tr
-  )
-  [SMTPat (tr `suffix_after` Nil)]
-  = match tr with
-  | Nil -> ()
-  | Snoc init ev -> 
-         suffix_after_nil init
-
-let rec suffix_at_event_same_for_suffix (tr:trace) (suff:trace) (the_ev:trace_event):
-  Lemma
-  (requires 
-    tr `has_suffix` suff
-    /\ event_exists tr the_ev /\ event_exists suff the_ev
-  )
-  (ensures 
-    tr `suffix_at_event` the_ev = suff `suffix_at_event` the_ev
-  )
-=
-  let tr_before = tr `prefix_before_event` the_ev in
-  let suff_before = suff `prefix_before_event` the_ev in
-  match suff with
-  | Nil -> ()
-  | Snoc suff_init suff_ev ->
-         match tr with
-         | Nil -> ()
-         | Snoc tr_init tr_ev -> 
-                if tr_ev = the_ev
-                then ()
-                else suffix_at_event_same_for_suffix tr_init suff_init the_ev
-
 let suffixes (tr:trace) (suff1:trace) (suff2:trace):
   Lemma
   (requires
@@ -458,7 +341,15 @@ let suffixes (tr:trace) (suff1:trace) (suff2:trace):
   )
   = admit()
 
-#push-options "--z3rlimit 25 " // --z3cliopt 'smt.qi.eager_threshold=50'"
+let suff_after_before_event_is_suff_at_event (tr:trace) (ev:trace_event{event_exists tr ev}):
+  Lemma
+  ( let tr_before = tr `prefix_before_event` ev in
+    let tr_after = tr `suffix_after_event` ev in
+    tr `suffix_after` tr_before = (Snoc Nil ev) `trace_concat` tr_after
+  )
+  = admit()
+
+#push-options "--z3rlimit 50 " //--z3cliopt 'smt.qi.eager_threshold=50'"
 val next_full_state_pred:
   tr:trace -> p:principal -> sid:state_id ->
   Lemma 
@@ -530,15 +421,18 @@ let next_full_state_pred tr p sid =
                            else begin
                              let (Some state_i, _) =  get_state p sid_i tr_after_msg in
                              assert(state_i = last_i_b );
-                             let tr_after_last_i = (tr `suffix_after_event` (SetState p sid_i last_i_b) ) in
+                             let oldst_entry = SetState p sid oldst_b in
                              let tr_after_oldst = tr `suffix_after_event` (SetState p sid oldst_b) in
+                             let last_i_entry = SetState p sid_i last_i_b in
+                             let tr_after_last_i = (tr `suffix_after_event` (SetState p sid_i last_i_b) ) in
+                             
                              if tr_after_oldst `has_suffix` tr_after_last_i // last_i after oldst on tr
                              then (
                                get_state_no_set_state_for_on_suffix_after_event tr p sid;
                                no_set_state_entry_for_on_suffix tr_after_oldst tr_after_last_i p sid;
                                assert(no_set_state_entry_for p sid tr_after_last_i);
                                let tr_before_last_i = tr `prefix_before_event` (SetState p sid_i last_i_b) in
-                               assume(tr `suffix_after` tr_before_last_i = (Snoc Nil (SetState p sid_i last_i_b)) `trace_concat` tr_after_last_i );
+                               suff_after_before_event_is_suff_at_event tr last_i_entry;
                                no_set_state_entry_for_concat p sid (Snoc Nil (SetState p sid_i last_i_b)) tr_after_last_i;
                                get_state_aux_same p sid tr_before_last_i tr;
                                  assert((Some oldst_b, tr_before_last_i) = get_state p sid tr_before_last_i);
@@ -549,17 +443,16 @@ let next_full_state_pred tr p sid =
                                      assert(global_state_pred tr_before_last_i p sid_i last_i_b);
                                      get_state_appears_in_full_state tr_before_last_i p sid
                              )
-                             else ( // oldst before last_i on tr
+                             else ( // oldst after last_i on tr
+                             // admit()
                                suffixes tr tr_after_last_i tr_after_oldst;
                                assert(tr_after_last_i `has_suffix` tr_after_oldst);
   
-                               let oldst_entry = SetState p sid oldst_b in
-                               let tr_before_old = tr `prefix_before_event` oldst_entry in
-                               let tr_suff_at_old = tr `suffix_at_event` oldst_entry in
-                               assume(tr_after_last_i `has_suffix` tr_suff_at_old );
                                get_state_no_set_state_for_on_suffix_after_event tr p sid_i;
-                               no_set_state_entry_for_on_suffix tr_after_last_i tr_suff_at_old p sid_i;
-                               assert(no_set_state_entry_for p sid_i tr_suff_at_old);
+                               no_set_state_entry_for_on_suffix tr_after_last_i tr_after_oldst p sid_i;
+                               let tr_before_old = tr `prefix_before_event` oldst_entry in                               
+                               suff_after_before_event_is_suff_at_event tr oldst_entry;
+                               no_set_state_entry_for_concat p sid_i (Snoc Nil oldst_entry) tr_after_oldst;
                                get_state_aux_same p sid_i tr_before_old tr;
                                let (Some state_i_before_old, _) = get_state p sid_i tr_before_old in
                                assert(state_i_before_old = state_i);
