@@ -8,6 +8,8 @@
     - PRs are an essential process to guarantee the code quality of DY*.
 - PRs are merged via GitHub's `Squash and merge` option to keep the commit history clean.
 - After merging a PR, the corresponding branch must be deleted to keep the repository tidy.
+- Commits in the main branch must use [conventional commits](https://www.conventionalcommits.org/en/v1.0.0/#summary), and be worded using the imperative tense.
+- Commits in other branches don't have to follow any rule, only the squashed commit must follow the main branch rule.
 
 # Protocol Analysis
 
