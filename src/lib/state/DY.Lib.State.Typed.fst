@@ -60,6 +60,7 @@ let local_state_predicate_to_local_bytes_state_predicate #cinvs #a #ps_a tspred 
     );
   }
 
+unfold
 val has_local_state_predicate:
   #a:Type -> {|local_state a|} ->
   invs:protocol_invariants -> local_state_predicate a ->

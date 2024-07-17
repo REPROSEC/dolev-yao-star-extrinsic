@@ -17,9 +17,6 @@ type dh_session =
 %splice [ps_dh_session] (gen_parser (`dh_session))
 %splice [ps_dh_session_is_well_formed] (gen_is_well_formed_lemma (`dh_session))
 
-instance dh_session_parseable_serializeable: parseable_serializeable bytes dh_session
- = mk_parseable_serializeable ps_dh_session
-
 (*** Definition of events ***)
 [@@ with_bytes bytes]
 type dh_event =
@@ -146,4 +143,3 @@ let verify_msg3 global_sess_id alice bob msg_id bob_si =
     return (Some ())
   )
   | _ -> return None
-    

@@ -90,7 +90,8 @@ let all_sessions = [
 /// List of all local event predicates.
 
 let all_events = [
-  (event_nsl_event.tag, compile_event_pred event_predicate_nsl)
+  (event_nsl_event.tag, compile_event_pred event_predicate_nsl);
+  ("__dummy__", (fun _ _ _ -> False)) // workaround
 ]
 
 /// Create the global trace invariants.
@@ -107,33 +108,19 @@ instance protocol_invariants_nsl: protocol_invariants = {
 
 /// Lemmas that the global state predicate contains all the local ones
 
-val all_sessions_has_all_sessions: unit -> Lemma (norm [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP (has_local_bytes_state_predicate protocol_invariants_nsl) all_sessions))
-let all_sessions_has_all_sessions () =
+val all_sessions_has_all_sessions: squash (norm [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP (has_local_bytes_state_predicate protocol_invariants_nsl) all_sessions))
+let all_sessions_has_all_sessions =
   assert_norm(List.Tot.no_repeats_p (List.Tot.map fst (all_sessions)));
   mk_global_local_bytes_state_predicate_correct protocol_invariants_nsl all_sessions;
   norm_spec [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP (has_local_bytes_state_predicate protocol_invariants_nsl) all_sessions)
 
-val protocol_invariants_nsl_has_pki_invariant: squash (has_pki_invariant protocol_invariants_nsl)
-let protocol_invariants_nsl_has_pki_invariant = all_sessions_has_all_sessions ()
-
-val protocol_invariants_nsl_has_private_keys_invariant: squash (has_private_keys_invariant protocol_invariants_nsl)
-let protocol_invariants_nsl_has_private_keys_invariant = all_sessions_has_all_sessions ()
-
-val protocol_invariants_nsl_has_nsl_session_invariant: squash (has_local_state_predicate protocol_invariants_nsl state_predicate_nsl)
-let protocol_invariants_nsl_has_nsl_session_invariant = all_sessions_has_all_sessions ()
-
 /// Lemmas that the global event predicate contains all the local ones
 
-val all_events_has_all_events: unit -> Lemma (norm [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP (has_compiled_event_pred protocol_invariants_nsl) all_events))
-let all_events_has_all_events () =
+val all_events_has_all_events: squash (norm [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP (has_compiled_event_pred protocol_invariants_nsl) all_events))
+let all_events_has_all_events =
   assert_norm(List.Tot.no_repeats_p (List.Tot.map fst (all_events)));
   mk_event_pred_correct protocol_invariants_nsl all_events;
-  norm_spec [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP (has_compiled_event_pred protocol_invariants_nsl) all_events);
-  let dumb_lemma (x:prop) (y:prop): Lemma (requires x /\ x == y) (ensures y) = () in
-  dumb_lemma (for_allP (has_compiled_event_pred protocol_invariants_nsl) all_events) (norm [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP (has_compiled_event_pred protocol_invariants_nsl) all_events))
-
-val protocol_invariants_nsl_has_nsl_event_invariant: squash (has_event_pred protocol_invariants_nsl event_predicate_nsl)
-let protocol_invariants_nsl_has_nsl_event_invariant = all_events_has_all_events ()
+  norm_spec [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP (has_compiled_event_pred protocol_invariants_nsl) all_events)
 
 (*** Proofs ***)
 

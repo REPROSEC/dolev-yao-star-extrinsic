@@ -23,12 +23,9 @@ type nsl_session =
 %splice [ps_nsl_session] (gen_parser (`nsl_session))
 %splice [ps_nsl_session_is_well_formed] (gen_is_well_formed_lemma (`nsl_session))
 
-instance parseable_serializeable_bytes_nsl_session: parseable_serializeable bytes nsl_session
- = mk_parseable_serializeable ps_nsl_session
-
 instance local_state_nsl_session: local_state nsl_session = {
   tag = "NSL.Session";
-  format = parseable_serializeable_bytes_nsl_session;
+  format = mk_parseable_serializeable ps_nsl_session;
 }
 
 (*** Event type ***)
