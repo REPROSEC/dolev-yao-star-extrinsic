@@ -100,7 +100,6 @@ let all_sessions = [
 
 let all_events = [
   (dh_event_instance.tag, compile_event_pred dh_event_pred);
-  ("__dummy__", (fun _ _ _ -> False)) // workaround
 ]
 
 /// Create the global trace invariants.
@@ -125,11 +124,13 @@ let all_sessions_has_all_sessions =
 
 /// Lemmas that the global event predicate contains all the local ones
 
+#push-options "--fuel 1" // fuel is a workaround for FStarLang/FStar#3360
 val all_events_has_all_events: squash (norm [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP (has_compiled_event_pred dh_protocol_invs) all_events))
 let all_events_has_all_events =
   assert_norm(List.Tot.no_repeats_p (List.Tot.map fst (all_events)));
   mk_event_pred_correct dh_protocol_invs all_events;
   norm_spec [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP (has_compiled_event_pred dh_protocol_invs) all_events)
+#pop-options
 
 (*** Proofs ****)
 
