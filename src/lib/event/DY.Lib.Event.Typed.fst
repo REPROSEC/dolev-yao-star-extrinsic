@@ -46,21 +46,21 @@ let split_event_pred_func: split_function_input_values = {
 
   tag_set_t = string;
   tag_t = string;
-  is_disjoint = default_disjoint;
+  is_disjoint = unequal;
   tag_belong_to = (fun dtag tag -> dtag = tag);
   cant_belong_to_disjoint_sets = (fun dtag tag1 tag2 -> ());
 
   raw_data_t = trace & principal & bytes;
   output_t = prop;
 
-  default_global_fun = (fun tr prin tag content -> False);
-
   decode_tagged_data = (fun (tr, prin, tag, content) -> (
     Some (tag, (tr, prin, content))
   ));
 
-  local_fun = trace -> principal -> bytes -> prop;
-  global_fun = trace -> principal -> string -> bytes -> prop;
+  local_fun_t = trace -> principal -> bytes -> prop;
+  global_fun_t = trace -> principal -> string -> bytes -> prop;
+
+  default_global_fun = (fun tr prin tag content -> False);
 
   apply_local_fun = (fun epred (tr, prin, content) ->
     epred tr prin content
@@ -74,7 +74,7 @@ let split_event_pred_func: split_function_input_values = {
   apply_mk_global_fun = (fun spred x -> ());
 }
 
-type compiled_event_predicate = split_event_pred_func.local_fun
+type compiled_event_predicate = split_event_pred_func.local_fun_t
 
 val compile_event_pred:
   #a:Type0 -> {|event a|} ->

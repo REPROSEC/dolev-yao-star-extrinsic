@@ -1,7 +1,7 @@
 module DY.Lib.SplitFunction
 
 open FStar.List.Tot
-open Comparse //for_allP
+open Comparse //for_allP, for_allP_eq
 
 #set-options "--fuel 1 --ifuel 1"
 
@@ -91,21 +91,21 @@ noeq type split_function_input_values = {
   output_t: Type;
 
   // We can decode the global function input
-  // into an encoded tag and a local function input
+  // into a tag and a local function input
   decode_tagged_data: tagged_data_t -> Tot (option (tag_t & raw_data_t));
 
   // Types for the local functions and the global function
-  local_fun: Type;
-  global_fun: Type;
+  local_fun_t: Type;
+  global_fun_t: Type;
 
-  default_global_fun: global_fun;
+  default_global_fun: global_fun_t;
 
   // Apply a local function to its input
-  apply_local_fun: local_fun -> raw_data_t -> output_t;
+  apply_local_fun: local_fun_t -> raw_data_t -> output_t;
   // Apply the global function to its input
-  apply_global_fun: global_fun -> tagged_data_t -> output_t;
+  apply_global_fun: global_fun_t -> tagged_data_t -> output_t;
   // Create a global function
-  mk_global_fun: (tagged_data_t -> output_t) -> global_fun;
+  mk_global_fun: (tagged_data_t -> output_t) -> global_fun_t;
   // Correctness theorem on creating and applying a global function
   apply_mk_global_fun: bare:(tagged_data_t -> output_t) -> x:tagged_data_t -> Lemma
     (apply_global_fun (mk_global_fun bare) x == bare x);
@@ -114,31 +114,35 @@ noeq type split_function_input_values = {
 /// Do a global function contain some given local function with some set of tags?
 /// This will be a crucial precondition for the correctness theorem `local_eq_global_lemma`.
 
-val has_local_fun: func:split_function_input_values -> func.global_fun -> (func.tag_set_t & func.local_fun) -> prop
-let has_local_fun func gfun (tag_set, lfun) =
+val has_local_fun: func:split_function_input_values -> func.global_fun_t -> (func.tag_set_t & func.local_fun_t) -> prop
+let has_local_fun func global_fun (tag_set, tagged_local_fun) =
   forall tagged_data.
     match func.decode_tagged_data tagged_data with
     | Some (tag, raw_data) ->
-      tag `func.tag_belong_to` tag_set ==> (func.apply_global_fun gfun tagged_data == func.apply_local_fun lfun raw_data)
+      tag `func.tag_belong_to` tag_set ==> (func.apply_global_fun global_fun tagged_data == func.apply_local_fun tagged_local_fun raw_data)
     | None -> True
 
-val find_local_fun: func:split_function_input_values -> list (func.tag_set_t & func.local_fun) -> func.tag_t -> option func.local_fun
-let rec find_local_fun func l tag =
-  match l with
+/// Returns the first local function associated with a tag set containing `tag`, if it exists.
+/// In practice, only one tag set may contain `tag` because tag sets are mutually disjoint
+/// (c.f. precondition of `mk_global_fun_correct`).
+/// In that case, this function returns the *unique* local function associated with a tag set containing `tag`.
+val find_local_fun: func:split_function_input_values -> list (func.tag_set_t & func.local_fun_t) -> func.tag_t -> option func.local_fun_t
+let rec find_local_fun func tagged_local_funs tag =
+  match tagged_local_funs with
   | [] -> None
-  | (tag_set, lfun)::t -> (
-    if tag `func.tag_belong_to` tag_set then
-      Some lfun
+  | (h_tag_set, h_local_fun)::t_tagged_local_funs -> (
+    if tag `func.tag_belong_to` h_tag_set then
+      Some h_local_fun
     else
-      find_local_fun func t tag
+      find_local_fun func t_tagged_local_funs tag
   )
 
-val mk_global_fun_aux: func:split_function_input_values -> list (func.tag_set_t & func.local_fun) -> func.tagged_data_t -> func.output_t
-let mk_global_fun_aux func l tagged_data =
+val mk_global_fun_aux: func:split_function_input_values -> list (func.tag_set_t & func.local_fun_t) -> func.tagged_data_t -> func.output_t
+let mk_global_fun_aux func tagged_local_funs tagged_data =
   match func.decode_tagged_data tagged_data with
   | Some (tag_set, raw_data) -> (
-    match find_local_fun func l tag_set with
-    | Some lfun -> func.apply_local_fun lfun raw_data
+    match find_local_fun func tagged_local_funs tag_set with
+    | Some tagged_local_fun -> func.apply_local_fun tagged_local_fun raw_data
     | None -> func.apply_global_fun func.default_global_fun tagged_data
   )
   | None -> func.apply_global_fun func.default_global_fun tagged_data
@@ -146,9 +150,9 @@ let mk_global_fun_aux func l tagged_data =
 /// Given a list of tags and local functions, create the global function.
 
 [@@"opaque_to_smt"]
-val mk_global_fun: func:split_function_input_values -> list (func.tag_set_t & func.local_fun) -> func.global_fun
-let mk_global_fun func l =
-  func.mk_global_fun (mk_global_fun_aux func l)
+val mk_global_fun: func:split_function_input_values -> list (func.tag_set_t & func.local_fun_t) -> func.global_fun_t
+let mk_global_fun func tagged_local_funs =
+  func.mk_global_fun (mk_global_fun_aux func tagged_local_funs)
 
 val memP_map:
   #a:Type -> #b:Type ->
@@ -170,51 +174,51 @@ let rec all_disjoint #a disj l =
   | h::t -> (for_allP (disj h) t) /\ all_disjoint disj t
 
 val mk_global_fun_correct_aux:
-  func:split_function_input_values -> l:list (func.tag_set_t & func.local_fun) -> tag_set:func.tag_set_t -> lfun:func.local_fun -> tag:func.tag_t ->
+  func:split_function_input_values -> tagged_local_funs:list (func.tag_set_t & func.local_fun_t) -> tag_set:func.tag_set_t -> local_fun:func.local_fun_t -> tag:func.tag_t ->
   Lemma
   (requires
-    all_disjoint (func.is_disjoint) (List.Tot.map fst l) /\
+    all_disjoint (func.is_disjoint) (List.Tot.map fst tagged_local_funs) /\
     tag `func.tag_belong_to` tag_set /\
-    List.Tot.memP (tag_set, lfun) l
+    List.Tot.memP (tag_set, local_fun) tagged_local_funs
   )
-  (ensures find_local_fun func l tag == Some lfun)
-let rec mk_global_fun_correct_aux func l tag_set lfun tag =
-  match l with
+  (ensures find_local_fun func tagged_local_funs tag == Some local_fun)
+let rec mk_global_fun_correct_aux func tagged_local_funs tag_set tagged_local_fun tag =
+  match tagged_local_funs with
   | [] -> ()
-  | (h_tag_set, h_sfun)::t -> (
+  | (h_tag_set, h_tagged_local_fun)::t_tagged_local_funs -> (
     if tag `func.tag_belong_to` h_tag_set then (
-      introduce (List.Tot.memP (tag_set, lfun) t) ==> False with _. (
-        for_allP_eq (func.is_disjoint h_tag_set) (List.Tot.map fst t);
-        memP_map fst t (tag_set, lfun);
+      introduce (List.Tot.memP (tag_set, tagged_local_fun) t_tagged_local_funs) ==> False with _. (
+        for_allP_eq (func.is_disjoint h_tag_set) (List.Tot.map fst t_tagged_local_funs);
+        memP_map fst t_tagged_local_funs (tag_set, tagged_local_fun);
         func.cant_belong_to_disjoint_sets tag h_tag_set tag_set
       )
     ) else (
-      mk_global_fun_correct_aux func t tag_set lfun tag
+      mk_global_fun_correct_aux func t_tagged_local_funs tag_set tagged_local_fun tag
     )
   )
 
 val mk_global_fun_correct:
-  func:split_function_input_values -> lfuns:list (func.tag_set_t & func.local_fun) -> tag_set:func.tag_set_t -> lfun:func.local_fun ->
+  func:split_function_input_values -> tagged_local_funs:list (func.tag_set_t & func.local_fun_t) -> tag_set:func.tag_set_t -> local_fun:func.local_fun_t ->
   Lemma
   (requires
-    all_disjoint (func.is_disjoint) (List.Tot.map fst lfuns) /\
-    List.Tot.memP (tag_set, lfun) lfuns
+    all_disjoint (func.is_disjoint) (List.Tot.map fst tagged_local_funs) /\
+    List.Tot.memP (tag_set, local_fun) tagged_local_funs
   )
-  (ensures has_local_fun func (mk_global_fun func lfuns) (tag_set, lfun))
-let mk_global_fun_correct func lfuns tag_set lfun =
+  (ensures has_local_fun func (mk_global_fun func tagged_local_funs) (tag_set, local_fun))
+let mk_global_fun_correct func tagged_local_funs tag_set local_fun =
   reveal_opaque (`%mk_global_fun) (mk_global_fun);
   introduce
     forall tagged_data.
       match func.decode_tagged_data tagged_data with
       | Some (tag, raw_data) ->
-        tag `func.tag_belong_to` tag_set ==> (func.apply_global_fun (mk_global_fun func lfuns) tagged_data == func.apply_local_fun lfun raw_data)
+        tag `func.tag_belong_to` tag_set ==> (func.apply_global_fun (mk_global_fun func tagged_local_funs) tagged_data == func.apply_local_fun local_fun raw_data)
       | None -> True
   with (
     match func.decode_tagged_data tagged_data with
     | Some (tag, raw_data) -> (
       if tag `func.tag_belong_to` tag_set then (
-        mk_global_fun_correct_aux func lfuns tag_set lfun tag;
-        func.apply_mk_global_fun (mk_global_fun_aux func lfuns) tagged_data
+        mk_global_fun_correct_aux func tagged_local_funs tag_set local_fun tag;
+        func.apply_mk_global_fun (mk_global_fun_aux func tagged_local_funs) tagged_data
       ) else ()
     )
     | None -> ()
@@ -226,22 +230,22 @@ let mk_global_fun_correct func lfuns tag_set lfun =
 /// (e.g. the function keep the same output when the trace grows.)
 
 val mk_global_fun_eq:
-  func:split_function_input_values -> lfuns:list (func.tag_set_t & func.local_fun) ->
+  func:split_function_input_values -> tagged_local_funs:list (func.tag_set_t & func.local_fun_t) ->
   tagged_data:func.tagged_data_t ->
   Lemma (
-    func.apply_global_fun (mk_global_fun func lfuns) tagged_data == (
+    func.apply_global_fun (mk_global_fun func tagged_local_funs) tagged_data == (
       match func.decode_tagged_data tagged_data with
       | Some (tag, raw_data) -> (
-        match find_local_fun func lfuns tag with
-        | Some lfun -> func.apply_local_fun lfun raw_data
+        match find_local_fun func tagged_local_funs tag with
+        | Some tagged_local_fun -> func.apply_local_fun tagged_local_fun raw_data
         | None -> func.apply_global_fun func.default_global_fun tagged_data
       )
       | None -> func.apply_global_fun func.default_global_fun tagged_data
     )
   )
-let mk_global_fun_eq func lfuns tagged_data =
+let mk_global_fun_eq func tagged_local_funs tagged_data =
   reveal_opaque (`%mk_global_fun) (mk_global_fun);
-  func.apply_mk_global_fun (mk_global_fun_aux func lfuns) tagged_data
+  func.apply_mk_global_fun (mk_global_fun_aux func tagged_local_funs) tagged_data
 
 /// If a global function contains some local function,
 /// and the global function input decodes to a tag for this local function,
@@ -249,35 +253,35 @@ let mk_global_fun_eq func lfuns tagged_data =
 
 val local_eq_global_lemma:
   func:split_function_input_values ->
-  gfun:func.global_fun -> tag_set:func.tag_set_t -> lfun:func.local_fun ->
+  global_fun:func.global_fun_t -> tag_set:func.tag_set_t -> local_fun:func.local_fun_t ->
   tagged_data:func.tagged_data_t -> tag:func.tag_t -> raw_data:func.raw_data_t ->
   Lemma
   (requires
     func.decode_tagged_data tagged_data == Some (tag, raw_data) /\
     tag `func.tag_belong_to` tag_set /\
-    has_local_fun func gfun (tag_set, lfun)
+    has_local_fun func global_fun (tag_set, local_fun)
   )
-  (ensures func.apply_global_fun gfun tagged_data == func.apply_local_fun lfun raw_data)
-let local_eq_global_lemma func gfun tag_set lfun tagged_data tag raw_data = ()
+  (ensures func.apply_global_fun global_fun tagged_data == func.apply_local_fun local_fun raw_data)
+let local_eq_global_lemma func global_fun tag_set tagged_local_fun tagged_data tag raw_data = ()
 
 /// In the common case where tag disjointness is unequality,
 /// `all_disjoint` is equivalent to the `no_repeats_p` predicate
 /// from F*'s standard library.
 
-val default_disjoint:
+val unequal:
   #a:Type ->
   a -> a -> prop
-let default_disjoint #a x y = x =!= y
+let unequal #a x y = x =!= y
 
 val no_repeats_p_implies_all_disjoint:
   #a:Type ->
   l:list a ->
   Lemma
   (requires List.Tot.no_repeats_p l)
-  (ensures all_disjoint default_disjoint l)
+  (ensures all_disjoint unequal l)
 let rec no_repeats_p_implies_all_disjoint #a l =
   match l with
   | [] -> ()
   | h::t ->
     no_repeats_p_implies_all_disjoint t;
-    for_allP_eq (default_disjoint h) t
+    for_allP_eq (unequal h) t
