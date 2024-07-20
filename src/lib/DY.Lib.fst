@@ -24,3 +24,5 @@ include DY.Lib.State.PrivateKeys
 
 /// Provide functions to print the trace
 include DY.Lib.Printing
+
+include DY.Lib.Communication
