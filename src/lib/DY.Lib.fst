@@ -34,3 +34,5 @@ include DY.Lib.Printing
 
 /// Functions and lemmas for HPKE, built on top of kem, kdf and aead
 include DY.Lib.HPKE
+
+include DY.Lib.Communication
