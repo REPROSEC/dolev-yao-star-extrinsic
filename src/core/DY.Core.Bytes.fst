@@ -328,7 +328,7 @@ let get_signkey_usage #cusages pk =
 
 /// Obtain the label of the corresponding DH private key of a DH public key.
 /// Although the DH public key label is public,
-/// this is useful to reason on the corresponding DH signature key label.
+/// this is useful to reason on the corresponding DH private key label.
 
 [@@"opaque_to_smt"]
 val get_dh_label: {|crypto_usages|} -> bytes -> GTot label
@@ -346,7 +346,9 @@ let get_dh_usage #cusages pk =
   | DhPub sk -> get_usage sk
   | _ -> NoUsage
 
-/// TODO comment KEM
+/// Obtain the label of the corresponding KEM private key of a KEM public key.
+/// Although the KEM public key label is public,
+/// this is useful to reason on the corresponding KEM private key label.
 
 [@@"opaque_to_smt"]
 val get_kem_label: {|crypto_usages|} -> bytes -> GTot label
@@ -611,26 +613,33 @@ let rec bytes_invariant #cinvs tr b =
         (get_label info) `can_flow tr` public
       )
     )
-    | KemPub sk ->
-      bytes_invariant tr sk
-    | KemEncap pk nonce ->
-      bytes_invariant tr pk /\
-      bytes_invariant tr nonce /\
+  | KemPub sk ->
+    bytes_invariant tr sk
+  | KemEncap pk nonce ->
+    bytes_invariant tr pk /\
+    bytes_invariant tr nonce /\
+    (
       (
-        (
-          (get_label nonce) `can_flow tr` (get_kem_label pk) /\ (
-            match get_kem_usage pk, get_usage nonce with
-            | KemKey usg_key, KemNonce usg_nonce ->
-              usg_key == usg_nonce
-            | _, _ -> False
-          )
-        ) \/ (
-          (get_label pk) `can_flow tr` public /\
-          (get_label nonce) `can_flow tr` public
+        // Honest case:
+        // nonce is knowable by the holder of pk
+        // (because the nonce roughly corresponds to the shared secret)
+        (get_label nonce) `can_flow tr` (get_kem_label pk) /\ (
+        // nonce and pk agree on the usage of the shared secret
+        // (this is because this KEM model does not bind the public key to the shared secret)
+          match get_kem_usage pk, get_usage nonce with
+          | KemKey usg_key, KemNonce usg_nonce ->
+            usg_key == usg_nonce
+          | _, _ -> False
         )
+      ) \/ (
+        // Attacker case:
+        // the attacker knows both pk and nonce
+        (get_label pk) `can_flow tr` public /\
+        (get_label nonce) `can_flow tr` public
       )
-    | KemSecretShared nonce ->
-      bytes_invariant tr nonce
+    )
+  | KemSecretShared nonce ->
+    bytes_invariant tr nonce
 
 
 /// The bytes invariant is preserved as the trace grows.
@@ -1992,6 +2001,11 @@ let kem_pk sk =
   KemPub sk
 
 /// Constructor.
+///
+/// Note that KemSecretShared does not include `pk`,
+/// this is to model a KEM that does not bind the shared secret
+/// to the public key.
+/// See https://eprint.iacr.org/2023/1933 for more information
 
 [@@"opaque_to_smt"]
 val kem_encap: bytes -> bytes -> (bytes & bytes)
@@ -2037,6 +2051,8 @@ let kem_pk_preserves_publishability #ci tr sk =
   normalize_term_spec bytes_invariant;
   normalize_term_spec get_label
 
+/// User lemma (kem_pk usage)
+
 val get_kem_usage_kem_pk:
   {|crypto_usages|} ->
   sk:bytes ->
@@ -2048,6 +2064,8 @@ val get_kem_usage_kem_pk:
 let get_kem_usage_kem_pk #cu sk =
   normalize_term_spec get_kem_usage;
   normalize_term_spec kem_pk
+
+/// User lemma (kem_pk label)
 
 val get_kem_label_kem_pk:
   {|crypto_usages|} ->
@@ -2108,7 +2126,7 @@ let kem_decap_preserves_publishability #ci tr sk encap =
     else ()
   | _ -> ()
 
-// TODO comment
+/// User lemma (kem_encap properties)
 
 val bytes_invariant_kem_encap:
   {|crypto_invariants|} -> tr:trace ->
@@ -2141,6 +2159,8 @@ let bytes_invariant_kem_encap #ci tr pk nonce =
   let (kem_output, ss) = kem_encap pk nonce in
   ()
 
+/// User lemma (kem_decap usage)
+
 #push-options "--z3rlimit 25"
 val get_usage_kem_decap:
   {|crypto_invariants|} -> tr:trace ->
@@ -2170,6 +2190,8 @@ let get_usage_kem_decap #ci tr sk encap =
     else ()
   | _ -> ()
 #pop-options
+
+/// User lemma (kem_decap invariant)
 
 #push-options "--z3rlimit 25"
 val bytes_invariant_kem_decap:
