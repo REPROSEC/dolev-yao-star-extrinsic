@@ -41,7 +41,7 @@ let mk_event_instance #a #format tag = {
 type event_predicate (a:Type0) {|event a|} =
   trace -> principal -> a -> prop
 
-let split_event_pred_func: split_function_parameters = {
+let split_event_pred_params: split_function_parameters = {
   singleton_split_function_parameters string with
 
   tagged_data_t = trace & principal & string & bytes;
@@ -69,7 +69,7 @@ let split_event_pred_func: split_function_parameters = {
   apply_mk_global_fun = (fun spred x -> ());
 }
 
-type compiled_event_predicate = split_event_pred_func.local_fun_t
+type compiled_event_predicate = split_event_pred_params.local_fun_t
 
 val compile_event_pred:
   #a:Type0 -> {|event a|} ->
@@ -83,7 +83,7 @@ let compile_event_pred #a #ev epred tr prin content_bytes =
 val has_compiled_event_pred:
   protocol_invariants -> (string & compiled_event_predicate) -> prop
 let has_compiled_event_pred invs (tag, epred) =
-  has_local_fun split_event_pred_func event_pred (tag, epred)
+  has_local_fun split_event_pred_params event_pred (tag, epred)
 
 val has_event_pred:
   #a:Type0 -> {|event a|} ->
@@ -95,7 +95,7 @@ let has_event_pred #a #ev invs epred =
 
 val mk_event_pred: {|crypto_invariants|} -> list (string & compiled_event_predicate) -> trace -> principal -> string -> bytes -> prop
 let mk_event_pred #cinvs tagged_local_preds =
-  mk_global_fun split_event_pred_func tagged_local_preds
+  mk_global_fun split_event_pred_params tagged_local_preds
 
 val mk_event_pred_correct: invs:protocol_invariants -> tagged_local_preds:list (string & compiled_event_predicate) -> Lemma
   (requires
@@ -106,7 +106,7 @@ val mk_event_pred_correct: invs:protocol_invariants -> tagged_local_preds:list (
 let mk_event_pred_correct invs tagged_local_preds =
   no_repeats_p_implies_for_all_pairsP_unequal (List.Tot.map fst tagged_local_preds);
   for_allP_eq (has_compiled_event_pred invs) tagged_local_preds;
-  FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (mk_global_fun_correct split_event_pred_func tagged_local_preds))
+  FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (mk_global_fun_correct split_event_pred_params tagged_local_preds))
 
 (*** Monadic functions ***)
 
@@ -155,7 +155,7 @@ val trigger_event_trace_invariant:
 let trigger_event_trace_invariant #invs #a #ev epred prin e tr =
   reveal_opaque (`%trigger_event) (trigger_event #a);
   reveal_opaque (`%event_triggered_at) (event_triggered_at #a);
-  local_eq_global_lemma split_event_pred_func event_pred ev.tag (compile_event_pred epred) (tr, prin, ev.tag, serialize _ e) ev.tag (tr, prin, serialize _ e)
+  local_eq_global_lemma split_event_pred_params event_pred ev.tag (compile_event_pred epred) (tr, prin, ev.tag, serialize _ e) ev.tag (tr, prin, serialize _ e)
 
 val event_triggered_at_implies_pred:
   {|invs:protocol_invariants|} ->
@@ -175,7 +175,7 @@ val event_triggered_at_implies_pred:
   ]
 let event_triggered_at_implies_pred #invs #a #ev epred tr i prin e =
   reveal_opaque (`%event_triggered_at) (event_triggered_at #a);
-  local_eq_global_lemma split_event_pred_func event_pred ev.tag (compile_event_pred epred) ((prefix tr i), prin, ev.tag, serialize _ e) ev.tag ((prefix tr i), prin, serialize _ e)
+  local_eq_global_lemma split_event_pred_params event_pred ev.tag (compile_event_pred epred) ((prefix tr i), prin, ev.tag, serialize _ e) ev.tag ((prefix tr i), prin, serialize _ e)
 
 val event_triggered_grows:
   #a:Type -> {|ev:event a|} ->
