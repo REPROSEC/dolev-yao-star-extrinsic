@@ -7,8 +7,8 @@ module DY.Lib
 include DY.Lib.Comparse.Glue
 include DY.Lib.Comparse.Parsers
 
-/// The split predicate methodology
-include DY.Lib.SplitPredicate
+/// The split function methodology
+include DY.Lib.SplitFunction
 
 /// User-friendly event API
 include DY.Lib.Event.Typed
