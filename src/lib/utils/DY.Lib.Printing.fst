@@ -87,12 +87,12 @@ val usage_to_string: (u:usage) -> string
 let usage_to_string u =
   match u with
   | NoUsage -> "NoUsage"
-  | SigKey tag -> "SigKey " ^ tag
+  | SigKey tag _ -> "SigKey " ^ tag
   | SigNonce -> "SigNonce"
-  | PkdecKey tag -> "PkdecKey " ^ tag
+  | PkdecKey tag _ -> "PkdecKey " ^ tag
   | PkNonce -> "PkNonce"
-  | AeadKey tag -> "AeadKey " ^ tag
-  | DhKey tag -> "DhKey " ^ tag
+  | AeadKey tag data -> Printf.sprintf "AeadKey %s (data=(%s))" tag (bytes_to_string data)
+  | DhKey tag _ -> "DhKey " ^ tag
   | KdfExtractSaltKey tag data -> Printf.sprintf "KdfExtractSaltKey %s (data=(%s))" tag (bytes_to_string data)
   | KdfExtractIkmKey tag data -> Printf.sprintf "KdfExtractIkmKey %s (data=(%s))" tag (bytes_to_string data)
   | KdfExpandKey tag data -> Printf.sprintf "KdfExpandKey %s (data=(%s))" tag (bytes_to_string data)

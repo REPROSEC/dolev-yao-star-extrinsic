@@ -88,19 +88,24 @@ let rec length b =
 /// Customizable functions stating how labels and usages evolve
 /// when using some cryptographic functions.
 
-class crypto_usages = {
-  dh_known_peer_usage: string -> string -> usage;
-  dh_unknown_peer_usage: string -> usage;
-  dh_known_peer_usage_commutes:
-    s1:string -> s2:string -> Lemma
-    (dh_known_peer_usage s1 s2 == dh_known_peer_usage s2 s1)
+noeq
+type dh_crypto_usage = {
+  known_peer_usage: usg1:usage{DhKey? usg1} -> usg2:usage{DhKey? usg2} -> usage;
+  unknown_peer_usage: usg:usage{DhKey? usg} -> usage;
+  known_peer_usage_commutes:
+    usg1:usage{DhKey? usg1} -> usg2:usage{DhKey? usg2} -> Lemma
+    (known_peer_usage usg1 usg2 == known_peer_usage usg2 usg1)
   ;
-  dh_unknown_peer_usage_implies:
-    s1:string -> s2:string -> Lemma
-    (requires dh_unknown_peer_usage s1 =!= NoUsage)
-    (ensures dh_known_peer_usage s1 s2 == dh_unknown_peer_usage s1)
+  unknown_peer_usage_implies:
+    usg1:usage{DhKey? usg1} -> usg2:usage{DhKey? usg2} -> Lemma
+    (requires unknown_peer_usage usg1 =!= NoUsage)
+    (ensures known_peer_usage usg1 usg2 == unknown_peer_usage usg1)
   ;
+}
 
+
+noeq
+type kdf_extract_crypto_usage = {
   /// HKDF.Extract is commonly used as a dual-PRF to mix two secrets keys,
   /// thereby obtaining a new key that is as strong as the strongest input key.
   /// This nature of being a dual-PRF means that one of the inputs must have the correct usage,
@@ -108,14 +113,14 @@ class crypto_usages = {
   /// This explains the "or" in the preconditions.
 
   /// The usage of HKDF.Extract depends on both the usage and the content of its inputs.
-  kdf_extract_usage:
+  get_usage:
     salt_usage:usage -> ikm_usage:usage ->
     salt:bytes -> ikm:bytes ->
     Pure usage (requires KdfExtractSaltKey? salt_usage \/ KdfExtractIkmKey? ikm_usage) (ensures fun _ -> True)
   ;
 
   /// The label of HKDF.Extract depends on the usage, the label and the content of its inputs.
-  kdf_extract_label:
+  get_label:
     salt_usage:usage -> ikm_usage:usage ->
     salt_label:label -> ikm_label:label ->
     salt:bytes -> ikm:bytes ->
@@ -123,16 +128,19 @@ class crypto_usages = {
   ;
 
   /// The label of HKDF.Extract cannot be too secret.
-  kdf_extract_label_lemma:
+  get_label_lemma:
     tr:trace ->
     salt_usage:usage -> ikm_usage:usage ->
     salt_label:label -> ikm_label:label ->
     salt:bytes -> ikm:bytes ->
     Lemma
     (requires KdfExtractSaltKey? salt_usage \/ KdfExtractIkmKey? ikm_usage)
-    (ensures (kdf_extract_label salt_usage ikm_usage salt_label ikm_label salt ikm) `can_flow tr` (salt_label `meet` ikm_label))
+    (ensures (get_label salt_usage ikm_usage salt_label ikm_label salt ikm) `can_flow tr` (salt_label `meet` ikm_label))
   ;
+}
 
+noeq
+type kdf_expand_crypto_usage = {
   /// HKDF.Expand is a more standard PRF to derive several keys from an initial one,
   /// therefore we know that `prk` must have the correct usage.
   /// In particular, it cannot be used to mix two secrets.
@@ -140,43 +148,62 @@ class crypto_usages = {
   /// because `HKDF.Expand prk info len` is a prefix of `HKDF.Expand prk info (len+k)`.
 
   /// The usage of HKDF.Expand depends on the prk usage and the info content.
-  kdf_expand_usage:
+  get_usage:
     prk_usage:usage{KdfExpandKey? prk_usage} ->
     info:bytes ->
     usage;
 
   /// The label of HKDF.Expand depends on the prk usage and label and the info content.
-  kdf_expand_label:
+  get_label:
     prk_usage:usage{KdfExpandKey? prk_usage} -> prk_label:label ->
     info:bytes ->
     label;
 
   /// The label of HKDF.Expand cannot be too secret.
-  kdf_expand_label_lemma:
+  get_label_lemma:
     tr:trace ->
     prk_usage:usage{KdfExpandKey? prk_usage} -> prk_label:label ->
     info:bytes ->
-    Lemma ((kdf_expand_label prk_usage prk_label info) `can_flow tr` prk_label)
+    Lemma ((get_label prk_usage prk_label info) `can_flow tr` prk_label)
   ;
+}
+
+class crypto_usages = {
+  dh_usage: dh_crypto_usage;
+  kdf_extract_usage: kdf_extract_crypto_usage;
+  kdf_expand_usage: kdf_expand_crypto_usage;
 }
 
 /// Default (empty) usage functions, that can be used like this:
 /// { default_crypto_usages with ... }
 
+val default_dh_crypto_usage: dh_crypto_usage
+let default_dh_crypto_usage = {
+  known_peer_usage = (fun s1 s2 -> NoUsage);
+  unknown_peer_usage = (fun s1 -> NoUsage);
+  known_peer_usage_commutes = (fun s1 s2 -> ());
+  unknown_peer_usage_implies = (fun s1 s2 -> ());
+}
+
+val default_kdf_extract_crypto_usage: kdf_extract_crypto_usage
+let default_kdf_extract_crypto_usage = {
+  get_usage = (fun salt_usg ikm_usg salt ikm -> NoUsage);
+  get_label = (fun salt_usg ikm_usg salt_label ikm_label salt ikm -> salt_label `meet` ikm_label);
+  get_label_lemma = (fun tr salt_usg ikm_usg salt_label ikm_label salt ikm -> ());
+}
+
+val default_kdf_expand_crypto_usage: kdf_expand_crypto_usage
+let default_kdf_expand_crypto_usage = {
+  get_usage = (fun prk_usage info -> NoUsage);
+  get_label = (fun prk_usage prk_label info -> prk_label);
+  get_label_lemma = (fun tr prk_usage prk_label info -> ());
+}
+
 val default_crypto_usages: crypto_usages
 let default_crypto_usages = {
-  dh_known_peer_usage = (fun s1 s2 -> NoUsage);
-  dh_unknown_peer_usage = (fun s1 -> NoUsage);
-  dh_known_peer_usage_commutes = (fun s1 s2 -> ());
-  dh_unknown_peer_usage_implies = (fun s1 s2 -> ());
-
-  kdf_extract_usage = (fun salt_usg ikm_usg salt ikm -> NoUsage);
-  kdf_extract_label = (fun salt_usg ikm_usg salt_label ikm_label salt ikm -> salt_label `meet` ikm_label);
-  kdf_extract_label_lemma = (fun tr salt_usg ikm_usg salt_label ikm_label salt ikm -> ());
-
-  kdf_expand_usage = (fun prk_usage info -> NoUsage);
-  kdf_expand_label = (fun prk_usage prk_label info -> prk_label);
-  kdf_expand_label_lemma = (fun tr prk_usage prk_label info -> ());
+  dh_usage = default_dh_crypto_usage;
+  kdf_extract_usage = default_kdf_extract_crypto_usage;
+  kdf_expand_usage = default_kdf_expand_crypto_usage;
 }
 
 /// Obtain the usage of a given bytestring.
@@ -184,38 +211,39 @@ let default_crypto_usages = {
 
 #push-options "--ifuel 2"
 [@@"opaque_to_smt"]
-val get_usage: {|crypto_usages|} -> b:bytes -> GTot usage
+val get_usage: {|crypto_usages|} -> b:bytes -> usage
 let rec get_usage #cusages b =
   match b with
   | Rand usg label len time ->
     usg
   | Dh sk1 (DhPub sk2) -> (
     match get_usage sk1, get_usage sk2 with
-    | DhKey s1, DhKey s2 ->
-      dh_known_peer_usage s1 s2
-    | DhKey s, _
-    | _, DhKey s ->
-      dh_unknown_peer_usage s
+    | DhKey _ _, DhKey _ _ ->
+      dh_usage.known_peer_usage (get_usage sk1) (get_usage sk2)
+    | DhKey _ _, _ ->
+      dh_usage.unknown_peer_usage (get_usage sk1)
+    | _, DhKey _ _ ->
+      dh_usage.unknown_peer_usage (get_usage sk2)
     | _, _ ->
       NoUsage
   )
   | Dh sk pk -> (
     match get_usage sk with
-    | DhKey s -> dh_unknown_peer_usage s
+    | DhKey _ _ -> dh_usage.unknown_peer_usage (get_usage sk)
     | _ -> NoUsage
   )
   | KdfExtract salt ikm -> (
     let salt_usage = get_usage salt in
     let ikm_usage = get_usage ikm in
     if KdfExtractSaltKey? salt_usage || KdfExtractIkmKey? ikm_usage then
-      kdf_extract_usage salt_usage ikm_usage salt ikm
+      kdf_extract_usage.get_usage salt_usage ikm_usage salt ikm
     else
       NoUsage
   )
   | KdfExpand prk info len -> (
     let prk_usage = get_usage prk in
     if KdfExpandKey? prk_usage then
-      kdf_expand_usage prk_usage info
+      kdf_expand_usage.get_usage prk_usage info
     else
       NoUsage
   )
@@ -226,7 +254,7 @@ let rec get_usage #cusages b =
 
 #push-options "--ifuel 2"
 [@@"opaque_to_smt"]
-val get_label: {|crypto_usages|} -> bytes -> GTot label
+val get_label: {|crypto_usages|} -> bytes -> label
 let rec get_label #cusages b =
   match b with
   | Literal buf ->
@@ -257,13 +285,13 @@ let rec get_label #cusages b =
     let salt_usage = get_usage salt in
     let ikm_usage = get_usage ikm in
     if KdfExtractSaltKey? salt_usage || KdfExtractIkmKey? ikm_usage then
-      kdf_extract_label salt_usage ikm_usage (get_label salt) (get_label ikm) salt ikm
+      kdf_extract_usage.get_label salt_usage ikm_usage (get_label salt) (get_label ikm) salt ikm
     else
       meet (get_label salt) (get_label ikm)
   | KdfExpand prk info len -> (
     let prk_usage = get_usage prk in
     if KdfExpandKey? prk_usage then
-      kdf_expand_label prk_usage (get_label prk) info
+      kdf_expand_usage.get_label prk_usage (get_label prk) info
     else
       get_label prk
   )
@@ -274,7 +302,7 @@ let rec get_label #cusages b =
 /// this is useful to reason on the corresponding decryption key label.
 
 [@@"opaque_to_smt"]
-val get_sk_label: {|crypto_usages|} -> bytes -> GTot label
+val get_sk_label: {|crypto_usages|} -> bytes -> label
 let get_sk_label #cusages pk =
   match pk with
   | Pk sk -> get_label sk
@@ -283,7 +311,7 @@ let get_sk_label #cusages pk =
 /// Same as above, for usage.
 
 [@@"opaque_to_smt"]
-val get_sk_usage: {|crypto_usages|} -> bytes -> GTot usage
+val get_sk_usage: {|crypto_usages|} -> bytes -> usage
 let get_sk_usage #cusages pk =
   match pk with
   | Pk sk -> get_usage sk
@@ -294,7 +322,7 @@ let get_sk_usage #cusages pk =
 /// this is useful to reason on the corresponding signature key label.
 
 [@@"opaque_to_smt"]
-val get_signkey_label: {|crypto_usages|} -> bytes -> GTot label
+val get_signkey_label: {|crypto_usages|} -> bytes -> label
 let get_signkey_label #cusages pk =
   match pk with
   | Vk sk -> get_label sk
@@ -303,7 +331,7 @@ let get_signkey_label #cusages pk =
 /// Same as above, for usage.
 
 [@@"opaque_to_smt"]
-val get_signkey_usage: {|crypto_usages|} -> bytes -> GTot usage
+val get_signkey_usage: {|crypto_usages|} -> bytes -> usage
 let get_signkey_usage #cusages pk =
   match pk with
   | Vk sk -> get_usage sk
@@ -314,7 +342,7 @@ let get_signkey_usage #cusages pk =
 /// this is useful to reason on the corresponding DH signature key label.
 
 [@@"opaque_to_smt"]
-val get_dh_label: {|crypto_usages|} -> bytes -> GTot label
+val get_dh_label: {|crypto_usages|} -> bytes -> label
 let get_dh_label #cusages pk =
   match pk with
   | DhPub sk -> get_label sk
@@ -323,7 +351,7 @@ let get_dh_label #cusages pk =
 /// Same as above, for usage.
 
 [@@"opaque_to_smt"]
-val get_dh_usage: {|crypto_usages|} -> bytes -> GTot usage
+val get_dh_usage: {|crypto_usages|} -> bytes -> usage
 let get_dh_usage #cusages pk =
   match pk with
   | DhPub sk -> get_usage sk
@@ -334,55 +362,78 @@ let get_dh_usage #cusages pk =
 /// by honest principals.
 
 noeq
-type crypto_predicates (cusages:crypto_usages) = {
-  aead_pred: tr:trace -> key:bytes{AeadKey? (get_usage key)} -> nonce:bytes -> msg:bytes -> ad:bytes -> prop;
-  aead_pred_later:
+type aead_crypto_predicate (cusages:crypto_usages) = {
+  pred: tr:trace -> key:bytes{AeadKey? (get_usage key)} -> msg:bytes -> ad:bytes -> prop;
+  pred_later:
     tr1:trace -> tr2:trace ->
-    key:bytes{AeadKey? (get_usage key)} -> nonce:bytes -> msg:bytes -> ad:bytes ->
+    key:bytes{AeadKey? (get_usage key)} -> msg:bytes -> ad:bytes ->
     Lemma
-    (requires aead_pred tr1 key nonce msg ad /\ tr1 <$ tr2)
-    (ensures aead_pred tr2 key nonce msg ad)
+    (requires pred tr1 key msg ad /\ tr1 <$ tr2)
+    (ensures pred tr2 key msg ad)
   ;
+}
 
-  pkenc_pred: tr:trace -> pk:bytes{PkdecKey? (get_sk_usage pk)} -> msg:bytes -> prop;
-  pkenc_pred_later:
+noeq
+type pkenc_crypto_predicate (cusages:crypto_usages) = {
+  pred: tr:trace -> pk:bytes{PkdecKey? (get_sk_usage pk)} -> msg:bytes -> prop;
+  pred_later:
     tr1:trace -> tr2:trace ->
     pk:bytes{PkdecKey? (get_sk_usage pk)} -> msg:bytes ->
     Lemma
-    (requires pkenc_pred tr1 pk msg /\ tr1 <$ tr2)
-    (ensures pkenc_pred tr2 pk msg)
+    (requires pred tr1 pk msg /\ tr1 <$ tr2)
+    (ensures pred tr2 pk msg)
   ;
+}
 
-  sign_pred: tr:trace -> vk:bytes{SigKey? (get_signkey_usage vk)} -> msg:bytes -> prop;
-  sign_pred_later:
+noeq
+type sign_crypto_predicate (cusages:crypto_usages) = {
+  pred: tr:trace -> vk:bytes{SigKey? (get_signkey_usage vk)} -> msg:bytes -> prop;
+  pred_later:
     tr1:trace -> tr2:trace ->
     vk:bytes{SigKey? (get_signkey_usage vk)} -> msg:bytes ->
     Lemma
-    (requires sign_pred tr1 vk msg /\ tr1 <$ tr2)
-    (ensures sign_pred tr2 vk msg)
+    (requires pred tr1 vk msg /\ tr1 <$ tr2)
+    (ensures pred tr2 vk msg)
   ;
+}
 
-  // ...
+noeq
+type crypto_predicates (cusages:crypto_usages) = {
+  aead_pred: aead_crypto_predicate cusages;
+  pkenc_pred: pkenc_crypto_predicate cusages;
+  sign_pred: sign_crypto_predicate cusages;
 }
 
 /// Default (empty) cryptographic predicates, that can be used like this:
 /// { default_crypto_predicates with
 ///   sign_pred = ...;
-///   sign_pred_later = ...;
 /// }
+
+val default_aead_predicate: cusages:crypto_usages -> aead_crypto_predicate cusages
+let default_aead_predicate cusages = {
+  pred = (fun tr key msg ad -> False);
+  pred_later = (fun tr1 tr2 key msg ad -> ());
+}
+
+val default_pkenc_predicate: cusages:crypto_usages -> pkenc_crypto_predicate cusages
+let default_pkenc_predicate cusages = {
+  pred = (fun tr pk msg -> False);
+  pred_later = (fun tr1 tr2 pk msg -> ());
+}
+
+val default_sign_predicate: cusages:crypto_usages -> sign_crypto_predicate cusages
+let default_sign_predicate cusages = {
+  pred = (fun tr vk msg -> False);
+  pred_later = (fun tr1 tr2 vk msg -> ());
+}
 
 val default_crypto_predicates:
   cusages:crypto_usages ->
   crypto_predicates cusages
 let default_crypto_predicates cusages = {
-  aead_pred = (fun tr key nonce msg ad -> False);
-  aead_pred_later = (fun tr1 tr2 key nonce msg ad -> ());
-
-  pkenc_pred = (fun tr pk msg -> False);
-  pkenc_pred_later = (fun tr1 tr2 pk msg -> ());
-
-  sign_pred = (fun tr vk msg -> False);
-  sign_pred_later = (fun tr1 tr2 vk msg -> ());
+  aead_pred = default_aead_predicate cusages;
+  pkenc_pred = default_pkenc_predicate cusages;
+  sign_pred = default_sign_predicate cusages;
 }
 
 /// Gather the usage functions and the cryptographic predicates
@@ -400,11 +451,8 @@ class crypto_invariants = {
 // hence we simulate inheritance like this.
 
 let aead_pred {|cinvs:crypto_invariants|} = cinvs.preds.aead_pred
-let aead_pred_later {|cinvs:crypto_invariants|} = cinvs.preds.aead_pred_later
 let pkenc_pred {|cinvs:crypto_invariants|} = cinvs.preds.pkenc_pred
-let pkenc_pred_later {|cinvs:crypto_invariants|} = cinvs.preds.pkenc_pred_later
 let sign_pred {|cinvs:crypto_invariants|} = cinvs.preds.sign_pred
-let sign_pred_later {|cinvs:crypto_invariants|} = cinvs.preds.sign_pred_later
 
 /// The invariants on every bytestring used in a protocol execution.
 /// - it is preserved by every honest participant
@@ -441,7 +489,7 @@ let rec bytes_invariant #cinvs tr b =
         // - the key has the usage of AEAD key
         AeadKey? (get_usage key) /\
         // - the custom (protocol-specific) invariant hold (authentication)
-        cinvs.preds.aead_pred tr key nonce msg ad /\
+        aead_pred.pred tr key msg ad /\
         // - the message is less secret than the key
         //   (this is crucial so that decryption preserve publishability)
         (get_label msg) `can_flow tr` (get_label key)
@@ -464,7 +512,7 @@ let rec bytes_invariant #cinvs tr b =
         // - the key has the usage of asymetric encryption key
         PkdecKey? (get_sk_usage pk) /\
         // - the custom (protocol-specific) invariant hold (authentication)
-        cinvs.preds.pkenc_pred tr pk msg /\
+        pkenc_pred.pred tr pk msg /\
         // - the message is less secret than the decryption key
         //   (this is crucial so that decryption preserve publishability)
         (get_label msg) `can_flow tr` (get_sk_label pk) /\
@@ -495,7 +543,7 @@ let rec bytes_invariant #cinvs tr b =
         // - the key has the usage of signature key
         SigKey? (get_signkey_usage (Vk sk)) /\
         // - the custom (protocol-specific) invariant hold (authentication)
-        cinvs.preds.sign_pred tr (Vk sk) msg /\
+        sign_pred.pred tr (Vk sk) msg /\
         // - the nonce is more secret than the signature key
         //   (this is because the standard EUF-CMA security assumption on signatures
         //   do not have any guarantees when the nonce is leaked to the attacker,
@@ -600,7 +648,7 @@ let rec bytes_invariant_later #cinvs tr1 tr2 msg =
     bytes_invariant_later tr1 tr2 msg;
     bytes_invariant_later tr1 tr2 ad;
     match get_usage key with
-    | AeadKey _ -> FStar.Classical.move_requires (cinvs.preds.aead_pred_later tr1 tr2 key nonce msg) ad
+    | AeadKey _ _ -> FStar.Classical.move_requires (aead_pred.pred_later tr1 tr2 key msg) ad
     | _ -> ()
   )
   | Pk sk ->
@@ -610,7 +658,7 @@ let rec bytes_invariant_later #cinvs tr1 tr2 msg =
     bytes_invariant_later tr1 tr2 nonce;
     bytes_invariant_later tr1 tr2 msg;
     match get_sk_usage pk with
-    | PkdecKey _ -> FStar.Classical.move_requires (cinvs.preds.pkenc_pred_later tr1 tr2 pk) msg
+    | PkdecKey _ _ -> FStar.Classical.move_requires (cinvs.preds.pkenc_pred.pred_later tr1 tr2 pk) msg
     | _ -> ()
   )
   | Vk sk ->
@@ -620,7 +668,7 @@ let rec bytes_invariant_later #cinvs tr1 tr2 msg =
     bytes_invariant_later tr1 tr2 nonce;
     bytes_invariant_later tr1 tr2 msg;
     match get_signkey_usage (Vk sk) with
-    | SigKey _ -> FStar.Classical.move_requires (cinvs.preds.sign_pred_later tr1 tr2 (Vk sk)) msg
+    | SigKey _ _ -> FStar.Classical.move_requires (cinvs.preds.sign_pred.pred_later tr1 tr2 (Vk sk)) msg
     | _ -> ()
   )
   | Hash msg ->
@@ -671,25 +719,25 @@ let is_secret #cinvs lab tr b =
 
 /// Shorthand predicates for the various type of keys.
 
-val is_verification_key: {|crypto_invariants|} -> string -> label -> trace -> bytes -> prop
+val is_verification_key: {|crypto_invariants|} -> usg:usage{SigKey? usg} -> label -> trace -> bytes -> prop
 let is_verification_key #cinvs usg lab tr b =
   is_publishable tr b /\ (get_signkey_label b) == lab /\
-  get_signkey_usage b == SigKey usg
+  get_signkey_usage b == usg
 
-val is_signature_key: {|crypto_invariants|} -> string -> label -> trace -> bytes -> prop
+val is_signature_key: {|crypto_invariants|} -> usg:usage{SigKey? usg} -> label -> trace -> bytes -> prop
 let is_signature_key #cinvs usg lab tr b =
   is_secret lab tr b /\
-  get_usage b == SigKey usg
+  get_usage b == usg
 
-val is_encryption_key: {|crypto_invariants|} -> string -> label -> trace -> bytes -> prop
+val is_encryption_key: {|crypto_invariants|} -> usg:usage{PkdecKey? usg} -> label -> trace -> bytes -> prop
 let is_encryption_key #cinvs usg lab tr b =
   is_publishable tr b /\ (get_sk_label b) == lab /\
-  get_sk_usage b == PkdecKey usg
+  get_sk_usage b == usg
 
-val is_decryption_key: {|crypto_invariants|} -> string -> label -> trace -> bytes -> prop
+val is_decryption_key: {|crypto_invariants|} -> usg:usage{PkdecKey? usg} -> label -> trace -> bytes -> prop
 let is_decryption_key #cinvs usg lab tr b =
   is_secret lab tr b /\
-  get_usage b == PkdecKey usg
+  get_usage b == usg
 
 (*** Literal ***)
 
@@ -1036,7 +1084,7 @@ val bytes_invariant_aead_enc:
     (get_label ad) `can_flow tr` public /\
     (get_label msg) `can_flow tr` (get_label key) /\
     AeadKey? (get_usage key) /\
-    aead_pred tr key nonce msg ad
+    aead_pred.pred tr key msg ad
   )
   (ensures bytes_invariant tr (aead_enc key nonce msg ad))
   [SMTPat (bytes_invariant tr (aead_enc key nonce msg ad))]
@@ -1077,7 +1125,7 @@ val bytes_invariant_aead_dec:
       (
         (
           AeadKey? (get_usage key) ==>
-          aead_pred tr key nonce plaintext ad
+          aead_pred.pred tr key plaintext ad
         ) \/ (
           is_publishable tr key
         )
@@ -1248,7 +1296,7 @@ val bytes_invariant_pk_enc:
     (get_label msg) `can_flow tr` (get_label nonce) /\
     PkdecKey? (get_sk_usage pk) /\
     PkNonce? (get_usage nonce) /\
-    pkenc_pred tr pk msg
+    pkenc_pred.pred tr pk msg
   )
   (ensures bytes_invariant tr (pk_enc pk nonce msg))
   [SMTPat (bytes_invariant tr (pk_enc pk nonce msg))]
@@ -1286,7 +1334,7 @@ val bytes_invariant_pk_dec:
       (
         (
           PkdecKey? (get_sk_usage (pk sk)) ==>
-          pkenc_pred tr (pk sk) plaintext
+          pkenc_pred.pred tr (pk sk) plaintext
         ) \/ (
           is_publishable tr plaintext
         )
@@ -1427,7 +1475,7 @@ val bytes_invariant_sign:
     bytes_invariant tr msg /\
     SigKey? (get_usage sk) /\
     SigNonce? (get_usage nonce) /\
-    sign_pred tr (vk sk) msg /\
+    sign_pred.pred tr (vk sk) msg /\
     (get_label sk) `can_flow tr` (get_label nonce)
   )
   (ensures bytes_invariant tr (sign sk nonce msg))
@@ -1464,7 +1512,7 @@ val bytes_invariant_verify:
   (ensures
     (
       SigKey? (get_signkey_usage vk) ==>
-      sign_pred tr vk msg
+      sign_pred.pred tr vk msg
     ) \/ (
       (get_signkey_label vk) `can_flow tr` public
     )
@@ -1695,9 +1743,7 @@ val get_usage_dh_known_peer:
     DhKey? (get_dh_usage pk)
   )
   (ensures (
-    let DhKey sk_tag = get_usage sk in
-    let DhKey pk_tag = get_dh_usage pk in
-    get_usage (dh sk pk) == dh_known_peer_usage sk_tag pk_tag
+    get_usage (dh sk pk) == dh_usage.known_peer_usage (get_usage sk) (get_dh_usage pk)
   ))
   [SMTPat (get_usage (dh sk pk))]
 let get_usage_dh_known_peer sk pk =
@@ -1705,9 +1751,7 @@ let get_usage_dh_known_peer sk pk =
   reveal_opaque (`%dh) (dh);
   normalize_term_spec get_dh_usage;
   normalize_term_spec get_usage;
-  let DhKey sk_tag = get_usage sk in
-  let DhKey pk_tag = get_dh_usage pk in
-  dh_known_peer_usage_commutes sk_tag pk_tag
+  dh_usage.known_peer_usage_commutes (get_usage sk) (get_dh_usage pk)
 
 /// User lemma (dh bytes usage with unknown peer)
 
@@ -1716,13 +1760,11 @@ val get_usage_dh_unknown_peer:
   sk:bytes -> pk:bytes ->
   Lemma
   (requires
-    DhKey? (get_usage sk) /\ (
-    let DhKey sk_tag = get_usage sk in
-    dh_unknown_peer_usage sk_tag <> NoUsage
-  ))
+    DhKey? (get_usage sk) /\
+    dh_usage.unknown_peer_usage (get_usage sk) <> NoUsage
+  )
   (ensures (
-    let DhKey sk_tag = get_usage sk in
-    get_usage (dh sk pk) == dh_unknown_peer_usage sk_tag
+    get_usage (dh sk pk) == dh_usage.unknown_peer_usage (get_usage sk)
   ))
   [SMTPat (get_usage (dh sk pk))]
 let get_usage_dh_unknown_peer sk pk =
@@ -1730,8 +1772,7 @@ let get_usage_dh_unknown_peer sk pk =
   reveal_opaque (`%dh) (dh);
   normalize_term_spec get_dh_usage;
   normalize_term_spec get_usage;
-  let DhKey sk_tag = get_usage sk in
-  FStar.Classical.forall_intro (FStar.Classical.move_requires (dh_unknown_peer_usage_implies sk_tag))
+  FStar.Classical.forall_intro (FStar.Classical.move_requires (dh_usage.unknown_peer_usage_implies (get_usage sk)))
 
 (*** KDF ***)
 
@@ -1768,7 +1809,7 @@ let kdf_extract_preserves_publishability tr salt ikm =
   let salt_usage = get_usage salt in
   let ikm_usage = get_usage ikm in
   if KdfExtractSaltKey? salt_usage || KdfExtractIkmKey? ikm_usage then
-    kdf_extract_label_lemma tr salt_usage ikm_usage (get_label salt) (get_label ikm) salt ikm
+    kdf_extract_usage.get_label_lemma tr salt_usage ikm_usage (get_label salt) (get_label ikm) salt ikm
   else ()
 
 /// Lemma for attacker knowledge theorem.
@@ -1789,7 +1830,7 @@ let kdf_expand_preserves_publishability tr prk info len =
   normalize_term_spec get_label;
   let prk_usage = get_usage prk in
   if KdfExpandKey? prk_usage then
-    kdf_expand_label_lemma tr prk_usage (get_label prk) info
+    kdf_expand_usage.get_label_lemma tr prk_usage (get_label prk) info
   else ()
 
 /// Lemma for attacker knowledge theorem.
@@ -1839,7 +1880,7 @@ val get_usage_kdf_extract:
   )
   (ensures
     get_usage (kdf_extract salt ikm) ==
-    kdf_extract_usage
+    kdf_extract_usage.get_usage
       (get_usage salt) (get_usage ikm)
       salt ikm
   )
@@ -1859,7 +1900,7 @@ val get_label_kdf_extract:
   )
   (ensures
     get_label (kdf_extract salt ikm) ==
-    kdf_extract_label
+    kdf_extract_usage.get_label
       (get_usage salt) (get_usage ikm)
       (get_label salt) (get_label ikm)
       salt ikm
@@ -1895,7 +1936,7 @@ val get_usage_kdf_expand:
   Lemma
   (requires KdfExpandKey? (get_usage prk))
   (ensures (
-    get_usage (kdf_expand prk info len) == kdf_expand_usage (get_usage prk) info
+    get_usage (kdf_expand prk info len) == kdf_expand_usage.get_usage (get_usage prk) info
   ))
   [SMTPat (get_usage (kdf_expand prk info len))]
 let get_usage_kdf_expand prk info len =
@@ -1910,7 +1951,7 @@ val get_label_kdf_expand:
   Lemma
   (requires KdfExpandKey? (get_usage prk))
   (ensures (
-    get_label (kdf_expand prk info len) == kdf_expand_label (get_usage prk) (get_label prk) info
+    get_label (kdf_expand prk info len) == kdf_expand_usage.get_label (get_usage prk) (get_label prk) info
   ))
   [SMTPat (get_label (kdf_expand prk info len))]
 let get_label_kdf_expand prk info len =
