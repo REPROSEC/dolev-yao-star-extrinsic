@@ -41,15 +41,10 @@ let mk_event_instance #a #format tag = {
 type event_predicate (a:Type0) {|event a|} =
   trace -> principal -> a -> prop
 
-let split_event_pred_func: split_function_input_values = {
+let split_event_pred_func: split_function_parameters = {
+  singleton_split_function_parameters string with
+
   tagged_data_t = trace & principal & string & bytes;
-
-  tag_set_t = string;
-  tag_t = string;
-  is_disjoint = unequal;
-  tag_belong_to = (fun dtag tag -> dtag = tag);
-  cant_belong_to_disjoint_sets = (fun dtag tag1 tag2 -> ());
-
   raw_data_t = trace & principal & bytes;
   output_t = prop;
 
@@ -99,19 +94,19 @@ let has_event_pred #a #ev invs epred =
 (*** Global event predicate builder ***)
 
 val mk_event_pred: {|crypto_invariants|} -> list (string & compiled_event_predicate) -> trace -> principal -> string -> bytes -> prop
-let mk_event_pred #cinvs l =
-  mk_global_fun split_event_pred_func l
+let mk_event_pred #cinvs tagged_local_preds =
+  mk_global_fun split_event_pred_func tagged_local_preds
 
-val mk_event_pred_correct: invs:protocol_invariants -> lpreds:list (string & compiled_event_predicate) -> Lemma
+val mk_event_pred_correct: invs:protocol_invariants -> tagged_local_preds:list (string & compiled_event_predicate) -> Lemma
   (requires
-    invs.trace_invs.event_pred == mk_event_pred lpreds /\
-    List.Tot.no_repeats_p (List.Tot.map fst lpreds)
+    invs.trace_invs.event_pred == mk_event_pred tagged_local_preds /\
+    List.Tot.no_repeats_p (List.Tot.map fst tagged_local_preds)
   )
-  (ensures for_allP (has_compiled_event_pred invs) lpreds)
-let mk_event_pred_correct invs lpreds =
-  no_repeats_p_implies_all_disjoint (List.Tot.map fst lpreds);
-  for_allP_eq (has_compiled_event_pred invs) lpreds;
-  FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (mk_global_fun_correct split_event_pred_func lpreds))
+  (ensures for_allP (has_compiled_event_pred invs) tagged_local_preds)
+let mk_event_pred_correct invs tagged_local_preds =
+  no_repeats_p_implies_for_all_pairsP_unequal (List.Tot.map fst tagged_local_preds);
+  for_allP_eq (has_compiled_event_pred invs) tagged_local_preds;
+  FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (mk_global_fun_correct split_event_pred_func tagged_local_preds))
 
 (*** Monadic functions ***)
 
