@@ -73,45 +73,45 @@ val mk_global_kdf_expand_usage_get_usage:
   list (string & kdf_expand_crypto_usage) ->
   prk_usage:usage{KdfExpandKey? prk_usage} -> info:bytes ->
   usage
-let mk_global_kdf_expand_usage_get_usage l =
-  mk_global_fun (split_kdf_expand_usage_get_usage_params) l
+let mk_global_kdf_expand_usage_get_usage tagged_local_invariants =
+  mk_global_fun (split_kdf_expand_usage_get_usage_params) tagged_local_invariants
 
 val mk_global_kdf_expand_usage_get_label:
   list (string & kdf_expand_crypto_usage) ->
   prk_usage:usage{KdfExpandKey? prk_usage} -> prk_label:label -> info:bytes ->
   label
-let mk_global_kdf_expand_usage_get_label l =
-  mk_global_fun (split_kdf_expand_usage_get_label_params) l
+let mk_global_kdf_expand_usage_get_label tagged_local_invariants =
+  mk_global_fun (split_kdf_expand_usage_get_label_params) tagged_local_invariants
 
 val mk_global_kdf_expand_usage_correct:
-  cusgs:crypto_usages -> lusages:list (string & kdf_expand_crypto_usage) ->
+  cusgs:crypto_usages -> tagged_local_invariants:list (string & kdf_expand_crypto_usage) ->
   Lemma
   (requires
-    kdf_expand_usage.get_usage == mk_global_kdf_expand_usage_get_usage lusages /\
-    kdf_expand_usage.get_label == mk_global_kdf_expand_usage_get_label lusages /\
-    List.Tot.no_repeats_p (List.Tot.map fst lusages)
+    kdf_expand_usage.get_usage == mk_global_kdf_expand_usage_get_usage tagged_local_invariants /\
+    kdf_expand_usage.get_label == mk_global_kdf_expand_usage_get_label tagged_local_invariants /\
+    List.Tot.no_repeats_p (List.Tot.map fst tagged_local_invariants)
   )
-  (ensures for_allP (has_kdf_expand_usage cusgs) lusages)
-let mk_global_kdf_expand_usage_correct cusgs lusages =
-  no_repeats_p_implies_for_all_pairsP_unequal (List.Tot.map fst lusages);
-  for_allP_eq (has_kdf_expand_usage cusgs) lusages;
-  FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (mk_global_fun_correct split_kdf_expand_usage_get_usage_params lusages));
-  FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (mk_global_fun_correct split_kdf_expand_usage_get_label_params lusages))
+  (ensures for_allP (has_kdf_expand_usage cusgs) tagged_local_invariants)
+let mk_global_kdf_expand_usage_correct cusgs tagged_local_invariants =
+  no_repeats_p_implies_for_all_pairsP_unequal (List.Tot.map fst tagged_local_invariants);
+  for_allP_eq (has_kdf_expand_usage cusgs) tagged_local_invariants;
+  FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (mk_global_fun_correct split_kdf_expand_usage_get_usage_params tagged_local_invariants));
+  FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (mk_global_fun_correct split_kdf_expand_usage_get_label_params tagged_local_invariants))
 
 val mk_global_kdf_expand_usage_get_label_lemma:
-  lusages:list (string & kdf_expand_crypto_usage) ->
+  tagged_local_invariants:list (string & kdf_expand_crypto_usage) ->
   tr:trace ->
   prk_usage:usage{KdfExpandKey? prk_usage} -> prk_label:label -> info:bytes ->
-  Lemma ((mk_global_kdf_expand_usage_get_label lusages prk_usage prk_label info) `can_flow tr` prk_label)
-let mk_global_kdf_expand_usage_get_label_lemma lusages tr prk_usage prk_label info =
-  mk_global_fun_eq split_kdf_expand_usage_get_label_params lusages (prk_usage, prk_label, info);
-  introduce forall lusages. split_kdf_expand_usage_get_label_params.apply_local_fun lusages (prk_usage, prk_label, info) `can_flow tr` prk_label with (
-    lusages.get_label_lemma tr prk_usage prk_label info
+  Lemma ((mk_global_kdf_expand_usage_get_label tagged_local_invariants prk_usage prk_label info) `can_flow tr` prk_label)
+let mk_global_kdf_expand_usage_get_label_lemma tagged_local_invariants tr prk_usage prk_label info =
+  mk_global_fun_eq split_kdf_expand_usage_get_label_params tagged_local_invariants (prk_usage, prk_label, info);
+  introduce forall tagged_local_invariants. split_kdf_expand_usage_get_label_params.apply_local_fun tagged_local_invariants (prk_usage, prk_label, info) `can_flow tr` prk_label with (
+    tagged_local_invariants.get_label_lemma tr prk_usage prk_label info
   )
 
 val mk_kdf_expand_usage: list (string & kdf_expand_crypto_usage) -> kdf_expand_crypto_usage
-let mk_kdf_expand_usage lusages = {
-  get_usage = mk_global_kdf_expand_usage_get_usage lusages;
-  get_label = mk_global_kdf_expand_usage_get_label lusages;
-  get_label_lemma = mk_global_kdf_expand_usage_get_label_lemma lusages;
+let mk_kdf_expand_usage tagged_local_invariants = {
+  get_usage = mk_global_kdf_expand_usage_get_usage tagged_local_invariants;
+  get_label = mk_global_kdf_expand_usage_get_label tagged_local_invariants;
+  get_label_lemma = mk_global_kdf_expand_usage_get_label_lemma tagged_local_invariants;
 }
