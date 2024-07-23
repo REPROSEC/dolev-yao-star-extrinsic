@@ -3,6 +3,13 @@ module DY.Lib.Crypto.SplitPredicate
 open DY.Core
 open DY.Lib.SplitFunction
 
+/// This module defines a library to create a global cryptographic predicate from several independent local predicates.
+/// This is based on the DY.Lib.SplitFunction module,
+/// and is specific to cryptographic predicates that follow a specific shape,
+/// where the tag is a string derived from the usage of the key,
+/// and the predicate stays true when the trace grows.
+/// For these specific cryptographic predicates, this module allows to define predicate splitting with little boilerplate.
+
 noeq
 type split_crypto_predicate_parameters = {
   key_t: Type;
