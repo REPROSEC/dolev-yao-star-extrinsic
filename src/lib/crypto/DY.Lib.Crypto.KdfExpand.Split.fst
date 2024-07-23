@@ -83,21 +83,6 @@ val mk_global_kdf_expand_usage_get_label:
 let mk_global_kdf_expand_usage_get_label tagged_local_invariants =
   mk_global_fun (split_kdf_expand_usage_get_label_params) tagged_local_invariants
 
-val mk_global_kdf_expand_usage_correct:
-  cusgs:crypto_usages -> tagged_local_invariants:list (string & kdf_expand_crypto_usage) ->
-  Lemma
-  (requires
-    kdf_expand_usage.get_usage == mk_global_kdf_expand_usage_get_usage tagged_local_invariants /\
-    kdf_expand_usage.get_label == mk_global_kdf_expand_usage_get_label tagged_local_invariants /\
-    List.Tot.no_repeats_p (List.Tot.map fst tagged_local_invariants)
-  )
-  (ensures for_allP (has_kdf_expand_usage cusgs) tagged_local_invariants)
-let mk_global_kdf_expand_usage_correct cusgs tagged_local_invariants =
-  no_repeats_p_implies_for_all_pairsP_unequal (List.Tot.map fst tagged_local_invariants);
-  for_allP_eq (has_kdf_expand_usage cusgs) tagged_local_invariants;
-  FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (mk_global_fun_correct split_kdf_expand_usage_get_usage_params tagged_local_invariants));
-  FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (mk_global_fun_correct split_kdf_expand_usage_get_label_params tagged_local_invariants))
-
 val mk_global_kdf_expand_usage_get_label_lemma:
   tagged_local_invariants:list (string & kdf_expand_crypto_usage) ->
   tr:trace ->
@@ -115,3 +100,17 @@ let mk_kdf_expand_usage tagged_local_invariants = {
   get_label = mk_global_kdf_expand_usage_get_label tagged_local_invariants;
   get_label_lemma = mk_global_kdf_expand_usage_get_label_lemma tagged_local_invariants;
 }
+
+val mk_kdf_expand_usage_correct:
+  cusgs:crypto_usages -> tagged_local_invariants:list (string & kdf_expand_crypto_usage) ->
+  Lemma
+  (requires
+    kdf_expand_usage == mk_kdf_expand_usage tagged_local_invariants /\
+    List.Tot.no_repeats_p (List.Tot.map fst tagged_local_invariants)
+  )
+  (ensures for_allP (has_kdf_expand_usage cusgs) tagged_local_invariants)
+let mk_kdf_expand_usage_correct cusgs tagged_local_invariants =
+  no_repeats_p_implies_for_all_pairsP_unequal (List.Tot.map fst tagged_local_invariants);
+  for_allP_eq (has_kdf_expand_usage cusgs) tagged_local_invariants;
+  FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (mk_global_fun_correct split_kdf_expand_usage_get_usage_params tagged_local_invariants));
+  FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (mk_global_fun_correct split_kdf_expand_usage_get_label_params tagged_local_invariants))

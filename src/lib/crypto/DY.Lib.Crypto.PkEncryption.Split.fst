@@ -2,78 +2,58 @@ module DY.Lib.Crypto.PkEncryption.Split
 
 open Comparse // for_allP, for_allP_eq
 open DY.Core
-open DY.Lib.SplitFunction
+open DY.Lib.Crypto.SplitPredicate
 
-let split_pkenc_predicate_params (cusages:crypto_usages): split_function_parameters = {
-  singleton_split_function_parameters string with
-
-  tagged_data_t = (trace & (pk:bytes{PkdecKey? (get_sk_usage pk)}) & bytes);
-  raw_data_t = (trace & (pk:bytes{PkdecKey? (get_sk_usage pk)}) & bytes);
-  output_t = prop;
-
-  decode_tagged_data = (fun (tr, pk, msg) ->
+let split_pkenc_predicate_params (cusages:crypto_usages): split_crypto_predicate_parameters = {
+  key_t = pk:bytes{PkdecKey? (get_sk_usage pk)};
+  data_t = bytes;
+  get_usage = (fun pk ->
     let PkdecKey tag _ = get_sk_usage pk in
-    Some (tag, (tr, pk, msg))
+    tag
   );
 
-  local_fun_t = pkenc_crypto_predicate cusages;
-  global_fun_t = trace -> pk:bytes{PkdecKey? (get_sk_usage pk)} -> msg:bytes -> prop;
+  local_pred_t = pkenc_crypto_predicate cusages;
+  global_pred_t = tr:trace -> pk:bytes{PkdecKey? (get_sk_usage pk)} -> msg:bytes -> prop;
 
-  default_global_fun = (fun tr pk msg -> False);
-
-  apply_local_fun = (fun pred (tr, pk, msg) ->
+  apply_local_pred = (fun pred (tr, pk, msg) ->
     pred.pred tr pk msg
   );
-  apply_global_fun = (fun pred (tr, pk, msg) ->
+  apply_global_pred = (fun pred (tr, pk, msg) ->
     pred tr pk msg
   );
-  mk_global_fun = (fun pred tr pk msg ->
+  mk_global_pred = (fun pred tr pk msg ->
     pred (tr, pk, msg)
   );
-  apply_mk_global_fun = (fun bare x -> ());
+
+  apply_mk_global_pred = (fun bare x -> ());
+  apply_local_pred_later = (fun lpred tr1 tr2 pk msg ->
+    lpred.pred_later tr1 tr2 pk msg
+  );
 }
 
 val has_pkenc_predicate: cinvs:crypto_invariants -> (string & pkenc_crypto_predicate cinvs.usages) -> prop
 let has_pkenc_predicate cinvs (tag, pred) =
-  has_local_fun (split_pkenc_predicate_params cinvs.usages) pkenc_pred.pred (tag, pred)
+  has_local_crypto_predicate (split_pkenc_predicate_params cinvs.usages) pkenc_pred.pred (tag, pred)
 
 (*** Global pkenc predicate builder ***)
 
-val mk_global_pkenc_predicate:
+val mk_pkenc_predicate:
   {|cusgs:crypto_usages|} ->
   list (string & pkenc_crypto_predicate cusgs) ->
-  trace -> pk:bytes{PkdecKey? (get_sk_usage pk)} -> msg:bytes -> prop
-let mk_global_pkenc_predicate #cusgs l =
-  mk_global_fun (split_pkenc_predicate_params cusgs) l
+  pkenc_crypto_predicate cusgs
+let mk_pkenc_predicate #cusgs l = {
+  pred = mk_global_crypto_predicate (split_pkenc_predicate_params cusgs) l;
+  pred_later = mk_global_crypto_predicate_later (split_pkenc_predicate_params cusgs) l;
+}
 
-val mk_global_pkenc_predicate_correct:
+val mk_pkenc_predicate_correct:
   cinvs:crypto_invariants -> tagged_local_preds:list (string & pkenc_crypto_predicate cinvs.usages) ->
   Lemma
   (requires
-    pkenc_pred.pred == mk_global_pkenc_predicate tagged_local_preds /\
+    pkenc_pred == mk_pkenc_predicate tagged_local_preds /\
     List.Tot.no_repeats_p (List.Tot.map fst tagged_local_preds)
   )
   (ensures for_allP (has_pkenc_predicate cinvs) tagged_local_preds)
-let mk_global_pkenc_predicate_correct cinvs tagged_local_preds =
-  no_repeats_p_implies_for_all_pairsP_unequal (List.Tot.map fst tagged_local_preds);
+let mk_pkenc_predicate_correct cinvs tagged_local_preds =
   for_allP_eq (has_pkenc_predicate cinvs) tagged_local_preds;
-  FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (mk_global_fun_correct (split_pkenc_predicate_params cinvs.usages) tagged_local_preds))
-
-val mk_global_pkenc_predicate_later:
-  {|cusgs:crypto_usages|} -> tagged_local_preds:list (string & pkenc_crypto_predicate cusgs) ->
-  tr1:trace -> tr2:trace -> pk:bytes{PkdecKey? (get_sk_usage pk)} -> msg:bytes ->
-  Lemma
-  (requires mk_global_pkenc_predicate tagged_local_preds tr1 pk msg  /\ tr1 <$ tr2)
-  (ensures mk_global_pkenc_predicate tagged_local_preds tr2 pk msg)
-let mk_global_pkenc_predicate_later #cusgs tagged_local_preds tr1 tr2 pk msg  =
-  mk_global_fun_eq (split_pkenc_predicate_params cusgs) tagged_local_preds (tr1, pk, msg);
-  mk_global_fun_eq (split_pkenc_predicate_params cusgs) tagged_local_preds (tr2, pk, msg);
-  introduce forall lpred. (split_pkenc_predicate_params cusgs).apply_local_fun lpred (tr1, pk, msg) ==> (split_pkenc_predicate_params cusgs).apply_local_fun lpred (tr2, pk, msg) with (
-    introduce _ ==> _ with _. lpred.pred_later tr1 tr2 pk msg
-  )
-
-val mk_pkenc_predicate: {|cusgs:crypto_usages|} -> list (string & pkenc_crypto_predicate cusgs) -> pkenc_crypto_predicate cusgs
-let mk_pkenc_predicate #cusgs tagged_local_preds = {
-  pred = mk_global_pkenc_predicate tagged_local_preds;
-  pred_later = mk_global_pkenc_predicate_later tagged_local_preds;
-}
+  FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (mk_global_crypto_predicate_correct (split_pkenc_predicate_params cinvs.usages) tagged_local_preds))
