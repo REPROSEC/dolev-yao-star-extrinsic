@@ -86,16 +86,19 @@ let rec bytes_to_string b =
 val usage_to_string: (u:usage) -> string
 let usage_to_string u =
   match u with
-  | NoUsage -> "NoUsage"
-  | SigKey tag _ -> "SigKey " ^ tag
-  | SigNonce -> "SigNonce"
-  | PkdecKey tag _ -> "PkdecKey " ^ tag
-  | PkNonce -> "PkNonce"
-  | AeadKey tag data -> Printf.sprintf "AeadKey %s (data=(%s))" tag (bytes_to_string data)
-  | DhKey tag _ -> "DhKey " ^ tag
-  | KdfExtractSaltKey tag data -> Printf.sprintf "KdfExtractSaltKey %s (data=(%s))" tag (bytes_to_string data)
-  | KdfExtractIkmKey tag data -> Printf.sprintf "KdfExtractIkmKey %s (data=(%s))" tag (bytes_to_string data)
-  | KdfExpandKey tag data -> Printf.sprintf "KdfExpandKey %s (data=(%s))" tag (bytes_to_string data)
+  | NoUsage -> "{\"Type\": \"NoUsage\"}"
+  | SigKey tag data -> Printf.sprintf "{\"Type\": \"SigKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}" tag (bytes_to_string data)
+  | SigNonce -> "{\"Type\": \"SigNonce\"}"
+  | PkdecKey tag data -> Printf.sprintf "{\"Type\": \"PkdecKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}" tag (bytes_to_string data)
+  | PkNonce -> "{\"Type\": \"PkNonce\"}"
+  | AeadKey tag data -> Printf.sprintf "{\"Type\": \"AeadKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}" tag (bytes_to_string data)
+  | DhKey tag data -> Printf.sprintf "{\"Type\": \"DhKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}" tag (bytes_to_string data)
+  | KdfExtractSaltKey tag data -> Printf.sprintf "{\"Type\": \"KdfExtractSaltKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}" 
+                                    tag (bytes_to_string data)
+  | KdfExtractIkmKey tag data -> Printf.sprintf "{\"Type\": \"KdfExtractIkmKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}" 
+                                    tag (bytes_to_string data)
+  | KdfExpandKey tag data -> Printf.sprintf "{\"Type\": \"KdfExpandKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}" 
+                                    tag (bytes_to_string data)
 
 
 (*** State Parsing Helper Functions ***)
@@ -202,7 +205,7 @@ let trace_event_to_string printers tr_event i =
       i msg_str
   )
   | RandGen usg lab len -> (
-    Printf.sprintf "{\"TraceID\": %d, \"Type\": \"Nonce\", \"Usage\": \"%s\", \"Label\": \"%s\"}\n" 
+    Printf.sprintf "{\"TraceID\": %d, \"Type\": \"Nonce\", \"Usage\": %s, \"Label\": \"%s\"}\n" 
     i (usage_to_string usg) (label_to_string lab)
   )
   | Corrupt prin sess_id -> ""
