@@ -84,6 +84,12 @@ let rec length b =
     32
   | KdfExpand prk info len ->
     len
+  | KemPub sk ->
+    32
+  | KemEncap pk nonce ->
+    32
+  | KemSecretShared nonce ->
+    32
 
 /// Customizable functions stating how labels and usages evolve
 /// when using some cryptographic functions.
@@ -219,6 +225,11 @@ let rec get_usage #cusages b =
     else
       NoUsage
   )
+  | KemSecretShared nonce -> (
+    match get_usage nonce with
+    | KemNonce usg -> usg
+    | _ -> NoUsage
+  )
   | _ -> NoUsage
 #pop-options
 
@@ -267,6 +278,12 @@ let rec get_label #cusages b =
     else
       get_label prk
   )
+  | KemPub sk ->
+    public
+  | KemEncap pk nonce ->
+    public
+  | KemSecretShared nonce ->
+    get_label nonce
 #pop-options
 
 /// Obtain the label of the corresponding decryption key of an encryption key.
@@ -311,7 +328,7 @@ let get_signkey_usage #cusages pk =
 
 /// Obtain the label of the corresponding DH private key of a DH public key.
 /// Although the DH public key label is public,
-/// this is useful to reason on the corresponding DH signature key label.
+/// this is useful to reason on the corresponding DH private key label.
 
 [@@"opaque_to_smt"]
 val get_dh_label: {|crypto_usages|} -> bytes -> GTot label
@@ -327,6 +344,26 @@ val get_dh_usage: {|crypto_usages|} -> bytes -> GTot usage
 let get_dh_usage #cusages pk =
   match pk with
   | DhPub sk -> get_usage sk
+  | _ -> NoUsage
+
+/// Obtain the label of the corresponding KEM private key of a KEM public key.
+/// Although the KEM public key label is public,
+/// this is useful to reason on the corresponding KEM private key label.
+
+[@@"opaque_to_smt"]
+val get_kem_sk_label: {|crypto_usages|} -> bytes -> GTot label
+let get_kem_sk_label #cusages pk =
+  match pk with
+  | KemPub sk -> get_label sk
+  | _ -> public
+
+/// Same as above, for usage.
+
+[@@"opaque_to_smt"]
+val get_kem_sk_usage: {|crypto_usages|} -> bytes -> GTot usage
+let get_kem_sk_usage #cusages pk =
+  match pk with
+  | KemPub sk -> get_usage sk
   | _ -> NoUsage
 
 
@@ -576,6 +613,34 @@ let rec bytes_invariant #cinvs tr b =
         (get_label info) `can_flow tr` public
       )
     )
+  | KemPub sk ->
+    bytes_invariant tr sk
+  | KemEncap pk nonce ->
+    bytes_invariant tr pk /\
+    bytes_invariant tr nonce /\
+    (
+      (
+        // Honest case:
+        // nonce is knowable by the holder of pk
+        // (because the nonce roughly corresponds to the shared secret)
+        (get_label nonce) `can_flow tr` (get_kem_sk_label pk) /\ (
+        // nonce and pk agree on the usage of the shared secret
+        // (this is because this KEM model does not bind the public key to the shared secret)
+          match get_kem_sk_usage pk, get_usage nonce with
+          | KemKey usg_key, KemNonce usg_nonce ->
+            usg_key == usg_nonce
+          | _, _ -> False
+        )
+      ) \/ (
+        // Attacker case:
+        // the attacker knows both pk and nonce
+        (get_label pk) `can_flow tr` public /\
+        (get_label nonce) `can_flow tr` public
+      )
+    )
+  | KemSecretShared nonce ->
+    bytes_invariant tr nonce
+
 
 /// The bytes invariant is preserved as the trace grows.
 
@@ -639,6 +704,13 @@ let rec bytes_invariant_later #cinvs tr1 tr2 msg =
   | KdfExpand prk info len ->
     bytes_invariant_later tr1 tr2 prk;
     bytes_invariant_later tr1 tr2 info
+  | KemPub sk ->
+    bytes_invariant_later tr1 tr2 sk
+  | KemEncap pk nonce ->
+    bytes_invariant_later tr1 tr2 pk;
+    bytes_invariant_later tr1 tr2 nonce
+  | KemSecretShared nonce ->
+    bytes_invariant_later tr1 tr2 nonce
 
 (*** Various predicates ***)
 
@@ -1270,6 +1342,7 @@ let get_label_pk_enc #cusages pk nonce msg =
 
 /// User lemma (public-key decryption bytes invariant).
 
+#push-options "--z3rlimit 25"
 val bytes_invariant_pk_dec:
   {|crypto_invariants|} -> tr:trace ->
   sk:bytes -> msg:bytes ->
@@ -1299,6 +1372,7 @@ let bytes_invariant_pk_dec #cinvs tr sk msg =
   normalize_term_spec get_sk_label;
   normalize_term_spec get_label;
   normalize_term_spec bytes_invariant
+#pop-options
 
 (*** Signature ***)
 
@@ -1916,3 +1990,232 @@ val get_label_kdf_expand:
 let get_label_kdf_expand prk info len =
   reveal_opaque (`%kdf_expand) (kdf_expand);
   normalize_term_spec get_label
+
+(*** KEM ***)
+
+/// Constructor.
+
+[@@"opaque_to_smt"]
+val kem_pk: bytes -> bytes
+let kem_pk sk =
+  KemPub sk
+
+/// Constructor.
+///
+/// Note that KemSecretShared does not include `pk`,
+/// this is to model a KEM that does not bind the shared secret
+/// to the public key.
+/// See https://eprint.iacr.org/2023/1933 for more information
+
+[@@"opaque_to_smt"]
+val kem_encap: bytes -> bytes -> (bytes & bytes)
+let kem_encap pk nonce =
+  (KemEncap pk nonce, KemSecretShared nonce)
+
+/// Destructor
+
+[@@"opaque_to_smt"]
+val kem_decap: bytes -> bytes -> option bytes
+let kem_decap sk encap =
+  match encap with
+  | KemEncap (KemPub sk') nonce ->
+    if sk = sk' then
+      Some (KemSecretShared nonce)
+    else
+      None
+  | _ -> None
+
+/// Reduction rule
+
+val kem_decap_encap:
+  sk:bytes -> nonce:bytes ->
+  Lemma (
+    let (kem_output, ss) = kem_encap (kem_pk sk) nonce in
+    kem_decap sk kem_output == Some ss
+  )
+let kem_decap_encap sk nonce =
+  normalize_term_spec kem_encap;
+  normalize_term_spec kem_decap;
+  normalize_term_spec kem_pk
+
+/// Lemma for attacker knowledge theorem.
+
+val kem_pk_preserves_publishability:
+  {|crypto_invariants|} -> tr:trace ->
+  sk:bytes ->
+  Lemma
+  (requires is_publishable tr sk)
+  (ensures is_publishable tr (kem_pk sk))
+let kem_pk_preserves_publishability #ci tr sk =
+  normalize_term_spec kem_pk;
+  normalize_term_spec bytes_invariant;
+  normalize_term_spec get_label
+
+/// User lemma (kem_pk usage)
+
+val get_kem_sk_usage_kem_pk:
+  {|crypto_usages|} ->
+  sk:bytes ->
+  Lemma
+  (ensures (
+    get_kem_sk_usage (kem_pk sk) == get_usage sk
+  ))
+  [SMTPat (get_kem_sk_usage (kem_pk sk))]
+let get_kem_sk_usage_kem_pk #cu sk =
+  normalize_term_spec get_kem_sk_usage;
+  normalize_term_spec kem_pk
+
+/// User lemma (kem_pk label)
+
+val get_kem_sk_label_kem_pk:
+  {|crypto_usages|} ->
+  sk:bytes ->
+  Lemma
+  (ensures (
+    get_kem_sk_label (kem_pk sk) == get_label sk
+  ))
+  [SMTPat (get_kem_sk_label (kem_pk sk))]
+let get_kem_sk_label_kem_pk #cu sk =
+  normalize_term_spec get_kem_sk_label;
+  normalize_term_spec kem_pk
+
+/// Lemma for attacker knowledge theorem.
+
+val kem_encap_preserves_publishability:
+  {|crypto_invariants|} -> tr:trace ->
+  pk:bytes -> nonce:bytes ->
+  Lemma
+  (requires
+    is_publishable tr pk /\
+    is_publishable tr nonce
+  )
+  (ensures (
+    let (kem_output, ss) = kem_encap pk nonce in
+    is_publishable tr kem_output /\
+    is_publishable tr ss
+  ))
+let kem_encap_preserves_publishability #ci tr pk nonce =
+  normalize_term_spec kem_encap;
+  normalize_term_spec bytes_invariant;
+  normalize_term_spec get_label;
+  assert(is_publishable tr (KemSecretShared nonce))
+
+/// Lemma for attacker knowledge theorem.
+
+val kem_decap_preserves_publishability:
+  {|crypto_invariants|} -> tr:trace ->
+  sk:bytes -> encap:bytes ->
+  Lemma
+  (requires
+    is_publishable tr sk /\
+    is_publishable tr encap
+  )
+  (ensures (
+    match kem_decap sk encap with
+    | Some ss -> is_publishable tr ss
+    | None -> True
+  ))
+let kem_decap_preserves_publishability #ci tr sk encap =
+  normalize_term_spec kem_decap;
+  normalize_term_spec bytes_invariant;
+  normalize_term_spec get_label;
+  normalize_term_spec get_kem_sk_label;
+  match encap with
+  | KemEncap (KemPub sk') nonce ->
+    if sk = sk' then ()
+    else ()
+  | _ -> ()
+
+/// User lemma (kem_encap properties)
+
+val bytes_invariant_kem_encap:
+  {|crypto_invariants|} -> tr:trace ->
+  pk:bytes -> nonce:bytes ->
+  Lemma
+  (requires
+    is_publishable tr pk /\
+    bytes_invariant tr nonce /\
+    KemNonce? (get_usage nonce) /\
+    (get_label nonce) `can_flow tr` (get_kem_sk_label pk) /\ (
+      get_label nonce `can_flow tr` public \/
+      get_kem_sk_usage pk == KemKey (KemNonce?.usg (get_usage nonce))
+    )
+  )
+  (ensures (
+    let (kem_output, ss) = kem_encap pk nonce in
+    is_publishable tr kem_output /\
+    bytes_invariant tr ss /\
+    get_label ss == get_label nonce /\
+    get_usage ss == (KemNonce?.usg (get_usage nonce))
+  ))
+  [SMTPat (kem_encap pk nonce); SMTPat (bytes_invariant tr nonce)]
+let bytes_invariant_kem_encap #ci tr pk nonce =
+  normalize_term_spec kem_encap;
+  normalize_term_spec bytes_invariant;
+  normalize_term_spec get_usage;
+  normalize_term_spec get_kem_sk_usage;
+  normalize_term_spec get_label;
+  normalize_term_spec get_kem_sk_label;
+  let (kem_output, ss) = kem_encap pk nonce in
+  ()
+
+/// User lemma (kem_decap usage)
+
+#push-options "--z3rlimit 25"
+val get_usage_kem_decap:
+  {|crypto_invariants|} -> tr:trace ->
+  sk:bytes -> encap:bytes ->
+  Lemma
+  (requires
+    bytes_invariant tr sk /\
+    bytes_invariant tr encap /\
+    (KemKey? (get_usage sk) \/ (get_label sk) `can_flow tr` public)
+  )
+  (ensures (
+    match kem_decap sk encap with
+    | Some ss -> get_usage sk == KemKey (get_usage ss) \/ get_label ss `can_flow tr` public
+    | None -> True
+  ))
+  [SMTPat (kem_decap sk encap); SMTPat (bytes_invariant tr encap)]
+let get_usage_kem_decap #ci tr sk encap =
+  normalize_term_spec kem_decap;
+  normalize_term_spec bytes_invariant;
+  normalize_term_spec get_usage;
+  normalize_term_spec get_kem_sk_usage;
+  normalize_term_spec get_label;
+  normalize_term_spec get_kem_sk_label;
+  match encap with
+  | KemEncap (KemPub sk') nonce ->
+    if sk = sk' then ()
+    else ()
+  | _ -> ()
+#pop-options
+
+/// User lemma (kem_decap invariant)
+
+#push-options "--z3rlimit 25"
+val bytes_invariant_kem_decap:
+  {|crypto_invariants|} -> tr:trace ->
+  sk:bytes -> encap:bytes ->
+  Lemma
+  (requires
+    bytes_invariant tr sk /\
+    bytes_invariant tr encap
+  )
+  (ensures (
+    match kem_decap sk encap with
+    | Some ss -> is_knowable_by (get_label sk) tr ss
+    | None -> True
+  ))
+  [SMTPat (kem_decap sk encap); SMTPat (bytes_invariant tr encap)]
+let bytes_invariant_kem_decap #ci tr sk encap =
+  normalize_term_spec kem_decap;
+  normalize_term_spec bytes_invariant;
+  normalize_term_spec get_label;
+  normalize_term_spec get_kem_sk_label;
+  match encap with
+  | KemEncap (KemPub sk') nonce ->
+    if sk = sk' then ()
+    else ()
+  | _ -> ()
+#pop-options

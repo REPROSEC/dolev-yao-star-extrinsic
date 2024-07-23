@@ -82,9 +82,15 @@ let rec bytes_to_string b =
     Printf.sprintf "KdfExtract(salt=(%s), ikm=(%s))" (bytes_to_string salt) (bytes_to_string ikm)
   | KdfExpand prk info len ->
     Printf.sprintf "KdfExpand(prk=(%s), info=(%s), len=(%d))" (bytes_to_string prk) (bytes_to_string info) len
+  | KemPub sk ->
+    Printf.sprintf "KemKey(sk=(%s))" (bytes_to_string sk)
+  | KemEncap pk nonce ->
+    Printf.sprintf "KemEncap(pk=(%s), nonce=(%s))" (bytes_to_string pk) (bytes_to_string nonce)
+  | KemSecretShared nonce ->
+    Printf.sprintf "KemSecretShared(nonce=(%s))" (bytes_to_string nonce)
 
 val usage_to_string: (u:usage) -> string
-let usage_to_string u =
+let rec usage_to_string u =
   match u with
   | NoUsage -> "NoUsage"
   | SigKey tag -> "SigKey " ^ tag
@@ -96,6 +102,8 @@ let usage_to_string u =
   | KdfExtractSaltKey tag data -> Printf.sprintf "KdfExtractSaltKey %s (data=(%s))" tag (bytes_to_string data)
   | KdfExtractIkmKey tag data -> Printf.sprintf "KdfExtractIkmKey %s (data=(%s))" tag (bytes_to_string data)
   | KdfExpandKey tag data -> Printf.sprintf "KdfExpandKey %s (data=(%s))" tag (bytes_to_string data)
+  | KemKey usg -> Printf.sprintf "KemKey (usg=(%s))" (usage_to_string usg)
+  | KemNonce usg -> Printf.sprintf "KemNonce (usg=(%s))" (usage_to_string usg)
 
 
 (*** State Parsing Helper Functions ***)
