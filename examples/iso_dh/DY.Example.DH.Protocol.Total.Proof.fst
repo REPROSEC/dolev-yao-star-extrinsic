@@ -16,14 +16,14 @@ instance dh_crypto_usages = {
 
   dh_usage = {
     known_peer_usage = (fun usg1 usg2 ->
-      match usg1, usg2 with
-      | DhKey "DH.dh_key" _, _ -> AeadKey "DH.aead_key" empty
-      | _, DhKey "DH.dh_key" _ -> AeadKey "DH.aead_key" empty
+      match usg1.tag, usg2.tag with
+      | "DH.dh_key", _ -> AeadKey {tag = "DH.aead_key"; data = empty}
+      | _, "DH.dh_key" -> AeadKey {tag = "DH.aead_key"; data = empty}
       | _, _ -> NoUsage
     );
     unknown_peer_usage = (fun usg1 -> 
-      match usg1 with
-      | DhKey "DH.dh_key" _ -> AeadKey "DH.aead_key" empty
+      match usg1.tag with
+      | "DH.dh_key" -> AeadKey {tag = "DH.aead_key"; data = empty}
       | _ -> NoUsage);
     known_peer_usage_commutes = (fun usg1 usg2 -> ());
     unknown_peer_usage_implies = (fun usg1 usg2 -> ());
@@ -37,7 +37,7 @@ let dh_crypto_preds = {
 
   sign_pred = {
     pred = (fun tr vk sig_msg ->
-      get_signkey_usage vk == SigKey "DH.SigningKey" empty /\
+      get_signkey_usage vk == SigKey {tag = "DH.SigningKey"; data = empty} /\
       (exists prin. get_signkey_label vk = principal_label prin /\ (
         match parse sig_message sig_msg with
         | Some (SigMsg2 sig_msg2) -> (
@@ -130,7 +130,7 @@ val compute_message2_proof:
     event_triggered tr bob (Respond1 alice bob gx (dh_pk y) y) /\
     is_publishable tr gx /\
     bytes_invariant tr y /\
-    is_signature_key (SigKey "DH.SigningKey" empty) (principal_label bob) tr sk_b /\
+    is_signature_key {tag = "DH.SigningKey"; data = empty} (principal_label bob) tr sk_b /\
     is_secret (principal_label bob) tr n_sig /\
     SigNonce? (get_usage n_sig)
   )
@@ -175,7 +175,7 @@ val decode_and_verify_message2_proof:
   (requires
     is_publishable tr msg2_bytes /\
     is_secret (principal_state_label alice alice_si) tr x /\
-    is_verification_key (SigKey "DH.SigningKey" empty) (principal_label bob) tr pk_b
+    is_verification_key {tag = "DH.SigningKey"; data = empty} (principal_label bob) tr pk_b
   )
   (ensures (
     match decode_and_verify_message2 msg2_bytes alice x pk_b with
@@ -218,7 +218,7 @@ val compute_message3_proof:
     event_triggered tr alice (Initiate2 alice bob (dh_pk x) gy (dh x gy)) /\
     is_publishable tr gx /\ is_publishable tr gy /\
     gx = dh_pk x /\
-    is_signature_key (SigKey "DH.SigningKey" empty) (principal_label alice) tr sk_a /\
+    is_signature_key {tag = "DH.SigningKey"; data = empty} (principal_label alice) tr sk_a /\
     is_secret (principal_label alice) tr n_sig /\
     SigNonce? (get_usage n_sig)
   )
@@ -259,7 +259,7 @@ val decode_and_verify_message3_proof:
     is_publishable tr msg3_bytes /\
     is_publishable tr gx /\
     is_secret (principal_state_label bob bob_si) tr y /\
-    is_verification_key (SigKey "DH.SigningKey" empty) (principal_label alice) tr pk_a
+    is_verification_key {tag = "DH.SigningKey"; data = empty} (principal_label alice) tr pk_a
   )
   (ensures (
     let gy = dh_pk y in

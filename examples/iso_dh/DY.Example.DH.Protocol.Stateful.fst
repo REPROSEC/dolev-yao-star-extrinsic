@@ -59,7 +59,7 @@ type dh_global_sess_ids = {
 val prepare_msg1: principal -> principal -> traceful state_id
 let prepare_msg1 alice bob =
   let* alice_si = new_session_id alice in
-  let* x = mk_rand (DhKey "DH.dh_key" empty) (principal_state_label alice alice_si) 32 in
+  let* x = mk_rand (DhKey {tag = "DH.dh_key"; data = empty}) (principal_state_label alice alice_si) 32 in
   trigger_event alice (Initiate1 alice bob x);*
   set_state alice alice_si (InitiatorSentMsg1 bob x <: dh_session);*
   return alice_si
@@ -82,7 +82,7 @@ let prepare_msg2 alice bob msg_id =
   let*? msg = recv_msg msg_id in
   let*? msg1: message1 = return (decode_message1 msg) in
   let* bob_si = new_session_id bob in
-  let* y = mk_rand (DhKey "DH.dh_key" empty) (principal_state_label bob bob_si) 32 in
+  let* y = mk_rand (DhKey {tag = "DH.dh_key"; data = empty}) (principal_state_label bob bob_si) 32 in
   trigger_event bob (Respond1 alice bob msg1.gx (dh_pk y) y);*
   set_state bob bob_si (ResponderSentMsg2 alice msg1.gx (dh_pk y) y <: dh_session);*
   return (Some bob_si)

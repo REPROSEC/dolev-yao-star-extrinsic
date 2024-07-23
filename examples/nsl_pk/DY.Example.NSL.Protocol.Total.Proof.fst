@@ -23,7 +23,7 @@ let crypto_predicates_nsl = {
 
   pkenc_pred = {
     pred = (fun tr pk msg ->
-      get_sk_usage pk == PkdecKey "NSL.PublicKey" empty /\
+      get_sk_usage pk == PkKey {tag = "NSL.PublicKey"; data = empty} /\
       (exists prin. get_sk_label pk = principal_label prin /\ (
         match parse message msg with
         | Some (Msg1 msg1) -> (
@@ -71,7 +71,7 @@ val compute_message1_proof:
     // From random generation
     PkNonce? (get_usage nonce) /\
     // From PKI invariants
-    is_encryption_key (PkdecKey "NSL.PublicKey" empty) (principal_label bob) tr pk_b
+    is_encryption_key {tag = "NSL.PublicKey"; data = empty} (principal_label bob) tr pk_b
   )
   (ensures is_publishable tr (compute_message1 alice bob pk_b n_a nonce))
 let compute_message1_proof tr alice bob pk_b n_a nonce =
@@ -91,7 +91,7 @@ val decode_message1_proof:
   Lemma
   (requires
     // From PrivateKeys invariants
-    is_decryption_key (PkdecKey "NSL.PublicKey" empty) (principal_label bob) tr sk_b /\
+    is_decryption_key {tag = "NSL.PublicKey"; data = empty} (principal_label bob) tr sk_b /\
     // From the network
     bytes_invariant tr msg_cipher
   )
@@ -127,7 +127,7 @@ val compute_message2_proof:
     // From the random generation
     PkNonce? (get_usage nonce) /\
     // From the PKI
-    is_encryption_key (PkdecKey "NSL.PublicKey" empty) (principal_label msg1.alice) tr pk_a
+    is_encryption_key {tag = "NSL.PublicKey"; data = empty} (principal_label msg1.alice) tr pk_a
   )
   (ensures
     is_publishable tr (compute_message2 bob msg1 pk_a n_b nonce)
@@ -151,7 +151,7 @@ val decode_message2_proof:
     // From the NSL state invariant
     is_secret (join (principal_label alice) (principal_label bob)) tr n_a /\
     // From the PrivateKeys invariant
-    is_decryption_key (PkdecKey "NSL.PublicKey" empty) (principal_label alice) tr sk_a /\
+    is_decryption_key {tag = "NSL.PublicKey"; data = empty} (principal_label alice) tr sk_a /\
     // From the network
     bytes_invariant tr msg_cipher
   )
@@ -190,7 +190,7 @@ val compute_message3_proof:
     // From the random generation
     PkNonce? (get_usage nonce) /\
     // From the PKI
-    is_encryption_key (PkdecKey "NSL.PublicKey" empty) (principal_label bob) tr pk_b
+    is_encryption_key {tag = "NSL.PublicKey"; data = empty} (principal_label bob) tr pk_b
   )
   (ensures
     is_publishable tr (compute_message3 alice bob pk_b n_b nonce)
@@ -215,7 +215,7 @@ val decode_message3_proof:
     // From the NSL state invariant
     get_label n_b = join (principal_label alice) (principal_label bob) /\
     // From the PrivateKeys invariant
-    is_decryption_key (PkdecKey "NSL.PublicKey" empty) (principal_label bob) tr sk_b /\
+    is_decryption_key {tag = "NSL.PublicKey"; data = empty} (principal_label bob) tr sk_b /\
     // From the network
     bytes_invariant tr msg_cipher
   )
