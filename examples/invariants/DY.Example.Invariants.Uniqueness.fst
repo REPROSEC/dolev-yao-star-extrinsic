@@ -76,43 +76,6 @@ let p_cinvs = {
 }
 
 
-let rec parse_session session_b : option (rev_list p_state)=
-  match session_b with
-  | Nil -> Some Nil
-  | Snoc rest state ->
-      let? st = parse #bytes p_state state in
-      let? rest = parse_session rest in
-      Some (Snoc rest st)
-
-let rec parse_full_state (fst_b: full_state_raw ) : list (state_id * option (rev_list p_state)) =
-  match fst_b with
-  | [] -> []
-  | Cons (sid, sess_b) rest ->
-         (sid, parse_session sess_b) :: parse_full_state rest
-
-val parse_full_state_lemma :
-  (tr: trace) -> p:principal -> (i:nat) ->
-  Lemma 
-    (
-      match get_full_state p tr with 
-      | None -> True
-      | Some full_st -> begin
-          if i >= List.length full_st
-            then True
-            else begin
-                   match List.index full_st i with
-                   | (_, Nil) -> True
-                   | (sid_i, (Snoc init_i last_i)) -> begin
-                       Some? (fst (get_state p sid_i tr))
-                       /\ Some?.v (fst (get_state p sid_i tr)) = last_i
-                   end
-            end
-      end
-      
-    )
-let parse_full_state_lemma tr p i =
-      admit()
-
 
 let p_state_pred: state_predicate p_cinvs = {
     pred = (fun tr p sid cont -> is_knowable_by #p_cinvs (principal_state_label p sid) tr cont)
@@ -150,6 +113,388 @@ instance protocol_invariants_p: protocol_invariants = {
   }
 }
 
+// let rec full_state_event_exists (tr:trace) (p:principal) :
+//   Lemma
+//   (requires Some? (get_full_state p tr)
+//   )
+//   (ensures exists sid cont. event_exists tr (SetState p sid cont)
+//   )
+// = match tr with
+//   | Snoc init (SetState p' sid' cont) -> 
+//       if p' = p
+//         then ()
+//         else full_state_event_exists init p
+//   | Snoc init _ -> full_state_event_exists init p
+
+// let rec full_state_event_exists_i (tr:trace) (p:principal) (i:nat) :
+//   Lemma
+//   (requires 
+//     Some? (get_full_state p tr)
+//     /\ (let Some full_st = get_full_state p tr in
+//        i < List.length full_st
+//       )
+//   )
+//   (ensures (
+//   let Some full_st = get_full_state p tr in
+//   let (sid_i, _) = List.index full_st i in
+//   exists cont. event_exists tr (SetState p sid_i cont)
+//   )
+//   )
+// = let Some full_st = get_full_state p tr in
+//   let (sid_i, cont_i) = List.index full_st i in
+//   let sids = List.map fst full_st in
+//   match tr with
+//   | Snoc init (SetState p' sid' cont) -> 
+//       if p' = p
+//         then (
+//          assume(forall curr_state. sid' `List.mem` (List.map fst (append_to curr_state sid' cont))); 
+//           assert(sid' `List.mem` sids );
+//           admit()
+//           )
+//         else full_state_event_exists_i init p i
+//   | Snoc init _ -> full_state_event_exists_i init p i
+
+let tail_is_subset (#a:eqtype) (x:a) (tl:list a) :
+  Lemma 
+  ( let xs = x :: tl in
+    tl `List.subset` xs
+  )
+  = FStar.List.Tot.Properties.mem_subset tl (x :: tl)
+
+let get_full_state_aux_step_subset (tr:trace) (p:principal) (curr_state: full_state_raw) (ev:trace_event{event_exists tr ev}):
+  Lemma
+  (curr_state `List.subset` get_full_state_aux_step p tr curr_state ev
+  )
+= match ev with
+  | (SetState p' sid' cont') -> (
+      if p' = p  
+      then (
+          if sid' `List.mem` (List.map fst curr_state)
+          then ()
+          else (
+            state_was_set_get_session_some p sid' cont' tr;
+            let Some sess = get_session p sid' tr in
+            let new_state = (sid', sess) :: curr_state in
+            FStar.List.Tot.Properties.mem_subset curr_state ((sid', sess) :: curr_state)
+          )
+      )
+      else ()
+  )
+  | _ ->  () 
+
+
+
+// let rec get_full_state_on_grows (tr1:trace) (tr2:trace{tr1 <$ tr2}) (p:principal):
+//   Lemma
+//   (requires
+//     Some? (get_full_state p tr1)
+//   )
+//   (ensures
+//     Some? (get_full_state p tr2)
+//   )
+//   = 
+//   reveal_opaque (`%grows) grows; 
+//   norm_spec [zeta; delta_only [`%prefix]] (prefix);
+//   match tr2 with
+//   | Nil -> assert(Nil? tr1)
+//   | Snoc init (SetState p' sid' cont') ->
+//       if Trace.length tr1 = Trace.length tr2
+//         then ()
+//         else (
+//           if p' = p
+//           then  admit()
+//           else get_full_state_on_grows tr1 init p
+//         )
+//   | Snoc init _ -> (
+//       if Trace.length tr1 = Trace.length tr2
+//         then ()
+//         else get_full_state_on_grows tr1 init p
+//     )
+
+let get_full_state_aux_step_state_was_set (p:principal) (sid:state_id) (cont:bytes) (tr:trace) (curr_state:full_state_raw) (ev:trace_event{event_exists tr ev}) :
+  Lemma(
+    requires ev = SetState p sid cont //state_was_set tr p sid cont
+  )
+  (ensures
+      sid `List.mem` (List.map fst (get_full_state_aux_step p tr curr_state ev) )
+  )
+=  ()
+
+
+
+// let rec get_full_state_aux_step_state_was_set_ (p:principal) (sid:state_id) (cont:bytes) (tr:trace) :
+//   Lemma(
+//     requires state_was_set tr p sid cont
+//   )
+//   (ensures
+//       sid `List.mem` (List.map fst (get_full_state_aux p tr) )
+//   )
+// =  match tr with
+// | Nil -> ()
+// | Snoc init last ->
+//     match last with
+//     | SetState p' sid' cont' -> admit()
+//     | _ -> get_full_state_aux_step_state_was_set_ p sid cont init; 
+//         assert(get_full_state_aux p tr = get_full_state_aux_step p tr ( get_full_state_aux p init ) last)
+
+let append_subset (#a:eqtype) (xs:list a) (ys: list a):
+  Lemma (
+    xs `List.subset` (xs @ ys)
+    /\ ys `List.subset` (xs @ ys)
+    )
+  = FStar.List.Tot.Properties.append_mem_forall xs ys
+
+let concatMap_subset_tail (#a #b:eqtype) (f: a -> list b) (xs: list a{Cons? xs}):
+  Lemma(
+    let hd::tl = xs in
+    List.concatMap f tl `List.subset` List.concatMap f xs
+  )
+  =
+  let hd::tl = xs in 
+  assert(List.concatMap f xs = f hd @ List.concatMap f tl);
+  append_subset (f hd) (List.concatMap f tl)
+
+let rec mem_concatMap (#a #b:eqtype) (f: a -> list b) (xs: list a) (x:a):
+  Lemma 
+  (requires
+    x `List.mem` xs /\
+    ~(List.isEmpty (f x) )
+  )
+  (ensures 
+   f x `List.subset` List.concatMap f xs 
+  ) 
+  = match xs with
+  | [] -> ()
+  | hd :: tl -> 
+       if hd = x
+       then append_subset (f hd) (List.concatMap f tl)
+       else 
+         mem_concatMap f tl x;
+         concatMap_subset_tail f xs
+
+let rec zero_to_sid_mem (bound:state_id) (x :state_id{x.the_id <= bound.the_id}):
+  Lemma ( ensures
+    x `List.mem` (zero_to_sid bound)
+  )
+  (decreases bound.the_id)  
+  = if bound.the_id = 0
+    then ()
+    else begin
+      FStar.List.Tot.Properties.append_mem_forall (zero_to_sid {the_id = bound.the_id - 1}) [bound];
+      if x = bound
+      then ()
+      else 
+        zero_to_sid_mem ({the_id = bound.the_id -1}) x
+    end
+
+let no_set_state_entry_for_p (p:principal) (tr:trace) =
+  forall sid. no_set_state_entry_for p sid tr
+
+let rec compute_new_session_id_same (p:principal) (tr1 tr2:trace) :
+  Lemma (
+    requires
+    tr1 <$ tr2 /\ 
+      no_set_state_entry_for_p p (tr2 `suffix_after` tr1)
+  )
+  (ensures
+    compute_new_session_id p tr1 = compute_new_session_id p tr2
+  )
+  = reveal_opaque (`%grows) grows; 
+    norm_spec [zeta; delta_only [`%prefix]] (prefix);
+    if tr1 = tr2 
+    then ()
+    else (
+      match tr2 with
+       | Nil -> ()
+       | Snoc init ev -> 
+           assert(event_exists (tr2 `suffix_after` tr1) ev);
+           suffix_after_for_prefix tr2 init tr1;
+           compute_new_session_id_same p tr1 init
+    )
+
+
+let rec concatMap_equals (#a #b:eqtype) (f g: a -> list b) (xs : list a) :
+  Lemma (
+  requires
+    forall x. x `List.mem` xs ==> f x = g x
+  )
+  (ensures
+    List.concatMap f xs = List.concatMap g xs
+  )
+  = match xs with
+  | [] -> ()
+  | hd :: tl -> concatMap_equals f g tl
+
+let get_full_state_same (p:principal) (tr1:trace) (tr2:trace):
+  Lemma
+  (requires
+      tr1 <$ tr2 /\ 
+      no_set_state_entry_for_p p (tr2 `suffix_after` tr1)
+    )
+  (ensures get_full_state p tr1 = get_full_state p tr2)
+= introduce forall sid. get_session_list tr1 p sid == get_session_list tr2 p sid
+  with (
+    reveal_opaque (`%get_session) get_session; 
+    get_session_aux_same p sid tr1 tr2
+  ); 
+  compute_new_session_id_same p tr1 tr2;
+  concatMap_equals 
+    (get_session_list tr1 p) 
+    (get_session_list tr2 p) 
+    (zero_to_sid (compute_new_session_id p tr1))
+
+
+let get_full_state_on_growing_traces (p:principal) (tr1 tr2:trace) (sid:state_id):
+  Lemma 
+  (requires
+    tr1 <$ tr2
+    /\ Some? (get_full_state p tr1)
+  )
+  (ensures
+    Some? (get_full_state p tr2) /\
+    sid `List.mem` (List.map fst (Some?.v (get_full_state p tr1)))
+    ==>
+    sid `List.mem` (List.map fst (Some?.v (get_full_state p tr2)))
+  )
+  = admit()
+
+let rec state_was_set_full_state (tr:trace) (p:principal) (sid:state_id) (cont:bytes):
+  Lemma
+  (requires
+    state_was_set tr p sid cont
+  )
+  (ensures
+    Some? (get_full_state p tr) 
+    /\ sid `List.mem` (List.map fst (Some?.v (get_full_state p tr)))
+  )
+= match tr with
+  | Nil -> ()
+  | Snoc init (SetState p' sid' cont') ->
+      if p' = p 
+        then ( 
+        if sid' = sid
+        then (
+          compute_new_session_id_larger_than_id_on_trace p tr sid cont';
+          zero_to_sid_mem (compute_new_session_id p tr) sid;
+          assert(Some? (get_session p sid tr));
+          let f = get_session_list tr p
+        in
+        let sids = (zero_to_sid (compute_new_session_id p tr)) in
+          let Some full_st = get_full_state p tr in
+          mem_concatMap f sids sid;
+          FStar.List.Tot.Properties.memP_map_intro fst (sid, Some?.v (get_session p sid tr)) full_st
+          )
+          else (
+          init_is_prefix tr;
+          state_was_set_full_state init p sid cont;
+          get_full_state_on_growing_traces p init tr sid
+          )
+        )
+        else (
+          init_is_prefix tr;
+          get_full_state_same p init tr;
+          state_was_set_full_state init p sid cont
+        ) 
+ | Snoc init _ -> 
+     init_is_prefix tr;
+     get_full_state_same p init tr;
+     state_was_set_full_state init p sid cont
+
+val full_state_session_lemma:
+  (tr:trace) -> (p:principal) -> (i:nat) ->
+  Lemma(
+    match get_full_state p tr with 
+      | None -> True
+      | Some full_st -> begin
+          if i >= List.length full_st
+            then True
+            else begin
+              let (sid_i, sess_i) = List.index full_st i in
+              get_session p sid_i tr = Some sess_i
+            end
+      end
+      
+  )
+let rec full_state_session_lemma tr p i =
+    match get_full_state p tr with 
+      | None -> ()
+      | Some full_st -> begin
+          if i >= List.length full_st
+            then ()
+            else begin
+              let (sid_i, sess_i) = List.index full_st i in
+              let Snoc init last = tr in
+              match last with
+              | SetState p' sid' cont' ->
+                  if sid' = sid_i
+                    then admit()
+                    else (
+                      
+                      init_is_prefix tr;
+                      get_session_aux_same p sid_i init tr;
+                      assert(get_session p sid_i tr = get_session p sid_i init);
+                      full_state_session_lemma init p i;
+                      assume(List.index full_st i = List.index (Some?.v (get_full_state p init)) i);
+                      assert(Some sess_i = get_session p sid_i init);
+                      admit()
+                    )
+              | _ -> full_state_session_lemma init p i
+            end
+      end
+
+val parse_full_state_lemma :
+  (tr: trace) -> p:principal -> (i:nat) ->
+  Lemma 
+    (
+      match get_full_state p tr with 
+      | None -> True
+      | Some full_st -> begin
+          if i >= List.length full_st
+            then True
+            else begin
+                   match List.index full_st i with
+                   | (_, Nil) -> True
+                   | (sid_i, (Snoc init_i last_i)) -> begin
+                         Some?   (fst (get_state p sid_i tr))
+                       /\ Some?.v (fst (get_state p sid_i tr)) = last_i
+                   end
+            end
+      end
+      
+    )
+
+
+
+let rec parse_full_state_lemma tr p i =
+  reveal_opaque (`%get_state) get_state;
+      match get_full_state p tr with 
+      | None -> ()
+      | Some full_st -> begin
+        assert(full_st = get_full_state_aux p tr []);
+        assert(~ (Nil? tr));
+          if i >= List.length full_st
+            then ()
+            else begin
+                   match List.index full_st i with
+                   | (_, Nil) -> ()
+                   | (sid_i, (Snoc init_i last_i)) -> begin
+                       match tr with
+                       | Snoc init (SetState p' sid' cont') ->
+                              if p' = p
+                                then begin
+                                  if sid' = sid_i
+                                    then (
+                                      assert(Some?.v (fst (get_state p sid_i tr)) = cont');
+                                      assert(last_i = cont');
+                                      admit()
+                                    )
+                                    else admit()
+                                end
+                                else parse_full_state_lemma init p i
+                       | Snoc init _ -> parse_full_state_lemma init p i                       
+                   end
+            end
+      end 
 
 val get_state_appears_in_full_state :
   tr:trace -> p:principal -> sid:state_id ->
@@ -329,17 +674,98 @@ let rec suffix_after_is_suffix (tr:trace) (pref:trace{pref <$ tr}):
 
 
 
+let rec suffixes_ (tr:trace) (suff1:trace) (suff2:trace):
+  Lemma
+  (requires
+      tr `has_suffix` suff1
+    /\ tr `has_suffix` suff2
+    /\ Trace.length suff1 >= Trace.length suff2
+  )
+  (ensures
+        suff1 `has_suffix` suff2 
+  )
+  = match suff2 with
+  | Nil -> ()
+  | Snoc init2 last2 -> 
+      let Snoc init1 last1 = suff1 in
+      let Snoc init last = tr in 
+      suffixes_ init init1 init2
+
 let suffixes (tr:trace) (suff1:trace) (suff2:trace):
   Lemma
   (requires
-    tr `has_suffix` suff1
+      tr `has_suffix` suff1
     /\ tr `has_suffix` suff2
   )
   (ensures
-      suff1 `has_suffix` suff2 
+        suff1 `has_suffix` suff2 
       \/ suff2 `has_suffix` suff1
   )
-  = admit()
+  = if Trace.length suff1 >= Trace.length suff2
+       then suffixes_ tr suff1 suff2
+       else suffixes_ tr suff2 suff1
+  
+let nil_grows (tr:trace):
+  Lemma (Nil <$ tr)
+  [SMTPat (Nil <$ tr)]
+  = reveal_opaque (`%grows) grows
+
+let rec suffix_after_nil (tr:trace):
+  Lemma (tr `suffix_after` Nil = tr)
+  [SMTPat (tr `suffix_after` Nil)]
+  = match tr with
+    | Nil -> ()
+    | Snoc init ev -> suffix_after_nil init
+
+let prepend  (ev:trace_event) (tr:trace) =
+  (Snoc Nil ev) `trace_concat` tr
+
+
+
+let rec event_splits_trace (tr:trace) (ev:trace_event{event_exists tr ev}):
+  Lemma
+  ( let tr_before = tr `prefix_before_event` ev in
+    let tr_after = tr `suffix_after_event` ev in
+    tr = tr_before `trace_concat` (prepend ev tr_after)
+  )
+  = let tr_before = tr `prefix_before_event` ev in
+    let tr_after = tr `suffix_after_event` ev in
+    match tr with
+    | Nil -> ()
+    | Snoc tr_init tr_last ->
+        if tr_last = ev
+          then ()
+          else event_splits_trace tr_init ev
+        
+
+// let trace_concat_grows_ (tr1:trace) (tr2:trace):
+//   Lemma (tr1 <$ tr1 `trace_concat` tr2)
+//   [SMTPat (tr1 <$ (tr1 `trace_concat` tr2) )]
+//   = trace_concat_grows tr1 tr2
+
+let suffix_after_snoc (init:trace) (ev:trace_event) (pref:trace{pref <$ init}):
+  Lemma
+  ( reveal_opaque (`%grows) grows; 
+    norm_spec [zeta; delta_only [`%prefix]] (prefix);
+
+    (Snoc init ev) `suffix_after` pref = Snoc ( init `suffix_after` pref ) ev
+  )
+= normalize_term_spec suffix_after
+
+let rec suffix_after_concat_ (pref:trace) (suff:trace):
+  Lemma 
+  ( let tr = pref `trace_concat` suff in
+    trace_concat_grows pref suff;
+    tr `suffix_after` pref = suff
+  )
+  = 
+  let tr = pref `trace_concat` suff in
+  match suff with
+  | Nil -> ()
+  | Snoc suff_init suff_ev ->
+         suffix_after_concat_ pref suff_init;
+         trace_concat_grows pref suff_init;
+         suffix_after_snoc ( pref `trace_concat` suff_init  ) suff_ev pref
 
 let suff_after_before_event_is_suff_at_event (tr:trace) (ev:trace_event{event_exists tr ev}):
   Lemma
@@ -347,7 +773,11 @@ let suff_after_before_event_is_suff_at_event (tr:trace) (ev:trace_event{event_ex
     let tr_after = tr `suffix_after_event` ev in
     tr `suffix_after` tr_before = (Snoc Nil ev) `trace_concat` tr_after
   )
-  = admit()
+  = let tr_before = tr `prefix_before_event` ev in
+    let tr_after = tr `suffix_after_event` ev in
+    event_splits_trace tr ev;
+    suffix_after_concat_ tr_before (prepend ev tr_after)
+    
 
 #push-options "--z3rlimit 50 " //--z3cliopt 'smt.qi.eager_threshold=50'"
 val next_full_state_pred:
