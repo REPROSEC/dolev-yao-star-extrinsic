@@ -4,7 +4,7 @@ open Comparse // for_allP, for_allP_eq
 open DY.Core
 open DY.Lib.SplitFunction
 
-let split_aead_predicate_params (cusages:crypto_usages) = {
+let split_aead_predicate_params (cusages:crypto_usages): split_function_parameters = {
   singleton_split_function_parameters string with
 
   tagged_data_t = (trace & (key:bytes{AeadKey? (get_usage key)}) & bytes & bytes);

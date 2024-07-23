@@ -4,7 +4,7 @@ open Comparse // for_allP, for_allP_eq
 open DY.Core
 open DY.Lib.SplitFunction
 
-let split_kdf_expand_usage_get_usage_params = {
+let split_kdf_expand_usage_get_usage_params: split_function_parameters = {
   singleton_split_function_parameters string with
 
   tagged_data_t = (prk_usage:usage{KdfExpandKey? prk_usage}) & bytes;
