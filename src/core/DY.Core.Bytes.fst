@@ -375,10 +375,10 @@ type aead_crypto_predicate (cusages:crypto_usages) = {
 
 noeq
 type pkenc_crypto_predicate (cusages:crypto_usages) = {
-  pred: tr:trace -> pk:bytes{PkdecKey? (get_sk_usage pk)} -> msg:bytes -> prop;
+  pred: tr:trace -> pk:bytes{PkKey? (get_sk_usage pk)} -> msg:bytes -> prop;
   pred_later:
     tr1:trace -> tr2:trace ->
-    pk:bytes{PkdecKey? (get_sk_usage pk)} -> msg:bytes ->
+    pk:bytes{PkKey? (get_sk_usage pk)} -> msg:bytes ->
     Lemma
     (requires pred tr1 pk msg /\ tr1 <$ tr2)
     (ensures pred tr2 pk msg)
@@ -510,7 +510,7 @@ let rec bytes_invariant #cinvs tr b =
       (
         // Honest case:
         // - the key has the usage of asymetric encryption key
-        PkdecKey? (get_sk_usage pk) /\
+        PkKey? (get_sk_usage pk) /\
         // - the custom (protocol-specific) invariant hold (authentication)
         pkenc_pred.pred tr pk msg /\
         // - the message is less secret than the decryption key
@@ -658,7 +658,7 @@ let rec bytes_invariant_later #cinvs tr1 tr2 msg =
     bytes_invariant_later tr1 tr2 nonce;
     bytes_invariant_later tr1 tr2 msg;
     match get_sk_usage pk with
-    | PkdecKey _ _ -> FStar.Classical.move_requires (cinvs.preds.pkenc_pred.pred_later tr1 tr2 pk) msg
+    | PkKey _ _ -> FStar.Classical.move_requires (cinvs.preds.pkenc_pred.pred_later tr1 tr2 pk) msg
     | _ -> ()
   )
   | Vk sk ->
@@ -729,12 +729,12 @@ let is_signature_key #cinvs usg lab tr b =
   is_secret lab tr b /\
   get_usage b == usg
 
-val is_encryption_key: {|crypto_invariants|} -> usg:usage{PkdecKey? usg} -> label -> trace -> bytes -> prop
+val is_encryption_key: {|crypto_invariants|} -> usg:usage{PkKey? usg} -> label -> trace -> bytes -> prop
 let is_encryption_key #cinvs usg lab tr b =
   is_publishable tr b /\ (get_sk_label b) == lab /\
   get_sk_usage b == usg
 
-val is_decryption_key: {|crypto_invariants|} -> usg:usage{PkdecKey? usg} -> label -> trace -> bytes -> prop
+val is_decryption_key: {|crypto_invariants|} -> usg:usage{PkKey? usg} -> label -> trace -> bytes -> prop
 let is_decryption_key #cinvs usg lab tr b =
   is_secret lab tr b /\
   get_usage b == usg
@@ -1294,7 +1294,7 @@ val bytes_invariant_pk_enc:
     bytes_invariant tr msg /\
     (get_label msg) `can_flow tr` (get_sk_label pk) /\
     (get_label msg) `can_flow tr` (get_label nonce) /\
-    PkdecKey? (get_sk_usage pk) /\
+    PkKey? (get_sk_usage pk) /\
     PkNonce? (get_usage nonce) /\
     pkenc_pred.pred tr pk msg
   )
@@ -1333,7 +1333,7 @@ val bytes_invariant_pk_dec:
       is_knowable_by (get_label sk) tr plaintext /\
       (
         (
-          PkdecKey? (get_sk_usage (pk sk)) ==>
+          PkKey? (get_sk_usage (pk sk)) ==>
           pkenc_pred.pred tr (pk sk) plaintext
         ) \/ (
           is_publishable tr plaintext

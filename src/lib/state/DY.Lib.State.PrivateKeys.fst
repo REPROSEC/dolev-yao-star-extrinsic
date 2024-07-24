@@ -52,7 +52,7 @@ val is_private_key_for:
 let is_private_key_for #cinvs tr sk sk_type who =
   match sk_type with
   | PkDec usg -> (
-    is_decryption_key (PkdecKey usg empty) (principal_label who) tr sk
+    is_decryption_key (PkKey usg empty) (principal_label who) tr sk
   )
   | Sign usg -> (
     is_signature_key (SigKey usg empty) (principal_label who) tr sk
@@ -80,7 +80,7 @@ val private_key_type_to_usage:
   usage
 let private_key_type_to_usage sk_type =
   match sk_type with
-  | PkDec usg -> PkdecKey usg empty
+  | PkDec usg -> PkKey usg empty
   | Sign usg -> SigKey usg empty
 
 (*** Private Keys API ***)

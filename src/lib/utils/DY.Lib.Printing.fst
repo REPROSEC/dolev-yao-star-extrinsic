@@ -89,7 +89,7 @@ let usage_to_string u =
   | NoUsage -> "{\"Type\": \"NoUsage\"}"
   | SigKey tag data -> Printf.sprintf "{\"Type\": \"SigKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}" tag (bytes_to_string data)
   | SigNonce -> "{\"Type\": \"SigNonce\"}"
-  | PkdecKey tag data -> Printf.sprintf "{\"Type\": \"PkdecKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}" tag (bytes_to_string data)
+  | PkKey tag data -> Printf.sprintf "{\"Type\": \"PkKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}" tag (bytes_to_string data)
   | PkNonce -> "{\"Type\": \"PkNonce\"}"
   | AeadKey tag data -> Printf.sprintf "{\"Type\": \"AeadKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}" tag (bytes_to_string data)
   | DhKey tag data -> Printf.sprintf "{\"Type\": \"DhKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}" tag (bytes_to_string data)

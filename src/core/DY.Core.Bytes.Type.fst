@@ -35,7 +35,7 @@ type usage =
   | NoUsage: usage // baked-in None
   | SigKey: tag:string -> data:bytes -> usage
   | SigNonce: usage
-  | PkdecKey: tag:string -> data:bytes -> usage
+  | PkKey: tag:string -> data:bytes -> usage
   | PkNonce: usage
   | AeadKey: tag:string -> data:bytes -> usage
   | DhKey: tag:string -> data:bytes -> usage
@@ -98,7 +98,7 @@ let rec encode_usage usg =
   | NoUsage -> 0::[]
   | SigKey tag data -> 1::(encode_list [encode tag; encode_bytes data])
   | SigNonce -> 2::[]
-  | PkdecKey tag data -> 3::(encode_list [encode tag; encode_bytes data])
+  | PkKey tag data -> 3::(encode_list [encode tag; encode_bytes data])
   | PkNonce -> 4::[]
   | AeadKey tag data -> 5::(encode_list [encode tag; encode_bytes data])
   | DhKey tag data -> 6::(encode_list [encode tag; encode_bytes data])
@@ -132,7 +132,7 @@ let rec encode_usage_inj usg1 usg2 =
   | PkNonce, PkNonce
   | NoUsage, NoUsage -> ()
   | SigKey tag1 data1, SigKey tag2 data2
-  | PkdecKey tag1 data1, PkdecKey tag2 data2
+  | PkKey tag1 data1, PkKey tag2 data2
   | AeadKey tag1 data1, AeadKey tag2 data2
   | DhKey tag1 data1, DhKey tag2 data2
   | KdfExtractSaltKey tag1 data1, KdfExtractSaltKey tag2 data2
