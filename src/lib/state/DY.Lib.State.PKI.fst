@@ -76,12 +76,13 @@ let pki_pred #cinvs = {
   pred_knowable = (fun tr prin sess_id key value -> ());
 }
 
+unfold
 val has_pki_invariant: protocol_invariants -> prop
 let has_pki_invariant invs =
   has_map_session_invariant invs pki_pred
 
 val pki_tag_and_invariant: {|crypto_invariants|} -> string & local_bytes_state_predicate
-let pki_tag_and_invariant #ci = (map_types_pki.tag, local_state_predicate_to_local_bytes_state_predicate (map_session_invariant pki_pred))
+let pki_tag_and_invariant #ci = ((local_state_map pki_key pki_value #map_types_pki).tag, local_state_predicate_to_local_bytes_state_predicate (map_session_invariant pki_pred))
 
 (*** PKI API ***)
 

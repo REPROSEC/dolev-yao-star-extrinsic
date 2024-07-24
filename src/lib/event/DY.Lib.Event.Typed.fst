@@ -85,6 +85,7 @@ val has_compiled_event_pred:
 let has_compiled_event_pred invs (tag, epred) =
   has_local_fun split_event_pred_params event_pred (tag, epred)
 
+unfold
 val has_event_pred:
   #a:Type0 -> {|event a|} ->
   protocol_invariants -> event_predicate a -> prop

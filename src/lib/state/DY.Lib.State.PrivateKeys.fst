@@ -68,12 +68,13 @@ let private_keys_pred #cinvs = {
   pred_knowable = (fun tr prin sess_id key value -> ());
 }
 
+unfold
 val has_private_keys_invariant: protocol_invariants -> prop
 let has_private_keys_invariant invs =
   has_map_session_invariant invs private_keys_pred
 
 val private_keys_tag_and_invariant: {|crypto_invariants|} -> string & local_bytes_state_predicate
-let private_keys_tag_and_invariant #ci = (map_types_private_keys.tag, local_state_predicate_to_local_bytes_state_predicate (map_session_invariant private_keys_pred))
+let private_keys_tag_and_invariant #ci = ((local_state_map private_key_key private_key_value #map_types_private_keys).tag, local_state_predicate_to_local_bytes_state_predicate (map_session_invariant private_keys_pred))
 
 val private_key_type_to_usage:
   private_key_type ->
