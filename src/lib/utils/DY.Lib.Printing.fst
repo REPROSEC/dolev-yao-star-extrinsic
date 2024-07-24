@@ -93,20 +93,33 @@ val usage_to_string: (u:usage) -> string
 let rec usage_to_string u =
   match u with
   | NoUsage -> "{\"Type\": \"NoUsage\"}"
-  | SigKey tag data -> Printf.sprintf "{\"Type\": \"SigKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}" tag (bytes_to_string data)
+  | SigKey tag data ->
+    Printf.sprintf "{\"Type\": \"SigKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}"
+      tag (bytes_to_string data)
   | SigNonce -> "{\"Type\": \"SigNonce\"}"
-  | PkKey tag data -> Printf.sprintf "{\"Type\": \"PkKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}" tag (bytes_to_string data)
+  | PkKey tag data ->
+    Printf.sprintf "{\"Type\": \"PkKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}"
+      tag (bytes_to_string data)
   | PkNonce -> "{\"Type\": \"PkNonce\"}"
-  | AeadKey tag data -> Printf.sprintf "{\"Type\": \"AeadKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}" tag (bytes_to_string data)
-  | DhKey tag data -> Printf.sprintf "{\"Type\": \"DhKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}" tag (bytes_to_string data)
-  | KdfExtractSaltKey tag data -> Printf.sprintf "{\"Type\": \"KdfExtractSaltKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}" 
-                                    tag (bytes_to_string data)
-  | KdfExtractIkmKey tag data -> Printf.sprintf "{\"Type\": \"KdfExtractIkmKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}" 
-                                    tag (bytes_to_string data)
-  | KdfExpandKey tag data -> Printf.sprintf "{\"Type\": \"KdfExpandKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}" 
-                                    tag (bytes_to_string data)
-  | KemKey usg -> Printf.sprintf "{\"Type\": \"KemKey\", \"Usage\": \"%s\"}" (usage_to_string usg)
-  | KemNonce usg -> Printf.sprintf "{\"Type\": \"KemNonce\", \"Usage\": \"%s\"}" (usage_to_string usg)
+  | AeadKey tag data ->
+    Printf.sprintf "{\"Type\": \"AeadKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}"
+      tag (bytes_to_string data)
+  | DhKey tag data ->
+    Printf.sprintf "{\"Type\": \"DhKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}"
+      tag (bytes_to_string data)
+  | KdfExtractSaltKey tag data ->
+    Printf.sprintf "{\"Type\": \"KdfExtractSaltKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}" 
+      tag (bytes_to_string data)
+  | KdfExtractIkmKey tag data ->
+    Printf.sprintf "{\"Type\": \"KdfExtractIkmKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}" 
+      tag (bytes_to_string data)
+  | KdfExpandKey tag data ->
+    Printf.sprintf "{\"Type\": \"KdfExpandKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}" 
+      tag (bytes_to_string data)
+  | KemKey usg ->
+    Printf.sprintf "{\"Type\": \"KemKey\", \"Usage\": \"%s\"}" (usage_to_string usg)
+  | KemNonce usg ->
+    Printf.sprintf "{\"Type\": \"KemNonce\", \"Usage\": \"%s\"}" (usage_to_string usg)
 
 
 (*** State Parsing Helper Functions ***)
