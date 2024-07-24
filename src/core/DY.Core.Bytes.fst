@@ -363,13 +363,13 @@ let get_dh_usage #cusages pk =
 
 noeq
 type aead_crypto_predicate (cusages:crypto_usages) = {
-  pred: tr:trace -> key:bytes{AeadKey? (get_usage key)} -> msg:bytes -> ad:bytes -> prop;
+  pred: tr:trace -> key:bytes{AeadKey? (get_usage key)} -> nonce:bytes -> msg:bytes -> ad:bytes -> prop;
   pred_later:
     tr1:trace -> tr2:trace ->
-    key:bytes{AeadKey? (get_usage key)} -> msg:bytes -> ad:bytes ->
+    key:bytes{AeadKey? (get_usage key)} -> nonce:bytes -> msg:bytes -> ad:bytes ->
     Lemma
-    (requires pred tr1 key msg ad /\ tr1 <$ tr2)
-    (ensures pred tr2 key msg ad)
+    (requires pred tr1 key nonce msg ad /\ tr1 <$ tr2)
+    (ensures pred tr2 key nonce msg ad)
   ;
 }
 
@@ -411,8 +411,8 @@ type crypto_predicates (cusages:crypto_usages) = {
 
 val default_aead_predicate: cusages:crypto_usages -> aead_crypto_predicate cusages
 let default_aead_predicate cusages = {
-  pred = (fun tr key msg ad -> False);
-  pred_later = (fun tr1 tr2 key msg ad -> ());
+  pred = (fun tr key nonce msg ad -> False);
+  pred_later = (fun tr1 tr2 key nonce msg ad -> ());
 }
 
 val default_pkenc_predicate: cusages:crypto_usages -> pkenc_crypto_predicate cusages
@@ -489,7 +489,7 @@ let rec bytes_invariant #cinvs tr b =
         // - the key has the usage of AEAD key
         AeadKey? (get_usage key) /\
         // - the custom (protocol-specific) invariant hold (authentication)
-        aead_pred.pred tr key msg ad /\
+        aead_pred.pred tr key nonce msg ad /\
         // - the message is less secret than the key
         //   (this is crucial so that decryption preserve publishability)
         (get_label msg) `can_flow tr` (get_label key)
@@ -648,7 +648,7 @@ let rec bytes_invariant_later #cinvs tr1 tr2 msg =
     bytes_invariant_later tr1 tr2 msg;
     bytes_invariant_later tr1 tr2 ad;
     match get_usage key with
-    | AeadKey _ _ -> FStar.Classical.move_requires (aead_pred.pred_later tr1 tr2 key msg) ad
+    | AeadKey _ _ -> FStar.Classical.move_requires (aead_pred.pred_later tr1 tr2 key nonce msg) ad
     | _ -> ()
   )
   | Pk sk ->
@@ -1084,7 +1084,7 @@ val bytes_invariant_aead_enc:
     (get_label ad) `can_flow tr` public /\
     (get_label msg) `can_flow tr` (get_label key) /\
     AeadKey? (get_usage key) /\
-    aead_pred.pred tr key msg ad
+    aead_pred.pred tr key nonce msg ad
   )
   (ensures bytes_invariant tr (aead_enc key nonce msg ad))
   [SMTPat (bytes_invariant tr (aead_enc key nonce msg ad))]
@@ -1125,7 +1125,7 @@ val bytes_invariant_aead_dec:
       (
         (
           AeadKey? (get_usage key) ==>
-          aead_pred.pred tr key plaintext ad
+          aead_pred.pred tr key nonce plaintext ad
         ) \/ (
           is_publishable tr key
         )
