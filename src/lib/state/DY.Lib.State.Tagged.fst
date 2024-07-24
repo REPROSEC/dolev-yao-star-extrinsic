@@ -80,17 +80,6 @@ val mk_global_local_bytes_state_predicate: {|crypto_invariants|} -> list (string
 let mk_global_local_bytes_state_predicate #cinvs tagged_local_preds =
   mk_global_fun split_local_bytes_state_predicate_params tagged_local_preds
 
-val mk_global_local_bytes_state_predicate_correct: invs:protocol_invariants -> tagged_local_preds:list (string & local_bytes_state_predicate) -> Lemma
-  (requires
-    invs.trace_invs.state_pred.pred == mk_global_local_bytes_state_predicate tagged_local_preds /\
-    List.Tot.no_repeats_p (List.Tot.map fst tagged_local_preds)
-  )
-  (ensures for_allP (has_local_bytes_state_predicate invs) tagged_local_preds)
-let mk_global_local_bytes_state_predicate_correct invs tagged_local_preds =
-  no_repeats_p_implies_for_all_pairsP_unequal (List.Tot.map fst tagged_local_preds);
-  for_allP_eq (has_local_bytes_state_predicate invs) tagged_local_preds;
-  FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (mk_global_fun_correct split_local_bytes_state_predicate_params tagged_local_preds))
-
 #push-options "--ifuel 2" // to deconstruct nested tuples
 val mk_global_local_bytes_state_predicate_later:
   cinvs:crypto_invariants -> tagged_local_preds:list (string & local_bytes_state_predicate) ->
@@ -125,13 +114,24 @@ let mk_global_local_bytes_state_predicate_knowable cinvs tagged_local_preds tr p
   )
   | None -> ()
 
-val mk_state_predicate: cinvs:crypto_invariants -> list (string & local_bytes_state_predicate) -> state_predicate cinvs
-let mk_state_predicate cinvs tagged_local_preds =
+val mk_state_pred: cinvs:crypto_invariants -> list (string & local_bytes_state_predicate) -> state_predicate cinvs
+let mk_state_pred cinvs tagged_local_preds =
   {
     pred = mk_global_local_bytes_state_predicate tagged_local_preds;
     pred_later = mk_global_local_bytes_state_predicate_later cinvs tagged_local_preds;
     pred_knowable = mk_global_local_bytes_state_predicate_knowable cinvs tagged_local_preds;
   }
+
+val mk_state_pred_correct: invs:protocol_invariants -> tagged_local_preds:list (string & local_bytes_state_predicate) -> Lemma
+  (requires
+    invs.trace_invs.state_pred == mk_state_pred invs.crypto_invs tagged_local_preds /\
+    List.Tot.no_repeats_p (List.Tot.map fst tagged_local_preds)
+  )
+  (ensures for_allP (has_local_bytes_state_predicate invs) tagged_local_preds)
+let mk_state_pred_correct invs tagged_local_preds =
+  no_repeats_p_implies_for_all_pairsP_unequal (List.Tot.map fst tagged_local_preds);
+  for_allP_eq (has_local_bytes_state_predicate invs) tagged_local_preds;
+  FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (mk_global_fun_correct split_local_bytes_state_predicate_params tagged_local_preds))
 
 (*** Predicates on trace ***)
 

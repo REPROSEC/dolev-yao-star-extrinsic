@@ -96,7 +96,7 @@ let all_events = [
 /// Create the global trace invariants.
 
 let trace_invariants_nsl: trace_invariants (crypto_invariants_nsl) = {
-  state_pred = mk_state_predicate crypto_invariants_nsl all_sessions;
+  state_pred = mk_state_pred crypto_invariants_nsl all_sessions;
   event_pred = mk_event_pred all_events;
 }
 
@@ -110,7 +110,7 @@ instance protocol_invariants_nsl: protocol_invariants = {
 val all_sessions_has_all_sessions: unit -> Lemma (norm [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP (has_local_bytes_state_predicate protocol_invariants_nsl) all_sessions))
 let all_sessions_has_all_sessions () =
   assert_norm(List.Tot.no_repeats_p (List.Tot.map fst (all_sessions)));
-  mk_global_local_bytes_state_predicate_correct protocol_invariants_nsl all_sessions;
+  mk_state_pred_correct protocol_invariants_nsl all_sessions;
   norm_spec [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP (has_local_bytes_state_predicate protocol_invariants_nsl) all_sessions)
 
 val protocol_invariants_nsl_has_pki_invariant: squash (has_pki_invariant protocol_invariants_nsl)

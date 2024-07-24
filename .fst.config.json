@@ -1,5 +1,15 @@
 { "fstar_exe":"fstar.exe",
   "options":["--cache_dir", "cache", "--hint_dir", "hints", "--use_hints", "--record_hints"],
   "include_dirs":[
-    "../comparse/src", "src/core", "src/lib", "src/lib/comparse", "src/lib/event", "src/lib/state", "src/lib/utils", "examples/nsl_pk", "examples/iso_dh"] 
+    "../comparse/src",
+    "src/core",
+    "src/lib",
+    "src/lib/comparse",
+    "src/lib/crypto",
+    "src/lib/event",
+    "src/lib/state",
+    "src/lib/utils",
+    "examples/nsl_pk",
+    "examples/iso_dh"
+  ]
 }
