@@ -70,6 +70,7 @@ let split_local_bytes_state_predicate_params {|crypto_invariants|} : split_funct
   apply_mk_global_fun = (fun bare x -> ());
 }
 
+[@@ "opaque_to_smt"]
 val has_local_bytes_state_predicate: protocol_invariants -> (string & local_bytes_state_predicate) -> prop
 let has_local_bytes_state_predicate invs (tag, spred) =
   has_local_fun split_local_bytes_state_predicate_params (state_pred) (tag, spred)
@@ -129,6 +130,7 @@ val mk_state_pred_correct: invs:protocol_invariants -> tagged_local_preds:list (
   )
   (ensures for_allP (has_local_bytes_state_predicate invs) tagged_local_preds)
 let mk_state_pred_correct invs tagged_local_preds =
+  reveal_opaque (`%has_local_bytes_state_predicate) (has_local_bytes_state_predicate);
   no_repeats_p_implies_for_all_pairsP_unequal (List.Tot.map fst tagged_local_preds);
   for_allP_eq (has_local_bytes_state_predicate invs) tagged_local_preds;
   FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (mk_global_fun_correct split_local_bytes_state_predicate_params tagged_local_preds))
@@ -180,6 +182,7 @@ val set_tagged_state_invariant:
    SMTPat (trace_invariant tr);
    SMTPat (has_local_bytes_state_predicate invs (tag, spred))]
 let set_tagged_state_invariant invs tag spred prin sess_id content tr =
+  reveal_opaque (`%has_local_bytes_state_predicate) (has_local_bytes_state_predicate);
   reveal_opaque (`%set_tagged_state) (set_tagged_state);
   reveal_opaque (`%tagged_state_was_set) (tagged_state_was_set);
   let full_content = {tag; content;} in
@@ -209,6 +212,7 @@ val get_tagged_state_invariant:
    SMTPat (trace_invariant tr);
    SMTPat (has_local_bytes_state_predicate invs (tag, spred))]
 let get_tagged_state_invariant invs tag spred prin sess_id tr =
+  reveal_opaque (`%has_local_bytes_state_predicate) (has_local_bytes_state_predicate);
   reveal_opaque (`%get_tagged_state) (get_tagged_state);
   let (opt_content, tr_out) = get_tagged_state tag prin sess_id tr in
   match opt_content with
@@ -235,6 +239,7 @@ val tagged_state_was_set_implies_pred:
    SMTPat (has_local_bytes_state_predicate invs (tag, spred));
   ]
 let tagged_state_was_set_implies_pred invs tr tag spred prin sess_id content =
+  reveal_opaque (`%has_local_bytes_state_predicate) (has_local_bytes_state_predicate);
   reveal_opaque (`%tagged_state_was_set) (tagged_state_was_set);
   let full_content = {tag; content;} in
   parse_serialize_inv_lemma #bytes tagged_state full_content;

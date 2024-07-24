@@ -68,6 +68,18 @@ val has_local_crypto_predicate:
 let has_local_crypto_predicate params global_pred (tag, local_pred) =
   has_local_fun (split_crypto_predicate_parameters_to_split_function_parameters params) global_pred (tag, local_pred)
 
+val has_local_crypto_predicate_elim:
+  params:split_crypto_predicate_parameters ->
+  global_pred:params.global_pred_t -> tag:string -> local_pred:params.local_pred_t ->
+  tr:trace -> key:params.key_t -> data:params.data_t ->
+  Lemma
+  (requires has_local_crypto_predicate params global_pred (tag, local_pred))
+  (ensures
+    params.get_usage key == tag ==> (params.apply_global_pred global_pred (tr, key, data) == params.apply_local_pred local_pred (tr, key, data))
+  )
+let has_local_crypto_predicate_elim params global_pred tag local_pred tr key data =
+  has_local_fun_elim (split_crypto_predicate_parameters_to_split_function_parameters params) global_pred tag local_pred (tr, key, data)
+
 val mk_global_crypto_predicate:
   params:split_crypto_predicate_parameters ->
   list (string & params.local_pred_t) ->
