@@ -52,10 +52,10 @@ val is_private_key_for:
 let is_private_key_for #cinvs tr sk sk_type who =
   match sk_type with
   | PkDec usg -> (
-    is_decryption_key {tag=usg; data=empty} (principal_label who) tr sk
+    is_decryption_key (PkdecKey usg empty) (principal_label who) tr sk
   )
   | Sign usg -> (
-    is_signature_key {tag=usg; data=empty} (principal_label who) tr sk
+    is_signature_key (SigKey usg empty) (principal_label who) tr sk
   )
 
 // The `#_` at the end is a workaround for FStarLang/FStar#3286
@@ -80,8 +80,8 @@ val private_key_type_to_usage:
   usage
 let private_key_type_to_usage sk_type =
   match sk_type with
-  | PkDec usg -> PkKey { tag = usg; data = empty }
-  | Sign usg -> SigKey { tag = usg; data = empty }
+  | PkDec usg -> PkdecKey usg empty
+  | Sign usg -> SigKey usg empty
 
 (*** Private Keys API ***)
 

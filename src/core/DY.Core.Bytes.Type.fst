@@ -31,22 +31,17 @@ open DY.Core.Label.Type
 /// allowing the usage's `data` field and the label of the keys to evolve
 /// when calling kdf_extract and kdf_expand.
 
-type usage_content = {
-  tag:string;
-  data:bytes;
-}
-
-and usage =
+type usage =
   | NoUsage: usage // baked-in None
-  | SigKey: content:usage_content -> usage
+  | SigKey: tag:string -> data:bytes -> usage
   | SigNonce: usage
-  | PkKey: content:usage_content -> usage
+  | PkdecKey: tag:string -> data:bytes -> usage
   | PkNonce: usage
-  | AeadKey: content:usage_content -> usage
-  | DhKey: content:usage_content -> usage
-  | KdfExtractSaltKey: content:usage_content -> usage
-  | KdfExtractIkmKey: content:usage_content -> usage
-  | KdfExpandKey: content:usage_content -> usage
+  | AeadKey: tag:string -> data:bytes -> usage
+  | DhKey: tag:string -> data:bytes -> usage
+  | KdfExtractSaltKey: tag:string -> data:bytes -> usage
+  | KdfExtractIkmKey: tag:string -> data:bytes -> usage
+  | KdfExpandKey: tag:string -> data:bytes -> usage
 
 /// The bytes term.
 /// It is similar to the one you would find in other symbolic analysis tools.
@@ -96,23 +91,20 @@ and bytes =
 
 open DY.Core.Internal.Ord
 
-val encode_usage_content: usage_content -> list int
 val encode_usage: usage -> list int
 val encode_bytes: bytes -> list int
-let rec encode_usage_content {tag; data} =
-  encode_list [encode tag; encode_bytes data]
-and encode_usage usg =
+let rec encode_usage usg =
   match usg with
   | NoUsage -> 0::[]
-  | SigKey content -> 1::(encode_list [encode_usage_content content])
+  | SigKey tag data -> 1::(encode_list [encode tag; encode_bytes data])
   | SigNonce -> 2::[]
-  | PkKey content -> 3::(encode_list [encode_usage_content content])
+  | PkdecKey tag data -> 3::(encode_list [encode tag; encode_bytes data])
   | PkNonce -> 4::[]
-  | AeadKey content -> 5::(encode_list [encode_usage_content content])
-  | DhKey content -> 6::(encode_list [encode_usage_content content])
-  | KdfExtractSaltKey content -> 7::(encode_list [encode_usage_content content])
-  | KdfExtractIkmKey content -> 8::(encode_list [encode_usage_content content])
-  | KdfExpandKey content -> 9::(encode_list [encode_usage_content content])
+  | AeadKey tag data -> 5::(encode_list [encode tag; encode_bytes data])
+  | DhKey tag data -> 6::(encode_list [encode tag; encode_bytes data])
+  | KdfExtractSaltKey tag data -> 7::(encode_list [encode tag; encode_bytes data])
+  | KdfExtractIkmKey tag data -> 8::(encode_list [encode tag; encode_bytes data])
+  | KdfExpandKey tag data -> 9::(encode_list [encode tag; encode_bytes data])
 and encode_bytes b =
   match b with
   | Literal l -> 0::(encode_list [encode l])
@@ -131,27 +123,23 @@ and encode_bytes b =
 
 // --warn_error is a workaround for FStar/FStarLang#3220
 #push-options "--z3rlimit 25 --fuel 4 --ifuel 4 --warn_error +290"
-val encode_usage_content_inj: content1:usage_content -> content2:usage_content -> Lemma (requires encode_usage_content content1 == encode_usage_content content2) (ensures content1 == content2)
 val encode_usage_inj: usg1:usage -> usg2:usage -> Lemma (requires encode_usage usg1 == encode_usage usg2) (ensures usg1 == usg2)
 val encode_bytes_inj: b1:bytes -> b2:bytes -> Lemma (requires encode_bytes b1 == encode_bytes b2) (ensures b1 == b2)
-let rec encode_usage_content_inj content1 content2 =
-  encode_inj_forall (list (list int)) ();
-  encode_inj content1.tag content2.tag;
-  encode_bytes_inj content1.data content2.data
-and encode_usage_inj usg1 usg2 =
+let rec encode_usage_inj usg1 usg2 =
   encode_inj_forall (list (list int)) ();
   match usg1, usg2 with
   | SigNonce, SigNonce
   | PkNonce, PkNonce
   | NoUsage, NoUsage -> ()
-  | SigKey content1, SigKey content2
-  | PkKey content1, PkKey content2
-  | AeadKey content1, AeadKey content2
-  | DhKey content1, DhKey content2
-  | KdfExtractSaltKey content1, KdfExtractSaltKey content2
-  | KdfExtractIkmKey content1, KdfExtractIkmKey content2
-  | KdfExpandKey content1, KdfExpandKey content2 -> (
-    encode_usage_content_inj content1 content2
+  | SigKey tag1 data1, SigKey tag2 data2
+  | PkdecKey tag1 data1, PkdecKey tag2 data2
+  | AeadKey tag1 data1, AeadKey tag2 data2
+  | DhKey tag1 data1, DhKey tag2 data2
+  | KdfExtractSaltKey tag1 data1, KdfExtractSaltKey tag2 data2
+  | KdfExtractIkmKey tag1 data1, KdfExtractIkmKey tag2 data2
+  | KdfExpandKey tag1 data1, KdfExpandKey tag2 data2 -> (
+    encode_inj tag1 tag2;
+    encode_bytes_inj data1 data2
   )
 
 and encode_bytes_inj b1 b2 =
@@ -185,11 +173,6 @@ and encode_bytes_inj b1 b2 =
     encode_bytes_inj x4 y4
   | _, _ -> assert(False)
 #pop-options
-
-instance integer_encodable_usage_content: integer_encodable usage_content = {
-  encode = encode_usage_content;
-  encode_inj = encode_usage_content_inj;
-}
 
 instance integer_encodable_usage: integer_encodable usage = {
   encode = encode_usage;
