@@ -6,28 +6,28 @@ open DY.Lib.Crypto.SplitPredicate
 
 let split_aead_predicate_params (cusages:crypto_usages): split_crypto_predicate_parameters = {
   key_t = key:bytes{AeadKey? (get_usage key)};
-  data_t = (bytes & bytes);
+  data_t = (bytes & bytes & bytes);
   get_usage = (fun key ->
     let AeadKey tag _ = get_usage key in
     tag
   );
 
   local_pred_t = aead_crypto_predicate cusages;
-  global_pred_t = trace -> key:bytes{AeadKey? (get_usage key)} -> msg:bytes -> ad:bytes -> prop;
+  global_pred_t = trace -> key:bytes{AeadKey? (get_usage key)} -> nonce:bytes -> msg:bytes -> ad:bytes -> prop;
 
-  apply_local_pred = (fun pred (tr, key, (msg, ad)) ->
-    pred.pred tr key msg ad
+  apply_local_pred = (fun pred (tr, key, (nonce, msg, ad)) ->
+    pred.pred tr key nonce msg ad
   );
-  apply_global_pred = (fun pred (tr, key, (msg, ad)) ->
-    pred tr key msg ad
+  apply_global_pred = (fun pred (tr, key, (nonce, msg, ad)) ->
+    pred tr key nonce msg ad
   );
-  mk_global_pred = (fun pred tr key msg ad ->
-    pred (tr, key, (msg, ad))
+  mk_global_pred = (fun pred tr key nonce msg ad ->
+    pred (tr, key, (nonce, msg, ad))
   );
 
   apply_mk_global_pred = (fun bare x -> ());
-  apply_local_pred_later = (fun lpred tr1 tr2 key (msg, ad) ->
-    lpred.pred_later tr1 tr2 key msg ad
+  apply_local_pred_later = (fun lpred tr1 tr2 key (nonce, msg, ad) ->
+    lpred.pred_later tr1 tr2 key nonce msg ad
   );
 }
 
@@ -43,7 +43,7 @@ val mk_aead_predicate:
   aead_crypto_predicate cusgs
 let mk_aead_predicate #cusgs l = {
   pred = mk_global_crypto_predicate (split_aead_predicate_params cusgs) l;
-  pred_later = (fun tr1 tr2 key msg ad -> mk_global_crypto_predicate_later (split_aead_predicate_params cusgs) l tr1 tr2 key (msg, ad));
+  pred_later = (fun tr1 tr2 key nonce msg ad -> mk_global_crypto_predicate_later (split_aead_predicate_params cusgs) l tr1 tr2 key (nonce, msg, ad));
 }
 
 val mk_aead_predicate_correct:

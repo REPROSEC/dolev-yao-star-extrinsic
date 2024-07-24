@@ -5,15 +5,15 @@ open DY.Core
 open DY.Lib.Crypto.SplitPredicate
 
 let split_pkenc_predicate_params (cusages:crypto_usages): split_crypto_predicate_parameters = {
-  key_t = pk:bytes{PkdecKey? (get_sk_usage pk)};
+  key_t = pk:bytes{PkKey? (get_sk_usage pk)};
   data_t = bytes;
   get_usage = (fun pk ->
-    let PkdecKey tag _ = get_sk_usage pk in
+    let PkKey tag _ = get_sk_usage pk in
     tag
   );
 
   local_pred_t = pkenc_crypto_predicate cusages;
-  global_pred_t = tr:trace -> pk:bytes{PkdecKey? (get_sk_usage pk)} -> msg:bytes -> prop;
+  global_pred_t = tr:trace -> pk:bytes{PkKey? (get_sk_usage pk)} -> msg:bytes -> prop;
 
   apply_local_pred = (fun pred (tr, pk, msg) ->
     pred.pred tr pk msg
