@@ -18,27 +18,27 @@ open DY.Core.Label.Type
 /// To this bytestring will correspond a usage (e.g. "SigKey"),
 /// which will ensure it can only be used as the key of one specific cryptographic primitive (e.g. signature function).
 ///
-/// Second, the various usages additionally contain a usage string,
+/// Second, the various usages additionally contain a usage string "tag",
 /// which is used to further distinguish keys used with a given cryptographic primitive:
 /// for example to distinguish the long-term key from the ephemeral ones,
 /// or to distinguish keys from two sub-protocols running in parallel.
 /// At the end, this usage string may play a role in the security proof
 /// via the protocol invariants.
 ///
-/// Although most usages only contain a usage string to disambiguate different keys,
-/// KDF keys additionally contains a full `bytes` in their usage.
+/// Because a string may not be enough to express the complex reasons two keys are distinct,
+/// usages also contain a `bytes` called "data".
 /// This is useful to do security proofs of protocols with complex key schedules,
 /// allowing the usage's `data` field and the label of the keys to evolve
 /// when calling kdf_extract and kdf_expand.
 
 type usage =
   | NoUsage: usage // baked-in None
-  | SigKey: tag:string -> usage
+  | SigKey: tag:string -> data:bytes -> usage
   | SigNonce: usage
-  | PkdecKey: tag:string -> usage
+  | PkKey: tag:string -> data:bytes -> usage
   | PkNonce: usage
-  | AeadKey: tag:string -> usage
-  | DhKey: tag:string -> usage
+  | AeadKey: tag:string -> data:bytes -> usage
+  | DhKey: tag:string -> data:bytes -> usage
   | KdfExtractSaltKey: tag:string -> data:bytes -> usage
   | KdfExtractIkmKey: tag:string -> data:bytes -> usage
   | KdfExpandKey: tag:string -> data:bytes -> usage
@@ -102,12 +102,12 @@ val encode_bytes: bytes -> list int
 let rec encode_usage usg =
   match usg with
   | NoUsage -> 0::[]
-  | SigKey tag -> 1::(encode_list [encode tag])
+  | SigKey tag data -> 1::(encode_list [encode tag; encode_bytes data])
   | SigNonce -> 2::[]
-  | PkdecKey tag -> 3::(encode_list [encode tag])
+  | PkKey tag data -> 3::(encode_list [encode tag; encode_bytes data])
   | PkNonce -> 4::[]
-  | AeadKey tag -> 5::(encode_list [encode tag])
-  | DhKey tag -> 6::(encode_list [encode tag])
+  | AeadKey tag data -> 5::(encode_list [encode tag; encode_bytes data])
+  | DhKey tag data -> 6::(encode_list [encode tag; encode_bytes data])
   | KdfExtractSaltKey tag data -> 7::(encode_list [encode tag; encode_bytes data])
   | KdfExtractIkmKey tag data -> 8::(encode_list [encode tag; encode_bytes data])
   | KdfExpandKey tag data -> 9::(encode_list [encode tag; encode_bytes data])
@@ -132,7 +132,8 @@ and encode_bytes b =
   | KemEncap pk ss -> 14::(encode_list [encode_bytes pk; encode_bytes ss])
   | KemSecretShared ss -> 15::(encode_list [encode_bytes ss])
 
-#push-options "--z3rlimit 25 --fuel 4 --ifuel 4"
+// --warn_error is a workaround for FStar/FStarLang#3220
+#push-options "--z3rlimit 25 --fuel 4 --ifuel 4 --warn_error +290"
 val encode_usage_inj: usg1:usage -> usg2:usage -> Lemma (requires encode_usage usg1 == encode_usage usg2) (ensures usg1 == usg2)
 val encode_bytes_inj: b1:bytes -> b2:bytes -> Lemma (requires encode_bytes b1 == encode_bytes b2) (ensures b1 == b2)
 let rec encode_usage_inj usg1 usg2 =
@@ -141,11 +142,10 @@ let rec encode_usage_inj usg1 usg2 =
   | SigNonce, SigNonce
   | PkNonce, PkNonce
   | NoUsage, NoUsage -> ()
-  | SigKey tag1, SigKey tag2
-  | PkdecKey tag1, PkdecKey tag2
-  | AeadKey tag1, AeadKey tag2
-  | DhKey tag1, DhKey tag2 ->
-    encode_inj tag1 tag2
+  | SigKey tag1 data1, SigKey tag2 data2
+  | PkKey tag1 data1, PkKey tag2 data2
+  | AeadKey tag1 data1, AeadKey tag2 data2
+  | DhKey tag1 data1, DhKey tag2 data2
   | KdfExtractSaltKey tag1 data1, KdfExtractSaltKey tag2 data2
   | KdfExtractIkmKey tag1 data1, KdfExtractIkmKey tag2 data2
   | KdfExpandKey tag1 data1, KdfExpandKey tag2 data2 -> (

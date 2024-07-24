@@ -14,18 +14,20 @@ val dh_crypto_usages: crypto_usages
 instance dh_crypto_usages = {
   default_crypto_usages with
 
-  dh_known_peer_usage = (fun s1 s2 ->
-    match s1, s2 with
-    | "DH.dh_key", _ -> AeadKey "DH.aead_key"
-    | _, "DH.dh_key" -> AeadKey "DH.aead_key"
-    | _, _ -> NoUsage
-  );
-  dh_unknown_peer_usage = (fun s1 -> 
-    match s1 with
-    | "DH.dh_key" -> AeadKey "DH.aead_key"
-    | _ -> NoUsage);
-  dh_known_peer_usage_commutes = (fun s1 s2 -> ());
-  dh_unknown_peer_usage_implies = (fun s1 s2 -> ());
+  dh_usage = {
+    known_peer_usage = (fun usg1 usg2 ->
+      match usg1, usg2 with
+      | DhKey "DH.dh_key" _, _ -> AeadKey "DH.aead_key" empty
+      | _, DhKey "DH.dh_key" _ -> AeadKey "DH.aead_key" empty
+      | _, _ -> NoUsage
+    );
+    unknown_peer_usage = (fun usg1 -> 
+      match usg1 with
+      | DhKey "DH.dh_key" _ -> AeadKey "DH.aead_key" empty
+      | _ -> NoUsage);
+    known_peer_usage_commutes = (fun usg1 usg2 -> ());
+    unknown_peer_usage_implies = (fun usg1 usg2 -> ());
+  }
 }
 
 #push-options "--ifuel 2 --fuel 0"
@@ -33,20 +35,22 @@ val dh_crypto_preds: crypto_predicates dh_crypto_usages
 let dh_crypto_preds = {
   default_crypto_predicates dh_crypto_usages with
 
-  sign_pred = (fun tr vk sig_msg ->
-    get_signkey_usage vk == SigKey "DH.SigningKey" /\
-    (exists prin. get_signkey_label vk = principal_label prin /\ (
-      match parse sig_message sig_msg with
-      | Some (SigMsg2 sig_msg2) -> (
-        exists y. sig_msg2.gy == (dh_pk y) /\ event_triggered tr prin (Respond1 sig_msg2.alice prin sig_msg2.gx sig_msg2.gy y)
-      )
-      | Some (SigMsg3 sig_msg3) -> (
-        exists x. sig_msg3.gx == (dh_pk x) /\ event_triggered tr prin (Initiate2 prin sig_msg3.bob sig_msg3.gx sig_msg3.gy (dh x sig_msg3.gy))
-      )
-      | None -> False
-    ))
-  );
-  sign_pred_later = (fun tr1 tr2 vk msg -> ())
+  sign_pred = {
+    pred = (fun tr vk sig_msg ->
+      get_signkey_usage vk == SigKey "DH.SigningKey" empty /\
+      (exists prin. get_signkey_label vk = principal_label prin /\ (
+        match parse sig_message sig_msg with
+        | Some (SigMsg2 sig_msg2) -> (
+          exists y. sig_msg2.gy == (dh_pk y) /\ event_triggered tr prin (Respond1 sig_msg2.alice prin sig_msg2.gx sig_msg2.gy y)
+        )
+        | Some (SigMsg3 sig_msg3) -> (
+          exists x. sig_msg3.gx == (dh_pk x) /\ event_triggered tr prin (Initiate2 prin sig_msg3.bob sig_msg3.gx sig_msg3.gy (dh x sig_msg3.gy))
+        )
+        | None -> False
+      ))
+    );
+    pred_later = (fun tr1 tr2 vk msg -> ());
+  };
 }
 #pop-options
 
@@ -126,7 +130,7 @@ val compute_message2_proof:
     event_triggered tr bob (Respond1 alice bob gx (dh_pk y) y) /\
     is_publishable tr gx /\
     bytes_invariant tr y /\
-    is_signature_key "DH.SigningKey" (principal_label bob) tr sk_b /\
+    is_signature_key (SigKey "DH.SigningKey" empty) (principal_label bob) tr sk_b /\
     is_secret (principal_label bob) tr n_sig /\
     SigNonce? (get_usage n_sig)
   )
@@ -171,7 +175,7 @@ val decode_and_verify_message2_proof:
   (requires
     is_publishable tr msg2_bytes /\
     is_secret (principal_state_label alice alice_si) tr x /\
-    is_verification_key "DH.SigningKey" (principal_label bob) tr pk_b
+    is_verification_key (SigKey "DH.SigningKey" empty) (principal_label bob) tr pk_b
   )
   (ensures (
     match decode_and_verify_message2 msg2_bytes alice x pk_b with
@@ -214,7 +218,7 @@ val compute_message3_proof:
     event_triggered tr alice (Initiate2 alice bob (dh_pk x) gy (dh x gy)) /\
     is_publishable tr gx /\ is_publishable tr gy /\
     gx = dh_pk x /\
-    is_signature_key "DH.SigningKey" (principal_label alice) tr sk_a /\
+    is_signature_key (SigKey "DH.SigningKey" empty) (principal_label alice) tr sk_a /\
     is_secret (principal_label alice) tr n_sig /\
     SigNonce? (get_usage n_sig)
   )
@@ -255,7 +259,7 @@ val decode_and_verify_message3_proof:
     is_publishable tr msg3_bytes /\
     is_publishable tr gx /\
     is_secret (principal_state_label bob bob_si) tr y /\
-    is_verification_key "DH.SigningKey" (principal_label alice) tr pk_a
+    is_verification_key (SigKey "DH.SigningKey" empty) (principal_label alice) tr pk_a
   )
   (ensures (
     let gy = dh_pk y in

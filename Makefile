@@ -21,10 +21,9 @@ FSTAR_EXTRACT = --extract '-* +DY +Comparse'
 
 # Allowed warnings:
 # - (Warning 242) Definitions of inner let-rec ... and its enclosing top-level letbinding are not encoded to the solver, you will only be able to reason with their types
-# - (Warning 290) SMT may not be able to prove the types of ... and ...  to be equal, if the proof fails, try annotating these with the same type
 # - (Warning 335) Interface ... is admitted without an implementation 
 
-FSTAR_FLAGS = $(FSTAR_INCLUDE_DIRS) --cache_checked_modules --already_cached '+Prims +FStar' --warn_error '@0..1000' --warn_error '+242+290-335' --record_hints --hint_dir $(DY_HOME)/hints --cache_dir $(DY_HOME)/cache --odir $(DY_HOME)/obj --cmi
+FSTAR_FLAGS = $(FSTAR_INCLUDE_DIRS) --cache_checked_modules --already_cached '+Prims +FStar' --warn_error '@0..1000' --warn_error '+242-335' --record_hints --hint_dir $(DY_HOME)/hints --cache_dir $(DY_HOME)/cache --odir $(DY_HOME)/obj --cmi
 
 .PHONY: all clean
 
