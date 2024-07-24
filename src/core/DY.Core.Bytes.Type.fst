@@ -42,6 +42,8 @@ type usage =
   | KdfExtractSaltKey: tag:string -> data:bytes -> usage
   | KdfExtractIkmKey: tag:string -> data:bytes -> usage
   | KdfExpandKey: tag:string -> data:bytes -> usage
+  | KemKey: usg:usage -> usage
+  | KemNonce: usg:usage -> usage
 
 /// The bytes term.
 /// It is similar to the one you would find in other symbolic analysis tools.
@@ -87,6 +89,10 @@ and bytes =
   | KdfExtract: salt:bytes -> ikm:bytes -> bytes
   | KdfExpand: prk:bytes -> info:bytes -> len:nat{len <> 0} -> bytes
 
+  // Key Encapsulation Mechanism
+  | KemPub: sk:bytes -> bytes
+  | KemEncap: pk:bytes -> ss:bytes -> bytes
+  | KemSecretShared: ss:bytes -> bytes
   // ...
 
 open DY.Core.Internal.Ord
@@ -105,6 +111,8 @@ let rec encode_usage usg =
   | KdfExtractSaltKey tag data -> 7::(encode_list [encode tag; encode_bytes data])
   | KdfExtractIkmKey tag data -> 8::(encode_list [encode tag; encode_bytes data])
   | KdfExpandKey tag data -> 9::(encode_list [encode tag; encode_bytes data])
+  | KemKey usg -> 10::(encode_list [encode_usage usg])
+  | KemNonce usg -> 11::(encode_list [encode_usage usg])
 and encode_bytes b =
   match b with
   | Literal l -> 0::(encode_list [encode l])
@@ -120,6 +128,9 @@ and encode_bytes b =
   | Dh sk pk -> 10::(encode_list [encode_bytes sk; encode_bytes pk])
   | KdfExtract salt ikm -> 11::(encode_list [encode_bytes salt; encode_bytes ikm])
   | KdfExpand prk info len -> 12::(encode_list [encode_bytes prk; encode_bytes info; encode (len <: nat)])
+  | KemPub sk -> 13::(encode_list [encode_bytes sk])
+  | KemEncap pk ss -> 14::(encode_list [encode_bytes pk; encode_bytes ss])
+  | KemSecretShared ss -> 15::(encode_list [encode_bytes ss])
 
 // --warn_error is a workaround for FStar/FStarLang#3220
 #push-options "--z3rlimit 25 --fuel 4 --ifuel 4 --warn_error +290"
@@ -141,6 +152,9 @@ let rec encode_usage_inj usg1 usg2 =
     encode_inj tag1 tag2;
     encode_bytes_inj data1 data2
   )
+  | KemKey usg1, KemKey usg2
+  | KemNonce usg1, KemNonce usg2 ->
+    encode_usage_inj usg1 usg2
 
 and encode_bytes_inj b1 b2 =
   encode_inj_forall (list (list int)) ();
@@ -153,12 +167,15 @@ and encode_bytes_inj b1 b2 =
   | Pk x1, Pk y1
   | Vk x1, Vk y1
   | Hash x1, Hash y1
-  | DhPub x1, DhPub y1 ->
+  | DhPub x1, DhPub y1
+  | KemPub x1, KemPub y1
+  | KemSecretShared x1, KemSecretShared y1 ->
     encode_bytes_inj x1 y1
   | Concat x1 x2, Concat y1 y2
   | Dh x1 x2, Dh y1 y2
   | KdfExtract x1 x2, KdfExtract y1 y2
-  | KdfExpand x1 x2 _, KdfExpand y1 y2 _ ->
+  | KdfExpand x1 x2 _, KdfExpand y1 y2 _
+  | KemEncap x1 x2, KemEncap y1 y2 ->
     encode_bytes_inj x1 y1;
     encode_bytes_inj x2 y2
   | PkEnc x1 x2 x3, PkEnc y1 y2 y3
