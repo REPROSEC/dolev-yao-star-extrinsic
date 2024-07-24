@@ -1,11 +1,12 @@
 module DY.Core.Trace.State.Aux
 
+open FStar.List.Tot
+
 open DY.Core.Bytes.Type
 open DY.Core.Bytes
 open DY.Core.Label.Type
 open DY.Core.Trace.Type
 
-module L = FStar.List.Tot
 module List = FStar.List.Tot.Base
 
 /// This module defines helper functions for state handling on traces.
@@ -339,7 +340,6 @@ let no_set_state_entry_for_suffixes_transitive p sid tr1 tr2 tr3 =
   suffix_after_concat tr1 tr2 tr3;
   no_set_state_entry_for_concat p sid (tr2 `suffix_after` tr1) (tr3 `suffix_after` tr2)
 
-#push-options "--fuel 2"
 
 /// the main property:
 /// if there are no more state entries,

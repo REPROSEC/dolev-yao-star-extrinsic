@@ -113,165 +113,6 @@ instance protocol_invariants_p: protocol_invariants = {
   }
 }
 
-// let rec full_state_event_exists (tr:trace) (p:principal) :
-//   Lemma
-//   (requires Some? (get_full_state p tr)
-//   )
-//   (ensures exists sid cont. event_exists tr (SetState p sid cont)
-//   )
-// = match tr with
-//   | Snoc init (SetState p' sid' cont) -> 
-//       if p' = p
-//         then ()
-//         else full_state_event_exists init p
-//   | Snoc init _ -> full_state_event_exists init p
-
-// let rec full_state_event_exists_i (tr:trace) (p:principal) (i:nat) :
-//   Lemma
-//   (requires 
-//     Some? (get_full_state p tr)
-//     /\ (let Some full_st = get_full_state p tr in
-//        i < List.length full_st
-//       )
-//   )
-//   (ensures (
-//   let Some full_st = get_full_state p tr in
-//   let (sid_i, _) = List.index full_st i in
-//   exists cont. event_exists tr (SetState p sid_i cont)
-//   )
-//   )
-// = let Some full_st = get_full_state p tr in
-//   let (sid_i, cont_i) = List.index full_st i in
-//   let sids = List.map fst full_st in
-//   match tr with
-//   | Snoc init (SetState p' sid' cont) -> 
-//       if p' = p
-//         then (
-//          assume(forall curr_state. sid' `List.mem` (List.map fst (append_to curr_state sid' cont))); 
-//           assert(sid' `List.mem` sids );
-//           admit()
-//           )
-//         else full_state_event_exists_i init p i
-//   | Snoc init _ -> full_state_event_exists_i init p i
-
-let tail_is_subset (#a:eqtype) (x:a) (tl:list a) :
-  Lemma 
-  ( let xs = x :: tl in
-    tl `List.subset` xs
-  )
-  = FStar.List.Tot.Properties.mem_subset tl (x :: tl)
-
-let get_full_state_aux_step_subset (tr:trace) (p:principal) (curr_state: full_state_raw) (ev:trace_event{event_exists tr ev}):
-  Lemma
-  (curr_state `List.subset` get_full_state_aux_step p tr curr_state ev
-  )
-= match ev with
-  | (SetState p' sid' cont') -> (
-      if p' = p  
-      then (
-          if sid' `List.mem` (List.map fst curr_state)
-          then ()
-          else (
-            state_was_set_get_session_some p sid' cont' tr;
-            let Some sess = get_session p sid' tr in
-            let new_state = (sid', sess) :: curr_state in
-            FStar.List.Tot.Properties.mem_subset curr_state ((sid', sess) :: curr_state)
-          )
-      )
-      else ()
-  )
-  | _ ->  () 
-
-
-
-// let rec get_full_state_on_grows (tr1:trace) (tr2:trace{tr1 <$ tr2}) (p:principal):
-//   Lemma
-//   (requires
-//     Some? (get_full_state p tr1)
-//   )
-//   (ensures
-//     Some? (get_full_state p tr2)
-//   )
-//   = 
-//   reveal_opaque (`%grows) grows; 
-//   norm_spec [zeta; delta_only [`%prefix]] (prefix);
-//   match tr2 with
-//   | Nil -> assert(Nil? tr1)
-//   | Snoc init (SetState p' sid' cont') ->
-//       if Trace.length tr1 = Trace.length tr2
-//         then ()
-//         else (
-//           if p' = p
-//           then  admit()
-//           else get_full_state_on_grows tr1 init p
-//         )
-//   | Snoc init _ -> (
-//       if Trace.length tr1 = Trace.length tr2
-//         then ()
-//         else get_full_state_on_grows tr1 init p
-//     )
-
-let get_full_state_aux_step_state_was_set (p:principal) (sid:state_id) (cont:bytes) (tr:trace) (curr_state:full_state_raw) (ev:trace_event{event_exists tr ev}) :
-  Lemma(
-    requires ev = SetState p sid cont //state_was_set tr p sid cont
-  )
-  (ensures
-      sid `List.mem` (List.map fst (get_full_state_aux_step p tr curr_state ev) )
-  )
-=  ()
-
-
-
-// let rec get_full_state_aux_step_state_was_set_ (p:principal) (sid:state_id) (cont:bytes) (tr:trace) :
-//   Lemma(
-//     requires state_was_set tr p sid cont
-//   )
-//   (ensures
-//       sid `List.mem` (List.map fst (get_full_state_aux p tr) )
-//   )
-// =  match tr with
-// | Nil -> ()
-// | Snoc init last ->
-//     match last with
-//     | SetState p' sid' cont' -> admit()
-//     | _ -> get_full_state_aux_step_state_was_set_ p sid cont init; 
-//         assert(get_full_state_aux p tr = get_full_state_aux_step p tr ( get_full_state_aux p init ) last)
-
-let append_subset (#a:eqtype) (xs:list a) (ys: list a):
-  Lemma (
-    xs `List.subset` (xs @ ys)
-    /\ ys `List.subset` (xs @ ys)
-    )
-  = FStar.List.Tot.Properties.append_mem_forall xs ys
-
-let concatMap_subset_tail (#a #b:eqtype) (f: a -> list b) (xs: list a{Cons? xs}):
-  Lemma(
-    let hd::tl = xs in
-    List.concatMap f tl `List.subset` List.concatMap f xs
-  )
-  =
-  let hd::tl = xs in 
-  assert(List.concatMap f xs = f hd @ List.concatMap f tl);
-  append_subset (f hd) (List.concatMap f tl)
-
-let rec mem_concatMap (#a #b:eqtype) (f: a -> list b) (xs: list a) (x:a):
-  Lemma 
-  (requires
-    x `List.mem` xs /\
-    ~(List.isEmpty (f x) )
-  )
-  (ensures 
-   f x `List.subset` List.concatMap f xs 
-  ) 
-  = match xs with
-  | [] -> ()
-  | hd :: tl -> 
-       if hd = x
-       then append_subset (f hd) (List.concatMap f tl)
-       else 
-         mem_concatMap f tl x;
-         concatMap_subset_tail f xs
-
 let rec zero_to_sid_mem (bound:state_id) (x :state_id{x.the_id <= bound.the_id}):
   Lemma ( ensures
     x `List.mem` (zero_to_sid bound)
@@ -312,18 +153,6 @@ let rec compute_new_session_id_same (p:principal) (tr1 tr2:trace) :
            compute_new_session_id_same p tr1 init
     )
 
-
-let rec concatMap_equals (#a #b:eqtype) (f g: a -> list b) (xs : list a) :
-  Lemma (
-  requires
-    forall x. x `List.mem` xs ==> f x = g x
-  )
-  (ensures
-    List.concatMap f xs = List.concatMap g xs
-  )
-  = match xs with
-  | [] -> ()
-  | hd :: tl -> concatMap_equals f g tl
 
 let rec choose_equals (#a #b:eqtype) (f g: a -> option b) (xs: list a):
   Lemma 
@@ -423,30 +252,6 @@ let rec state_was_set_full_state (tr:trace) (p:principal) (sid:state_id) (cont:b
      state_was_set_full_state init p sid cont
 
 
-// val full_state_state_was_set_lemma:
-//   (tr:trace) -> (p:principal) -> (i:nat) ->
-//   Lemma
-//   (requires
-//       Some? (get_full_state p tr)
-//     /\ i < List.length (Some?.v (get_full_state p tr))
-//   )
-//   (ensures (
-//      let Some full_st = get_full_state p tr in
-//      let (sid_i, sess_i) = List.index full_st i in
-//      exists c. state_was_set tr p sid_i c
-//       )
-//   )
-// let rec full_state_state_was_set_lemma tr p i =
-//   let Some full_st = get_full_state p tr in
-//   let (sid_i, sess_i) = List.index full_st i in
-
-//   let next_sid = compute_new_session_id p tr in
-//   let f = get_session_list tr p in
-//   let sids = zero_to_sid next_sid in
-
-
-//   admit()
- 
 let rec mem_choose_elim (#a #b:eqtype) (f: a -> option b) (xs : list a) (y : b)
   : Lemma
   (ensures (
@@ -591,7 +396,7 @@ let get_state_appears_in_full_state  tr p sid =
             mem_index full_state (sid, Snoc init state)
           );
           // assert(exists i init . List.index full_state i = (sid, Snoc init state))
-          admit()
+          admit() /// ??? WHY ??? the above assert works fine...
           )
           )
 
@@ -842,7 +647,7 @@ let suff_after_before_event_is_suff_at_event (tr:trace) (ev:trace_event{event_ex
     suffix_after_concat_ tr_before (prepend ev tr_after)
     
 
-#push-options "--z3rlimit 50 --z3cliopt 'smt.qi.eager_threshold=100'"
+#push-options "--z3rlimit 25 --z3cliopt 'smt.qi.eager_threshold=100'"
 val next_full_state_pred:
   tr:trace -> p:principal -> sid:state_id ->
   Lemma 
