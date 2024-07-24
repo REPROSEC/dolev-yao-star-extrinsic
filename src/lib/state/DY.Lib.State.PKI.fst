@@ -60,10 +60,10 @@ val is_public_key_for:
 let is_public_key_for #cinvs tr pk pk_type who =
   match pk_type with
   | PkEnc usg -> (
-    is_encryption_key usg (principal_label who) tr pk
+    is_encryption_key (PkKey usg empty) (principal_label who) tr pk
   )
   | Verify usg -> (
-    is_verification_key usg (principal_label who) tr pk
+    is_verification_key (SigKey usg empty) (principal_label who) tr pk
   )
 
 // The `#_` at the end is a workaround for FStarLang/FStar#3286
