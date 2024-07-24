@@ -5,6 +5,7 @@ open DY.Core.Bytes
 open DY.Core.Label.Type
 open DY.Core.Trace.Type
 
+module L = FStar.List.Tot
 module List = FStar.List.Tot.Base
 
 /// This module defines helper functions for state handling on traces.
@@ -102,148 +103,6 @@ let _ =
 
 /// Helper function for `get_full_state`
 
-val prepend: #a:Type -> x:a -> rev_list a -> rev_list a
-let rec prepend x xs =
-  match xs with
-  | Nil -> Snoc Nil x
-  | Snoc init last -> Snoc (prepend x init) last
-
-let _ =
-  let xs = Snoc (Snoc Nil 1) 2 in
-  assert( 5 `prepend` xs = Snoc (Snoc (Snoc Nil 5) 1) 2)
-
-val prepend_to: #a:eqtype -> #b:Type -> list (a * rev_list b) -> a -> b -> list (a * rev_list b)
-let prepend_to xys key elem =
-  let (key_elems,rest) = FStar.List.Tot.Base.partition (fun (x, _) -> x = key) xys in
-  let new_key_elems = 
-    match key_elems with
-    | [] -> Snoc Nil elem
-    | Cons (k,elems) _ -> elem `prepend` elems
-    in
-  (key, new_key_elems) :: rest // re-ordering shouldn't matter, since key is attached to elements
-
-let _ = 
-  let xs = [(1, Snoc Nil 5); (5, Nil)] in
-  assert(prepend_to xs 5 7 = [(5, Snoc Nil 7); (1, Snoc Nil 5)]);
-  assert(prepend_to xs 1 7 = [(1, Snoc (Snoc Nil 7) 5); (5,  Nil)]);
-  assert(prepend_to xs 3 7 = [(3, Snoc Nil 7); (1, Snoc Nil 5); (5, Nil)])
-
-
-val get_full_state_aux_: principal -> trace -> full_state_raw -> full_state_raw
-let rec get_full_state_aux_ prin tr curr_state =
-  match tr with
-  | Nil -> curr_state
-  | Snoc init (SetState p' sid' content) ->
-      if p' = prin 
-        then begin
-          let new_state = prepend_to curr_state sid' content in
-          get_full_state_aux_ prin init new_state
-        end
-        else get_full_state_aux_ prin init curr_state
-  | Snoc init _ -> get_full_state_aux_ prin init curr_state
-
-val get_full_state_: principal -> trace -> option full_state_raw
-let get_full_state_ prin tr = 
-  let next_state_id = compute_new_session_id prin tr in
-  if next_state_id.the_id = 0
-    then None
-    else begin
-      let full_state_init = [] in
-      match get_full_state_aux_ prin tr full_state_init with
-      | [] -> None
-      | fst -> Some fst
-    end
-
-val fold_right_reverse_list:
-  ('a -> 'b -> Tot 'b) -> xs:rev_list 'a -> 'b -> Tot 'b (decreases xs)
-let rec fold_right_reverse_list f xs y =
-  match xs with 
-  | Nil -> y
-  | Snoc init x -> f x (fold_right_reverse_list f init y) // fold_right_reverse_list f (f y x) init
-
-#push-options "--fuel 4"
-let _ =
-  let xs = Snoc (Snoc Nil 3) 5 in
-  assert(fold_right_reverse_list (+) xs 0 = 8);
-  assert(fold_right_reverse_list (Cons) xs [] = [5;3]);
-  // let ys = Nil in
-  // assert(fold_right_reverse_list (fun next old -> next ^ old) "begin" ys = "begin");
-  // let ys' = Snoc Nil "a" in
-  // assert(fold_right_reverse_list (^) ys' "begin" = "abegin");
-  ()
-
-let rec state_was_set_get_session_some (p:principal) (sid:state_id) (cont:bytes) (tr:trace) :
-  Lemma 
-  (requires
-    state_was_set tr p sid cont
-  )
-  (ensures
-    Some? (get_session p sid tr)
-  )
-  //[SMTPat (state_was_set tr p sid cont)]
-  = 
-    match tr with
-    | Nil -> ()
-    | Snoc init (SetState p' sid' cont') -> 
-        if p' = p && sid' = sid
-          then ()
-          else state_was_set_get_session_some p sid cont init
-    | Snoc init _ -> state_was_set_get_session_some p sid cont init
-  
-// this is not the most efficient way to collect the full state
-// (since it goes through the trace for every new session id)
-// but this way makes it easier to prove relations of get_full_state and get_session
-val get_full_state_aux_step: principal -> tr:trace  -> full_state_raw -> ev:trace_event{event_exists tr ev} -> full_state_raw
-let get_full_state_aux_step prin tr curr_state ev =
-  match ev with
-  | (SetState p' sid' content) ->
-      if p' = prin  
-        then begin
-          if sid' `List.mem` (List.map fst curr_state)
-            then curr_state
-            else begin 
-              state_was_set_get_session_some prin sid' content tr;
-              let Some sess = get_session prin sid' tr in
-              let new_state = (sid', sess) :: curr_state in
-              new_state
-            end
-        end
-        else curr_state
-  | _ -> curr_state
-
-
-val get_full_state_aux: principal -> trace -> full_state_raw
-let get_full_state_aux prin tr =
-  assume(has_type tr (rev_list (ev:trace_event {event_exists tr ev})));
-  fold_right_reverse_list (fun ev curr_state -> get_full_state_aux_step prin tr curr_state ev) tr []
-//   match tr with
-//   | Nil -> curr_state
-//   | Snoc init (SetState p' sid' content) ->
-//       if p' = prin  
-//         then begin
-//           if sid' `List.mem` (List.map fst curr_state)
-//             then get_full_state_aux prin init curr_state
-//             else begin 
-//               let Some sess = get_session prin sid' tr in
-//               let new_state = (sid', sess) :: curr_state in
-//               get_full_state_aux prin init new_state
-//             end
-//         end
-//         else get_full_state_aux prin init curr_state
-//   | Snoc init _ -> get_full_state_aux prin init curr_state
-
-
-// val get_full_state: principal -> trace -> option full_state_raw
-// let get_full_state prin tr = 
-//       match get_full_state_aux prin tr with
-//       | [] -> None
-//       | fst -> Some fst
-
-let rec one_to (n:nat{n >= 1}) :list nat = 
-  if n = 1
-  then [1]
-  else (one_to (n-1)) @ [n]
-
 let rec zero_to_sid (sid:state_id) : 
   Tot (list state_id ) 
   (decreases (sid.the_id))
@@ -252,27 +111,25 @@ let rec zero_to_sid (sid:state_id) :
   then [{the_id = 0}]
   else (zero_to_sid {the_id = sid.the_id - 1}) @ [sid]
 
-let get_session_list (tr:trace) (prin:principal) (sid:state_id) =
-  let session = get_session prin sid tr in
-        if Some? session
-        then [(sid,Some?.v session)]
-        else []
+let get_session_indexed (tr:trace) (prin:principal) (sid:state_id) =
+  match get_session prin sid tr with
+  | None -> None
+  | Some sess -> Some (sid, sess)
 
+// this is not the most efficient way to collect the full state
+// (since it goes through the whole trace for every session id)
+// but this way makes it easier to prove relations of get_full_state and get_session
 val get_full_state: principal -> trace -> option full_state_raw
 let get_full_state prin tr = 
   let new_sessid = compute_new_session_id prin tr in
   if new_sessid.the_id = 0
   then None
-  else (
-    // let sessions = List.concatMap 
-    //   (fun sid -> (
-    //     get_session_list tr prin sid)) 
-    //   (zero_to_sid new_sessid) in
-    Some (List.concatMap 
-      (get_session_list tr prin) 
-      (zero_to_sid new_sessid))
-  )
-
+  else
+    Some (List.choose 
+      (get_session_indexed tr prin) 
+      (zero_to_sid new_sessid)
+    )
+    
 // tests for `get_full_state`
 let _ =
   let p = "a" in
@@ -283,16 +140,8 @@ let _ =
   let tr = Snoc ( Snoc (Snoc Nil (SetState p sid1 b)) (SetState p sid2 b) ) (SetState p sid1 b1) in
   assert(get_session p sid1 tr =  Some (Snoc (Snoc Nil b) b1));
   assert(get_session p sid2 tr = Some (Snoc Nil b));
-  assert(compute_new_session_id p tr = {the_id = 3});
-  assert(zero_to_sid {the_id = 3} = [ {the_id = 0}; sid1; sid2; {the_id = 3} ]);
-//  assert(None? (get_session p {the_id = 0} tr));
-//  assert(None? (get_session p {the_id = 3} tr));
-  assert((List.concatMap (get_session_list tr p) [sid1; sid2])
-  = [(sid1, Snoc (Snoc Nil b) b1); (sid2, Snoc Nil b) ]
-  );
-  // assert((List.concatMap (get_session_list tr p) [{the_id = 0}; sid1; sid2; {the_id = 3}])
-  // = [(sid1, Snoc (Snoc Nil b) b1); (sid2, Snoc Nil b) ]
-  // );
+  
+  normalize_term_spec (List.choose #state_id #(state_id* session_raw));
   assert(get_full_state p tr = Some [(sid1, Snoc (Snoc Nil b) b1); (sid2, Snoc Nil b); ]);
   assert(None? (get_full_state "b" tr))
 
