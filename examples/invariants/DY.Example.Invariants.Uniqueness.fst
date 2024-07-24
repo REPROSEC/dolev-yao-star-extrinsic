@@ -201,14 +201,19 @@ let get_full_state_on_growing_traces (p:principal) (tr1 tr2:trace) (sid:state_id
   )
   = admit()
 
-let mem_choose (#a #b:eqtype) (f: a -> option b) (xs : list a) (x:a):
+let rec mem_choose (#a #b:eqtype) (f: a -> option b) (xs : list a) (x:a):
   Lemma
   (requires 
      x `List.mem` xs /\ Some? (f x)
   )
   (ensures Some?.v (f x) `List.mem` (List.choose f xs)
   )
-  = admit()
+  = match xs with
+  | [] -> ()
+  | hd :: tl ->
+      if hd = x
+      then ()
+      else mem_choose f tl x 
 
 let rec state_was_set_full_state (tr:trace) (p:principal) (sid:state_id) (cont:bytes):
   Lemma
@@ -329,11 +334,31 @@ let parse_full_state_lemma tr p i =
             end
       end 
 
-let mem_index (#a:eqtype) (xs: list a) (x:a):
+let rec mem_index (#a:eqtype) (xs: list a) (x:a):
   Lemma
-  ( x `List.mem` xs ==> (exists i. x = List.index xs i)
+  (requires
+    x `List.mem` xs
   )
-  = admit()
+  (ensures (exists i. x = List.index xs i)
+  )
+  = match xs with
+  | [] -> ()
+  | hd :: tl -> 
+    if hd = x 
+    then (
+      introduce exists i. x = List.index xs i
+      with 0
+      and ()
+    )
+    else ( 
+      mem_index tl x;
+      eliminate exists i. x = List.index tl i
+      returns (exists i. x = List.index xs i)
+      with _ .
+      ( introduce exists i. x = List.index xs i
+        with (i+1) and ()
+      )
+    )
 
 val get_state_appears_in_full_state_ :
   tr:trace -> p:principal -> sid:state_id ->
