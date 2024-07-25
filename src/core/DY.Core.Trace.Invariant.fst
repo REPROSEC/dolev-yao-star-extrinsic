@@ -4,6 +4,7 @@ open DY.Core.Trace.State.Aux
 open DY.Core.Bytes.Type
 open DY.Core.Bytes
 open DY.Core.Label.Type
+include DY.Core.Trace.PrefixSuffix
 module L = DY.Core.Label
 open DY.Core.Trace.Type
 

@@ -219,6 +219,11 @@ let init_is_prefix tr =
     reveal_opaque (`%grows) (grows);
     norm_spec [zeta; delta_only [`%prefix]] (prefix)
 
+let nil_grows (tr:trace):
+  Lemma (Nil <$ tr)
+  [SMTPat (Nil <$ tr)]
+  = reveal_opaque (`%grows) grows
+
 
 /// concatenation of traces  
 let rec trace_concat tr1 tr2 =
@@ -294,6 +299,19 @@ let rec event_at_grows tr1 tr2 i e =
     event_at_grows tr1 tr2_init i e
   )
 
+
+let last_event_exists (tr:trace):
+  Lemma
+  (requires Snoc? tr
+  )
+  (ensures (
+     let Snoc _ ev = tr in
+     event_exists tr ev
+     )
+  )
+  [SMTPat (Snoc? tr)]
+  = let Snoc _ ev = tr in
+    assert(event_at tr (length tr - 1) ev)
 
 /// given an event on a trace, we often need the trace up until right before that entry
 

@@ -10,8 +10,9 @@ module List = FStar.List.Tot.Base
 
 /// Experimenting with the new state invariants for sessions and full states
 
+[@@with_bytes bytes]
 type p_state =
- | S: idn:nat -> ctr: nat -> p_state
+ | S: idn:bytes -> ctr: nat -> p_state
 
 %splice [ps_p_state] (gen_parser (`p_state))
 %splice [ps_p_state_is_well_formed] (gen_is_well_formed_lemma (`p_state))
@@ -55,8 +56,12 @@ instance parseable_serializeable_bytes_p_event: parseable_serializeable bytes p_
 //     | [] -> 0
 //     | (_,sess)::rest -> max_nat (find_max_id_in_session sess) (find_curr_max_id rest)
 
-val new_idn: principal -> traceful nat
-let new_idn prin = return 7
+val new_idn: principal -> traceful bytes
+let new_idn prin = 
+  //return (from_nat 4 7)
+  mk_rand NoUsage public 4
+
+
 // let new_idn prin =
 //   let* tr = get_trace in
 //   let opt_fst = get_full_state prin tr in
@@ -103,10 +108,13 @@ let p_state_pred: state_predicate p_cinvs = {
     pred = (fun tr p sid cont -> is_knowable_by #p_cinvs (principal_state_label p sid) tr cont)
   ; session_pred = (fun tr sess prin sid cont -> 
       match sess with
-      | Nil -> True // session is empty -> delegate to (single state) pred (no restriction here)
-      // this delegation should probably be enforced, 
-      // so that we have the lemma
-      // "pred tr p sid cont ==> session_pred tr Nil p sid cont"
+      | Nil -> (
+            match parse p_state cont with
+            | None -> False
+            | Some (S idn ctr) -> 
+                   0 < DY.Core.Trace.Type.length tr /\
+                   (exists ts. rand_generated_at tr ts idn)
+      )
       | Snoc init last -> (
           match (parse p_state last, parse p_state cont) with
           | (None,_) -> False
@@ -162,6 +170,7 @@ let next_invariant tr p sid =
           let next_state = S idn (c+1) in
           let next_state_b = serialize p_state next_state in
           let (_,tr_after_next_state) = set_state p sid next_state_b tr_after_msg in
+          parse_wf_lemma #bytes p_state #_ (is_knowable_by (principal_state_label p sid) tr) st_b;
           serialize_wf_lemma p_state (is_knowable_by (principal_state_label p sid) tr) next_state;
           // assert(trace_invariant tr_after_next_state);
 
@@ -183,7 +192,8 @@ let next_invariant tr p sid =
                let other_state = S other_idn (other_c + 1) in
                let other_state_b = serialize p_state other_state in
                let (_, tr_after_other_session) = set_state p other_sid other_state_b tr_after_event in
-               serialize_wf_lemma p_state (is_knowable_by (principal_state_label p other_sid) tr) other_state;
+               parse_wf_lemma #bytes p_state #_ (is_knowable_by (principal_state_label p other_sid) tr_after_event) ost_b;
+               serialize_wf_lemma p_state (is_knowable_by (principal_state_label p other_sid) tr_after_event) other_state;
 
 //               set_state_sets_no_state_for_others p other_sid other_state_b tr_after_event;
                get_session_aux_same p sid tr_after_event tr_after_other_session;
@@ -192,4 +202,48 @@ let next_invariant tr p sid =
             end
         )
     )
+#pop-options
+
+
+#push-options "--z3rlimit 25 --z3cliopt 'smt.qi.eager_threshold=100'"
+val session_pred_implies_idn_unique:
+  tr:trace -> p:principal -> sid:state_id -> sid':state_id{sid <> sid'} ->
+  Lemma
+    (requires (
+        trace_invariant tr
+      )
+    )
+  (ensures (
+    let (state, _) = get_state p sid tr in
+    let (state', _) = get_state p sid' tr in
+    match (state, state') with
+    | (None, _ ) -> True
+    | (_, None) -> True
+    | (Some state, Some state') ->
+              match (parse p_state state, parse p_state state') with
+              | (None, _) ->  True
+              | (_, None) -> True
+              | (Some (S idn ctr), Some (S idn' ctr')) -> idn <> idn'
+     )
+  )
+let session_pred_implies_idn_unique tr p sid sid' = 
+    let (state, _) = get_state p sid tr in
+    let (state', _) = get_state p sid' tr in
+    match (state, state') with
+    | (None, _ ) -> ()
+    | (_, None) -> ()
+    | (Some state, Some state') ->
+              match (parse p_state state, parse p_state state') with
+              | (None, _) ->  ()
+              | (_, None) -> ()
+              | (Some (S idn ctr), Some (S idn' ctr')) -> 
+                      
+                      let tr_before_state = (prefix_before_event tr (SetState p sid state)) in
+                      assert(global_state_pred #protocol_invariants_p tr_before_state p sid state );
+                      let sess = get_session p sid (prefix_before_event tr (SetState p sid state)) in
+                      assert(session_pred_ #p_cinvs #p_state_pred (prefix_before_event tr (SetState p sid state)) sess p sid state );
+                      get_state_is_last_of_get_session p sid tr_before_state;
+                      assert(exists ts. rand_generated_at tr_before_state ts idn);
+                      admit()
+
 #pop-options

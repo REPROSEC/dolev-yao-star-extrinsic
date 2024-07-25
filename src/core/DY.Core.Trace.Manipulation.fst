@@ -413,7 +413,8 @@ val get_state_is_last_of_get_session:
       let (opt_state, _) = get_state p sid tr in
       match opt_state with
       | None -> None? opt_session
-      | Some st -> Some? opt_session /\ Snoc? (Some?.v opt_session) /\ (let Some (Snoc _ last) = opt_session in st = last)
+      | Some st -> 
+          Some? opt_session /\ Snoc? (Some?.v opt_session) /\ (let Some (Snoc _ last) = opt_session in st = last)
     )
     )
     [SMTPat (get_session p sid tr); SMTPat (get_state p sid tr)]

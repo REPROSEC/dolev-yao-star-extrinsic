@@ -108,10 +108,14 @@ include DY.Core.Attacker.Knowledge
 include DY.Core.Label
 include DY.Core.Label.Type
 include DY.Core.Label.Derived
+include DY.Core.List
+include DY.Core.Trace.PrefixSuffix
 include DY.Core.Trace.State.Aux
+include DY.Core.Trace.State.Properties
 include DY.Core.Trace.Invariant
 include DY.Core.Trace.Manipulation
 include DY.Core.Trace.Type
+
 // include Bytes after Trace because of shadowing `length` function
 include DY.Core.Bytes
 include DY.Core.Bytes.Type

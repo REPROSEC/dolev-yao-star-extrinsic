@@ -23,12 +23,18 @@ let _ =
 
 val suffix_after_event:
   ev:trace_event -> tr:trace{event_exists tr ev} -> trace
-let rec suffix_after_event the_ev tr =
-  match tr with
-  | Snoc init ev ->
-      if ev <> the_ev 
-        then Snoc (suffix_after_event the_ev init) ev
-        else Nil
+// let rec suffix_after_event the_ev tr =
+//   match tr with
+//   | Snoc init ev ->
+//       if ev <> the_ev 
+//         then Snoc (suffix_after_event the_ev init) ev
+//         else Nil
+
+let suffix_after_event ev tr =
+  prefix_before_event_is_prefix tr ev;
+  tr `suffix_after` (Snoc (prefix_before_event tr ev) ev)
+
+
 
 let _ =
   let ev1 = MsgSent (BT.Literal FStar.Seq.Base.empty) in

@@ -6,6 +6,8 @@ open DY.Core.Bytes.Type
 open DY.Core.Bytes
 open DY.Core.Label.Type
 open DY.Core.Trace.Type
+open DY.Core.Trace.PrefixSuffix
+
 
 module List = FStar.List.Tot.Base
 
@@ -254,77 +256,6 @@ let rec no_set_state_entry_for_concat p sid tr1 tr2 =
     assert(event_exists tr2 ev2);
     no_set_state_entry_for_prefix p sid init2 tr2;
     no_set_state_entry_for_concat p sid tr1 init2
-#pop-options
-
-/// definition of "trace substraction"
-/// (it holds: tr2 = tr1 ++ tr2 `suffix_after` tr1)
-
-val suffix_after: tr2:trace -> tr1:trace{tr1 <$ tr2} -> trace
-let rec suffix_after tr2 tr1 = 
-  match tr2 with
-  | Nil -> Nil
-  | Snoc init ev -> 
-      if length tr2 = length tr1
-        then Nil
-        else begin 
-             reveal_opaque (`%grows) grows; 
-             norm_spec [zeta; delta_only [`%prefix]] (prefix);
-             Snoc (suffix_after init tr1) ev
-         end
-
-val suffix_after_splits_trace:
-  tr2:trace -> tr1:trace{tr1 <$ tr2} ->
-  Lemma (tr2 = tr1 `trace_concat` (tr2 `suffix_after` tr1))
-let rec suffix_after_splits_trace tr2 tr1 =
-  reveal_opaque (`%grows) grows; 
-  norm_spec [zeta; delta_only [`%prefix]] (prefix);
-  match tr2 with
-  | Nil -> ()
-  | Snoc init ev -> 
-         if length tr1 = length tr2 
-           then ()
-           else suffix_after_splits_trace init tr1
-
-/// for traces with tr1 <$ tr2 <$ tr3,
-/// the suffix after tr1 on tr2
-/// is a prefix of
-/// the suffix after tr1 on tr3
-
-val suffix_after_for_prefix: 
-  tr3:trace -> tr2:trace {tr2 <$ tr3} -> tr1:trace {tr1 <$ tr2} ->
-  Lemma 
-    (tr2 `suffix_after` tr1 <$ tr3 `suffix_after` tr1)
-let rec suffix_after_for_prefix tr3 tr2 tr1 = 
-  reveal_opaque (`%grows) grows; 
-  norm_spec [zeta; delta_only [`%prefix]] (prefix);
-  if length tr3 = length tr2 || length tr2 = length tr1
-    then ()
-    else begin
-      match tr3 with
-      | Nil -> ()
-      | Snoc init ev -> suffix_after_for_prefix init tr2 tr1
-    end
-
-
-  
-/// for traces with tr1 <$ tr2 <$ tr3,
-/// the suffix after tr1 on tr3
-/// is the concat of the two pairwise suffixes
-#push-options "--fuel 2"
-val suffix_after_concat:
-  tr1:trace -> tr2:trace {tr1 <$ tr2} -> tr3:trace{tr2 <$ tr3} ->
-  Lemma
-  ( tr3 `suffix_after` tr1 == (tr2 `suffix_after` tr1) `trace_concat` (tr3 `suffix_after` tr2)
-  )
-let rec suffix_after_concat tr1 tr2 tr3 =     
-  reveal_opaque (`%grows) (grows);
-  norm_spec [zeta; delta_only [`%prefix]] (prefix);
-  match tr3 with
-  | Nil -> ()
-  | Snoc init ev -> 
-      if length tr2 = length tr3
-        then ()
-        else suffix_after_concat tr1 tr2 init
 #pop-options
 
 /// transitivity of `no_set_state_entry_for` on suffixes of growing traces
