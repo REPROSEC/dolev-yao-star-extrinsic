@@ -80,6 +80,7 @@ let compile_event_pred #a #ev epred tr prin content_bytes =
   | None -> False
   | Some(content) -> epred tr prin content
 
+[@@ "opaque_to_smt"]
 val has_compiled_event_pred:
   protocol_invariants -> (string & compiled_event_predicate) -> prop
 let has_compiled_event_pred invs (tag, epred) =
@@ -104,6 +105,7 @@ val mk_event_pred_correct: invs:protocol_invariants -> tagged_local_preds:list (
   )
   (ensures for_allP (has_compiled_event_pred invs) tagged_local_preds)
 let mk_event_pred_correct invs tagged_local_preds =
+  reveal_opaque (`%has_compiled_event_pred) (has_compiled_event_pred);
   no_repeats_p_implies_for_all_pairsP_unequal (List.Tot.map fst tagged_local_preds);
   for_allP_eq (has_compiled_event_pred invs) tagged_local_preds;
   FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (mk_global_fun_correct split_event_pred_params tagged_local_preds))
@@ -153,6 +155,7 @@ val trigger_event_trace_invariant:
    SMTPat (has_event_pred invs epred);
    SMTPat (trace_invariant tr)]
 let trigger_event_trace_invariant #invs #a #ev epred prin e tr =
+  reveal_opaque (`%has_compiled_event_pred) (has_compiled_event_pred);
   reveal_opaque (`%trigger_event) (trigger_event #a);
   reveal_opaque (`%event_triggered_at) (event_triggered_at #a);
   local_eq_global_lemma split_event_pred_params event_pred ev.tag (compile_event_pred epred) (tr, prin, ev.tag, serialize _ e) ev.tag (tr, prin, serialize _ e)
@@ -174,6 +177,7 @@ val event_triggered_at_implies_pred:
    SMTPat (trace_invariant tr);
   ]
 let event_triggered_at_implies_pred #invs #a #ev epred tr i prin e =
+  reveal_opaque (`%has_compiled_event_pred) (has_compiled_event_pred);
   reveal_opaque (`%event_triggered_at) (event_triggered_at #a);
   local_eq_global_lemma split_event_pred_params event_pred ev.tag (compile_event_pred epred) ((prefix tr i), prin, ev.tag, serialize _ e) ev.tag ((prefix tr i), prin, serialize _ e)
 

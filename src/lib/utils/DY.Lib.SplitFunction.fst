@@ -114,12 +114,28 @@ noeq type split_function_parameters = {
 /// This will be a crucial precondition for the correctness theorem `local_eq_global_lemma`.
 
 val has_local_fun: params:split_function_parameters -> params.global_fun_t -> (params.tag_set_t & params.local_fun_t) -> prop
-let has_local_fun params global_fun (tag_set, tagged_local_fun) =
+let has_local_fun params global_fun (tag_set, local_fun) =
   forall tagged_data.
     match params.decode_tagged_data tagged_data with
     | Some (tag, raw_data) ->
-      tag `params.tag_belong_to` tag_set ==> (params.apply_global_fun global_fun tagged_data == params.apply_local_fun tagged_local_fun raw_data)
+      tag `params.tag_belong_to` tag_set ==> (params.apply_global_fun global_fun tagged_data == params.apply_local_fun local_fun raw_data)
     | None -> True
+
+/// A lemma that may be useful when the `forall` quantification doesn't trigger well
+
+val has_local_fun_elim:
+  params:split_function_parameters ->
+  global_fun:params.global_fun_t -> tag_set:params.tag_set_t -> local_fun:params.local_fun_t ->
+  tagged_data:params.tagged_data_t ->
+  Lemma
+  (requires has_local_fun params global_fun (tag_set, local_fun))
+  (ensures (
+    match params.decode_tagged_data tagged_data with
+    | Some (tag, raw_data) ->
+      tag `params.tag_belong_to` tag_set ==> (params.apply_global_fun global_fun tagged_data == params.apply_local_fun local_fun raw_data)
+    | None -> True
+  ))
+let has_local_fun_elim params global_fun tag_set local_fun tagged_data = ()
 
 /// Returns the first local function associated with a tag set containing `tag`, if it exists.
 /// In practice, only one tag set may contain `tag` because tag sets are mutually disjoint
