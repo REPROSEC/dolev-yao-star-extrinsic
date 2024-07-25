@@ -120,6 +120,9 @@ let get_session_indexed (tr:trace) (prin:principal) (sid:state_id) =
 // this is not the most efficient way to collect the full state
 // (since it goes through the whole trace for every session id)
 // but this way makes it easier to prove relations of get_full_state and get_session
+// (trys to get the session for every session id 
+// smaller than the next (from compute new session)
+// collects those ids and session, where session is Some )
 val get_full_state: principal -> trace -> option full_state_raw
 let get_full_state prin tr = 
   let new_sessid = compute_new_session_id prin tr in
