@@ -32,8 +32,32 @@ let split_sign_predicate_params (cusages:crypto_usages): split_crypto_predicate_
 }
 
 val has_sign_predicate: cinvs:crypto_invariants -> (string & sign_crypto_predicate cinvs.usages) -> prop
-let has_sign_predicate cinvs (tag, pred) =
-  has_local_crypto_predicate (split_sign_predicate_params cinvs.usages) sign_pred.pred (tag, pred)
+let has_sign_predicate cinvs (tag, local_pred) =
+  forall (tr:trace) (vk:bytes) (msg:bytes).
+    {:pattern sign_pred.pred tr vk msg}
+    match get_signkey_usage vk with
+    | SigKey sign_tag _ ->
+        sign_tag = tag ==> sign_pred.pred tr vk msg == local_pred.pred tr vk msg
+    | _ -> True
+
+val intro_has_sign_predicate:
+  cinvs:crypto_invariants -> tagged_local_pred:(string & sign_crypto_predicate cinvs.usages) ->
+  Lemma
+  (requires has_local_crypto_predicate (split_sign_predicate_params cinvs.usages) sign_pred.pred tagged_local_pred)
+  (ensures has_sign_predicate cinvs tagged_local_pred)
+let intro_has_sign_predicate cinvs (tag, local_pred) =
+  introduce
+    forall tr vk msg.
+      match get_signkey_usage vk with
+      | SigKey sign_tag _ ->
+          sign_tag = tag ==> sign_pred.pred tr vk msg == local_pred.pred tr vk msg
+      | _ -> True
+  with (
+    match get_signkey_usage vk with
+    | SigKey sign_tag _ ->
+      has_local_crypto_predicate_elim (split_sign_predicate_params cinvs.usages) cinvs.preds.sign_pred.pred tag local_pred tr vk msg
+    | _ -> ()
+  )
 
 (*** Global sign predicate builder ***)
 
@@ -56,4 +80,5 @@ val mk_sign_predicate_correct:
   (ensures for_allP (has_sign_predicate cinvs) tagged_local_preds)
 let mk_sign_predicate_correct cinvs tagged_local_preds =
   for_allP_eq (has_sign_predicate cinvs) tagged_local_preds;
-  FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (mk_global_crypto_predicate_correct (split_sign_predicate_params cinvs.usages) tagged_local_preds))
+  FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (mk_global_crypto_predicate_correct (split_sign_predicate_params cinvs.usages) tagged_local_preds));
+  FStar.Classical.forall_intro (FStar.Classical.move_requires (intro_has_sign_predicate cinvs))

@@ -32,8 +32,32 @@ let split_pkenc_predicate_params (cusages:crypto_usages): split_crypto_predicate
 }
 
 val has_pkenc_predicate: cinvs:crypto_invariants -> (string & pkenc_crypto_predicate cinvs.usages) -> prop
-let has_pkenc_predicate cinvs (tag, pred) =
-  has_local_crypto_predicate (split_pkenc_predicate_params cinvs.usages) pkenc_pred.pred (tag, pred)
+let has_pkenc_predicate cinvs (tag, local_pred) =
+  forall (tr:trace) (pk:bytes) (msg:bytes).
+    {:pattern pkenc_pred.pred tr pk msg}
+    match get_sk_usage pk with
+    | PkKey pkenc_tag _ ->
+        pkenc_tag = tag ==> pkenc_pred.pred tr pk msg == local_pred.pred tr pk msg
+    | _ -> True
+
+val intro_has_pkenc_predicate:
+  cinvs:crypto_invariants -> tagged_local_pred:(string & pkenc_crypto_predicate cinvs.usages) ->
+  Lemma
+  (requires has_local_crypto_predicate (split_pkenc_predicate_params cinvs.usages) pkenc_pred.pred tagged_local_pred)
+  (ensures has_pkenc_predicate cinvs tagged_local_pred)
+let intro_has_pkenc_predicate cinvs (tag, local_pred) =
+  introduce
+    forall tr pk msg.
+      match get_sk_usage pk with
+      | PkKey pkenc_tag _ ->
+          pkenc_tag = tag ==> pkenc_pred.pred tr pk msg == local_pred.pred tr pk msg
+      | _ -> True
+  with (
+    match get_sk_usage pk with
+    | PkKey pkenc_tag _ ->
+      has_local_crypto_predicate_elim (split_pkenc_predicate_params cinvs.usages) cinvs.preds.pkenc_pred.pred tag local_pred tr pk msg
+    | _ -> ()
+  )
 
 (*** Global pkenc predicate builder ***)
 
@@ -56,4 +80,5 @@ val mk_pkenc_predicate_correct:
   (ensures for_allP (has_pkenc_predicate cinvs) tagged_local_preds)
 let mk_pkenc_predicate_correct cinvs tagged_local_preds =
   for_allP_eq (has_pkenc_predicate cinvs) tagged_local_preds;
-  FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (mk_global_crypto_predicate_correct (split_pkenc_predicate_params cinvs.usages) tagged_local_preds))
+  FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (mk_global_crypto_predicate_correct (split_pkenc_predicate_params cinvs.usages) tagged_local_preds));
+  FStar.Classical.forall_intro (FStar.Classical.move_requires (intro_has_pkenc_predicate cinvs))
