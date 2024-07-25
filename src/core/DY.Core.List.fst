@@ -43,29 +43,3 @@ let rec mem_choose_elim (#a #b:eqtype) (f: a -> option b) (xs : list a) (y : b)
   | [] -> ()
   | hd :: tl -> mem_choose_elim f tl y
 
-
-let rec mem_index (#a:eqtype) (xs: list a) (x:a):
-  Lemma
-  (requires
-    x `List.mem` xs
-  )
-  (ensures (exists i. x = List.index xs i)
-  )
-  = match xs with
-  | [] -> ()
-  | hd :: tl -> 
-    if hd = x 
-    then (
-      introduce exists i. x = List.index xs i
-      with 0
-      and ()
-    )
-    else ( 
-      mem_index tl x;
-      eliminate exists i. x = List.index tl i
-      returns (exists i. x = List.index xs i)
-      with _ .
-      ( introduce exists i. x = List.index xs i
-        with (i+1) and ()
-      )
-    )

@@ -205,45 +205,45 @@ let next_invariant tr p sid =
 #pop-options
 
 
-#push-options "--z3rlimit 25 --z3cliopt 'smt.qi.eager_threshold=100'"
-val session_pred_implies_idn_unique:
-  tr:trace -> p:principal -> sid:state_id -> sid':state_id{sid <> sid'} ->
-  Lemma
-    (requires (
-        trace_invariant tr
-      )
-    )
-  (ensures (
-    let (state, _) = get_state p sid tr in
-    let (state', _) = get_state p sid' tr in
-    match (state, state') with
-    | (None, _ ) -> True
-    | (_, None) -> True
-    | (Some state, Some state') ->
-              match (parse p_state state, parse p_state state') with
-              | (None, _) ->  True
-              | (_, None) -> True
-              | (Some (S idn ctr), Some (S idn' ctr')) -> idn <> idn'
-     )
-  )
-let session_pred_implies_idn_unique tr p sid sid' = 
-    let (state, _) = get_state p sid tr in
-    let (state', _) = get_state p sid' tr in
-    match (state, state') with
-    | (None, _ ) -> ()
-    | (_, None) -> ()
-    | (Some state, Some state') ->
-              match (parse p_state state, parse p_state state') with
-              | (None, _) ->  ()
-              | (_, None) -> ()
-              | (Some (S idn ctr), Some (S idn' ctr')) -> 
+// #push-options "--z3rlimit 25 --z3cliopt 'smt.qi.eager_threshold=100'"
+// val session_pred_implies_idn_unique:
+//   tr:trace -> p:principal -> sid:state_id -> sid':state_id{sid <> sid'} ->
+//   Lemma
+//     (requires (
+//         trace_invariant tr
+//       )
+//     )
+//   (ensures (
+//     let (state, _) = get_state p sid tr in
+//     let (state', _) = get_state p sid' tr in
+//     match (state, state') with
+//     | (None, _ ) -> True
+//     | (_, None) -> True
+//     | (Some state, Some state') ->
+//               match (parse p_state state, parse p_state state') with
+//               | (None, _) ->  True
+//               | (_, None) -> True
+//               | (Some (S idn ctr), Some (S idn' ctr')) -> idn <> idn'
+//      )
+//   )
+// let session_pred_implies_idn_unique tr p sid sid' = 
+//     let (state, _) = get_state p sid tr in
+//     let (state', _) = get_state p sid' tr in
+//     match (state, state') with
+//     | (None, _ ) -> ()
+//     | (_, None) -> ()
+//     | (Some state, Some state') ->
+//               match (parse p_state state, parse p_state state') with
+//               | (None, _) ->  ()
+//               | (_, None) -> ()
+//               | (Some (S idn ctr), Some (S idn' ctr')) -> 
                       
-                      let tr_before_state = (prefix_before_event tr (SetState p sid state)) in
-                      assert(global_state_pred #protocol_invariants_p tr_before_state p sid state );
-                      let sess = get_session p sid (prefix_before_event tr (SetState p sid state)) in
-                      assert(session_pred_ #p_cinvs #p_state_pred (prefix_before_event tr (SetState p sid state)) sess p sid state );
-                      get_state_is_last_of_get_session p sid tr_before_state;
-                      assert(exists ts. rand_generated_at tr_before_state ts idn);
-                      admit()
+//                       let tr_before_state = (prefix_before_event tr (SetState p sid state)) in
+//                       assert(global_state_pred #protocol_invariants_p tr_before_state p sid state );
+//                       let sess = get_session p sid (prefix_before_event tr (SetState p sid state)) in
+//                       assert(session_pred_ #p_cinvs #p_state_pred (prefix_before_event tr (SetState p sid state)) sess p sid state );
+//                       get_state_is_last_of_get_session p sid tr_before_state;
+//                       assert(exists ts. rand_generated_at tr_before_state ts idn);
+//                       admit()
 
-#pop-options
+// #pop-options

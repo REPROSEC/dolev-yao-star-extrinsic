@@ -86,20 +86,22 @@ let p_state_pred: state_predicate p_cinvs = {
       match parse p_state cont with
         | None -> False
         | Some (S the_idn _) -> begin     
-            forall (i:nat{i < List.length full_st_b}). 
-            match List.index full_st_b i with 
-            | (_, Nil) -> True
-            | (sid_i, Snoc init_i last_i) -> begin
-                match parse p_state last_i with
-                | None -> True
-                | Some last_i ->
-                    if sid_i = sid 
-                      then last_i.idn = the_idn
-                      else last_i.idn <> the_idn
-            end
+            // forall (i:nat{i < List.length full_st_b}). 
+            // match List.index full_st_b i with 
+            forall x. x `List.mem` full_st_b ==>
+             ( match x with
+               | (_, Nil) -> True
+               | (sid_i, Snoc init_i last_i) -> begin
+                    match parse p_state last_i with
+                    | None -> True
+                    | Some last_i ->
+                        if sid_i = sid 
+                          then last_i.idn = the_idn
+                          else last_i.idn <> the_idn                      
+                 end
+             )
         end
-      
-  )
+    )
   ; pred_later = (fun t1 t2 p sid cont -> ())
   ; pred_knowable = (fun tr p sid cont -> ())
   ; session_pred_grows = (fun tr1 tr2 sess p sid cont -> ())
@@ -113,7 +115,7 @@ instance protocol_invariants_p: protocol_invariants = {
   }
 }
 
-#push-options "--z3rlimit 50  "//--z3cliopt 'smt.qi.eager_threshold=100'"
+#push-options "--z3rlimit 50 " // --z3cliopt 'smt.qi.eager_threshold=100'"
 val next_full_state_pred:
   tr:trace -> p:principal -> sid:state_id ->
   Lemma 
@@ -159,8 +161,10 @@ let next_full_state_pred tr p sid =
           match (get_full_state p tr_after_msg) with
           | None -> ()
           | Some full_st_b -> begin
-              introduce forall (i:nat{i < List.length full_st_b}). 
-                match List.index full_st_b i with 
+              // introduce forall (i:nat{i < List.length full_st_b}). 
+              //   match List.index full_st_b i with 
+              introduce forall x. x `List.mem` full_st_b ==>
+                (match x with
                 | (_, Nil) -> True
                 | (sid_i, Snoc init_i last_i) -> (
                     match parse p_state last_i with
@@ -170,14 +174,28 @@ let next_full_state_pred tr p sid =
                           then last_i.idn = idn
                           else last_i.idn <> idn
                   )
+                  )
               with begin
-                match List.index full_st_b i with 
+              introduce x `List.mem` full_st_b ==> (match x with
+                | (_, Nil) -> True
+                | (sid_i, Snoc init_i last_i) -> (
+                    match parse p_state last_i with
+                    | None -> True
+                    | Some last_i ->
+                        if sid_i = sid 
+                          then last_i.idn = idn
+                          else last_i.idn <> idn
+                  )
+                  )
+              with _ . begin
+                // match List.index full_st_b i with 
+                  match x with
                   | (_, Nil) -> ()
                   | (sid_i, (Snoc init_i last_i_b)) ->
                        match parse p_state last_i_b with
                        | None -> ()
                        | Some last_i -> 
-                           parse_full_state_lemma tr_after_msg p i;
+                           parse_full_state_lemma tr_after_msg p sid_i init_i last_i_b;
                            get_state_aux_same p sid_i tr tr_after_msg;    
                            reveal_opaque (`%get_state) (get_state);
                            if sid_i = sid
@@ -191,7 +209,7 @@ let next_full_state_pred tr p sid =
                              let tr_after_last_i = (tr `suffix_after_event` (SetState p sid_i last_i_b) ) in
                              
                              if tr_after_oldst `has_suffix` tr_after_last_i // last_i after oldst on tr
-                             then (
+                             then ( // admit();
                                get_state_no_set_state_for_on_suffix_after_event tr p sid;
                                no_set_state_entry_for_on_suffix tr_after_oldst tr_after_last_i p sid;
                                assert(no_set_state_entry_for p sid tr_after_last_i);
@@ -205,11 +223,11 @@ let next_full_state_pred tr p sid =
                                  | Some full_state_before_last_i -> (
                                      prefix_before_event_invariant tr_after_msg (SetState p sid_i last_i_b);
                                      assert(global_state_pred tr_before_last_i p sid_i last_i_b);
-                                     get_state_appears_in_full_state_ tr_before_last_i p sid 
+                                     get_state_appears_in_full_state tr_before_last_i p sid 
                                   )
                              )
                              else ( // oldst after last_i on tr
-                             admit();
+                               admit();
                                suffixes tr tr_after_last_i tr_after_oldst;
                                assert(tr_after_last_i `has_suffix` tr_after_oldst);
   
@@ -232,6 +250,7 @@ let next_full_state_pred tr p sid =
             ()
             end;
           ()
+          end
         )
     )
 
