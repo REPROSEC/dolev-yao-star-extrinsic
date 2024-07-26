@@ -296,3 +296,99 @@ val f:
 
 To improve the diffs on the documentation,
 it should be written using [semantic line breaks](https://sembr.org/).
+
+# Appendix: git tricks to work with GitHub's Squash and merge
+
+
+Assume a branch `featureB` builds on `featureA`,
+leading to a git tree like this:
+
+```
+---o---o  main
+        \
+         o---o---o---o  featureA
+                  \
+                   o---o---o  featureB
+```
+
+Here is how to squash and merge both branches in `main`.
+
+On GitHub: Squash and merge `featureA` in `main`
+
+Now the git tree is:
+
+```
+        featureA
+        squashed
+           |
+           v
+---o---o---o  main
+        \
+         o---o---o---o  featureA
+                  \
+                   o---o---o  featureB
+```
+
+Locally: merge `featureA` in `featureB`
+
+```bash
+git checkout featureB
+git merge featureA
+```
+
+Now the git tree is:
+
+```
+       featureA
+       squashed
+           |
+           v
+---o---o---o  main
+        \
+         o---o---o---o------------ featureA
+                      \           \
+                       o---o---o---o  featureB (last commit is a merge commit)
+```
+
+We cannot merge main without conflicts in `featureB`,
+because otherwise `featureA` changes would appear twice
+(once in the `featureA` commits, once in the squashed `featureA` commit in main).
+The solution is the following.
+
+Locally: rebase `featureB` on `main`
+
+```bash
+git rebase --onto main featureA
+git push --force
+```
+
+Now the git tree is:
+
+```
+       featureA
+       squashed
+           |
+           v
+---o---o---o  main
+        \   \
+         \   o---o---o  featureB' (the commit hashes will change)
+          o---o---o---o  featureA (can be deleted)
+```
+
+On GitHub: Squash and merge featureB
+
+Now the git tree is:
+
+```
+            featureB
+           squashed
+               |
+       featureA|
+       squashed|
+           |   |
+           v   v
+---o---o---o---o  main
+        \   \
+         \   o---o---o  featureB' (can be deleted)
+          o---o---o---o  featureA (can be deleted)
+```
