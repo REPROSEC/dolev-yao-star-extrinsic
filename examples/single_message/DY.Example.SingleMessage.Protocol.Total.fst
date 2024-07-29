@@ -17,8 +17,18 @@ type single_message = {
 %splice [ps_single_message_is_well_formed] (gen_is_well_formed_lemma (`single_message))
 
 [@@with_bytes bytes]
+type test_message = {
+  sender:principal;
+  secret:bytes;
+}
+
+%splice [ps_test_message] (gen_parser (`test_message))
+%splice [ps_test_message_is_well_formed] (gen_is_well_formed_lemma (`test_message))
+
+[@@with_bytes bytes]
 type message =
   | Msg: single_message -> message
+  | Test: test_message -> message
 
 %splice [ps_message] (gen_parser (`message))
 %splice [ps_message_is_well_formed] (gen_is_well_formed_lemma (`message))
