@@ -17,6 +17,7 @@ let state_predicate_protocol: local_state_predicate login_state = {
     | ClientState server secret -> (
       let client = prin in
       event_triggered tr client (ClientSendMsg client server secret) /\
+      get_label secret == join (principal_label client) (principal_label server) /\
       is_knowable_by (join (principal_label client) (principal_label server)) tr secret
     )
     | ServerState secret -> (
@@ -54,7 +55,7 @@ let all_events = [
 /// Create the global trace invariants.
 
 let trace_invariants_protocol: trace_invariants (crypto_invariants_protocol) = {
-  state_pred = mk_state_predicate crypto_invariants_protocol all_sessions;
+  state_pred = mk_state_pred crypto_invariants_protocol all_sessions;
   event_pred = mk_event_pred all_events;
 }
 
@@ -68,7 +69,7 @@ instance protocol_invariants_protocol: protocol_invariants = {
 val all_sessions_has_all_sessions: unit -> Lemma (norm [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP (has_local_bytes_state_predicate protocol_invariants_protocol) all_sessions))
 let all_sessions_has_all_sessions () =
   assert_norm(List.Tot.no_repeats_p (List.Tot.map fst (all_sessions)));
-  mk_global_local_bytes_state_predicate_correct protocol_invariants_protocol all_sessions;
+  mk_state_pred_correct protocol_invariants_protocol all_sessions;
   norm_spec [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP (has_local_bytes_state_predicate protocol_invariants_protocol) all_sessions)
 
 val protocol_invariants_protocol_has_pki_invariant: squash (has_pki_invariant protocol_invariants_protocol)
@@ -123,6 +124,7 @@ let send_message_proof tr comm_keys_ids client server state_id =
   match get_state client state_id tr with
   | (Some (ClientState server secret), tr) -> (
     compute_message_proof tr client server secret;
+    assert(has_communication_layer_invariants crypto_invariants_protocol);
     send_confidential_proof #protocol_invariants_protocol tr comm_keys_ids client server (compute_message secret);
     ()
   )
@@ -150,12 +152,8 @@ let receive_message_proof tr comm_keys_ids server msg_id =
         match recv_msg msg_id tr with
         | (None, tr) -> ()
         | (Some msg_encrypted, tr) -> (
-          let Some msg_plain = pk_dec sk_receiver msg_encrypted in // serialized communication_message
-          (*assert(bytes_invariant tr msg_encrypted);
-          assert(is_decryption_key "DY.Lib.Communication.PublicKey" (principal_label server) tr sk_receiver);
-          
-          let Some {sender=client; receiver=server'; payload} = parse communication_message msg_plain in*)
-          assert(contains_communication_layer_predicates);
+          let Some msg_plain = pk_dec sk_receiver msg_encrypted in 
+          assert(has_communication_layer_invariants crypto_invariants_protocol);
           decrypt_message_proof #crypto_invariants_protocol tr server sk_receiver msg_encrypted;          
          
           assert(is_knowable_by (join (principal_label sender) (principal_label server)) tr payload);
