@@ -194,6 +194,22 @@ val get_label_hpke_pk:
   [SMTPat (get_label (hpke_pk sk))]
 let get_label_hpke_pk #cu sk = ()
 
+val get_hpke_sk_usage_hpke_pk:
+  {|crypto_usages|} ->
+  sk:bytes ->
+  Lemma
+  (ensures get_hpke_sk_usage (hpke_pk sk) == get_usage sk)
+  [SMTPat (get_hpke_sk_usage (hpke_pk sk))]
+let get_hpke_sk_usage_hpke_pk #cu sk = ()
+
+val get_hpke_sk_label_hpke_pk:
+  {|crypto_usages|} ->
+  sk:bytes ->
+  Lemma
+  (ensures get_hpke_sk_label (hpke_pk sk) == get_label sk)
+  [SMTPat (get_hpke_sk_label (hpke_pk sk))]
+let get_hpke_sk_label_hpke_pk #cu sk = ()
+
 /// Lemma for `hpke_enc`.
 /// It is a bit more complex than `DY.Core.Bytes.bytes_invariant_pk_enc`,
 /// the additional complexity is explained in the comments.
