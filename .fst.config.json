@@ -7,6 +7,7 @@
     "src/lib/comparse",
     "src/lib/crypto",
     "src/lib/event",
+    "src/lib/hpke",
     "src/lib/state",
     "src/lib/utils",
     "examples/nsl_pk",
