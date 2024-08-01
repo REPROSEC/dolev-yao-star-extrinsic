@@ -22,11 +22,11 @@ open DY.Lib.Crypto.KdfExpand.Split
 /// allowing for vertical protocol composition.
 ///
 /// The proof sketch is the following:
-/// - the shared secret is a KdfExpandKey with usage tag "HPKE"
+/// - the shared secret is a KdfExpandKey with usage tag "DY.Lib.HPKE"
 /// - the HPKE usage tag and usage data is serialized into the KdfExpandKey usage data
 ///   (using the type `internal_hpke_usage`)
 /// - when the shared secret goes into kdf_expand with `info`,
-///   we obtain an AeadKey with usage tag "HPKE"
+///   we obtain an AeadKey with usage tag "DY.Lib.HPKE"
 ///   and usage data containing `info` and the HPKE key usage
 ///   (using the type `hpke_aead_usage_data`, see `hpke_kdf_expand_usage`)
 /// - when encrypting or decrypting with AEAD,
@@ -59,11 +59,11 @@ instance parseable_serializeable_bytes_internal_hpke_usage: parseable_serializea
 
 val mk_hpke_sk_usage: string & bytes -> usage
 let mk_hpke_sk_usage (usage_tag, usage_data) =
-  KemKey (KdfExpandKey "HPKE" (serialize _ {usage_tag; usage_data}))
+  KemKey (KdfExpandKey "DY.Lib.HPKE" (serialize _ {usage_tag; usage_data}))
 
 val mk_hpke_entropy_usage: string & bytes -> usage
 let mk_hpke_entropy_usage (usage_tag, usage_data) =
-  KemNonce (KdfExpandKey "HPKE" (serialize _ {usage_tag; usage_data}))
+  KemNonce (KdfExpandKey "DY.Lib.HPKE" (serialize _ {usage_tag; usage_data}))
 
 val mk_hpke_sk_usage_inj:
   usage1:(string & bytes) -> usage2:(string & bytes) -> 
@@ -118,7 +118,7 @@ let hpke_kdf_expand_usage: kdf_expand_crypto_usage = {
     let KdfExpandKey _ data = prk_usage in
     match parse hpke_labeled_expand_info info, parse internal_hpke_usage data with
     | Some { len; label = "key"; info }, Some hpke_usg ->
-      AeadKey "HPKE" (serialize _ { hpke_usg; info; })
+      AeadKey "DY.Lib.HPKE" (serialize _ { hpke_usg; info; })
     | Some { len; label = "nonce"; info }, Some hpke_usg ->
       NoUsage // AEAD nonce
     | _ ->
@@ -157,13 +157,13 @@ let hpke_aead_pred #cusgs hpke = {
 
 /// Integration of the invariants within the split predicate methodology
 
-let hpke_kdf_expand_tag_and_usage = ("HPKE", hpke_kdf_expand_usage)
+let hpke_kdf_expand_tag_and_usage = ("DY.Lib.HPKE", hpke_kdf_expand_usage)
 
 val has_hpke_kdf_expand_usage: {|crypto_usages|} -> prop
 let has_hpke_kdf_expand_usage #cu =
   has_kdf_expand_usage cu hpke_kdf_expand_tag_and_usage
 
-let hpke_aead_tag_and_pred {|crypto_usages|} hpke = ("HPKE", hpke_aead_pred hpke)
+let hpke_aead_tag_and_pred {|crypto_usages|} hpke = ("DY.Lib.HPKE", hpke_aead_pred hpke)
 
 val has_hpke_aead_pred: {|crypto_invariants|} -> hpke_crypto_predicate -> prop
 let has_hpke_aead_pred #cinvs hpke =
@@ -361,9 +361,9 @@ let bytes_invariant_hpke_dec #cinvs hpke tr skR enc ciphertext info ad =
       | None -> ()
       | Some shared_secret ->
         assert(bytes_invariant tr shared_secret);
-        assert(is_publishable tr shared_secret \/ get_usage shared_secret == KdfExpandKey "HPKE" (serialize _ {usage_tag; usage_data}));
+        assert(is_publishable tr shared_secret \/ get_usage shared_secret == KdfExpandKey "DY.Lib.HPKE" (serialize _ {usage_tag; usage_data}));
         let aead_key = kdf_expand shared_secret key_info_bytes 32 in
-        assert(is_publishable tr shared_secret \/ get_usage aead_key == AeadKey "HPKE" (serialize _ {hpke_usg = {usage_tag; usage_data}; info}));
+        assert(is_publishable tr shared_secret \/ get_usage aead_key == AeadKey "DY.Lib.HPKE" (serialize _ {hpke_usg = {usage_tag; usage_data}; info}));
         assert(is_publishable tr shared_secret \/ get_label aead_key == get_label shared_secret);
         let aead_nonce = kdf_expand shared_secret nonce_info_bytes 32 in
         assert(is_publishable tr shared_secret \/ get_usage aead_nonce == NoUsage);
@@ -371,8 +371,8 @@ let bytes_invariant_hpke_dec #cinvs hpke tr skR enc ciphertext info ad =
         match aead_dec aead_key aead_nonce ciphertext ad with
         | None -> ()
         | Some plaintext -> (
-          assert(is_publishable tr aead_key \/ get_usage aead_key == AeadKey "HPKE" (serialize _ { hpke_usg = {usage_tag; usage_data}; info; }));
-          assert(get_usage aead_key == AeadKey "HPKE" (serialize _ { hpke_usg = {usage_tag; usage_data}; info; }) ==>
+          assert(is_publishable tr aead_key \/ get_usage aead_key == AeadKey "DY.Lib.HPKE" (serialize _ { hpke_usg = {usage_tag; usage_data}; info; }));
+          assert(get_usage aead_key == AeadKey "DY.Lib.HPKE" (serialize _ { hpke_usg = {usage_tag; usage_data}; info; }) ==>
             (aead_pred.pred tr aead_key aead_nonce plaintext ad ==> hpke.pred tr usage plaintext info ad)
           );
           FStar.Classical.forall_intro (FStar.Classical.move_requires (mk_hpke_sk_usage_inj usage));
