@@ -365,17 +365,17 @@ let bytes_invariant_hpke_dec #cinvs hpke tr skR enc ciphertext info ad =
         // or tweaking the specification.
         // This is why we leave these here.
         assert(bytes_invariant tr shared_secret);
-        assert(is_publishable tr shared_secret \/ get_usage shared_secret == KdfExpandKey "DY.Lib.HPKE" (serialize _ {usage_tag; usage_data}));
+        assert(get_usage shared_secret == KdfExpandKey "DY.Lib.HPKE" (serialize _ {usage_tag; usage_data}) \/ is_publishable tr shared_secret);
         let aead_key = kdf_expand shared_secret key_info_bytes 32 in
-        assert(is_publishable tr shared_secret \/ get_usage aead_key == AeadKey "DY.Lib.HPKE" (serialize _ {hpke_usg = {usage_tag; usage_data}; info}));
-        assert(is_publishable tr shared_secret \/ get_label aead_key == get_label shared_secret);
+        assert(get_usage aead_key == AeadKey "DY.Lib.HPKE" (serialize _ {hpke_usg = {usage_tag; usage_data}; info}) \/ is_publishable tr shared_secret);
+        assert(get_label aead_key == get_label shared_secret \/ is_publishable tr shared_secret);
         let aead_nonce = kdf_expand shared_secret nonce_info_bytes 32 in
-        assert(is_publishable tr shared_secret \/ get_usage aead_nonce == NoUsage);
-        assert(is_publishable tr shared_secret \/ get_label aead_nonce == public);
+        assert(get_usage aead_nonce == NoUsage \/ is_publishable tr shared_secret);
+        assert(get_label aead_nonce == public \/ is_publishable tr shared_secret);
         match aead_dec aead_key aead_nonce ciphertext ad with
         | None -> ()
         | Some plaintext -> (
-          assert(is_publishable tr aead_key \/ get_usage aead_key == AeadKey "DY.Lib.HPKE" (serialize _ { hpke_usg = {usage_tag; usage_data}; info; }));
+          assert(get_usage aead_key == AeadKey "DY.Lib.HPKE" (serialize _ { hpke_usg = {usage_tag; usage_data}; info; }) \/ is_publishable tr aead_key);
           assert(get_usage aead_key == AeadKey "DY.Lib.HPKE" (serialize _ { hpke_usg = {usage_tag; usage_data}; info; }) ==>
             (aead_pred.pred tr aead_key aead_nonce plaintext ad ==> hpke.pred tr usage plaintext info ad)
           );
