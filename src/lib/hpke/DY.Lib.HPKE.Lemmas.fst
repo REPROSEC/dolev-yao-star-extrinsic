@@ -360,6 +360,10 @@ let bytes_invariant_hpke_dec #cinvs hpke tr skR enc ciphertext info ad =
       match kem_decap skR enc with
       | None -> ()
       | Some shared_secret ->
+        // The `assert`s below are not needed for the proof to work.
+        // They are however useful to debug the proof when tweaking invariants
+        // or tweaking the specification.
+        // This is why we leave these here.
         assert(bytes_invariant tr shared_secret);
         assert(is_publishable tr shared_secret \/ get_usage shared_secret == KdfExpandKey "DY.Lib.HPKE" (serialize _ {usage_tag; usage_data}));
         let aead_key = kdf_expand shared_secret key_info_bytes 32 in
