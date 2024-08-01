@@ -53,7 +53,7 @@ val hpke_enc: bytes -> bytes -> bytes -> bytes -> bytes -> (bytes & bytes)
 let hpke_enc pkR entropy plaintext info ad =
   let (enc, shared_secret) = kem_encap pkR entropy in
   let aead_key = hpke_labeled_expand shared_secret "key" info 32 in
-  let aead_nonce = hpke_labeled_expand shared_secret "nonce" info 32 in
+  let aead_nonce = hpke_labeled_expand shared_secret "base_nonce" info 32 in
   let cipher = aead_enc aead_key aead_nonce plaintext ad in
   (enc, cipher)
 
@@ -63,5 +63,5 @@ let hpke_dec skR (enc, ciphertext) info ad =
   | None -> None
   | Some shared_secret ->
     let aead_key = hpke_labeled_expand shared_secret "key" info 32 in
-    let aead_nonce = hpke_labeled_expand shared_secret "nonce" info 32 in
+    let aead_nonce = hpke_labeled_expand shared_secret "base_nonce" info 32 in
     aead_dec aead_key aead_nonce ciphertext ad

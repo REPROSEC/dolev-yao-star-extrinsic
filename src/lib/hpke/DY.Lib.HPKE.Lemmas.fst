@@ -119,7 +119,7 @@ let hpke_kdf_expand_usage: kdf_expand_crypto_usage = {
     match parse hpke_labeled_expand_info info, parse internal_hpke_usage data with
     | Some { len; label = "key"; info }, Some hpke_usg ->
       AeadKey "DY.Lib.HPKE" (serialize _ { hpke_usg; info; })
-    | Some { len; label = "nonce"; info }, Some hpke_usg ->
+    | Some { len; label = "base_nonce"; info }, Some hpke_usg ->
       NoUsage // AEAD nonce
     | _ ->
       NoUsage
@@ -128,7 +128,7 @@ let hpke_kdf_expand_usage: kdf_expand_crypto_usage = {
     match parse hpke_labeled_expand_info info with
     | Some { len; label = "key"; info } ->
       prk_label
-    | Some { len; label = "nonce"; info } ->
+    | Some { len; label = "base_nonce"; info } ->
       public
     | _ ->
       prk_label
@@ -274,13 +274,13 @@ let bytes_invariant_hpke_enc #cinvs hpke tr pkR entropy msg info ad =
     let (enc, shared_secret) = kem_encap pkR entropy in
     bytes_invariant_kem_encap tr pkR entropy;
     let aead_key = kdf_expand shared_secret (serialize _ { len = 32; label = "key"; info }) 32 in
-    let aead_nonce = kdf_expand shared_secret (serialize _ { len = 32; label = "nonce"; info }) 32 in
+    let aead_nonce = kdf_expand shared_secret (serialize _ { len = 32; label = "base_nonce"; info }) 32 in
 
     let ciphertext = aead_enc aead_key aead_nonce msg ad in
     assert((enc, ciphertext) == hpke_enc pkR entropy msg info ad);
     assert(hpke.pred tr usage msg info ad ==> aead_pred.pred tr aead_key aead_nonce msg ad);
     serialize_wf_lemma _ (bytes_invariant tr) { len = 32; label = "key"; info };
-    serialize_wf_lemma _ (bytes_invariant tr) { len = 32; label = "nonce"; info };
+    serialize_wf_lemma _ (bytes_invariant tr) { len = 32; label = "base_nonce"; info };
     ()
   )
 #pop-options
@@ -343,7 +343,7 @@ let bytes_invariant_hpke_dec #cinvs hpke tr skR enc ciphertext info ad =
 
   let key_info = { len = 32; label = "key"; info } in
   let key_info_bytes = serialize _ key_info in
-  let nonce_info = { len = 32; label = "nonce"; info } in
+  let nonce_info = { len = 32; label = "base_nonce"; info } in
   let nonce_info_bytes = serialize _ nonce_info in
   serialize_wf_lemma _ (bytes_invariant tr) key_info;
   serialize_wf_lemma _ (bytes_invariant tr) nonce_info;
