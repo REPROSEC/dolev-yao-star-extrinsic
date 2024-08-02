@@ -1154,8 +1154,14 @@ val bytes_invariant_aead_enc:
     (get_label nonce) `can_flow tr` public /\
     (get_label ad) `can_flow tr` public /\
     (get_label msg) `can_flow tr` (get_label key) /\
-    (AeadKey? (get_usage key) \/ get_label key `can_flow tr` public) /\
-    ((get_label key `can_flow tr` public) \/ aead_pred.pred tr key nonce msg ad)
+    (
+      (
+        AeadKey? (get_usage key) /\
+        aead_pred.pred tr key nonce msg ad
+      ) \/ (
+        get_label key `can_flow tr` public
+      )
+    )
   )
   (ensures bytes_invariant tr (aead_enc key nonce msg ad))
   [SMTPat (bytes_invariant tr (aead_enc key nonce msg ad))]
