@@ -5,7 +5,7 @@ COMPARSE_HOME 	?= $(DY_HOME)/../comparse
 
 INNER_SOURCE_DIRS = core lib lib/comparse lib/crypto lib/event lib/hpke lib/state lib/utils lib/communication
 SOURCE_DIRS = $(addprefix $(DY_HOME)/src/, $(INNER_SOURCE_DIRS))
-INNER_EXAMPLE_DIRS = nsl_pk iso_dh single_message
+INNER_EXAMPLE_DIRS = nsl_pk iso_dh
 EXAMPLE_DIRS ?= $(addprefix $(DY_HOME)/examples/, $(INNER_EXAMPLE_DIRS))
 
 INCLUDE_DIRS = $(SOURCE_DIRS) $(EXAMPLE_DIRS) $(COMPARSE_HOME)/src
