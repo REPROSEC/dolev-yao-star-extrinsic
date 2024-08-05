@@ -3,13 +3,17 @@ module DY.Lib.Communication.API.Lemmas
 open Comparse
 open DY.Core
 open DY.Lib.Crypto.PkEncryption.Split
+open DY.Lib.Crypto.Signature.Split
 open DY.Lib.State.PKI
 open DY.Lib.State.PrivateKeys
+open DY.Lib.Event.Typed
 
-open DY.Lib.Communication.API
 open DY.Lib.Communication.API.Predicates
+open DY.Lib.Communication.API
 
 #set-options "--fuel 0 --ifuel 0 --z3cliopt 'smt.qi.eager_threshold=100'"
+
+(**** Confidential Send and Receive Lemmas ****)
 
 val encrypt_message_proof:
   {|cinvs:crypto_invariants|} ->
@@ -22,53 +26,57 @@ val encrypt_message_proof:
     is_knowable_by (join (principal_label sender) (principal_label receiver)) tr payload /\
     is_secret (principal_label sender) tr nonce /\
     PkNonce? (get_usage nonce) /\
-    is_encryption_key (PkKey comm_layer_tag empty) (principal_label receiver) tr pk
+    is_encryption_key (PkKey comm_layer_pkenc_tag empty) (principal_label receiver) tr pk /\
+    event_triggered tr sender (CommConfSendMsg sender receiver payload)
   )
   (ensures
     is_publishable tr (encrypt_message sender receiver payload pk nonce)
   )
 let encrypt_message_proof #cinvs tr sender receiver payload pk nonce =
-  let msg = {sender; receiver; payload} in
-  let msg_encrypted = encrypt_message sender receiver payload pk nonce in
-  
+  let msg = CM {sender; receiver; payload} in  
   serialize_wf_lemma communication_message (is_knowable_by (join (principal_label sender) (principal_label receiver)) tr) msg;
-  serialize_wf_lemma communication_message (bytes_invariant tr) msg;
-  assert(bytes_invariant tr (serialize communication_message msg));
-  
-  assert(match get_sk_usage pk with
-    | PkKey pkenc_tag _ ->
-        pkenc_tag = comm_layer_tag ==>
-          pkenc_pred.pred tr pk (serialize communication_message msg) == 
-            (pkenc_crypto_predicates_communication_layer cinvs.usages).pred tr pk (serialize communication_message msg)
-    | _ -> True);
-
-  assert(cinvs.preds.pkenc_pred.pred tr pk (serialize communication_message msg));
-  assert(bytes_invariant tr msg_encrypted);
   ()
 
+#push-options "--fuel 8 --ifuel 8 --z3rlimit 100"
 val send_confidential_proof:
   {|invs:protocol_invariants|} ->
-  tr:trace -> 
+  tr:trace ->
+  higher_layer_preds:event_predicate communication_event ->
   keys_sess_ids:communication_keys_sess_ids ->
   sender:principal -> receiver:principal -> payload:bytes ->
   Lemma
   (requires
-    trace_invariant tr /\ has_pki_invariant invs /\ has_communication_layer_invariants invs.crypto_invs /\
+    trace_invariant tr /\
+    has_pki_invariant invs /\
+    has_communication_layer_invariants invs.crypto_invs /\
+    (forall tr'.
+      tr <$ tr' ==> higher_layer_preds tr' sender (CommConfSendMsg sender receiver payload)) /\
+    has_communication_layer_event_predicates invs higher_layer_preds /\    
     is_knowable_by (join (principal_label sender) (principal_label receiver)) tr payload
   )
   (ensures (
     let (_, tr_out) = send_confidential keys_sess_ids sender receiver payload tr in
     trace_invariant tr_out
   ))
-let send_confidential_proof #invs tr keys_sess_ids sender receiver payload =
-  match get_public_key sender keys_sess_ids.pki (PkEnc comm_layer_tag) receiver tr with
-  | (None, tr) -> ()
-  | (Some pk_receiver, tr) -> (
+let send_confidential_proof #invs tr higher_layer_preds keys_sess_ids sender receiver payload =
+  match send_confidential keys_sess_ids sender receiver payload tr with
+  | (None, tr_out) -> ()
+  | (Some _, tr_out) -> (
+    
+    let (Some pk_receiver, tr) = get_public_key sender keys_sess_ids.pki (PkEnc comm_layer_pkenc_tag) receiver tr in
+    assert(higher_layer_preds tr sender (CommConfSendMsg sender receiver payload));
     let (nonce, tr) = mk_rand PkNonce (principal_label sender) 32 tr in
+    
+    let ((), tr) = trigger_event sender (CommConfSendMsg sender receiver payload) tr in
+    let msg_encrypted = encrypt_message sender receiver payload pk_receiver nonce in
+    
+    assert(higher_layer_preds tr sender (CommConfSendMsg sender receiver payload));
+    assert(event_triggered tr sender (CommConfSendMsg sender receiver payload));
     encrypt_message_proof tr sender receiver payload pk_receiver nonce;
+    let (msg_id, tr) = send_msg msg_encrypted tr in
+    assert(tr_out == tr);
     ()
   )
-
 
 val decrypt_message_proof:
   {|cinvs:crypto_invariants|} ->
@@ -77,79 +85,203 @@ val decrypt_message_proof:
   Lemma
   (requires
     has_communication_layer_invariants cinvs /\
-    is_decryption_key (PkKey comm_layer_tag empty) (principal_label receiver) tr sk_receiver /\
+    is_decryption_key (PkKey comm_layer_pkenc_tag empty) (principal_label receiver) tr sk_receiver /\
     bytes_invariant tr msg_encrypted
   )
   (ensures (
     match decrypt_message sk_receiver msg_encrypted with
-    | None -> True
     | Some {sender; receiver=receiver'; payload} -> (
       let Some msg_plain = pk_dec sk_receiver msg_encrypted in
-      (//
-        // /\
-        //get_sk_label (Pk sk_receiver) == principal_label receiver /\
-        is_knowable_by (join (principal_label sender) (principal_label receiver)) tr payload ///\
-        //(pkenc_pred.pred tr (Pk sk_receiver) msg_plain \/
-        //is_publishable tr msg_plain)
-        //is_corrupt tr (principal_label receiver)
-      )
+      (is_knowable_by (join (principal_label sender) (principal_label receiver)) tr payload /\
+        event_triggered tr sender (CommConfSendMsg sender receiver payload)) \/
+        is_publishable tr payload
     )
+    | _ -> True
   ))
 let decrypt_message_proof #cinvs tr receiver sk_receiver msg_encrypted =
   match decrypt_message sk_receiver msg_encrypted with
-  | None -> ()
   | Some {sender; receiver=receiver'; payload} -> ( 
     let Some msg_plain = pk_dec sk_receiver msg_encrypted in
-    let pk = pk sk_receiver in
-    
-    assert(get_usage sk_receiver == PkKey comm_layer_tag empty);
- 
-    // This follows from the precondition:
-    // has_communication_layer_invariants invs.crypto_invs
-    assert(match get_sk_usage pk with
-          | PkKey pkenc_tag _ ->
-            pkenc_tag = comm_layer_tag ==>
-              pkenc_pred.pred tr pk msg_plain == 
-                (pkenc_crypto_predicates_communication_layer cinvs.usages).pred tr pk msg_plain
-          | _ -> True
-    );
-    // Since the precondition states that pk has the
-    // comm_layer_tag, we can directly assert that the
-    // predicates are equal.
-    assert(pkenc_pred.pred tr pk msg_plain == 
-                (pkenc_crypto_predicates_communication_layer cinvs.usages).pred tr pk msg_plain);
-
-    // From the crypto predicates we can infer that the
-    // payload can flow to the sender and the receiver
-    assert((pkenc_crypto_predicates_communication_layer cinvs.usages).pred tr pk msg_plain ==>
-          (match parse communication_message msg_plain with
-            | Some {sender; receiver; payload} -> (
-              get_sk_label pk == principal_label receiver /\
-              (get_label payload) `can_flow tr` (join (principal_label sender) (principal_label receiver))
-            )
-            | None -> False)
-    );
-
     FStar.Classical.move_requires (parse_wf_lemma communication_message (is_publishable tr)) msg_plain;
     FStar.Classical.move_requires (parse_wf_lemma communication_message (bytes_invariant tr)) msg_plain;
-    assert(bytes_invariant tr payload);
-    assert(is_knowable_by (join (principal_label sender) (principal_label receiver)) tr payload \/
-      is_publishable tr payload);
-
-    assert(is_knowable_by (join (principal_label sender) (principal_label receiver)) tr payload);
     ()
   )
+  | _ -> ()
+
 
 val receive_confidential_proof:
-  {|invs:protocol_invariants|} -> tr:trace -> comm_keys_ids:communication_keys_sess_ids ->
+  {|invs:protocol_invariants|} ->
+  tr:trace ->
+  higher_layer_preds:event_predicate communication_event ->
+  comm_keys_ids:communication_keys_sess_ids ->
   receiver:principal -> msg_id:timestamp ->
   Lemma
   (requires
     trace_invariant tr /\ 
-    has_private_keys_invariant invs
+    has_private_keys_invariant invs /\
+    has_communication_layer_invariants invs.crypto_invs /\
+    (forall tr'.
+      match receive_confidential comm_keys_ids receiver msg_id tr with
+      | (None, tr_out) -> True
+      | (Some {sender; receiver=receiver'; payload}, tr_out) -> (
+      tr <$ tr' ==> higher_layer_preds tr' receiver (CommConfReceiveMsg sender receiver payload))) /\
+    has_communication_layer_event_predicates invs higher_layer_preds
   )
   (ensures (
-    let (_, tr_out) = receive_confidential comm_keys_ids receiver msg_id tr in
+    match receive_confidential comm_keys_ids receiver msg_id tr with
+    | (None, tr_out) -> trace_invariant tr_out
+    | (Some {sender; receiver=receiver'; payload}, tr_out) -> ( 
+      trace_invariant tr_out /\
+      event_triggered tr_out receiver (CommConfReceiveMsg sender receiver payload)
+    )
+  ))
+let receive_confidential_proof #invs tr higher_layer_preds comm_keys_ids receiver msg_id =
+  match receive_confidential comm_keys_ids receiver msg_id tr with
+  | (None, tr_out) -> ()
+  | (Some {sender; receiver=receiver'; payload}, tr_out) -> (
+    let (Some sk_receiver, tr) = get_private_key receiver comm_keys_ids.private_keys (PkDec comm_layer_pkenc_tag) tr in
+    let (Some msg_encrypted, tr) = recv_msg msg_id tr in
+    let Some msg_plain = decrypt_message sk_receiver msg_encrypted in
+    decrypt_message_proof tr receiver sk_receiver msg_encrypted;
+    let ((), tr) = trigger_event receiver (CommConfReceiveMsg msg_plain.sender receiver msg_plain.payload) tr in
+    assert(tr_out == tr);
+    ()
+  )
+
+
+(**** Authenticated Send and Receive Lemmas ****)
+
+val sign_message_proof:
+  {|cinvs:crypto_invariants|} ->
+  tr:trace ->
+  sender:principal -> receiver:principal -> payload:bytes ->
+  sk:bytes -> nonce:bytes ->
+  Lemma
+  (requires
+    has_communication_layer_invariants cinvs /\
+    is_publishable tr payload /\
+    is_secret (principal_label sender) tr nonce /\
+    SigNonce? (get_usage nonce) /\
+    is_signature_key (SigKey comm_layer_sign_tag empty) (principal_label sender) tr sk /\
+    event_triggered tr sender (CommAuthSendMsg sender payload)
+  )
+  (ensures
+    is_publishable tr (sign_message sender receiver payload sk nonce)
+  )
+let sign_message_proof #cinvs tr sender receiver payload sk nonce =
+  let msg = CM {sender; receiver; payload} in
+  serialize_wf_lemma communication_message (is_publishable tr) msg;
+  let msg_bytes = serialize communication_message #parseable_serializeable_bytes_communication_message msg in
+  let signature = sign sk nonce msg_bytes in
+  let msg_signed = CMSign {sender; receiver; payload; signature} in  
+  serialize_wf_lemma communication_message #parseable_serializeable_bytes_communication_message (is_publishable tr) msg_signed;
+  ()
+
+val send_authenticated_proof:
+  {|invs:protocol_invariants|} ->
+  tr:trace ->
+  higher_layer_preds:event_predicate communication_event ->
+  comm_keys_ids:communication_keys_sess_ids ->
+  sender:principal -> receiver:principal -> payload:bytes ->
+  Lemma
+  (requires
+    trace_invariant tr /\ has_private_keys_invariant invs /\
+    has_communication_layer_invariants invs.crypto_invs /\
+    (forall tr' e. higher_layer_preds tr' sender e) /\
+    has_communication_layer_event_predicates invs higher_layer_preds /\
+    is_publishable tr payload
+  )
+  (ensures (
+    let (_, tr_out) = send_authenticated comm_keys_ids sender receiver payload tr in
     trace_invariant tr_out
   ))
-let receive_confidential_proof #invs tr comm_keys_ids receiver msg_id = ()
+let send_authenticated_proof #invs tr higher_layer_preds comm_keys_ids sender receiver payload =
+    match send_authenticated comm_keys_ids sender receiver payload tr with
+    | (None, tr_out) -> ()
+    | (Some _, tr_out) -> (      
+      let (Some sk_sender, tr) = get_private_key sender comm_keys_ids.private_keys (Sign comm_layer_sign_tag) tr in
+      let (nonce,  tr) = mk_rand SigNonce (principal_label sender) 32 tr in      
+      let ((), tr) = trigger_event sender (CommAuthSendMsg sender payload) tr in
+      assert(event_triggered tr sender (CommAuthSendMsg sender payload)); 
+      let msg_signed = sign_message sender receiver payload sk_sender nonce in
+      sign_message_proof tr sender receiver payload sk_sender nonce;
+      let (msg_id, tr) = send_msg msg_signed tr in
+      assert(tr_out == tr);
+      ()
+    )
+  
+
+#push-options "--ifuel 1 --fuel 0"
+val verify_message_proof:
+  {|cinvs:crypto_invariants|} ->
+  tr:trace ->
+  sender:principal -> receiver:principal ->
+  msg_bytes:bytes -> vk_sender:bytes ->
+  Lemma
+  (requires
+    has_communication_layer_invariants cinvs /\
+    is_publishable tr msg_bytes /\
+    is_verification_key (SigKey comm_layer_sign_tag empty) (principal_label sender) tr vk_sender
+  )
+  (ensures (
+    match verify_message receiver msg_bytes vk_sender with
+    | Some {sender=sender'; receiver=receiver'; payload} -> (
+      is_publishable tr payload /\
+      ((get_signkey_label vk_sender == principal_label sender' /\
+        sender' == sender /\
+        event_triggered tr sender' (CommAuthSendMsg sender' payload)) \/
+        get_signkey_label vk_sender `can_flow tr` public)      
+    )
+    | _ -> True
+  ))
+let verify_message_proof #cinvs tr sender receiver msg_bytes vk_sender =
+  assert(get_signkey_label vk_sender == principal_label sender);
+  match verify_message receiver msg_bytes vk_sender with
+  | Some {sender=sender'; receiver=receiver'; payload} -> (
+    parse_wf_lemma communication_message (is_publishable tr) msg_bytes;
+    let msg = CM {sender=sender'; receiver=receiver'; payload} in
+    serialize_wf_lemma communication_message #parseable_serializeable_bytes_communication_message (is_publishable tr) msg;
+    ()
+  )
+  | _ -> ()
+#pop-options
+
+//#push-options "--ifuel 8 --fuel 8 --z3rlimit 100"
+val receive_authenticated_proof:
+  {|invs:protocol_invariants|} ->
+  tr:trace ->
+  higher_layer_preds:event_predicate communication_event ->
+  comm_keys_ids:communication_keys_sess_ids ->
+  sender:principal -> receiver:principal -> msg_id:timestamp ->
+  Lemma
+  (requires
+    trace_invariant tr /\ has_pki_invariant invs /\
+    has_communication_layer_invariants invs.crypto_invs /\
+    (forall tr' e. higher_layer_preds tr' receiver e) /\
+    has_communication_layer_event_predicates invs higher_layer_preds
+  )
+  (ensures (
+    let (_, tr_out) = receive_authenticated comm_keys_ids sender receiver msg_id tr in
+    trace_invariant tr_out
+  ))
+let receive_authenticated_proof #invs tr higher_layer_preds comm_keys_ids sender receiver msg_id =
+  match receive_authenticated comm_keys_ids sender receiver msg_id tr with
+  | (None, tr_out) -> ()
+  | (Some {sender=sender'; receiver=receiver'; payload}, tr_out) -> (
+    let (Some vk_sender, tr) = get_public_key receiver comm_keys_ids.pki (Verify comm_layer_sign_tag) sender tr in
+    let (Some msg_bytes, tr) = recv_msg msg_id tr in
+    //let Some msg_base = verify_message receiver msg_bytes vk_sender in
+    verify_message_proof tr sender receiver msg_bytes vk_sender;
+    (*assert(get_signkey_label vk_sender == principal_label msg_base.sender \/
+        get_signkey_label vk_sender `can_flow tr` public);
+    assert(sender == msg_base.sender \/
+        get_signkey_label vk_sender `can_flow tr` public);
+    assert(event_triggered tr msg_base.sender (CommunicationLayerSendMsg msg_base.sender payload) \/
+      get_signkey_label vk_sender `can_flow tr` public);
+    assert(get_signkey_label vk_sender `can_flow tr` public ==> is_corrupt tr (get_signkey_label vk_sender));
+    assert(event_triggered tr msg_base.sender (CommunicationLayerSendMsg msg_base.sender payload) \/
+      is_corrupt tr (get_signkey_label vk_sender));
+    let ((), tr) = trigger_event receiver (CommunicationLayerReceiveMsg msg_base.sender receiver vk_sender msg_base.payload) tr in*)
+    //assert(tr_out == tr);
+    ()
+  )

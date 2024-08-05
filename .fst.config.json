@@ -12,7 +12,6 @@
     "src/lib/utils",
     "src/lib/communication",
     "examples/nsl_pk",
-    "examples/iso_dh",
-    "examples/single_message"
+    "examples/iso_dh"
   ]
 }
