@@ -116,31 +116,37 @@ instance dh_protocol_invs: protocol_invariants = {
 
 /// Lemmas that the global state predicate contains all the local ones
 
-val all_sessions_has_all_sessions: unit -> Lemma (norm [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP has_local_bytes_state_predicate all_sessions))
+// Below, the `has_..._predicate` are called with the implicit argument `#dh_protocol_invs`.
+// This argument could be omitted as it can be instantiated automatically by F*'s typeclass resolution algorithm.
+// However we instantiate it explicitly here so that the meaning of `has_..._predicate` is easier to understand.
+
+val all_sessions_has_all_sessions: unit -> Lemma (norm [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP (has_local_bytes_state_predicate #dh_protocol_invs) all_sessions))
 let all_sessions_has_all_sessions () =
   assert_norm(List.Tot.no_repeats_p (List.Tot.map fst (all_sessions)));
-  mk_state_pred_correct all_sessions;
-  norm_spec [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP has_local_bytes_state_predicate all_sessions)
+  mk_state_pred_correct #dh_protocol_invs all_sessions;
+  norm_spec [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP (has_local_bytes_state_predicate #dh_protocol_invs) all_sessions)
 
-val full_dh_session_pred_has_pki_invariant: squash has_pki_invariant
+val full_dh_session_pred_has_pki_invariant: squash (has_pki_invariant #dh_protocol_invs)
 let full_dh_session_pred_has_pki_invariant = all_sessions_has_all_sessions ()
 
-val full_dh_session_pred_has_private_keys_invariant: squash has_private_keys_invariant
+val full_dh_session_pred_has_private_keys_invariant: squash (has_private_keys_invariant #dh_protocol_invs)
 let full_dh_session_pred_has_private_keys_invariant = all_sessions_has_all_sessions ()
 
+// As an example, below `#dh_protocol_invs` is omitted and instantiated using F*'s typeclass resolution algorithm
 val full_dh_session_pred_has_dh_invariant: squash (has_local_state_predicate dh_session_pred)
 let full_dh_session_pred_has_dh_invariant = all_sessions_has_all_sessions ()
 
 /// Lemmas that the global event predicate contains all the local ones
 
-val all_events_has_all_events: unit -> Lemma (norm [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP has_compiled_event_pred all_events))
+val all_events_has_all_events: unit -> Lemma (norm [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP (has_compiled_event_pred #dh_protocol_invs) all_events))
 let all_events_has_all_events () =
   assert_norm(List.Tot.no_repeats_p (List.Tot.map fst (all_events)));
-  mk_event_pred_correct all_events;
-  norm_spec [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP has_compiled_event_pred all_events);
+  mk_event_pred_correct #dh_protocol_invs all_events;
+  norm_spec [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP (has_compiled_event_pred #dh_protocol_invs) all_events);
   let dumb_lemma (x:prop) (y:prop): Lemma (requires x /\ x == y) (ensures y) = () in
-  dumb_lemma (for_allP has_compiled_event_pred all_events) (norm [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP has_compiled_event_pred all_events))
+  dumb_lemma (for_allP (has_compiled_event_pred #dh_protocol_invs) all_events) (norm [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP (has_compiled_event_pred #dh_protocol_invs) all_events))
 
+// As an example, below `#dh_protocol_invs` is omitted and instantiated using F*'s typeclass resolution algorithm
 val full_dh_event_pred_has_dh_invariant: squash (has_event_pred dh_event_pred)
 let full_dh_event_pred_has_dh_invariant = all_events_has_all_events ()
 
