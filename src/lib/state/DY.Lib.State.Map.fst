@@ -118,9 +118,9 @@ let map_session_invariant #cinvs #key_t #value_t #mt mpred = {
 
 val has_map_session_invariant:
   #key_t:eqtype -> #value_t:Type0 -> {|map_types key_t value_t|} ->
-  protocol_invariants -> map_predicate key_t value_t -> prop
-let has_map_session_invariant #key_t #value_t #mt invs mpred =
-  has_local_state_predicate invs (map_session_invariant mpred)
+  {|protocol_invariants|} -> map_predicate key_t value_t -> prop
+let has_map_session_invariant #key_t #value_t #mt #invs mpred =
+  has_local_state_predicate (map_session_invariant mpred)
 
 (*** Map API ***)
 
@@ -183,7 +183,7 @@ let find_value #key_t #value_t #mt prin sess_id key =
 
 #push-options "--fuel 1"
 val initialize_map_invariant:
-  {|invs:protocol_invariants|} ->
+  {|protocol_invariants|} ->
   #key_t:eqtype -> #value_t:Type0 -> {|map_types key_t value_t|} ->
   mpred:map_predicate key_t value_t ->
   prin:principal ->
@@ -191,14 +191,14 @@ val initialize_map_invariant:
   Lemma
   (requires
     trace_invariant tr /\
-    has_map_session_invariant invs mpred
+    has_map_session_invariant mpred
   )
   (ensures (
     let (_, tr_out) = initialize_map key_t value_t prin tr in
     trace_invariant tr_out
   ))
   [SMTPat (initialize_map key_t value_t prin tr);
-   SMTPat (has_map_session_invariant invs mpred);
+   SMTPat (has_map_session_invariant mpred);
    SMTPat (trace_invariant tr)
   ]
 let initialize_map_invariant #invs #key_t #value_t #mt mpred prin tr =
@@ -207,7 +207,7 @@ let initialize_map_invariant #invs #key_t #value_t #mt mpred prin tr =
 
 #push-options "--fuel 1"
 val add_key_value_invariant:
-  {|invs:protocol_invariants|} ->
+  {|protocol_invariants|} ->
   #key_t:eqtype -> #value_t:Type0 -> {|map_types key_t value_t|} ->
   mpred:map_predicate key_t value_t ->
   prin:principal -> sess_id:state_id ->
@@ -217,14 +217,14 @@ val add_key_value_invariant:
   (requires
     mpred.pred tr prin sess_id key value /\
     trace_invariant tr /\
-    has_map_session_invariant invs mpred
+    has_map_session_invariant mpred
   )
   (ensures (
     let (_, tr_out) = add_key_value prin sess_id key value tr in
     trace_invariant tr_out
   ))
   [SMTPat (add_key_value prin sess_id key value tr);
-   SMTPat (has_map_session_invariant invs mpred);
+   SMTPat (has_map_session_invariant mpred);
    SMTPat (trace_invariant tr)
   ]
 let add_key_value_invariant #invs #key_t #value_t #mt mpred prin sess_id key value tr =
@@ -232,7 +232,7 @@ let add_key_value_invariant #invs #key_t #value_t #mt mpred prin sess_id key val
 #pop-options
 
 val find_value_invariant:
-  {|invs:protocol_invariants|} ->
+  {|protocol_invariants|} ->
   #key_t:eqtype -> #value_t:Type0 -> {|map_types key_t value_t|} ->
   mpred:map_predicate key_t value_t ->
   prin:principal -> sess_id:state_id ->
@@ -241,7 +241,7 @@ val find_value_invariant:
   Lemma
   (requires
     trace_invariant tr /\
-    has_map_session_invariant invs mpred
+    has_map_session_invariant mpred
   )
   (ensures (
     let (opt_value, tr_out) = find_value prin sess_id key tr in
@@ -254,7 +254,7 @@ val find_value_invariant:
     )
   ))
   [SMTPat (find_value #key_t #value_t prin sess_id key tr);
-   SMTPat (has_map_session_invariant invs mpred);
+   SMTPat (has_map_session_invariant mpred);
    SMTPat (trace_invariant tr);
   ]
 let find_value_invariant #invs #key_t #value_t #mt mpred prin sess_id key tr =

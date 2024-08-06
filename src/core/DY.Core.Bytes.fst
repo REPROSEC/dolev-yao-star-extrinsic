@@ -399,7 +399,7 @@ let get_kem_sk_usage #cusages pk =
 /// by honest principals.
 
 noeq
-type aead_crypto_predicate (cusages:crypto_usages) = {
+type aead_crypto_predicate {|crypto_usages|} = {
   pred: tr:trace -> key:bytes{AeadKey? (get_usage key)} -> nonce:bytes -> msg:bytes -> ad:bytes -> prop;
   pred_later:
     tr1:trace -> tr2:trace ->
@@ -411,7 +411,7 @@ type aead_crypto_predicate (cusages:crypto_usages) = {
 }
 
 noeq
-type pkenc_crypto_predicate (cusages:crypto_usages) = {
+type pkenc_crypto_predicate {|crypto_usages|} = {
   pred: tr:trace -> pk:bytes{PkKey? (get_sk_usage pk)} -> msg:bytes -> prop;
   pred_later:
     tr1:trace -> tr2:trace ->
@@ -423,7 +423,7 @@ type pkenc_crypto_predicate (cusages:crypto_usages) = {
 }
 
 noeq
-type sign_crypto_predicate (cusages:crypto_usages) = {
+type sign_crypto_predicate {|crypto_usages|} = {
   pred: tr:trace -> vk:bytes{SigKey? (get_signkey_usage vk)} -> msg:bytes -> prop;
   pred_later:
     tr1:trace -> tr2:trace ->
@@ -435,10 +435,10 @@ type sign_crypto_predicate (cusages:crypto_usages) = {
 }
 
 noeq
-type crypto_predicates (cusages:crypto_usages) = {
-  aead_pred: aead_crypto_predicate cusages;
-  pkenc_pred: pkenc_crypto_predicate cusages;
-  sign_pred: sign_crypto_predicate cusages;
+type crypto_predicates {|crypto_usages|} = {
+  aead_pred: aead_crypto_predicate;
+  pkenc_pred: pkenc_crypto_predicate;
+  sign_pred: sign_crypto_predicate;
 }
 
 /// Default (empty) cryptographic predicates, that can be used like this:
@@ -446,31 +446,31 @@ type crypto_predicates (cusages:crypto_usages) = {
 ///   sign_pred = ...;
 /// }
 
-val default_aead_predicate: cusages:crypto_usages -> aead_crypto_predicate cusages
-let default_aead_predicate cusages = {
+val default_aead_predicate: {|crypto_usages|} -> aead_crypto_predicate
+let default_aead_predicate #cusages = {
   pred = (fun tr key nonce msg ad -> False);
   pred_later = (fun tr1 tr2 key nonce msg ad -> ());
 }
 
-val default_pkenc_predicate: cusages:crypto_usages -> pkenc_crypto_predicate cusages
-let default_pkenc_predicate cusages = {
+val default_pkenc_predicate: {|crypto_usages|} -> pkenc_crypto_predicate
+let default_pkenc_predicate #cusages = {
   pred = (fun tr pk msg -> False);
   pred_later = (fun tr1 tr2 pk msg -> ());
 }
 
-val default_sign_predicate: cusages:crypto_usages -> sign_crypto_predicate cusages
-let default_sign_predicate cusages = {
+val default_sign_predicate: {|crypto_usages|} -> sign_crypto_predicate
+let default_sign_predicate #cusages = {
   pred = (fun tr vk msg -> False);
   pred_later = (fun tr1 tr2 vk msg -> ());
 }
 
 val default_crypto_predicates:
-  cusages:crypto_usages ->
-  crypto_predicates cusages
-let default_crypto_predicates cusages = {
-  aead_pred = default_aead_predicate cusages;
-  pkenc_pred = default_pkenc_predicate cusages;
-  sign_pred = default_sign_predicate cusages;
+  {|crypto_usages|} ->
+  crypto_predicates
+let default_crypto_predicates #cusages = {
+  aead_pred = default_aead_predicate;
+  pkenc_pred = default_pkenc_predicate;
+  sign_pred = default_sign_predicate;
 }
 
 /// Gather the usage functions and the cryptographic predicates
@@ -481,7 +481,7 @@ class crypto_invariants = {
   [@@@FStar.Tactics.Typeclasses.tcinstance]
   usages: crypto_usages;
   [@@@FStar.Tactics.Typeclasses.no_method]
-  preds: crypto_predicates usages;
+  preds: crypto_predicates;
 }
 
 // `crypto_predicates` cannot be a typeclass that is inherited by `crypto_invariants`,
