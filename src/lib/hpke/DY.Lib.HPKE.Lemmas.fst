@@ -155,6 +155,7 @@ let hpke_aead_pred #cusgs #hpke = {
     let AeadKey usg data = get_usage key in
     match parse hpke_aead_usage_data data with
     | Some { hpke_usg; info; } ->
+      get_label msg `can_flow tr` public \/
       hpke_pred.pred tr (hpke_usg.usage_tag, hpke_usg.usage_data) msg info ad
     | _ ->
       False
@@ -163,7 +164,7 @@ let hpke_aead_pred #cusgs #hpke = {
     let AeadKey usg data = get_usage key in
     match parse hpke_aead_usage_data data with
     | Some { hpke_usg; info; } ->
-      hpke_pred.pred_later tr1 tr2 (hpke_usg.usage_tag, hpke_usg.usage_data) msg info ad
+      FStar.Classical.move_requires (hpke_pred.pred_later tr1 tr2 (hpke_usg.usage_tag, hpke_usg.usage_data) msg info) ad
     | _ -> ()
   );
 }
@@ -258,10 +259,14 @@ val bytes_invariant_hpke_enc:
     ) /\
     // but even if it is publishable, the entropy must have a correct usage
     (exists usage. get_usage entropy == mk_hpke_entropy_usage usage) /\
-    // the HPKE predicate must hold (the `forall` is a way to extract the usage from `pkR`)
-    (forall usage.
-      get_hpke_sk_usage pkR == mk_hpke_sk_usage usage ==>
-      hpke_pred.pred tr usage msg info ad
+    // the HPKE predicate must hold (the `forall` is a way to extract the usage from `pkR`),
+    // or the message is publishable
+    (
+      (forall usage.
+        get_hpke_sk_usage pkR == mk_hpke_sk_usage usage ==>
+        hpke_pred.pred tr usage msg info ad
+      ) \/
+      get_label msg `can_flow tr` public
     ) /\
     // the global protocol invariants must contain the HPKE invariants
     has_hpke_invariants
@@ -388,7 +393,7 @@ let bytes_invariant_hpke_dec #cinvs #hpke tr skR enc ciphertext info ad =
         | Some plaintext -> (
           assert(get_usage aead_key == AeadKey "DY.Lib.HPKE" (serialize _ { hpke_usg = {usage_tag; usage_data}; info; }) \/ is_publishable tr aead_key);
           assert(get_usage aead_key == AeadKey "DY.Lib.HPKE" (serialize _ { hpke_usg = {usage_tag; usage_data}; info; }) ==>
-            (aead_pred.pred tr aead_key aead_nonce plaintext ad ==> hpke_pred.pred tr usage plaintext info ad)
+            (aead_pred.pred tr aead_key aead_nonce plaintext ad ==> ((hpke_pred.pred tr usage plaintext info ad) \/ is_publishable tr plaintext))
           );
           FStar.Classical.forall_intro (FStar.Classical.move_requires (mk_hpke_sk_usage_inj usage));
           ()
