@@ -82,15 +82,15 @@ let compile_event_pred #a #ev epred tr prin content_bytes =
 
 [@@ "opaque_to_smt"]
 val has_compiled_event_pred:
-  protocol_invariants -> (string & compiled_event_predicate) -> prop
-let has_compiled_event_pred invs (tag, epred) =
+  {|protocol_invariants|} -> (string & compiled_event_predicate) -> prop
+let has_compiled_event_pred #invs (tag, epred) =
   has_local_fun split_event_pred_params event_pred (tag, epred)
 
 val has_event_pred:
   #a:Type0 -> {|event a|} ->
-  protocol_invariants -> event_predicate a -> prop
-let has_event_pred #a #ev invs epred =
-  has_compiled_event_pred invs (ev.tag, compile_event_pred epred)
+  {|protocol_invariants|} -> event_predicate a -> prop
+let has_event_pred #a #ev #invs epred =
+  has_compiled_event_pred (ev.tag, compile_event_pred epred)
 
 (*** Global event predicate builder ***)
 
@@ -98,16 +98,16 @@ val mk_event_pred: {|crypto_invariants|} -> list (string & compiled_event_predic
 let mk_event_pred #cinvs tagged_local_preds =
   mk_global_fun split_event_pred_params tagged_local_preds
 
-val mk_event_pred_correct: invs:protocol_invariants -> tagged_local_preds:list (string & compiled_event_predicate) -> Lemma
+val mk_event_pred_correct: {|protocol_invariants|} -> tagged_local_preds:list (string & compiled_event_predicate) -> Lemma
   (requires
-    invs.trace_invs.event_pred == mk_event_pred tagged_local_preds /\
+    event_pred == mk_event_pred tagged_local_preds /\
     List.Tot.no_repeats_p (List.Tot.map fst tagged_local_preds)
   )
-  (ensures for_allP (has_compiled_event_pred invs) tagged_local_preds)
-let mk_event_pred_correct invs tagged_local_preds =
+  (ensures for_allP has_compiled_event_pred tagged_local_preds)
+let mk_event_pred_correct #invs tagged_local_preds =
   reveal_opaque (`%has_compiled_event_pred) (has_compiled_event_pred);
   no_repeats_p_implies_for_all_pairsP_unequal (List.Tot.map fst tagged_local_preds);
-  for_allP_eq (has_compiled_event_pred invs) tagged_local_preds;
+  for_allP_eq has_compiled_event_pred tagged_local_preds;
   FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (mk_global_fun_correct split_event_pred_params tagged_local_preds))
 
 (*** Monadic functions ***)
@@ -136,14 +136,14 @@ let event_triggered #a #ev tr prin e =
   exists i. event_triggered_at tr i prin e
 
 val trigger_event_trace_invariant:
-  {|invs:protocol_invariants|} ->
+  {|protocol_invariants|} ->
   #a:Type -> {|ev:event a|} ->
   epred:event_predicate a ->
   prin:principal -> e:a -> tr:trace ->
   Lemma
   (requires
     epred tr prin e /\
-    has_event_pred invs epred /\
+    has_event_pred epred /\
     trace_invariant tr
   )
   (ensures (
@@ -152,7 +152,7 @@ val trigger_event_trace_invariant:
     event_triggered tr_out prin e
   ))
   [SMTPat (trigger_event prin e tr);
-   SMTPat (has_event_pred invs epred);
+   SMTPat (has_event_pred epred);
    SMTPat (trace_invariant tr)]
 let trigger_event_trace_invariant #invs #a #ev epred prin e tr =
   reveal_opaque (`%has_compiled_event_pred) (has_compiled_event_pred);
@@ -161,19 +161,19 @@ let trigger_event_trace_invariant #invs #a #ev epred prin e tr =
   local_eq_global_lemma split_event_pred_params event_pred ev.tag (compile_event_pred epred) (tr, prin, ev.tag, serialize _ e) ev.tag (tr, prin, serialize _ e)
 
 val event_triggered_at_implies_pred:
-  {|invs:protocol_invariants|} ->
+  {|protocol_invariants|} ->
   #a:Type -> {|ev:event a|} ->
   epred:event_predicate a -> tr:trace ->
   i:timestamp -> prin:principal -> e:a ->
   Lemma
   (requires
     event_triggered_at tr i prin e /\
-    has_event_pred invs epred /\
+    has_event_pred epred /\
     trace_invariant tr
   )
   (ensures i <= DY.Core.Trace.Type.length tr /\ epred (prefix tr i) prin e)
   [SMTPat (event_triggered_at tr i prin e);
-   SMTPat (has_event_pred invs epred);
+   SMTPat (has_event_pred epred);
    SMTPat (trace_invariant tr);
   ]
 let event_triggered_at_implies_pred #invs #a #ev epred tr i prin e =

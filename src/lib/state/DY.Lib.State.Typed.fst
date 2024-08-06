@@ -62,10 +62,10 @@ let local_state_predicate_to_local_bytes_state_predicate #cinvs #a #ps_a tspred 
 
 val has_local_state_predicate:
   #a:Type -> {|local_state a|} ->
-  invs:protocol_invariants -> local_state_predicate a ->
+  {|protocol_invariants|} -> local_state_predicate a ->
   prop
-let has_local_state_predicate #a #ls invs spred =
-  has_local_bytes_state_predicate invs (ls.tag, (local_state_predicate_to_local_bytes_state_predicate spred))
+let has_local_state_predicate #a #ls #invs spred =
+  has_local_bytes_state_predicate (ls.tag, (local_state_predicate_to_local_bytes_state_predicate spred))
 
 [@@ "opaque_to_smt"]
 val state_was_set:
@@ -94,14 +94,14 @@ let get_state #a #ls prin sess_id =
 
 val set_state_invariant:
   #a:Type -> {|local_state a|} ->
-  {|invs:protocol_invariants|} ->
+  {|protocol_invariants|} ->
   spred:local_state_predicate a ->
   prin:principal -> sess_id:state_id -> content:a -> tr:trace ->
   Lemma
   (requires
     spred.pred tr prin sess_id content /\
     trace_invariant tr /\
-    has_local_state_predicate invs spred
+    has_local_state_predicate spred
   )
   (ensures (
     let ((), tr_out) = set_state prin sess_id content tr in
@@ -110,7 +110,7 @@ val set_state_invariant:
   ))
   [SMTPat (set_state prin sess_id content tr);
    SMTPat (trace_invariant tr);
-   SMTPat (has_local_state_predicate invs spred)]
+   SMTPat (has_local_state_predicate spred)]
 let set_state_invariant #a #ls #invs spred prin sess_id content tr =
   reveal_opaque (`%set_state) (set_state #a);
   reveal_opaque (`%state_was_set) (state_was_set #a);
@@ -118,13 +118,13 @@ let set_state_invariant #a #ls #invs spred prin sess_id content tr =
 
 val get_state_invariant:
   #a:Type -> {|local_state a|} ->
-  {|invs:protocol_invariants|} ->
+  {|protocol_invariants|} ->
   spred:local_state_predicate a ->
   prin:principal -> sess_id:state_id -> tr:trace ->
   Lemma
   (requires
     trace_invariant tr /\
-    has_local_state_predicate invs spred
+    has_local_state_predicate spred
   )
   (ensures (
     let (opt_content, tr_out) = get_state prin sess_id tr in
@@ -138,26 +138,26 @@ val get_state_invariant:
   ))
   [SMTPat (get_state #a prin sess_id tr);
    SMTPat (trace_invariant tr);
-   SMTPat (has_local_state_predicate invs spred)]
+   SMTPat (has_local_state_predicate spred)]
 let get_state_invariant #a #ls #invs spred prin sess_id tr =
   reveal_opaque (`%get_state) (get_state #a)
 
 val state_was_set_implies_pred:
   #a:Type -> {|local_state a|} ->
-  invs:protocol_invariants -> tr:trace ->
+  {|protocol_invariants|} -> tr:trace ->
   spred:local_state_predicate a ->
   prin:principal -> sess_id:state_id -> content:a ->
   Lemma
   (requires
     state_was_set tr prin sess_id content /\
     trace_invariant tr /\
-    has_local_state_predicate invs spred
+    has_local_state_predicate spred
   )
   (ensures spred.pred tr prin sess_id content)
   [SMTPat (state_was_set tr prin sess_id content);
    SMTPat (trace_invariant tr);
-   SMTPat (has_local_state_predicate invs spred);
+   SMTPat (has_local_state_predicate spred);
   ]
-let state_was_set_implies_pred #a #ls invs tr spred prin sess_id content =
+let state_was_set_implies_pred #a #ls #invs tr spred prin sess_id content =
   parse_serialize_inv_lemma #bytes a content;
   reveal_opaque (`%state_was_set) (state_was_set #a)

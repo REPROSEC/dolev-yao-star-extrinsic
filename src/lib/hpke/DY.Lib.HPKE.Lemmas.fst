@@ -100,6 +100,19 @@ type hpke_crypto_predicate {|crypto_usages|} = {
   ;
 }
 
+/// Typeclass for hpke_crypto_predicate.
+/// The type `hpke_crypto_predicate` is used to represent the global HPKE predicate,
+/// but could also be used to represent local HPKE predicates,
+/// as it is done e.g. with sign_crypto_predicate.
+/// Hence, we cannot use the typeclass mechanism directly on `hpke_crypto_predicate`,
+/// as the typeclass resolution algorithm might resolve to local predicates.
+/// Hence, similarly to how we access to the global `sign_crypto_predicate` through the typeclass `crypto_invariants`,
+/// we define `hpke_crypto_invariants` that will contain the global HPKE predicate.
+
+class hpke_crypto_invariants {|crypto_usages|} = {
+  hpke_pred: hpke_crypto_predicate;
+}
+
 /// The cryptographic invariants for HPKE.
 
 [@@ with_bytes bytes]
@@ -136,13 +149,13 @@ let hpke_kdf_expand_usage: kdf_expand_crypto_usage = {
   get_label_lemma = (fun tr prk_usage prk_label info -> ());
 }
 
-val hpke_aead_pred: {|cusgs:crypto_usages|} -> hpke_crypto_predicate -> aead_crypto_predicate cusgs
-let hpke_aead_pred #cusgs hpke = {
+val hpke_aead_pred: {|crypto_usages|} -> {|hpke_crypto_invariants|} -> aead_crypto_predicate
+let hpke_aead_pred #cusgs #hpke = {
   pred = (fun tr key nonce msg ad ->
     let AeadKey usg data = get_usage key in
     match parse hpke_aead_usage_data data with
     | Some { hpke_usg; info; } ->
-      hpke.pred tr (hpke_usg.usage_tag, hpke_usg.usage_data) msg info ad
+      hpke_pred.pred tr (hpke_usg.usage_tag, hpke_usg.usage_data) msg info ad
     | _ ->
       False
   );
@@ -150,7 +163,7 @@ let hpke_aead_pred #cusgs hpke = {
     let AeadKey usg data = get_usage key in
     match parse hpke_aead_usage_data data with
     | Some { hpke_usg; info; } ->
-      hpke.pred_later tr1 tr2 (hpke_usg.usage_tag, hpke_usg.usage_data) msg info ad
+      hpke_pred.pred_later tr1 tr2 (hpke_usg.usage_tag, hpke_usg.usage_data) msg info ad
     | _ -> ()
   );
 }
@@ -160,19 +173,19 @@ let hpke_aead_pred #cusgs hpke = {
 let hpke_kdf_expand_tag_and_usage = ("DY.Lib.HPKE", hpke_kdf_expand_usage)
 
 val has_hpke_kdf_expand_usage: {|crypto_usages|} -> prop
-let has_hpke_kdf_expand_usage #cu =
-  has_kdf_expand_usage cu hpke_kdf_expand_tag_and_usage
+let has_hpke_kdf_expand_usage #cusgs =
+  has_kdf_expand_usage hpke_kdf_expand_tag_and_usage
 
-let hpke_aead_tag_and_pred {|crypto_usages|} hpke = ("DY.Lib.HPKE", hpke_aead_pred hpke)
+let hpke_aead_tag_and_pred {|crypto_usages|} {|hpke_crypto_invariants|} = ("DY.Lib.HPKE", hpke_aead_pred)
 
-val has_hpke_aead_pred: {|crypto_invariants|} -> hpke_crypto_predicate -> prop
-let has_hpke_aead_pred #cinvs hpke =
-  has_aead_predicate cinvs (hpke_aead_tag_and_pred hpke)
+val has_hpke_aead_pred: {|crypto_invariants|} -> {|hpke_crypto_invariants|} -> prop
+let has_hpke_aead_pred #cinvs #hpke =
+  has_aead_predicate hpke_aead_tag_and_pred
 
-val has_hpke_invariants: {|crypto_invariants|} -> hpke_crypto_predicate -> prop
-let has_hpke_invariants #cinvs hpke =
+val has_hpke_invariants: {|crypto_invariants|} -> {|hpke_crypto_invariants|} -> prop
+let has_hpke_invariants #cinvs #hpke =
   has_hpke_kdf_expand_usage /\
-  has_hpke_aead_pred hpke
+  has_hpke_aead_pred
 
 /// Lemmas for `hpke_pk`
 
@@ -216,8 +229,7 @@ let get_hpke_sk_label_hpke_pk #cu sk = ()
 
 #push-options "--ifuel 2"
 val bytes_invariant_hpke_enc:
-  {|cinvs:crypto_invariants|} ->
-  hpke:hpke_crypto_predicate ->
+  {|crypto_invariants|} -> {|hpke_crypto_invariants|} ->
   tr:trace ->
   pkR:bytes -> entropy:bytes -> msg:bytes -> info:bytes -> ad:bytes ->
   Lemma
@@ -249,10 +261,10 @@ val bytes_invariant_hpke_enc:
     // the HPKE predicate must hold (the `forall` is a way to extract the usage from `pkR`)
     (forall usage.
       get_hpke_sk_usage pkR == mk_hpke_sk_usage usage ==>
-      hpke.pred tr usage msg info ad
+      hpke_pred.pred tr usage msg info ad
     ) /\
     // the global protocol invariants must contain the HPKE invariants
-    has_hpke_invariants hpke
+    has_hpke_invariants
   )
   (ensures (
     let (enc, ciphertext) = hpke_enc pkR entropy msg info ad in
@@ -261,9 +273,9 @@ val bytes_invariant_hpke_enc:
   ))
   [SMTPat (hpke_enc pkR entropy msg info ad);
    SMTPat (bytes_invariant tr msg);
-   SMTPat (has_hpke_invariants hpke);
+   SMTPat (has_hpke_invariants);
   ]
-let bytes_invariant_hpke_enc #cinvs hpke tr pkR entropy msg info ad =
+let bytes_invariant_hpke_enc #cinvs #hpke tr pkR entropy msg info ad =
   eliminate exists usage. get_usage entropy == mk_hpke_entropy_usage usage
   returns (
     let (enc, ciphertext) = hpke_enc pkR entropy msg info ad in
@@ -278,7 +290,7 @@ let bytes_invariant_hpke_enc #cinvs hpke tr pkR entropy msg info ad =
 
     let ciphertext = aead_enc aead_key aead_nonce msg ad in
     assert((enc, ciphertext) == hpke_enc pkR entropy msg info ad);
-    assert(hpke.pred tr usage msg info ad ==> aead_pred.pred tr aead_key aead_nonce msg ad);
+    assert(hpke_pred.pred tr usage msg info ad ==> aead_pred.pred tr aead_key aead_nonce msg ad);
     serialize_wf_lemma _ (bytes_invariant tr) { len = 32; label = "key"; info };
     serialize_wf_lemma _ (bytes_invariant tr) { len = 32; label = "base_nonce"; info };
     ()
@@ -290,8 +302,7 @@ let bytes_invariant_hpke_enc #cinvs hpke tr pkR entropy msg info ad =
 
 #push-options "--ifuel 0"
 val bytes_invariant_hpke_dec:
-  {|cinvs:crypto_invariants|} ->
-  hpke:hpke_crypto_predicate ->
+  {|crypto_invariants|} -> {|hpke_crypto_invariants|} ->
   tr:trace ->
   skR:bytes -> enc:bytes -> ciphertext:bytes -> info:bytes -> ad:bytes ->
   Lemma
@@ -305,7 +316,7 @@ val bytes_invariant_hpke_dec:
     bytes_invariant tr ciphertext /\
     bytes_invariant tr info /\
     bytes_invariant tr ad /\
-    has_hpke_invariants hpke
+    has_hpke_invariants
   )
   (ensures (
     match hpke_dec skR (enc, ciphertext) info ad with
@@ -315,7 +326,7 @@ val bytes_invariant_hpke_dec:
       (
         (
           forall usage. get_hpke_sk_usage (hpke_pk skR) == mk_hpke_sk_usage usage ==>
-          hpke.pred tr usage plaintext info ad
+          hpke_pred.pred tr usage plaintext info ad
         ) \/ (
           is_publishable tr plaintext
         )
@@ -323,9 +334,9 @@ val bytes_invariant_hpke_dec:
   ))
   [SMTPat (hpke_dec skR (enc, ciphertext) info ad);
    SMTPat (bytes_invariant tr ciphertext);
-   SMTPat (has_hpke_invariants hpke);
+   SMTPat (has_hpke_invariants);
   ]
-let bytes_invariant_hpke_dec #cinvs hpke tr skR enc ciphertext info ad =
+let bytes_invariant_hpke_dec #cinvs #hpke tr skR enc ciphertext info ad =
   let post =
     match hpke_dec skR (enc, ciphertext) info ad with
     | None -> True
@@ -334,7 +345,7 @@ let bytes_invariant_hpke_dec #cinvs hpke tr skR enc ciphertext info ad =
       (
         (
           forall usage. get_hpke_sk_usage (hpke_pk skR) == mk_hpke_sk_usage usage ==>
-          hpke.pred tr usage plaintext info ad
+          hpke_pred.pred tr usage plaintext info ad
         ) \/ (
           is_publishable tr plaintext
         )
@@ -377,7 +388,7 @@ let bytes_invariant_hpke_dec #cinvs hpke tr skR enc ciphertext info ad =
         | Some plaintext -> (
           assert(get_usage aead_key == AeadKey "DY.Lib.HPKE" (serialize _ { hpke_usg = {usage_tag; usage_data}; info; }) \/ is_publishable tr aead_key);
           assert(get_usage aead_key == AeadKey "DY.Lib.HPKE" (serialize _ { hpke_usg = {usage_tag; usage_data}; info; }) ==>
-            (aead_pred.pred tr aead_key aead_nonce plaintext ad ==> hpke.pred tr usage plaintext info ad)
+            (aead_pred.pred tr aead_key aead_nonce plaintext ad ==> hpke_pred.pred tr usage plaintext info ad)
           );
           FStar.Classical.forall_intro (FStar.Classical.move_requires (mk_hpke_sk_usage_inj usage));
           ()

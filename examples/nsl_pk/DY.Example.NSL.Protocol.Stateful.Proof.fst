@@ -95,8 +95,8 @@ let all_events = [
 
 /// Create the global trace invariants.
 
-let trace_invariants_nsl: trace_invariants (crypto_invariants_nsl) = {
-  state_pred = mk_state_pred crypto_invariants_nsl all_sessions;
+let trace_invariants_nsl: trace_invariants = {
+  state_pred = mk_state_pred all_sessions;
   event_pred = mk_event_pred all_events;
 }
 
@@ -107,32 +107,38 @@ instance protocol_invariants_nsl: protocol_invariants = {
 
 /// Lemmas that the global state predicate contains all the local ones
 
-val all_sessions_has_all_sessions: unit -> Lemma (norm [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP (has_local_bytes_state_predicate protocol_invariants_nsl) all_sessions))
+// Below, the `has_..._predicate` are called with the implicit argument `#protocol_invariants_nsl`.
+// This argument could be omitted as it can be instantiated automatically by F*'s typeclass resolution algorithm.
+// However we instantiate it explicitly here so that the meaning of `has_..._predicate` is easier to understand.
+
+val all_sessions_has_all_sessions: unit -> Lemma (norm [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP (has_local_bytes_state_predicate #protocol_invariants_nsl) all_sessions))
 let all_sessions_has_all_sessions () =
   assert_norm(List.Tot.no_repeats_p (List.Tot.map fst (all_sessions)));
-  mk_state_pred_correct protocol_invariants_nsl all_sessions;
-  norm_spec [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP (has_local_bytes_state_predicate protocol_invariants_nsl) all_sessions)
+  mk_state_pred_correct #protocol_invariants_nsl all_sessions;
+  norm_spec [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP (has_local_bytes_state_predicate #protocol_invariants_nsl) all_sessions)
 
-val protocol_invariants_nsl_has_pki_invariant: squash (has_pki_invariant protocol_invariants_nsl)
+val protocol_invariants_nsl_has_pki_invariant: squash (has_pki_invariant #protocol_invariants_nsl)
 let protocol_invariants_nsl_has_pki_invariant = all_sessions_has_all_sessions ()
 
-val protocol_invariants_nsl_has_private_keys_invariant: squash (has_private_keys_invariant protocol_invariants_nsl)
+val protocol_invariants_nsl_has_private_keys_invariant: squash (has_private_keys_invariant #protocol_invariants_nsl)
 let protocol_invariants_nsl_has_private_keys_invariant = all_sessions_has_all_sessions ()
 
-val protocol_invariants_nsl_has_nsl_session_invariant: squash (has_local_state_predicate protocol_invariants_nsl state_predicate_nsl)
+// As an example, below `#protocol_invariants_nsl` is omitted and instantiated using F*'s typeclass resolution algorithm
+val protocol_invariants_nsl_has_nsl_session_invariant: squash (has_local_state_predicate state_predicate_nsl)
 let protocol_invariants_nsl_has_nsl_session_invariant = all_sessions_has_all_sessions ()
 
 /// Lemmas that the global event predicate contains all the local ones
 
-val all_events_has_all_events: unit -> Lemma (norm [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP (has_compiled_event_pred protocol_invariants_nsl) all_events))
+val all_events_has_all_events: unit -> Lemma (norm [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP (has_compiled_event_pred #protocol_invariants_nsl) all_events))
 let all_events_has_all_events () =
   assert_norm(List.Tot.no_repeats_p (List.Tot.map fst (all_events)));
-  mk_event_pred_correct protocol_invariants_nsl all_events;
-  norm_spec [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP (has_compiled_event_pred protocol_invariants_nsl) all_events);
+  mk_event_pred_correct #protocol_invariants_nsl all_events;
+  norm_spec [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP (has_compiled_event_pred #protocol_invariants_nsl) all_events);
   let dumb_lemma (x:prop) (y:prop): Lemma (requires x /\ x == y) (ensures y) = () in
-  dumb_lemma (for_allP (has_compiled_event_pred protocol_invariants_nsl) all_events) (norm [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP (has_compiled_event_pred protocol_invariants_nsl) all_events))
+  dumb_lemma (for_allP (has_compiled_event_pred #protocol_invariants_nsl) all_events) (norm [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP (has_compiled_event_pred #protocol_invariants_nsl) all_events))
 
-val protocol_invariants_nsl_has_nsl_event_invariant: squash (has_event_pred protocol_invariants_nsl event_predicate_nsl)
+// As an example, below `#protocol_invariants_nsl` is omitted and instantiated using F*'s typeclass resolution algorithm
+val protocol_invariants_nsl_has_nsl_event_invariant: squash (has_event_pred event_predicate_nsl)
 let protocol_invariants_nsl_has_nsl_event_invariant = all_events_has_all_events ()
 
 (*** Proofs ***)
