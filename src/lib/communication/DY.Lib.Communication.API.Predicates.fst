@@ -12,7 +12,6 @@ open DY.Lib.Communication.API
 
 (*** PkEnc Predicates ***)
 
-// TODO add higher layer preds as a parameter
 #push-options "--ifuel 3 --fuel 0"
 val pkenc_crypto_predicates_communication_layer: cusages:crypto_usages -> pkenc_crypto_predicate cusages
 let pkenc_crypto_predicates_communication_layer cusages = {
@@ -70,41 +69,64 @@ let has_communication_layer_invariants cinvs =
 
 (*** Event Predicates ***)
 
+noeq
+type comm_higher_layer_event_preds = {
+  send_conf: tr:trace -> sender:principal -> receiver:principal -> payload:bytes -> prop;
+  receive_conf: tr:trace -> sender:principal -> receiver:principal -> payload:bytes -> prop;
+  send_auth: tr:trace -> sender:principal -> payload:bytes -> prop;
+  receive_auth: tr:trace -> sender:principal -> receiver:principal -> vk_sender:bytes -> payload:bytes -> prop;
+}
+
+val default_comm_higher_layer_event_preds: comm_higher_layer_event_preds
+let default_comm_higher_layer_event_preds = {
+  send_conf = (fun tr sender receiver payload -> True);
+  receive_conf = (fun tr sender receiver payload -> True);
+  send_auth = (fun tr sender payload -> True);
+  receive_auth = (fun tr sender receiver vk_sender payload -> True);
+}
+
 #push-options "--ifuel 1 --fuel 0"
-let event_predicate_communication_layer {|cinvs:crypto_invariants|} (higher_layer_preds:event_predicate communication_event) : event_predicate communication_event =
+let event_predicate_communication_layer {|cinvs:crypto_invariants|} (higher_layer_preds:comm_higher_layer_event_preds) : event_predicate communication_event =
   fun tr prin e ->
-    (
-      match e with
-      | CommConfSendMsg sender receiver payload -> (
-        is_knowable_by (join (principal_label sender) (principal_label receiver)) tr payload
+    (match e with
+    | CommConfSendMsg sender receiver payload -> (
+      is_knowable_by (join (principal_label sender) (principal_label receiver)) tr payload /\
+      higher_layer_preds.send_conf tr sender receiver payload
+    )
+    | CommConfReceiveMsg sender receiver payload -> (
+      (
+        event_triggered tr sender (CommConfSendMsg sender receiver payload) /\
+        is_knowable_by (join (principal_label sender) (principal_label receiver)) tr payload /\
+        higher_layer_preds.receive_conf tr sender receiver payload
+      ) \/ (
+        is_publishable tr payload
       )
-      | CommConfReceiveMsg sender receiver payload -> (
+    )
+    | CommAuthSendMsg sender payload -> (
+      higher_layer_preds.send_auth tr sender payload
+    )
+    | CommAuthReceiveMsg sender receiver vk_sender payload -> (
+      is_publishable tr payload /\
+      (
         (
-          event_triggered tr sender (CommConfSendMsg sender receiver payload) /\
-          is_knowable_by (join (principal_label sender) (principal_label receiver)) tr payload
-        ) \/ (
-          is_publishable tr payload
-        )
-      )
-      | CommAuthSendMsg sender payload -> True
-      | CommAuthReceiveMsg sender receiver vk_sender payload -> (
-        event_triggered tr sender (CommAuthSendMsg sender payload) \/
+          event_triggered tr sender (CommAuthSendMsg sender payload) /\
+          higher_layer_preds.receive_auth tr sender receiver vk_sender payload
+        ) \/
         is_corrupt tr (get_signkey_label vk_sender)
       )
-    ) /\
-    higher_layer_preds tr prin e
+    ))
 #pop-options
 
 val event_predicate_communication_layer_and_tag: 
   {|cinvs:crypto_invariants|} ->
-  event_predicate communication_event ->
+  comm_higher_layer_event_preds ->
   (string & compiled_event_predicate)
 let event_predicate_communication_layer_and_tag #cinvs higher_layer_preds =
   ("DY.Lib.Communication.Event", compile_event_pred #communication_event (event_predicate_communication_layer #cinvs higher_layer_preds))
 
 val has_communication_layer_event_predicates:
   protocol_invariants ->
-  event_predicate communication_event ->
+ comm_higher_layer_event_preds ->
   prop
 let has_communication_layer_event_predicates invs higher_layer_preds =
   has_event_pred invs (event_predicate_communication_layer higher_layer_preds)
