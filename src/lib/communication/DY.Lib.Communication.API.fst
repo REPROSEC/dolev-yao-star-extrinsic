@@ -177,13 +177,20 @@ let verify_message receiver msg_bytes vk_sender =
   guard (verify vk_sender msg_bytes msg_signed.signature);?
   Some (CM?.msg msg)
 
+val get_sender: bytes -> option principal
+let get_sender msg_bytes =
+  let? cm_msg = parse communication_message msg_bytes in
+  guard (CMSign? cm_msg);?
+  Some (CMSign?.msg cm_msg).sender
+
 val receive_authenticated:
   communication_keys_sess_ids ->
-  principal -> principal -> timestamp ->
+  principal -> timestamp ->
   traceful (option communication_message_base)
-let receive_authenticated comm_keys_ids sender receiver msg_id =
+let receive_authenticated comm_keys_ids receiver msg_id =
+  let*? msg_signed = recv_msg msg_id in
+  let*? sender = return (get_sender msg_signed) in
   let*? vk_sender = get_public_key receiver comm_keys_ids.pki (Verify comm_layer_sign_tag) sender in
-  let*? msg_encrypted = recv_msg msg_id in
-  let*? msg_plain:communication_message_base = return (verify_message receiver msg_encrypted vk_sender) in
+  let*? msg_plain:communication_message_base = return (verify_message receiver msg_signed vk_sender) in
   trigger_event receiver (CommAuthReceiveMsg sender receiver vk_sender msg_plain.payload);*
   return (Some msg_plain)
