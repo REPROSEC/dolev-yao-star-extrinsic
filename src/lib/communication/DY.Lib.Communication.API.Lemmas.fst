@@ -37,7 +37,6 @@ let encrypt_message_proof #cinvs tr sender receiver payload pk nonce =
   serialize_wf_lemma communication_message (is_knowable_by (join (principal_label sender) (principal_label receiver)) tr) msg;
   ()
 
-#push-options "--fuel 8 --ifuel 8 --z3rlimit 100"
 val send_confidential_proof:
   {|invs:protocol_invariants|} ->
   tr:trace ->
@@ -116,10 +115,11 @@ val receive_confidential_proof:
     trace_invariant tr /\ 
     has_private_keys_invariant invs /\
     has_communication_layer_invariants invs.crypto_invs /\
-    (match receive_confidential comm_keys_ids receiver msg_id tr with
-    | (None, tr_out) -> True
-    | (Some {sender; receiver=receiver'; payload}, tr_out) -> 
-      (forall tr'. tr <$ tr' ==> higher_layer_preds.receive_conf tr' sender receiver payload)
+    (
+      match receive_confidential comm_keys_ids receiver msg_id tr with
+      | (None, tr_out) -> True
+      | (Some {sender; receiver=receiver'; payload}, tr_out) -> 
+        (forall tr'. tr <$ tr' ==> higher_layer_preds.receive_conf tr' sender receiver payload)
     ) /\
     has_communication_layer_event_predicates invs higher_layer_preds
   )
@@ -242,7 +242,31 @@ let verify_message_proof #cinvs tr sender receiver msg_bytes vk_sender =
   | _ -> ()
 #pop-options
 
-//#push-options "--ifuel 8 --fuel 8 --z3rlimit 100"
+val extract_data_from_msg_id:
+  tr:trace ->
+  comm_keys_ids:communication_keys_sess_ids ->
+  receiver:principal -> msg_id:timestamp ->
+  (principal -> principal -> bytes -> bytes -> prop) ->
+  prop
+let extract_data_from_msg_id tr comm_keys_ids receiver msg_id fn =
+  match recv_msg msg_id tr with
+  | (None, tr) -> True
+  | (Some msg_signed, tr) -> (
+    match get_sender msg_signed with
+    | None -> True
+    | Some sender -> (
+      match get_public_key receiver comm_keys_ids.pki (Verify comm_layer_sign_tag) sender tr with
+      | (None, tr) -> True
+      | (Some vk_sender, tr) -> (
+        match verify_message receiver msg_signed vk_sender with
+        | None -> True
+        | Some {sender=sender'; receiver=receiver'; payload} -> (
+          fn sender receiver vk_sender payload
+        )
+      )
+    )
+  )
+
 val receive_authenticated_proof:
   {|invs:protocol_invariants|} ->
   tr:trace ->
@@ -254,22 +278,9 @@ val receive_authenticated_proof:
     trace_invariant tr /\ has_pki_invariant invs /\
     has_communication_layer_invariants invs.crypto_invs /\
     (
-      match recv_msg msg_id tr with
-      | (None, tr) -> True
-      | (Some msg_signed, tr) -> (
-        match get_sender msg_signed with
-        | None -> True
-        | Some sender -> (
-          match get_public_key receiver comm_keys_ids.pki (Verify comm_layer_sign_tag) sender tr with
-          | (None, tr) -> True
-          | (Some vk_sender, tr) -> (
-            match verify_message receiver msg_signed vk_sender with
-            | None -> True
-            | Some {sender=sender'; receiver=receiver'; payload} -> (
-              (forall tr'. tr <$ tr' ==> higher_layer_preds.receive_auth tr' sender receiver vk_sender payload)
-            )
-          )
-        )
+      extract_data_from_msg_id tr comm_keys_ids receiver msg_id (
+        fun sender receiver vk_sender payload ->
+          (forall tr'. tr <$ tr' ==> higher_layer_preds.receive_auth tr' sender receiver vk_sender payload)
       )
     ) /\
     has_communication_layer_event_predicates invs higher_layer_preds
@@ -278,22 +289,9 @@ val receive_authenticated_proof:
     let (_, tr_out) = receive_authenticated comm_keys_ids receiver msg_id tr in
     trace_invariant tr_out /\
     (
-      match recv_msg msg_id tr with
-      | (None, tr) -> True
-      | (Some msg_signed, tr) -> (
-        match get_sender msg_signed with
-        | None -> True
-        | Some sender -> (
-          match get_public_key receiver comm_keys_ids.pki (Verify comm_layer_sign_tag) sender tr with
-          | (None, tr) -> True
-          | (Some vk_sender, tr) -> (
-            match verify_message receiver msg_signed vk_sender with
-            | None -> True
-            | Some {sender=sender'; receiver=receiver'; payload} -> (
-              event_triggered tr_out receiver (CommAuthReceiveMsg sender receiver vk_sender payload)
-            )
-          )
-        )
+      extract_data_from_msg_id tr comm_keys_ids receiver msg_id (
+        fun sender receiver vk_sender payload ->
+          event_triggered tr_out receiver (CommAuthReceiveMsg sender receiver vk_sender payload)
       )
     )
   ))
@@ -305,18 +303,6 @@ let receive_authenticated_proof #invs tr higher_layer_preds comm_keys_ids receiv
     let Some sender = get_sender msg_signed in
     let (Some vk_sender, tr) = get_public_key receiver comm_keys_ids.pki (Verify comm_layer_sign_tag) sender tr in
     let (Some msg_bytes, tr) = recv_msg msg_id tr in
-    //let Some msg_base = verify_message receiver msg_bytes vk_sender in
     verify_message_proof tr sender receiver msg_bytes vk_sender;
-    (*assert(get_signkey_label vk_sender == principal_label msg_base.sender \/
-        get_signkey_label vk_sender `can_flow tr` public);
-    assert(sender == msg_base.sender \/
-        get_signkey_label vk_sender `can_flow tr` public);
-    assert(event_triggered tr msg_base.sender (CommunicationLayerSendMsg msg_base.sender payload) \/
-      get_signkey_label vk_sender `can_flow tr` public);
-    assert(get_signkey_label vk_sender `can_flow tr` public ==> is_corrupt tr (get_signkey_label vk_sender));
-    assert(event_triggered tr msg_base.sender (CommunicationLayerSendMsg msg_base.sender payload) \/
-      is_corrupt tr (get_signkey_label vk_sender));
-    let ((), tr) = trigger_event receiver (CommunicationLayerReceiveMsg msg_base.sender receiver vk_sender msg_base.payload) tr in*)
-    //assert(tr_out == tr);
     ()
   )
