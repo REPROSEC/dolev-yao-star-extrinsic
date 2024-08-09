@@ -83,6 +83,7 @@ type communication_keys_sess_ids = {
 
 val initialize_communication: principal -> principal -> traceful (option (communication_keys_sess_ids & communication_keys_sess_ids))
 let initialize_communication sender receiver =
+  // Initialize keys for public key encryption
   let* client_global_session_priv_key_id = initialize_private_keys sender in
   generate_private_key sender client_global_session_priv_key_id (PkDec comm_layer_pkenc_tag);*
 
@@ -99,6 +100,20 @@ let initialize_communication sender receiver =
   let* receiver_global_session_pub_key_id = initialize_pki receiver in
   install_public_key receiver receiver_global_session_pub_key_id (PkEnc comm_layer_pkenc_tag) sender pub_key_client;*
 
+  // Initialize signing keys
+  (*generate_private_key sender client_global_session_priv_key_id (Sign comm_layer_sign_tag);*
+  generate_private_key receiver receiver_global_session_priv_key_id (Sign comm_layer_sign_tag);*
+
+  let*? priv_key_receiver = get_private_key receiver receiver_global_session_priv_key_id (Sign comm_layer_sign_tag) in
+  let pub_key_receiver = pk priv_key_receiver in
+  let* client_global_session_pub_key_id = initialize_pki sender in
+  install_public_key sender client_global_session_pub_key_id (Verify comm_layer_sign_tag) receiver pub_key_receiver;*
+
+  let*? priv_key_client = get_private_key sender client_global_session_priv_key_id (Sign comm_layer_sign_tag) in
+  let pub_key_client = pk priv_key_client in
+  let* receiver_global_session_pub_key_id = initialize_pki receiver in
+  install_public_key receiver receiver_global_session_pub_key_id (Verify comm_layer_sign_tag) sender pub_key_client;*
+*)
   let client_comm_keys_sess_ids = {pki=client_global_session_pub_key_id; private_keys=client_global_session_priv_key_id} in
   let receiver_comm_keys_sess_ids = {pki=receiver_global_session_pub_key_id; private_keys=receiver_global_session_priv_key_id} in
   return (Some (client_comm_keys_sess_ids, receiver_comm_keys_sess_ids))
@@ -112,7 +127,7 @@ let encrypt_message sender receiver payload pk nonce =
   let msg_bytes = serialize communication_message msg in
   pk_enc pk nonce msg_bytes
 
-val send_confidential: 
+val send_confidential:
   communication_keys_sess_ids ->
   principal -> principal -> bytes ->
   traceful (option timestamp)
