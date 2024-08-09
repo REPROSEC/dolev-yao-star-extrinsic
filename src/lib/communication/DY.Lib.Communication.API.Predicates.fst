@@ -72,8 +72,10 @@ let has_communication_layer_invariants cinvs =
 noeq
 type comm_higher_layer_event_preds = {
   send_conf: tr:trace -> sender:principal -> receiver:principal -> payload:bytes -> prop;
+  // TODO do we need extensibility on the receiver side?
   receive_conf: tr:trace -> sender:principal -> receiver:principal -> payload:bytes -> prop;
   send_auth: tr:trace -> sender:principal -> payload:bytes -> prop;
+  // TODO do we need extensibility on the receiver side?
   receive_auth: tr:trace -> sender:principal -> receiver:principal -> vk_sender:bytes -> payload:bytes -> prop;
 }
 
@@ -126,7 +128,7 @@ let event_predicate_communication_layer_and_tag #cinvs higher_layer_preds =
 
 val has_communication_layer_event_predicates:
   protocol_invariants ->
- comm_higher_layer_event_preds ->
+  comm_higher_layer_event_preds ->
   prop
 let has_communication_layer_event_predicates invs higher_layer_preds =
   has_event_pred invs (event_predicate_communication_layer higher_layer_preds)
