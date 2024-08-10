@@ -14,50 +14,47 @@ open DY.Example.NSL.Protocol.Stateful
 
 (*** Cryptographic invariants ***)
 
-instance crypto_usages_nsl : crypto_usages = default_crypto_usages
-
 #push-options "--ifuel 2 --fuel 0"
-val crypto_predicates_nsl: crypto_predicates crypto_usages_nsl
-let crypto_predicates_nsl = {
-  default_crypto_predicates crypto_usages_nsl with
-
-  pkenc_pred = {
-    pred = (fun tr pk msg ->
-      get_sk_usage pk == PkKey "NSL.PublicKey" empty /\
-      (exists prin. get_sk_label pk = principal_label prin /\ (
-        match parse message msg with
-        | Some (Msg1 msg1) -> (
-          let (alice, bob) = (msg1.alice, prin) in
-          event_triggered tr alice (Initiate1 alice bob msg1.n_a) /\
-          get_label msg1.n_a == join (principal_label alice) (principal_label bob)
-        )
-        | Some (Msg2 msg2) -> (
-          let (alice, bob) = (prin, msg2.bob) in
-          event_triggered tr bob (Respond1 alice bob msg2.n_a msg2.n_b) /\
-          get_label msg2.n_b == join (principal_label alice) (principal_label bob)
-        )
-        | Some (Msg3 msg3) -> (
-          let bob = prin in
-          exists alice n_a.
-            get_label msg3.n_b `can_flow tr` (principal_label alice) /\
-            event_triggered tr alice (Initiate2 alice bob n_a msg3.n_b)
-        )
-        | None -> False
-      ))
-    );
-    pred_later = (fun tr1 tr2 pk msg -> ());
-  };
+val nsl_pkenc_pred: {|cusgs:crypto_usages|} -> pkenc_crypto_predicate cusgs
+let nsl_pkenc_pred #cusgs = {
+  pred = (fun tr pk msg ->
+    get_sk_usage pk == PkKey "NSL.PublicKey" empty /\
+    (exists prin. get_sk_label pk = principal_label prin /\ (
+      match parse message msg with
+      | Some (Msg1 msg1) -> (
+        let (alice, bob) = (msg1.alice, prin) in
+        event_triggered tr alice (Initiate1 alice bob msg1.n_a) /\
+        get_label msg1.n_a == join (principal_label alice) (principal_label bob)
+      )
+      | Some (Msg2 msg2) -> (
+        let (alice, bob) = (prin, msg2.bob) in
+        event_triggered tr bob (Respond1 alice bob msg2.n_a msg2.n_b) /\
+        get_label msg2.n_b == join (principal_label alice) (principal_label bob)
+      )
+      | Some (Msg3 msg3) -> (
+        let bob = prin in
+        exists alice n_a.
+          get_label msg3.n_b `can_flow tr` (principal_label alice) /\
+          event_triggered tr alice (Initiate2 alice bob n_a msg3.n_b)
+      )
+      | None -> False
+    ))
+  );
+  pred_later = (fun tr1 tr2 pk msg -> ());
 }
 #pop-options
 
-instance crypto_invariants_nsl : crypto_invariants = {
-  usages = crypto_usages_nsl;
-  preds = crypto_predicates_nsl;
-}
+val nsl_tag_and_pkenc_pred: {|cusgs:crypto_usages|} -> string & pkenc_crypto_predicate cusgs
+let nsl_tag_and_pkenc_pred #cusgs = ("NSL.PublicKey", nsl_pkenc_pred)
+
+val has_nsl_crypto_invariants: {|crypto_invariants|} -> prop
+let has_nsl_crypto_invariants #cinvs =
+  has_pkenc_predicate cinvs nsl_tag_and_pkenc_pred
 
 (*** Proofs ***)
 
 val compute_message1_proof:
+  {|crypto_invariants|} ->
   tr:trace ->
   alice:principal -> bob:principal -> pk_b:bytes -> n_a:bytes -> nonce:bytes ->
   Lemma
@@ -71,10 +68,12 @@ val compute_message1_proof:
     // From random generation
     PkNonce? (get_usage nonce) /\
     // From PKI invariants
-    is_encryption_key (PkKey "NSL.PublicKey" empty) (principal_label bob) tr pk_b
+    is_encryption_key (PkKey "NSL.PublicKey" empty) (principal_label bob) tr pk_b /\
+    // Cryptographic invariants contain NSL invariants
+    has_nsl_crypto_invariants
   )
   (ensures is_publishable tr (compute_message1 alice bob pk_b n_a nonce))
-let compute_message1_proof tr alice bob pk_b n_a nonce =
+let compute_message1_proof #cinvs tr alice bob pk_b n_a nonce =
   let msg = Msg1 {n_a; alice;} in
   serialize_wf_lemma message (is_knowable_by (principal_label alice) tr) msg;
   serialize_wf_lemma message (is_knowable_by (principal_label bob) tr) msg
@@ -86,6 +85,7 @@ let compute_message1_proof tr alice bob pk_b n_a nonce =
 // - if the message was encrypted by an honest principal, this follows from the encryption predicate
 #push-options "--ifuel 1 --fuel 0 --z3rlimit 25"
 val decode_message1_proof:
+  {|crypto_invariants|} ->
   tr:trace ->
   bob:principal -> msg_cipher:bytes -> sk_b:bytes ->
   Lemma
@@ -93,7 +93,9 @@ val decode_message1_proof:
     // From PrivateKeys invariants
     is_decryption_key (PkKey "NSL.PublicKey" empty) (principal_label bob) tr sk_b /\
     // From the network
-    bytes_invariant tr msg_cipher
+    bytes_invariant tr msg_cipher /\
+    // Cryptographic invariants contain NSL invariants
+    has_nsl_crypto_invariants
   )
   (ensures (
     match decode_message1 bob msg_cipher sk_b with
@@ -102,7 +104,7 @@ val decode_message1_proof:
       is_knowable_by (join (principal_label msg1.alice) (principal_label bob)) tr msg1.n_a
     )
   ))
-let decode_message1_proof tr bob msg_cipher sk_b =
+let decode_message1_proof #cinvs tr bob msg_cipher sk_b =
   match decode_message1 bob msg_cipher sk_b with
   | None -> ()
   | Some msg1 ->
@@ -112,6 +114,7 @@ let decode_message1_proof tr bob msg_cipher sk_b =
 #pop-options
 
 val compute_message2_proof:
+  {|crypto_invariants|} ->
   tr:trace ->
   bob:principal -> msg1:message1 -> pk_a:bytes -> n_b:bytes -> nonce:bytes ->
   Lemma
@@ -127,12 +130,14 @@ val compute_message2_proof:
     // From the random generation
     PkNonce? (get_usage nonce) /\
     // From the PKI
-    is_encryption_key (PkKey "NSL.PublicKey" empty) (principal_label msg1.alice) tr pk_a
+    is_encryption_key (PkKey "NSL.PublicKey" empty) (principal_label msg1.alice) tr pk_a /\
+    // Cryptographic invariants contain NSL invariants
+    has_nsl_crypto_invariants
   )
   (ensures
     is_publishable tr (compute_message2 bob msg1 pk_a n_b nonce)
   )
-let compute_message2_proof tr bob msg1 pk_a n_b nonce =
+let compute_message2_proof #cinvs tr bob msg1 pk_a n_b nonce =
   let msg = Msg2 {n_a = msg1.n_a;  n_b; bob;} in
   serialize_wf_lemma message (is_knowable_by (principal_label msg1.alice) tr) msg;
   serialize_wf_lemma message (is_knowable_by (principal_label bob) tr) msg
@@ -144,6 +149,7 @@ let compute_message2_proof tr bob msg1 pk_a n_b nonce =
 // (proved with the encryption predicate)
 #push-options "--ifuel 1 --fuel 0 --z3rlimit 25"
 val decode_message2_proof:
+  {|crypto_invariants|} ->
   tr:trace ->
   alice:principal -> bob:principal -> msg_cipher:bytes -> sk_a:bytes -> n_a:bytes ->
   Lemma
@@ -153,7 +159,9 @@ val decode_message2_proof:
     // From the PrivateKeys invariant
     is_decryption_key (PkKey "NSL.PublicKey" empty) (principal_label alice) tr sk_a /\
     // From the network
-    bytes_invariant tr msg_cipher
+    bytes_invariant tr msg_cipher /\
+    // Cryptographic invariants contain NSL invariants
+    has_nsl_crypto_invariants
   )
   (ensures (
     match decode_message2 alice bob msg_cipher sk_a n_a with
@@ -166,7 +174,7 @@ val decode_message2_proof:
       )
     )
   ))
-let decode_message2_proof tr alice bob msg_cipher sk_a n_a =
+let decode_message2_proof #cinvs tr alice bob msg_cipher sk_a n_a =
   match decode_message2 alice bob msg_cipher sk_a n_a with
   | None -> ()
   | Some msg2 -> (
@@ -177,6 +185,7 @@ let decode_message2_proof tr alice bob msg_cipher sk_a n_a =
 #pop-options
 
 val compute_message3_proof:
+  {|crypto_invariants|} ->
   tr:trace ->
   alice:principal -> bob:principal -> pk_b:bytes -> n_b:bytes -> nonce:bytes ->
   Lemma
@@ -190,12 +199,14 @@ val compute_message3_proof:
     // From the random generation
     PkNonce? (get_usage nonce) /\
     // From the PKI
-    is_encryption_key (PkKey "NSL.PublicKey" empty) (principal_label bob) tr pk_b
+    is_encryption_key (PkKey "NSL.PublicKey" empty) (principal_label bob) tr pk_b /\
+    // Cryptographic invariants contain NSL invariants
+    has_nsl_crypto_invariants
   )
   (ensures
     is_publishable tr (compute_message3 alice bob pk_b n_b nonce)
   )
-let compute_message3_proof tr alice bob pk_b n_b nonce =
+let compute_message3_proof #cinvs tr alice bob pk_b n_b nonce =
   assert(exists alice n_a. event_triggered tr alice (Initiate2 alice bob n_a n_b));
   let msg = Msg3 {n_b;} in
   serialize_wf_lemma message (is_knowable_by (principal_label alice) tr) msg;
@@ -208,6 +219,7 @@ let compute_message3_proof tr alice bob pk_b n_b nonce =
 // (proved with the encryption predicate)
 #push-options "--ifuel 1 --fuel 0 --z3rlimit 25"
 val decode_message3_proof:
+  {|crypto_invariants|} ->
   tr:trace ->
   alice:principal -> bob:principal -> msg_cipher:bytes -> sk_b:bytes -> n_b:bytes ->
   Lemma
@@ -217,7 +229,9 @@ val decode_message3_proof:
     // From the PrivateKeys invariant
     is_decryption_key (PkKey "NSL.PublicKey" empty) (principal_label bob) tr sk_b /\
     // From the network
-    bytes_invariant tr msg_cipher
+    bytes_invariant tr msg_cipher /\
+    // Cryptographic invariants contain NSL invariants
+    has_nsl_crypto_invariants
   )
   (ensures (
     match decode_message3 alice bob msg_cipher sk_b n_b with
@@ -230,7 +244,7 @@ val decode_message3_proof:
       )
     )
   ))
-let decode_message3_proof tr alice bob msg_cipher sk_b n_b =
+let decode_message3_proof #cinvs tr alice bob msg_cipher sk_b n_b =
   match decode_message3 alice bob msg_cipher sk_b n_b with
   | None -> ()
   | Some msg3 -> (
