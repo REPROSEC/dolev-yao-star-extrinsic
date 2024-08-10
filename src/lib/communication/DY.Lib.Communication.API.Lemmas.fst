@@ -246,7 +246,7 @@ val extract_data_from_msg_id:
   tr:trace ->
   comm_keys_ids:communication_keys_sess_ids ->
   receiver:principal -> msg_id:timestamp ->
-  (principal -> principal -> bytes -> bytes -> prop) ->
+  (principal -> principal -> bytes -> prop) ->
   prop
 let extract_data_from_msg_id tr comm_keys_ids receiver msg_id fn =
   match recv_msg msg_id tr with
@@ -261,7 +261,7 @@ let extract_data_from_msg_id tr comm_keys_ids receiver msg_id fn =
         match verify_message receiver msg_signed vk_sender with
         | None -> True
         | Some {sender=sender'; receiver=receiver'; payload} -> (
-          fn sender receiver vk_sender payload
+          fn sender receiver payload
         )
       )
     )
@@ -279,8 +279,8 @@ val receive_authenticated_proof:
     has_communication_layer_invariants invs.crypto_invs /\
     (
       extract_data_from_msg_id tr comm_keys_ids receiver msg_id (
-        fun sender receiver vk_sender payload ->
-          (forall tr'. tr <$ tr' ==> higher_layer_preds.receive_auth tr' sender receiver vk_sender payload)
+        fun sender receiver payload ->
+          (forall tr'. tr <$ tr' ==> higher_layer_preds.receive_auth tr' sender receiver payload)
       )
     ) /\
     has_communication_layer_event_predicates invs higher_layer_preds
@@ -290,8 +290,8 @@ val receive_authenticated_proof:
     trace_invariant tr_out /\
     (
       extract_data_from_msg_id tr comm_keys_ids receiver msg_id (
-        fun sender receiver vk_sender payload ->
-          event_triggered tr_out receiver (CommAuthReceiveMsg sender receiver vk_sender payload)
+        fun sender receiver payload ->
+          event_triggered tr_out receiver (CommAuthReceiveMsg sender receiver payload)
       )
     )
   ))
@@ -304,5 +304,7 @@ let receive_authenticated_proof #invs tr higher_layer_preds comm_keys_ids receiv
     let (Some vk_sender, tr) = get_public_key receiver comm_keys_ids.pki (Verify comm_layer_sign_tag) sender tr in
     let (Some msg_bytes, tr) = recv_msg msg_id tr in
     verify_message_proof tr sender receiver msg_bytes vk_sender;
+    let ((), tr) = trigger_event receiver (CommAuthReceiveMsg sender receiver payload) tr in
+    assert(tr_out == tr);
     ()
   )

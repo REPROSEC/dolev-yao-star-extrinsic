@@ -27,4 +27,4 @@ that the predicates hold for the respective functions. These proofs
 are used by the user to prove security properties about the send and
 receive functions.
 Examples for how to use the communication layer functions
-in a higher layer protocol can be found in this [repository]().
+in a higher layer protocol can be found in this [repository](https://github.com/fabian-hk/dolev-yao-star-communication-layer-examples).
