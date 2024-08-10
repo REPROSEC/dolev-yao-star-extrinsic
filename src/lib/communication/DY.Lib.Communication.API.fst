@@ -10,7 +10,6 @@ open DY.Lib.Event.Typed
 
 (*** Messages ***)
 
-
 [@@with_bytes bytes]
 type communication_message_base = {
   sender:principal;
@@ -53,7 +52,7 @@ type communication_event =
   | CommConfSendMsg: sender:principal -> receiver:principal -> payload:bytes -> communication_event
   | CommConfReceiveMsg: sender:principal -> receiver:principal -> payload:bytes -> communication_event
   | CommAuthSendMsg: sender:principal -> payload:bytes -> communication_event
-  | CommAuthReceiveMsg: sender:principal -> receiver:principal -> vk_sender:bytes -> payload:bytes -> communication_event
+  | CommAuthReceiveMsg: sender:principal -> receiver:principal -> payload:bytes -> communication_event
 
 %splice [ps_communication_event] (gen_parser (`communication_event))
 %splice [ps_communication_event_is_well_formed] (gen_is_well_formed_lemma (`communication_event))
@@ -72,52 +71,12 @@ let comm_layer_pkenc_tag = "DY.Lib.Communication.PkEnc.PublicKey"
 val comm_layer_sign_tag: string
 let comm_layer_sign_tag = "DY.Lib.Communication.Sign.PublicKey"
 
-(*** Communication Layer ***)
-
-(**** Layer Initialization ****)
-
 type communication_keys_sess_ids = {
   pki: state_id;
   private_keys: state_id;
 }
 
-val initialize_communication: principal -> principal -> traceful (option (communication_keys_sess_ids & communication_keys_sess_ids))
-let initialize_communication sender receiver =
-  // Initialize keys for public key encryption
-  let* client_global_session_priv_key_id = initialize_private_keys sender in
-  generate_private_key sender client_global_session_priv_key_id (PkDec comm_layer_pkenc_tag);*
-
-  let* receiver_global_session_priv_key_id = initialize_private_keys receiver in
-  generate_private_key receiver receiver_global_session_priv_key_id (PkDec comm_layer_pkenc_tag);*
-
-  let*? priv_key_receiver = get_private_key receiver receiver_global_session_priv_key_id (PkDec comm_layer_pkenc_tag) in
-  let pub_key_receiver = pk priv_key_receiver in
-  let* client_global_session_pub_key_id = initialize_pki sender in
-  install_public_key sender client_global_session_pub_key_id (PkEnc comm_layer_pkenc_tag) receiver pub_key_receiver;*
-
-  let*? priv_key_client = get_private_key sender client_global_session_priv_key_id (PkDec comm_layer_pkenc_tag) in
-  let pub_key_client = pk priv_key_client in
-  let* receiver_global_session_pub_key_id = initialize_pki receiver in
-  install_public_key receiver receiver_global_session_pub_key_id (PkEnc comm_layer_pkenc_tag) sender pub_key_client;*
-
-  // Initialize signing keys
-  (*generate_private_key sender client_global_session_priv_key_id (Sign comm_layer_sign_tag);*
-  generate_private_key receiver receiver_global_session_priv_key_id (Sign comm_layer_sign_tag);*
-
-  let*? priv_key_receiver = get_private_key receiver receiver_global_session_priv_key_id (Sign comm_layer_sign_tag) in
-  let pub_key_receiver = pk priv_key_receiver in
-  let* client_global_session_pub_key_id = initialize_pki sender in
-  install_public_key sender client_global_session_pub_key_id (Verify comm_layer_sign_tag) receiver pub_key_receiver;*
-
-  let*? priv_key_client = get_private_key sender client_global_session_priv_key_id (Sign comm_layer_sign_tag) in
-  let pub_key_client = pk priv_key_client in
-  let* receiver_global_session_pub_key_id = initialize_pki receiver in
-  install_public_key receiver receiver_global_session_pub_key_id (Verify comm_layer_sign_tag) sender pub_key_client;*
-*)
-  let client_comm_keys_sess_ids = {pki=client_global_session_pub_key_id; private_keys=client_global_session_priv_key_id} in
-  let receiver_comm_keys_sess_ids = {pki=receiver_global_session_pub_key_id; private_keys=receiver_global_session_priv_key_id} in
-  return (Some (client_comm_keys_sess_ids, receiver_comm_keys_sess_ids))
-
+(*** Communication Layer ***)
 
 (**** Confidential Send and Receive Functions ****)
 
@@ -207,5 +166,43 @@ let receive_authenticated comm_keys_ids receiver msg_id =
   let*? sender = return (get_sender msg_signed) in
   let*? vk_sender = get_public_key receiver comm_keys_ids.pki (Verify comm_layer_sign_tag) sender in
   let*? msg_plain:communication_message_base = return (verify_message receiver msg_signed vk_sender) in
-  trigger_event receiver (CommAuthReceiveMsg sender receiver vk_sender msg_plain.payload);*
+  trigger_event receiver (CommAuthReceiveMsg sender receiver msg_plain.payload);*
   return (Some msg_plain)
+
+
+(**** Layer Initialization ****)
+
+val initialize_communication: principal -> principal -> traceful (option (communication_keys_sess_ids & communication_keys_sess_ids))
+let initialize_communication sender receiver =
+  // Initialize keys for public key encryption
+  let* client_global_session_priv_key_id = initialize_private_keys sender in
+  generate_private_key sender client_global_session_priv_key_id (PkDec comm_layer_pkenc_tag);*
+
+  let* receiver_global_session_priv_key_id = initialize_private_keys receiver in
+  generate_private_key receiver receiver_global_session_priv_key_id (PkDec comm_layer_pkenc_tag);*
+
+  let*? priv_key_receiver = get_private_key receiver receiver_global_session_priv_key_id (PkDec comm_layer_pkenc_tag) in
+  let pub_key_receiver = pk priv_key_receiver in
+  let* client_global_session_pub_key_id = initialize_pki sender in
+  install_public_key sender client_global_session_pub_key_id (PkEnc comm_layer_pkenc_tag) receiver pub_key_receiver;*
+
+  let*? priv_key_client = get_private_key sender client_global_session_priv_key_id (PkDec comm_layer_pkenc_tag) in
+  let pub_key_client = pk priv_key_client in
+  let* receiver_global_session_pub_key_id = initialize_pki receiver in
+  install_public_key receiver receiver_global_session_pub_key_id (PkEnc comm_layer_pkenc_tag) sender pub_key_client;*
+
+  // Initialize signing keys
+  generate_private_key sender client_global_session_priv_key_id (Sign comm_layer_sign_tag);*
+  generate_private_key receiver receiver_global_session_priv_key_id (Sign comm_layer_sign_tag);*
+
+  let*? priv_key_receiver = get_private_key receiver receiver_global_session_priv_key_id (Sign comm_layer_sign_tag) in
+  let pub_key_receiver = vk priv_key_receiver in
+  install_public_key sender client_global_session_pub_key_id (Verify comm_layer_sign_tag) receiver pub_key_receiver;*
+
+  let*? priv_key_client = get_private_key sender client_global_session_priv_key_id (Sign comm_layer_sign_tag) in
+  let pub_key_client = vk priv_key_client in
+  install_public_key receiver receiver_global_session_pub_key_id (Verify comm_layer_sign_tag) sender pub_key_client;*
+
+  let client_comm_keys_sess_ids = {pki=client_global_session_pub_key_id; private_keys=client_global_session_priv_key_id} in
+  let receiver_comm_keys_sess_ids = {pki=receiver_global_session_pub_key_id; private_keys=receiver_global_session_priv_key_id} in
+  return (Some (client_comm_keys_sess_ids, receiver_comm_keys_sess_ids))
