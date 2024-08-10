@@ -76,7 +76,7 @@ type comm_higher_layer_event_preds = {
   receive_conf: tr:trace -> sender:principal -> receiver:principal -> payload:bytes -> prop;
   send_auth: tr:trace -> sender:principal -> payload:bytes -> prop;
   // TODO do we need extensibility on the receiver side?
-  receive_auth: tr:trace -> sender:principal -> receiver:principal -> vk_sender:bytes -> payload:bytes -> prop;
+  receive_auth: tr:trace -> sender:principal -> receiver:principal -> payload:bytes -> prop;
 }
 
 val default_comm_higher_layer_event_preds: comm_higher_layer_event_preds
@@ -84,7 +84,7 @@ let default_comm_higher_layer_event_preds = {
   send_conf = (fun tr sender receiver payload -> True);
   receive_conf = (fun tr sender receiver payload -> True);
   send_auth = (fun tr sender payload -> True);
-  receive_auth = (fun tr sender receiver vk_sender payload -> True);
+  receive_auth = (fun tr sender receiver payload -> True);
 }
 
 #push-options "--ifuel 1 --fuel 0"
@@ -107,14 +107,14 @@ let event_predicate_communication_layer {|cinvs:crypto_invariants|} (higher_laye
     | CommAuthSendMsg sender payload -> (
       higher_layer_preds.send_auth tr sender payload
     )
-    | CommAuthReceiveMsg sender receiver vk_sender payload -> (
+    | CommAuthReceiveMsg sender receiver payload -> (
       is_publishable tr payload /\
       (
         (
           event_triggered tr sender (CommAuthSendMsg sender payload) /\
-          higher_layer_preds.receive_auth tr sender receiver vk_sender payload
+          higher_layer_preds.receive_auth tr sender receiver payload
         ) \/
-        is_corrupt tr (get_signkey_label vk_sender)
+        is_corrupt tr (principal_label sender)
       )
     ))
 #pop-options
