@@ -3,9 +3,12 @@ FSTAR_HOME 	?= $(dir $(shell which fstar.exe))/..
 Z3 		?= $(shell which z3)
 COMPARSE_HOME 	?= $(DY_HOME)/../comparse
 
-SOURCE_DIR = src
+INNER_SOURCE_DIRS = core lib lib/comparse lib/crypto lib/event lib/hpke lib/state lib/utils
+SOURCE_DIRS = $(addprefix $(DY_HOME)/src/, $(INNER_SOURCE_DIRS))
+INNER_EXAMPLE_DIRS = nsl_pk iso_dh
+EXAMPLE_DIRS = $(addprefix $(DY_HOME)/examples/, $(INNER_EXAMPLE_DIRS))
 
-INCLUDE_DIRS = $(SOURCE_DIR) $(COMPARSE_HOME)/src
+INCLUDE_DIRS = $(SOURCE_DIRS) $(EXAMPLE_DIRS) $(COMPARSE_HOME)/src
 FSTAR_INCLUDE_DIRS = $(addprefix --include , $(INCLUDE_DIRS))
 
 ADMIT ?=
@@ -14,14 +17,13 @@ MAYBE_ADMIT = $(if $(ADMIT),--admit_smt_queries true)
 FSTAR_EXE ?= $(FSTAR_HOME)/bin/fstar.exe
 FSTAR = $(FSTAR_EXE) $(MAYBE_ADMIT)
 
-FSTAR_EXTRACT = --extract '-* +DY'
+FSTAR_EXTRACT = --extract '-* +DY +Comparse'
 
 # Allowed warnings:
 # - (Warning 242) Definitions of inner let-rec ... and its enclosing top-level letbinding are not encoded to the solver, you will only be able to reason with their types
-# - (Warning 290) SMT may not be able to prove the types of ... and ...  to be equal, if the proof fails, try annotating these with the same type
 # - (Warning 335) Interface ... is admitted without an implementation 
 
-FSTAR_FLAGS = $(FSTAR_INCLUDE_DIRS) --cache_checked_modules --already_cached '+Prims +FStar' --warn_error '@0..1000' --warn_error '+242+290-335' --cache_dir cache --odir obj --cmi
+FSTAR_FLAGS = $(FSTAR_INCLUDE_DIRS) --cache_checked_modules --already_cached '+Prims +FStar' --warn_error '@0..1000' --warn_error '+242-335' --record_hints --hint_dir $(DY_HOME)/hints --cache_dir $(DY_HOME)/cache --odir $(DY_HOME)/obj --cmi
 
 .PHONY: all clean
 
@@ -29,17 +31,19 @@ all: copy_lib
 
 clean:
 	#dune clean
-	rm -rf hints obj cache ml/lib/src ml/tests/src
+	rm -rf $(DY_HOME)/hints $(DY_HOME)/obj $(DY_HOME)/cache $(DY_HOME)/ml/lib/src $(DY_HOME)/ml/tests/src
 
 # Dependency analysis
 
 FSTAR_ROOTS = \
-  $(wildcard $(addsuffix /*.fsti,$(SOURCE_DIR))) \
-  $(wildcard $(addsuffix /*.fst,$(SOURCE_DIR)))
+  $(wildcard $(addsuffix /*.fsti,$(SOURCE_DIRS))) \
+  $(wildcard $(addsuffix /*.fst,$(SOURCE_DIRS))) \
+  $(wildcard $(addsuffix /*.fsti,$(EXAMPLE_DIRS))) \
+  $(wildcard $(addsuffix /*.fst,$(EXAMPLE_DIRS)))
 
 ifeq (,$(filter %-in,$(MAKECMDGOALS)))
 ifndef MAKE_RESTARTS
-.depend: .FORCE
+$(DY_HOME)/.depend: .FORCE
 	$(FSTAR) $(FSTAR_FLAGS) --dep full $(FSTAR_EXTRACT) $(notdir $(FSTAR_ROOTS)) > $@
 
 .PHONY: .FORCE
@@ -47,28 +51,28 @@ ifndef MAKE_RESTARTS
 endif
 endif
 
-include .depend
+include $(DY_HOME)/.depend
 
 # Verification
 
-hints:
+$(DY_HOME)/hints:
 	mkdir $@
 
-cache:
+$(DY_HOME)/cache:
 	mkdir $@
 
-obj:
+$(DY_HOME)/obj:
 	mkdir $@
 
 
 %.checked: FSTAR_RULE_FLAGS=
 
-%.checked: | hints cache obj
+%.checked: | $(DY_HOME)/hints $(DY_HOME)/cache $(DY_HOME)/obj
 	$(FSTAR) $(FSTAR_FLAGS) $(FSTAR_RULE_FLAGS) $< && touch -c $@
 
 # Extraction
-.PRECIOUS: obj/%.ml
-obj/%.ml:
+.PRECIOUS: $(DY_HOME)/obj/%.ml
+$(DY_HOME)/obj/%.ml:
 	$(FSTAR) $(FSTAR_FLAGS) $(notdir $(subst .checked,,$<)) --codegen OCaml \
 	--extract_module $(basename $(notdir $(subst .checked,,$<)))
 
@@ -77,11 +81,11 @@ obj/%.ml:
 extract_lib: $(ALL_ML_FILES)
 
 copy_lib: extract_lib
-	mkdir -p ml/lib/src
-	cp $(ALL_ML_FILES) ml/lib/src
+	mkdir -p $(DY_HOME)/ml/lib/src
+	cp $(ALL_ML_FILES) $(DY_HOME)/ml/lib/src
 
 %.fst-in %.fsti-in:
-	@echo $(FSTAR_INCLUDE_DIRS) --include obj
+	@echo $(FSTAR_INCLUDE_DIRS) --include $(DY_HOME)/obj
 
 # Compilation
 
