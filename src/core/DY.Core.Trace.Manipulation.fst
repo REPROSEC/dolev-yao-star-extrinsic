@@ -294,9 +294,18 @@ val mk_rand_get_label:
   ))
   [SMTPat (mk_rand usg lab len tr); SMTPat (trace_invariant tr)]
 let mk_rand_get_label #invs usg lab len tr =
+  let open DY.Core.Label in
   reveal_opaque (`%mk_rand) (mk_rand);
   normalize_term_spec get_label;
-  admit()
+  let (b, tr_out) = mk_rand usg lab len tr in
+  norm_spec [zeta; delta_only [`%is_corrupt_aux]] (is_corrupt_aux);
+  reveal_opaque (`%is_corrupt) (is_corrupt);
+  reveal_opaque (`%can_flow) (can_flow);
+  assert(get_event_at tr_out (DY.Core.Trace.Type.length tr) == RandGen usg lab len);
+  assert(forall tr_extended. tr_out <$ tr_extended ==> get_event_at tr_extended (DY.Core.Trace.Type.length tr) == RandGen usg lab len);
+  assert(forall tr_extended steps. tr_out <$ tr_extended ==> (is_corrupt_aux steps tr_extended lab <==> is_corrupt_aux (steps + 1) tr_extended (get_label b)));
+  assert(forall (steps:nat). (steps + 1) - 1 == steps);
+  assert(forall tr_extended. tr_out <$ tr_extended ==> (is_corrupt tr_extended lab <==> is_corrupt tr_extended (get_label b)))
 
 /// Usage of random bytestrings.
 
