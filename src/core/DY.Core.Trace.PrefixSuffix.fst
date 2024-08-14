@@ -1,5 +1,6 @@
 module DY.Core.Trace.PrefixSuffix
 
+open DY.Core.List
 open  DY.Core.Trace.Type
 module Trace = DY.Core.Trace.Type
 open DY.Core.Bytes.Type

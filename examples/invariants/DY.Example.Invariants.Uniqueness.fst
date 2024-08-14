@@ -86,10 +86,8 @@ let p_state_pred: state_predicate p_cinvs = {
       match parse p_state cont with
         | None -> False
         | Some (S the_idn _) -> begin     
-            // forall (i:nat{i < List.length full_st_b}). 
-            // match List.index full_st_b i with 
-            forall x. x `List.mem` full_st_b ==>
-             ( match x with
+            forall sess. sess `List.mem` full_st_b ==>
+             ( match sess with
                | (_, Nil) -> True
                | (sid_i, Snoc init_i last_i) -> begin
                     match parse p_state last_i with
@@ -115,7 +113,7 @@ instance protocol_invariants_p: protocol_invariants = {
   }
 }
 
-#push-options "--z3rlimit 50 " // --z3cliopt 'smt.qi.eager_threshold=100'"
+#push-options "--z3rlimit 100 " // --z3cliopt 'smt.qi.eager_threshold=100'"
 val next_full_state_pred:
   tr:trace -> p:principal -> sid:state_id ->
   Lemma 
@@ -161,8 +159,6 @@ let next_full_state_pred tr p sid =
           match (get_full_state p tr_after_msg) with
           | None -> ()
           | Some full_st_b -> begin
-              // introduce forall (i:nat{i < List.length full_st_b}). 
-              //   match List.index full_st_b i with 
               introduce forall x. x `List.mem` full_st_b ==>
                 (match x with
                 | (_, Nil) -> True
@@ -188,16 +184,18 @@ let next_full_state_pred tr p sid =
                   )
                   )
               with _ . begin
-                // match List.index full_st_b i with 
                   match x with
                   | (_, Nil) -> ()
                   | (sid_i, (Snoc init_i last_i_b)) ->
                        match parse p_state last_i_b with
                        | None -> ()
                        | Some last_i -> 
-                           parse_full_state_lemma tr_after_msg p sid_i init_i last_i_b;
+                           full_state_some_get_session_get_state p sid_i tr_after_msg;
+
                            get_state_aux_same p sid_i tr tr_after_msg;    
                            reveal_opaque (`%get_state) (get_state);
+                           full_state_mem_get_session tr_after_msg p;
+                           assert((Some last_i_b, tr_after_msg) = get_state p sid_i tr_after_msg);
                            if sid_i = sid
                            then assert(last_i = S idn c)
                            else begin
@@ -213,13 +211,14 @@ let next_full_state_pred tr p sid =
                                get_state_no_set_state_for_on_suffix_after_event tr p sid;
                                no_set_state_entry_for_on_suffix tr_after_oldst tr_after_last_i p sid;
                                assert(no_set_state_entry_for p sid tr_after_last_i);
+
                                let tr_before_last_i = tr `prefix_before_event` (SetState p sid_i last_i_b) in
                                suff_after_before_event_is_suff_at_event tr last_i_entry;
                                no_set_state_entry_for_concat p sid (Snoc Nil (SetState p sid_i last_i_b)) tr_after_last_i;
                                get_state_aux_same p sid tr_before_last_i tr;
                                  assert((Some oldst_b, tr_before_last_i) = get_state p sid tr_before_last_i);
                                  match get_full_state p tr_before_last_i with
-                                 | None -> get_state_get_full_state p sid tr_before_last_i
+                                 | None -> state_was_set_full_state tr_before_last_i p sid oldst_b
                                  | Some full_state_before_last_i -> (
                                      prefix_before_event_invariant tr_after_msg (SetState p sid_i last_i_b);
                                      assert(global_state_pred tr_before_last_i p sid_i last_i_b);
@@ -240,7 +239,7 @@ let next_full_state_pred tr p sid =
                                let (Some state_i_before_old, _) = get_state p sid_i tr_before_old in
                                assert(state_i_before_old = state_i);
                                match get_full_state p tr_before_old with
-                               | None -> get_state_get_full_state p sid_i tr_before_old
+                               | None -> state_was_set_full_state tr_before_old p sid_i state_i_before_old
                                | Some full_state_before_old -> 
                                       assert(global_state_pred tr_before_old p sid oldst_b);
                                       get_state_appears_in_full_state tr_before_old p sid_i  

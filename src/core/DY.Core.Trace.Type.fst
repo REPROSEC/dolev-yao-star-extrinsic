@@ -1,5 +1,6 @@
 module DY.Core.Trace.Type
 
+open DY.Core.List
 open DY.Core.Bytes.Type
 open DY.Core.Label.Type
 
@@ -43,14 +44,6 @@ type trace_event =
   // A custom and protocol-specific event has been triggered by a principal.
   | Event: prin:principal -> tag:string -> content:bytes -> trace_event
 
-/// The trace is a list of trace events.
-/// Because the trace grows with time and the time is often represented going from left to right,
-/// the trace is actually a reversed list.
-/// To avoid confusions, we define a custom inductive to swap the arguments of the "cons" constructor.
-
-type rev_list (a:Type) =
-  | Nil : rev_list a
-  | Snoc: rev_list a -> a -> rev_list a
 
 type trace = rev_list trace_event
 
@@ -265,6 +258,8 @@ let rec get_event_at tr i =
     get_event_at tr_init i
   )
 
+
+
 /// Has some particular event been triggered at a some particular timestamp in the trace?
 
 val event_at: trace -> timestamp -> trace_event -> prop
@@ -279,6 +274,18 @@ let event_at tr i e =
 val event_exists: trace -> trace_event -> prop
 let event_exists tr e =
   exists i. event_at tr i e
+
+
+/// The property that there are no state entries
+/// for the principal and a particular session
+
+val no_set_state_entry_for:
+  principal -> state_id -> trace -> prop
+let no_set_state_entry_for p sid tr = 
+  forall (ts:timestamp{ts < length tr}).
+    match get_event_at tr ts with
+    | SetState p' sid' _ -> p' <> p \/ sid' <> sid
+    | _ -> True
 
 /// An event in the trace stays here when the trace grows.
 

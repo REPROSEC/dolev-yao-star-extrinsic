@@ -1,5 +1,6 @@
 module DY.Core.Trace.Invariant
 
+open DY.Core.List
 open DY.Core.Trace.State.Aux
 open DY.Core.Bytes.Type
 open DY.Core.Bytes
@@ -113,24 +114,6 @@ let global_state_pred_ #cinvs #sp tr prin sid content =
   /\ full_state_pred_ tr full_state prin sid content 
 
 
-/// the session predicate remains true
-/// if the trace grows
-/// but there are no more state entries for the principal and the session
-
-val session_pred_later_:
-  {|cinvs: crypto_invariants |} -> {|sp:state_predicate cinvs |} ->
-  tr1:trace -> tr2:trace  -> p:principal -> sid:state_id -> cont:state_raw ->
-  Lemma
-    (requires 
-        tr1 <$ tr2 
-      /\ no_set_state_entry_for p sid (tr2 `suffix_after` tr1)
-      /\ sp.session_pred tr1 (get_session_aux p sid tr1) p sid cont
-    )
-    (ensures sp.session_pred tr2 (get_session_aux p sid tr2) p sid cont)
-let session_pred_later_ #_ #sp tr1 tr2 p sid cont =
-  get_session_aux_same p sid tr1 tr2;
-  let session = get_session_aux p sid tr1 in
-  sp.session_pred_grows tr1 tr2 session p sid cont
 
 /// The parameters of the trace invariant.
 
@@ -164,7 +147,6 @@ let session_pred_grows {|invs:protocol_invariants|} = invs.trace_invs.state_pred
 let session_pred_opt {|invs:protocol_invariants|} = session_pred_ #_ #invs.trace_invs.state_pred
 let full_state_pred_opt {|invs:protocol_invariants|} = full_state_pred_ #_ #invs.trace_invs.state_pred
 let global_state_pred {|invs:protocol_invariants|} = global_state_pred_ #invs.crypto_invs #invs.trace_invs.state_pred
-let session_pred_later {|invs:protocol_invariants|} = session_pred_later_ #invs.crypto_invs #invs.trace_invs.state_pred
 let event_pred {|invs:protocol_invariants|} = invs.trace_invs.event_pred
 
 (*** Trace invariant definition ***)

@@ -110,6 +110,7 @@ include DY.Core.Label.Type
 include DY.Core.Label.Derived
 include DY.Core.List
 include DY.Core.Trace.PrefixSuffix
+include DY.Core.Trace.State.NoSetStateEntry
 include DY.Core.Trace.State.Aux
 include DY.Core.Trace.State.Properties
 include DY.Core.Trace.Invariant

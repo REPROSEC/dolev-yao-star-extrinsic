@@ -1,5 +1,6 @@
 module DY.Core.Trace.Manipulation
 
+open DY.Core.List
 open DY.Core.Trace.Type
 open DY.Core.Trace.State.Aux
 open DY.Core.Trace.Invariant
@@ -383,44 +384,6 @@ let set_state_invariant #invs prin sess_id content tr =
   normalize_term_spec set_state
 
 
-val get_state_state_was_set :
-  p:principal -> sid:state_id -> tr:trace ->
-  Lemma
-    (requires True)
-    (ensures (
-       let (opt_content, tr_out) = get_state p sid tr in
-       tr == tr_out /\
-       (match opt_content with
-       | None -> True
-       | Some v -> state_was_set tr p sid v
-       )
-      )
-    )
-    [SMTPat (get_state p sid tr)]
-let  get_state_state_was_set p sid tr =
-  normalize_term_spec get_state
-
-
-/// relating get_state and get_session
-
-val get_state_is_last_of_get_session:
-  p:principal -> sid:state_id -> tr:trace ->
-  Lemma 
-    (requires True
-    )
-    (ensures (
-      let opt_session = get_session p sid tr in
-      let (opt_state, _) = get_state p sid tr in
-      match opt_state with
-      | None -> None? opt_session
-      | Some st -> 
-          Some? opt_session /\ Snoc? (Some?.v opt_session) /\ (let Some (Snoc _ last) = opt_session in st = last)
-    )
-    )
-    [SMTPat (get_session p sid tr); SMTPat (get_state p sid tr)]
-let get_state_is_last_of_get_session p sid tr =
-    reveal_opaque (`%get_state) (get_state);
-    get_state_aux_is_last_of_get_session_aux p sid tr
 
 
 /// the retrieved state satisfies the gobal state predicate
@@ -453,12 +416,14 @@ val get_state_global_state_invariant:
     tr == tr_out /\ (
       match opt_content with
       | None -> True
-      | Some content -> global_state_pred (tr `prefix_before_event` (SetState prin sess_id content)) prin sess_id content
+      | Some content -> 
+        reveal_opaque (`%get_state) get_state;
+      global_state_pred (tr `prefix_before_event` (SetState prin sess_id content)) prin sess_id content
     )
   ))
   [SMTPat (get_state prin sess_id tr); SMTPat (trace_invariant #invs tr)]
 let get_state_global_state_invariant #invs prin sess_id tr =
-  normalize_term_spec get_state
+  reveal_opaque (`%get_state) get_state
 
 /// When the trace invariant holds,
 /// retrieved states satisfy the (single) state predicate on the whole trace.

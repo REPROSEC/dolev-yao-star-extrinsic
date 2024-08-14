@@ -2,11 +2,13 @@ module DY.Core.Trace.State.Aux
 
 open FStar.List.Tot
 
+open DY.Core.List
 open DY.Core.Bytes.Type
 open DY.Core.Bytes
 open DY.Core.Label.Type
 open DY.Core.Trace.Type
 open DY.Core.Trace.PrefixSuffix
+open DY.Core.Trace.State.NoSetStateEntry
 
 
 module List = FStar.List.Tot.Base
@@ -46,22 +48,6 @@ let rec compute_new_session_id prin tr =
   | Snoc tr_init _ -> compute_new_session_id prin tr_init
   
 
-// Sanity check
-val compute_new_session_id_larger_than_id_on_trace:
-  prin:principal -> tr:trace ->
-  sess_id:state_id -> state_content:bytes ->
-  Lemma
-  (requires event_exists tr (SetState prin sess_id state_content))
-  (ensures sess_id.the_id < (compute_new_session_id prin tr).the_id)
-let rec compute_new_session_id_larger_than_id_on_trace prin tr sess_id state_content =
-  match tr with
-  | Nil -> ()
-  | Snoc tr_init evt -> (
-    if evt = SetState prin sess_id state_content then ()
-    else (
-      compute_new_session_id_larger_than_id_on_trace prin tr_init sess_id state_content
-    )
-  )
 
 (*** Reading state, session, full state from the trace ***)
 
@@ -152,8 +138,10 @@ let _ =
   assert(None? (get_full_state "b" tr))
 
 
-(*** Properties for getter functions ***)
 
+
+
+(*** Properties for get_state_aux and get_session_aux ***)
 
 val get_state_aux_state_was_set :
   p:principal -> sid:state_id -> tr:trace ->
@@ -177,102 +165,6 @@ let rec get_state_aux_state_was_set p sid tr =
        end
        else get_state_aux_state_was_set p sid init
   | Snoc init _ -> get_state_aux_state_was_set p sid init
-
-val get_state_aux_is_last_of_get_session_aux:
-  p:principal -> sid:state_id -> tr:trace ->
-  Lemma 
-    (requires True
-    )
-    (ensures (
-      let session = get_session_aux p sid tr in
-      match get_state_aux p sid tr with
-      | None -> Nil? session
-      | Some st -> Snoc? session /\ (let Snoc _ last = session in st = last)
-    )
-    )
-let rec get_state_aux_is_last_of_get_session_aux p sid tr = 
-  match tr with
-  | Nil -> ()
-  | Snoc init _ -> get_state_aux_is_last_of_get_session_aux p sid init
-
-
-
-
-
-
-/// The main property we want to show is
-/// that a particular session of a principal stays the same
-/// if there are no more `SetState` entries for this principal and this session on the trace.
-
-/// The property that there are no state entries
-/// for the principal and a particular session
-
-val no_set_state_entry_for:
-  principal -> state_id -> trace -> prop
-let no_set_state_entry_for p sid tr = 
-  forall (ts:timestamp{ts < length tr}).
-    match get_event_at tr ts with
-    | SetState p' sid' _ -> p' <> p \/ sid' <> sid
-    | _ -> True
-
-/// if there are no state entries on a trace,
-/// this is true for any prefix of the trace.
-
-val no_set_state_entry_for_prefix:
-  p:principal -> sid:state_id -> tr1:trace -> tr2:trace ->
-  Lemma 
-    (requires no_set_state_entry_for p sid tr2 /\ tr1 <$ tr2)
-    (ensures no_set_state_entry_for p sid tr1)
-    [SMTPat (no_set_state_entry_for p sid tr2); SMTPat (tr1 <$ tr2)]
-let no_set_state_entry_for_prefix p sid tr1 tr2 = 
-  introduce forall (ts:timestamp{ts < length tr1}). get_event_at tr1 ts = get_event_at tr2 ts
-  with begin
-    let ev1 = get_event_at tr1 ts in
-    event_at_grows tr1 tr2 ts ev1
-    end
-
-
-/// concatenating traces without state entries
-/// results in no state entries
-#push-options "--fuel 2"
-val no_set_state_entry_for_concat:
-  p:principal -> sid:state_id ->
-  tr1: trace -> tr2:trace ->
-  Lemma
-    (requires 
-        no_set_state_entry_for p sid tr1
-      /\ no_set_state_entry_for p sid tr2
-    )
-    (ensures
-      no_set_state_entry_for p sid (tr1 `trace_concat` tr2)
-    )
-    // [SMTPat (no_set_state_entry_for p sid tr1)
-    // ; SMTPat (no_set_state_entry_for p sid tr2)]
-let rec no_set_state_entry_for_concat p sid tr1 tr2 =
-  match tr2 with
-  | Nil -> ()
-  | Snoc init2 ev2 -> 
-    init_is_prefix tr2;
-    assert(event_exists tr2 ev2);
-    no_set_state_entry_for_prefix p sid init2 tr2;
-    no_set_state_entry_for_concat p sid tr1 init2
-#pop-options
-
-/// transitivity of `no_set_state_entry_for` on suffixes of growing traces
-val no_set_state_entry_for_suffixes_transitive:
-  p:principal -> sid:state_id ->
-  tr1:trace -> tr2:trace{tr1 <$ tr2} -> tr3:trace{tr2 <$ tr3} ->
-  Lemma
-  (requires
-      no_set_state_entry_for p sid (tr2 `suffix_after` tr1)
-    /\ no_set_state_entry_for p sid (tr3 `suffix_after` tr2)
-  )
-  (ensures
-    no_set_state_entry_for p sid (tr3 `suffix_after` tr1)
-  )
-let no_set_state_entry_for_suffixes_transitive p sid tr1 tr2 tr3 =
-  suffix_after_concat tr1 tr2 tr3;
-  no_set_state_entry_for_concat p sid (tr2 `suffix_after` tr1) (tr3 `suffix_after` tr2)
 
 
 /// the main property:
@@ -301,6 +193,8 @@ let rec get_state_aux_same p sid tr1 tr2 =
               suffix_after_for_prefix tr2 init tr1;
               get_state_aux_same p sid tr1 init
     end
+
+
 
 /// lifting of the get_state_aux property to get_session_aux
 
