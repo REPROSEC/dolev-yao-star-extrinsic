@@ -31,19 +31,19 @@ let split_hpke_predicate_params {|crypto_usages|}: split_crypto_predicate_parame
   );
 }
 
-val has_hpke_predicate: {|crypto_usages|} -> hpke_crypto_predicate -> (string & hpke_crypto_predicate) -> prop
-let has_hpke_predicate hpke_pred (tag, local_pred) =
+val has_hpke_predicate: {|crypto_usages|} -> {|hpke_crypto_invariants|} -> (string & hpke_crypto_predicate) -> prop
+let has_hpke_predicate #cusgs #hpke (tag, local_pred) =
   forall (tr:trace) (usage:(string & bytes)) (plaintext:bytes) (info:bytes) (ad:bytes).
     {:pattern hpke_pred.pred tr usage plaintext info ad}
     fst usage = tag ==> hpke_pred.pred tr usage plaintext info ad == local_pred.pred tr usage plaintext info ad
 
 val intro_has_hpke_predicate:
-  {|crypto_usages|} ->
-  hpke_pred:hpke_crypto_predicate -> tagged_local_pred:(string & hpke_crypto_predicate) ->
+  {|crypto_usages|} -> {|hpke_crypto_invariants|} ->
+  tagged_local_pred:(string & hpke_crypto_predicate) ->
   Lemma
   (requires has_local_crypto_predicate split_hpke_predicate_params hpke_pred.pred tagged_local_pred)
-  (ensures has_hpke_predicate hpke_pred tagged_local_pred)
-let intro_has_hpke_predicate #cusgs hpke_pred (tag, local_pred) =
+  (ensures has_hpke_predicate tagged_local_pred)
+let intro_has_hpke_predicate #cusgs #hpke (tag, local_pred) =
   introduce
     forall tr usage plaintext info ad.
       fst usage = tag ==> hpke_pred.pred tr usage plaintext info ad == local_pred.pred tr usage plaintext info ad
@@ -63,15 +63,15 @@ let mk_hpke_predicate #cusgs l = {
 }
 
 val mk_hpke_predicate_correct:
-  {|crypto_usages|} ->
-  hpke_pred:hpke_crypto_predicate -> tagged_local_preds:list (string & hpke_crypto_predicate) ->
+  {|crypto_usages|} -> {|hpke_crypto_invariants|} ->
+  tagged_local_preds:list (string & hpke_crypto_predicate) ->
   Lemma
   (requires
     hpke_pred == mk_hpke_predicate tagged_local_preds /\
     List.Tot.no_repeats_p (List.Tot.map fst tagged_local_preds)
   )
-  (ensures for_allP (has_hpke_predicate hpke_pred) tagged_local_preds)
-let mk_hpke_predicate_correct #cusgs hpke_pred tagged_local_preds =
-  for_allP_eq (has_hpke_predicate hpke_pred) tagged_local_preds;
+  (ensures for_allP has_hpke_predicate tagged_local_preds)
+let mk_hpke_predicate_correct #cusgs #hpke tagged_local_preds =
+  for_allP_eq has_hpke_predicate tagged_local_preds;
   FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (mk_global_crypto_predicate_correct split_hpke_predicate_params tagged_local_preds));
-  FStar.Classical.forall_intro (FStar.Classical.move_requires (intro_has_hpke_predicate hpke_pred))
+  FStar.Classical.forall_intro (FStar.Classical.move_requires intro_has_hpke_predicate)

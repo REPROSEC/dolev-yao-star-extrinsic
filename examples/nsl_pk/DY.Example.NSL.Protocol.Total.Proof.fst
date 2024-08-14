@@ -15,7 +15,7 @@ open DY.Example.NSL.Protocol.Stateful
 (*** Cryptographic invariants ***)
 
 #push-options "--ifuel 2 --fuel 0"
-val nsl_pkenc_pred: {|cusgs:crypto_usages|} -> pkenc_crypto_predicate cusgs
+val nsl_pkenc_pred: {|crypto_usages|} -> pkenc_crypto_predicate
 let nsl_pkenc_pred #cusgs = {
   pred = (fun tr pk msg ->
     get_sk_usage pk == PkKey "NSL.PublicKey" empty /\
@@ -44,12 +44,12 @@ let nsl_pkenc_pred #cusgs = {
 }
 #pop-options
 
-val nsl_tag_and_pkenc_pred: {|cusgs:crypto_usages|} -> string & pkenc_crypto_predicate cusgs
+val nsl_tag_and_pkenc_pred: {|crypto_usages|} -> string & pkenc_crypto_predicate
 let nsl_tag_and_pkenc_pred #cusgs = ("NSL.PublicKey", nsl_pkenc_pred)
 
 val has_nsl_crypto_invariants: {|crypto_invariants|} -> prop
 let has_nsl_crypto_invariants #cinvs =
-  has_pkenc_predicate cinvs nsl_tag_and_pkenc_pred
+  has_pkenc_predicate nsl_tag_and_pkenc_pred
 
 (*** Proofs ***)
 

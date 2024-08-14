@@ -86,11 +86,11 @@ let has_nsl_invariants #invs =
   // crypto
   has_nsl_crypto_invariants /\
   // state
-  has_private_keys_invariant invs /\
-  has_pki_invariant invs /\
-  has_local_state_predicate invs state_predicate_nsl /\
+  has_private_keys_invariant /\
+  has_pki_invariant /\
+  has_local_state_predicate state_predicate_nsl /\
   // event
-  has_event_pred invs event_predicate_nsl
+  has_event_pred event_predicate_nsl
 
 (*** Proofs ***)
 

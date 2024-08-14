@@ -19,8 +19,8 @@ let all_pkenc_tag_and_preds = [
   nsl_tag_and_pkenc_pred;
 ]
 
-let nsl_crypto_predicates: crypto_predicates nsl_crypto_usages = {
-  default_crypto_predicates nsl_crypto_usages with
+let nsl_crypto_predicates: crypto_predicates = {
+  default_crypto_predicates with
   pkenc_pred = mk_pkenc_predicate all_pkenc_tag_and_preds
 }
 
@@ -38,8 +38,8 @@ val nsl_crypto_invariants_has_nsl_crypto_invariants:
   Lemma (has_nsl_crypto_invariants #nsl_crypto_invariants)
 let nsl_crypto_invariants_has_nsl_crypto_invariants () =
   assert_norm(List.Tot.no_repeats_p (List.Tot.map fst all_pkenc_tag_and_preds));
-  mk_pkenc_predicate_correct nsl_crypto_invariants all_pkenc_tag_and_preds;
-  norm_spec [delta_only [`%all_pkenc_tag_and_preds; `%for_allP]; iota; zeta] (for_allP (has_pkenc_predicate nsl_crypto_invariants) all_pkenc_tag_and_preds)
+  mk_pkenc_predicate_correct all_pkenc_tag_and_preds;
+  norm_spec [delta_only [`%all_pkenc_tag_and_preds; `%for_allP]; iota; zeta] (for_allP has_pkenc_predicate all_pkenc_tag_and_preds)
 #pop-options
 
 /// List of all local state predicates.
@@ -58,8 +58,8 @@ let all_event_tag_and_preds = [
 
 /// Trace Invariant
 
-let nsl_trace_invariants: trace_invariants nsl_crypto_invariants = {
-  state_pred = mk_state_pred nsl_crypto_invariants all_state_tag_and_preds;
+let nsl_trace_invariants: trace_invariants = {
+  state_pred = mk_state_pred all_state_tag_and_preds;
   event_pred = mk_event_pred all_event_tag_and_preds;
 }
 
@@ -79,10 +79,10 @@ let nsl_protocol_invariants_has_nsl_invariants () =
   nsl_crypto_invariants_has_nsl_crypto_invariants ();
 
   assert_norm(List.Tot.no_repeats_p (List.Tot.map fst (all_state_tag_and_preds)));
-  mk_state_pred_correct nsl_protocol_invariants all_state_tag_and_preds;
-  norm_spec [delta_only [`%all_state_tag_and_preds; `%for_allP]; iota; zeta] (for_allP (has_local_bytes_state_predicate nsl_protocol_invariants) all_state_tag_and_preds);
+  mk_state_pred_correct all_state_tag_and_preds;
+  norm_spec [delta_only [`%all_state_tag_and_preds; `%for_allP]; iota; zeta] (for_allP has_local_bytes_state_predicate all_state_tag_and_preds);
 
   assert_norm(List.Tot.no_repeats_p (List.Tot.map fst (all_event_tag_and_preds)));
-  mk_event_pred_correct nsl_protocol_invariants all_event_tag_and_preds;
-  norm_spec [delta_only [`%all_event_tag_and_preds; `%for_allP]; iota; zeta] (for_allP (has_compiled_event_pred nsl_protocol_invariants) all_event_tag_and_preds)
+  mk_event_pred_correct all_event_tag_and_preds;
+  norm_spec [delta_only [`%all_event_tag_and_preds; `%for_allP]; iota; zeta] (for_allP has_compiled_event_pred all_event_tag_and_preds)
 #pop-options
