@@ -31,9 +31,9 @@ instance dh_crypto_usages = {
 }
 
 #push-options "--ifuel 2 --fuel 0"
-val dh_crypto_preds: crypto_predicates dh_crypto_usages
+val dh_crypto_preds: crypto_predicates
 let dh_crypto_preds = {
-  default_crypto_predicates dh_crypto_usages with
+  default_crypto_predicates with
 
   sign_pred = {
     pred = (fun tr vk sig_msg ->
