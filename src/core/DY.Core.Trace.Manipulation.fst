@@ -344,6 +344,19 @@ let get_state prin sess_id =
   let* tr = get_trace in
   return (get_state_aux prin sess_id tr)
 
+//[@@ "opaque_to_smt"]
+val get_session: principal -> state_id -> traceful (option session_raw)
+let get_session prin sess_id =
+  let* tr = get_trace in
+  return (get_session_aux prin sess_id tr)
+
+//[@@ "opaque_to_smt"]
+val get_full_state: principal -> traceful (option full_state_raw)
+let get_full_state prin =
+  let* tr = get_trace in
+  return (get_full_state_aux prin tr)
+
+
 /// Obtaining a new state identifier does not change the trace.
 
 val new_session_id_invariant:
@@ -365,8 +378,8 @@ val set_state_invariant:
   prin:principal -> sess_id:state_id -> content:state_raw -> tr:trace ->
   Lemma
   (requires (
-      let sess = get_session prin sess_id tr in
-      let full_st = get_full_state prin tr in
+      let sess = get_session_aux prin sess_id tr in
+      let full_st = get_full_state_aux prin tr in
         trace_invariant tr
       /\ state_pred tr prin sess_id content 
       /\ session_pred_opt tr sess prin sess_id content

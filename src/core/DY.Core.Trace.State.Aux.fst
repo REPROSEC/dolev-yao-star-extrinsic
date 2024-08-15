@@ -99,8 +99,8 @@ let rec zero_to_sid (sid:state_id) :
   then [{the_id = 0}]
   else (zero_to_sid {the_id = sid.the_id - 1}) @ [sid]
 
-let get_session_indexed (tr:trace) (prin:principal) (sid:state_id) =
-  match get_session prin sid tr with
+let get_session_aux_indexed (tr:trace) (prin:principal) (sid:state_id) =
+  match get_session_aux prin sid tr with
   | None -> None
   | Some sess -> Some (sid, sess)
 
@@ -110,14 +110,14 @@ let get_session_indexed (tr:trace) (prin:principal) (sid:state_id) =
 // (trys to get the session for every session id 
 // smaller than the next (from compute new session)
 // collects those ids and session, where session is Some )
-val get_full_state: principal -> trace -> option full_state_raw
-let get_full_state prin tr = 
+val get_full_state_aux: principal -> trace -> option full_state_raw
+let get_full_state_aux prin tr = 
   let new_sessid = compute_new_session_id prin tr in
   if new_sessid.the_id = 0
   then None
   else
     Some (List.choose 
-      (get_session_indexed tr prin) 
+      (get_session_aux_indexed tr prin) 
       (zero_to_sid new_sessid)
     )
     
@@ -129,12 +129,12 @@ let _ =
   let b = Literal (FStar.Seq.Base.empty) in
   let b1 = Literal (FStar.Seq.Base.create 1 FStar.UInt8.one ) in
   let tr = Snoc ( Snoc (Snoc Nil (SetState p sid1 b)) (SetState p sid2 b) ) (SetState p sid1 b1) in
-  assert(get_session p sid1 tr =  Some (Snoc (Snoc Nil b) b1));
-  assert(get_session p sid2 tr = Some (Snoc Nil b));
+  assert(get_session_aux p sid1 tr =  Some (Snoc (Snoc Nil b) b1));
+  assert(get_session_aux p sid2 tr = Some (Snoc Nil b));
   
   normalize_term_spec (List.choose #state_id #(state_id* session_raw));
-  assert(get_full_state p tr = Some [(sid1, Snoc (Snoc Nil b) b1); (sid2, Snoc Nil b); ]);
-  assert(None? (get_full_state "b" tr))
+  assert(get_full_state_aux p tr = Some [(sid1, Snoc (Snoc Nil b) b1); (sid2, Snoc Nil b); ]);
+  assert(None? (get_full_state_aux "b" tr))
 
 
 

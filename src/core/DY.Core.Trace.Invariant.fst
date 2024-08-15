@@ -107,8 +107,8 @@ let full_state_pred_ #cinvs #sp tr full_state prin sid content =
 
 val global_state_pred_: {|cinvs: crypto_invariants|} -> {|sp: state_predicate cinvs |} -> trace -> principal -> state_id -> state_raw -> prop
 let global_state_pred_ #cinvs #sp tr prin sid content =
-  let session = get_session prin sid tr in
-  let full_state = get_full_state prin tr in
+  let session = get_session_aux prin sid tr in
+  let full_state = get_full_state_aux prin tr in
     sp.pred tr prin sid content
   /\ session_pred_ tr session prin sid content
   /\ full_state_pred_ tr full_state prin sid content 
