@@ -56,27 +56,26 @@ let rec get_state_aux prin sess_id tr =
   match tr with
   | Nil -> None
   | Snoc tr_init (SetState prin' sess_id' content) -> (
-    if prin = prin' && sess_id = sess_id' then
-      Some content
-    else
-      get_state_aux prin sess_id tr_init
-  )
+    if prin = prin' && sess_id = sess_id' 
+      then Some content
+      else get_state_aux prin sess_id tr_init
+    )
   | Snoc tr_init _ ->
       get_state_aux prin sess_id tr_init
 
-val get_session_aux: principal -> state_id -> trace -> session_raw
-let rec get_session_aux prin sess_id tr = 
+val get_session_: principal -> state_id -> trace -> session_raw
+let rec get_session_ prin sess_id tr = 
   match tr with
   | Nil -> Nil
   | Snoc init (SetState p' sid' content) ->
       if p' = prin && sid' = sess_id
-        then Snoc (get_session_aux prin sess_id init) content
-        else (get_session_aux prin sess_id init)
-  | Snoc init _ -> (get_session_aux prin sess_id init)
+        then Snoc (get_session_ prin sess_id init) content
+        else (get_session_ prin sess_id init)
+  | Snoc init _ -> (get_session_ prin sess_id init)
 
-val get_session: principal -> state_id -> trace -> option session_raw
-let get_session prin sess_id tr =
-  match get_session_aux prin sess_id tr with
+val get_session_aux: principal -> state_id -> trace -> option session_raw
+let get_session_aux prin sess_id tr =
+  match get_session_ prin sess_id tr with
   | Nil -> None
   | sess -> Some sess
 
@@ -86,8 +85,8 @@ let _ =
   let sid = {the_id = 1} in
   let b = Literal (FStar.Seq.Base.empty) in
   let tr = Snoc (Snoc Nil (SetState p sid b)) (SetState p sid b) in
-  assert(get_session p sid tr = Some (Snoc (Snoc Nil b) b));
-  assert(None? (get_session "b" sid tr))
+  assert(get_session_aux p sid tr = Some (Snoc (Snoc Nil b) b));
+  assert(None? (get_session_aux "b" sid tr))
 
 
 /// Helper function for `get_full_state`

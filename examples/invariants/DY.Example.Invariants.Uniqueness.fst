@@ -89,13 +89,16 @@ let p_state_pred: state_predicate p_cinvs = {
             forall sess. sess `List.mem` full_st_b ==>
              ( match sess with
                | (_, Nil) -> True
+                     // this should always be true (and we should hide it from the user)
+                     // since this corresponds to [session_pred]
+                     // one could also argue that empty sessions should not appear in the full state 
                | (sid_i, Snoc init_i last_i) -> begin
                     match parse p_state last_i with
                     | None -> True
                     | Some last_i ->
-                        if sid_i = sid 
-                          then last_i.idn = the_idn
-                          else last_i.idn <> the_idn                      
+                        if sid_i = sid // if the new state is added to session sid_i
+                          then last_i.idn = the_idn // the id should stay the same within session sid_i
+                          else last_i.idn <> the_idn // otherwise the id must be different
                  end
              )
         end
@@ -120,24 +123,24 @@ val next_full_state_pred:
     (requires trace_invariant tr)
     (ensures  (
       let (_,tr_out) = next p sid tr in
-       match get_state p sid tr with
-  | (None, _) -> True
-  | (Some oldst_b, _) -> (
-      match parse p_state oldst_b with
-      | None -> True
-      | Some (S idn c) -> (          
-          let msg = M p in
-          let msg_b = serialize message msg in
-          let (_, tr_after_msg) = send_msg msg_b tr in
+      match get_state p sid tr with
+      | (None, _) -> True
+      | (Some oldst_b, _) -> (
+        match parse p_state oldst_b with
+        | None -> True
+        | Some (S idn c) -> (          
+            let msg = M p in
+            let msg_b = serialize message msg in
+            let (_, tr_after_msg) = send_msg msg_b tr in
 
-          let next_state = S idn (c+1) in
-          let next_state_b = serialize p_state next_state in
-          let (_,tr_after_next_state) = set_state p sid next_state_b tr_after_msg in
-           match (get_full_state p tr_after_msg) with
-          | None -> True
-          | Some full_st_b -> full_state_pred tr_after_msg full_st_b p sid next_state_b
-      )
-    )
+            let next_state = S idn (c+1) in
+            let next_state_b = serialize p_state next_state in
+            let (_,tr_after_next_state) = set_state p sid next_state_b tr_after_msg in
+             match (get_full_state p tr_after_msg) with
+            | None -> True
+            | Some full_st_b -> full_state_pred tr_after_msg full_st_b p sid next_state_b
+          )
+        )
     ))
 let next_full_state_pred tr p sid = 
   match get_state p sid tr with

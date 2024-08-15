@@ -389,21 +389,6 @@ let set_state_invariant #invs prin sess_id content tr =
 /// the retrieved state satisfies the gobal state predicate
 /// for the prefix up until the state was set
 
-val get_state_aux_global_state_invariant:
-  {|protocol_invariants|} ->
-  prin:principal -> sess_id:state_id -> tr:trace ->
-  Lemma
-  (requires
-    trace_invariant tr
-  )
-  (ensures (
-    match get_state_aux prin sess_id tr with
-    | None -> True
-    | Some content -> global_state_pred (tr `prefix_before_event` (SetState prin sess_id content)) prin sess_id content
-  ))
-let get_state_aux_global_state_invariant prin sid tr = ()
-
-
 val get_state_global_state_invariant:
   {|invs: protocol_invariants|} ->
   prin:principal -> sess_id:state_id -> tr:trace ->
@@ -418,7 +403,7 @@ val get_state_global_state_invariant:
       | None -> True
       | Some content -> 
         reveal_opaque (`%get_state) get_state;
-      global_state_pred (tr `prefix_before_event` (SetState prin sess_id content)) prin sess_id content
+        global_state_pred (tr `prefix_before_event` (SetState prin sess_id content)) prin sess_id content
     )
   ))
   [SMTPat (get_state prin sess_id tr); SMTPat (trace_invariant #invs tr)]
@@ -427,23 +412,6 @@ let get_state_global_state_invariant #invs prin sess_id tr =
 
 /// When the trace invariant holds,
 /// retrieved states satisfy the (single) state predicate on the whole trace.
-
-val get_state_aux_state_invariant:
-  {|protocol_invariants|} ->
-  prin:principal -> sess_id:state_id -> tr:trace ->
-  Lemma
-  (requires
-    trace_invariant tr
-  )
-  (ensures (
-    match get_state_aux prin sess_id tr with
-    | None -> True
-    | Some content -> state_pred tr prin sess_id content
-  ))
-let get_state_aux_state_invariant #invs prin sess_id tr =
-  match get_state_aux prin sess_id tr with
-  | None -> ()
-  | Some content -> state_pred_later (tr `prefix_before_event` (SetState prin sess_id content)) tr prin sess_id content
 
 val get_state_state_invariant:
   {|invs: protocol_invariants|} ->
@@ -462,8 +430,10 @@ val get_state_state_invariant:
   ))
   [SMTPat (get_state prin sess_id tr); SMTPat (trace_invariant #invs tr)]
 let get_state_state_invariant #invs prin sess_id tr =
-  normalize_term_spec get_state;
-  get_state_aux_state_invariant prin sess_id tr
+  reveal_opaque (`%get_state) get_state;
+  match get_state_aux prin sess_id tr with
+  | None -> ()
+  | Some content -> state_pred_later (tr `prefix_before_event` (SetState prin sess_id content)) tr prin sess_id content
 
 (*** Event triggering ***)
 
