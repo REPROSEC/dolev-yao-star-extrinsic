@@ -24,6 +24,3 @@ include DY.Lib.State.PrivateKeys
 
 /// Provide functions to print the trace
 include DY.Lib.Printing
-
-/// Simplifications for working with labelled data
-include DY.Lib.Labelled
