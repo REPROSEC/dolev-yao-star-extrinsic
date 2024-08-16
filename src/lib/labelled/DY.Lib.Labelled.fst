@@ -4,6 +4,27 @@ open Comparse
 open DY.Lib.Comparse.Glue
 open DY.Core
 
+(**
+  The idea of this typeclasss is that we often want to reason about the secrecy of some value (or label)
+  by tracing through a series of can_flow relations. However, often, these are not simple label-label connections,
+  or bytes-label connections (captured by, for instance, is_knowable_by), but some mix --- for instance, we might
+  want to say that the label of an access token can flow to the label of a password, or that the label of some
+  encrypted message can flow to the label of the encryption key.
+
+  It is moderately inconvenient to have to call get_label all over the place when working with labelled bytes, and
+  even more so when dealing with the label of some more complex structure, such as a message (hence the utility of
+  predicates such as is_knowable_by and is_secret).
+
+  By making this generic, we can use the less_secret function (or variants thereof) to work through these chains of
+  reasoning without needing to worry about explicitly getting the labels of the various data we want to connect, thus
+  focusing the proof on the core ideas.
+
+  From some initial testing, this seems to work fine, but I don't find instances in the existing examples where it makes
+  a substantial difference, probably because simple examples leverage is_knowable_by quite well.
+
+  I think this exact implementation may not be final, but that the idea here is worth looking into incorporating (maybe
+  even into the core, at least for the label and bytes instances).
+*)
 class labelled (a:Type) =
 {
   extract_label : a -> GTot label
