@@ -44,7 +44,26 @@ let session_pred_later_ #_ #sp tr1 tr2 p sid cont =
 let session_pred_later {|invs:protocol_invariants|} = session_pred_later_ #invs.crypto_invs #invs.trace_invs.state_pred
 
 
+(*** Convenience Functions to check and access state, session, and full state ***)
 
+let has_state_for (tr:trace) (p:principal) (sid:state_id)  =
+  Some? (fst (get_state p sid tr))
+
+let access_state (tr:trace) (p:principal) (sid:state_id{has_state_for tr p sid}) = 
+  Some?.v (fst (get_state p sid tr))
+
+let has_session_for (tr:trace) (p:principal) (sid:state_id)  =
+  Some? (fst (get_session p sid tr))
+
+let access_session (tr:trace) (p:principal) (sid:state_id{has_session_for tr p sid}) = 
+  Some?.v (fst (get_session p sid tr))
+
+
+let has_full_state_for (tr:trace) (p:principal) =
+  Some? (fst (get_full_state p tr))
+
+let access_full_state (tr:trace) (p:principal{has_full_state_for tr p}) = 
+  Some?.v (fst (get_full_state p tr))
 
 
 (*** Properties of get_state ***)
@@ -65,7 +84,7 @@ let get_state_session_full_state_does_not_change_trace (p:principal) (sid:state_
 val get_state_state_was_set :
   p:principal -> sid:state_id -> tr:trace ->
   Lemma 
-  (requires Some? (fst (get_state p sid tr)))
+  (requires has_state_for tr p sid)
   (ensures (
     let (Some cont, tr_out) = get_state p sid tr in
       tr == tr_out
@@ -80,8 +99,8 @@ let rec state_was_set_get_state
   (p:principal) (sid:state_id) (cont:state_raw) (tr:trace):
   Lemma 
   (requires state_was_set tr p sid cont)
-  (ensures Some? (fst (get_state p sid tr)) )
-  =   reveal_opaque (`%get_state) get_state; 
+  (ensures has_state_for tr p sid)
+  = reveal_opaque (`%get_state) get_state; 
     match tr with
     | Nil -> ()
     | Snoc init (SetState p' sid' cont') ->
@@ -93,14 +112,13 @@ let rec state_was_set_get_state
 let rec get_state_no_set_state_for_on_suffix_after_event
   (tr:trace) (p:principal) (sid:state_id) :
   Lemma 
-  (requires Some? (fst (get_state p sid tr))
-  )
+  (requires has_state_for tr p sid)
   ( ensures (
-    let (Some st , _) = get_state p sid tr in
+    let st = access_state tr p sid in
     no_set_state_entry_for p sid (tr `suffix_after_event` (SetState p sid st)) 
     )
   )
-= let (Some st , _) = get_state p sid tr in
+= let st = access_state tr p sid in
   reveal_opaque (`%get_state) get_state; 
   match tr with
   | Nil -> ()
@@ -115,14 +133,27 @@ let rec get_state_no_set_state_for_on_suffix_after_event
     get_state_no_set_state_for_on_suffix_after_event init p sid;
     suffix_after_event_init tr (SetState p sid st)
 
+val get_state_same:
+  p:principal -> sid:state_id -> tr1:trace -> tr2:trace ->
+  Lemma
+    (requires
+      tr1 <$ tr2 /\ no_set_state_entry_for p sid (tr2 `suffix_after` tr1)
+    )
+    (ensures fst (get_state p sid tr1) = fst (get_state p sid tr2))
+ //   [SMTPat (tr1 <$ tr2 /\ no_set_state_entry_for p sid (tr2 `suffix_after` tr1))]
+let get_state_same p sid tr1 tr2 =
+  reveal_opaque (`%get_state)get_state;
+  get_state_aux_same p sid tr1 tr2
+
+
+
 (*** Properties of get_session ***)
 
 let rec get_session_grows (p:principal) (sid:state_id) (tr1 tr2:trace):
   Lemma
-  (requires tr1 <$ tr2 /\ Some? (fst (get_session p sid tr1))
+  (requires tr1 <$ tr2 /\ has_session_for tr1 p sid
   )
-  (ensures
-    Some? (fst (get_session p sid tr2))
+  (ensures has_session_for tr2 p sid
   )
  = reveal_opaque (`%grows) grows; 
    norm_spec [zeta; delta_only [`%prefix]] (prefix);
@@ -133,6 +164,16 @@ let rec get_session_grows (p:principal) (sid:state_id) (tr1 tr2:trace):
      | Nil -> ()
      | Snoc init _ -> get_session_grows p sid tr1 init
    )
+
+val get_session_same:
+  p:principal -> sid:state_id -> tr1:trace -> tr2:trace ->
+  Lemma
+    (requires
+      tr1 <$ tr2 /\ no_set_state_entry_for p sid (tr2 `suffix_after` tr1)
+    )
+    (ensures fst (get_session p sid tr1) = fst (get_session p sid tr2))
+let get_session_same p sid tr1 tr2 =
+  get_session_aux_same p sid tr1 tr2
 
 (*** Relations of get_state and get_session ***)
 
@@ -159,35 +200,18 @@ let rec get_state_is_last_of_get_session p sid tr =
 
 let get_state_some_get_session_some (p:principal) (sid:state_id) (tr:trace):
   Lemma 
-  (requires Some? (fst (get_state p sid tr)))
-  (ensures  Some? (fst (get_session p sid tr)))
+  (requires has_state_for tr p sid)
+  (ensures  has_session_for tr p sid)
   [SMTPat (get_state p sid tr)]
   = ()
 
 
-let rec get_session_some_get_state_some (p:principal) (sid:state_id) (tr:trace):
+let get_session_some_get_state_some (p:principal) (sid:state_id) (tr:trace):
   Lemma 
-  (requires Some? (fst (get_session p sid tr)))
-  (ensures Some? (fst (get_state p sid tr)))
-  = 
-    reveal_opaque (`%get_state) get_state;
-    match tr with
-    | Nil -> ()
-    | Snoc init (SetState p' sid' _) ->
-           if p' = p && sid' = sid
-           then ()
-           else get_session_some_get_state_some p sid init
-    | Snoc init _ -> get_session_some_get_state_some p sid init
-
-
-
-let get_session_state_was_set (p:principal) (sid:state_id) (tr:trace):
-  Lemma
-  (requires Some? (fst (get_session p sid tr)))
-  (ensures exists cont. state_was_set tr p sid cont )
-  = get_session_some_get_state_some p sid tr;
-    get_state_state_was_set p sid tr
-
+  (requires has_session_for tr p sid)
+  (ensures has_state_for tr p sid)
+  [SMTPat (get_session p sid tr)]
+  = () 
 
 (*** Relation of get_state, get_session and get_full_state ***)
 
@@ -201,12 +225,12 @@ let get_session_state_was_set (p:principal) (sid:state_id) (tr:trace):
 
 let full_state_mem_get_session_get_state_forall (p:principal) (tr:trace):
   Lemma 
-  (requires Some? (fst (get_full_state p tr)))
+  (requires has_full_state_for tr p)
   (ensures (
-     let (Some full_st, _) = get_full_state p tr in
+     let full_st = access_full_state tr p in
      forall sid cont. (sid, cont) `List.mem` full_st ==> (
        let (session_opt, _) = get_session p sid tr in
-       let (state_opt, _) = get_state p sid tr in
+       let (state_opt, _)   = get_state p sid tr in
 
          Some? session_opt
        /\ (let Some sess = session_opt in
@@ -225,7 +249,7 @@ let full_state_mem_get_session_get_state_forall (p:principal) (tr:trace):
          )
        )
   ))
-=  let (Some full_st, _) = get_full_state p tr in
+=  let full_st = access_full_state tr p in
    introduce forall sid cont. (sid, cont) `List.mem` full_st ==> (
      let (session_opt, _) = get_session p sid tr in
      let (state_opt, _) = get_state p sid tr in
@@ -251,17 +275,23 @@ let full_state_mem_get_session_get_state_forall (p:principal) (tr:trace):
       )
    )
 
+
+let appears_in_fsts (#a #b: eqtype) (x:a) (xs : list (a*b)) =
+  x `List.mem` (List.map fst xs)
+
+
+
 // corolloray of the above
 // instantiated for a given state id
 let full_state_some_get_session_get_state (p:principal) (sid:state_id) (tr:trace):
   Lemma 
   (requires
-       Some? (fst (get_full_state p tr))
+       has_full_state_for tr p
      /\ // the state id appears as key in the full state
-       sid `List.mem` (List.map fst (Some?.v (fst (get_full_state p tr))))
+       sid `appears_in_fsts` access_full_state tr p
   )
   (ensures (
-     let (Some full_st, _) = get_full_state p tr in
+     let full_st = access_full_state tr p in
      let (session_opt, _) = get_session p sid tr in
      let (state_opt, _) = get_state p sid tr in
 
@@ -277,7 +307,7 @@ let full_state_some_get_session_get_state (p:principal) (sid:state_id) (tr:trace
        )
    )
   )
-  = let (Some full_st, _) = get_full_state p tr in
+  = let full_st = access_full_state tr p in
     FStar.List.Tot.Properties.memP_map_elim fst sid full_st;
     full_state_mem_get_session_get_state_forall p tr
 
@@ -302,6 +332,18 @@ let rec compute_new_session_id_larger_than_id_on_trace prin tr sess_id state_con
       compute_new_session_id_larger_than_id_on_trace prin tr_init sess_id state_content
     )
   )
+
+val compute_new_session_id_larger_than_get_state_sid:
+  prin:principal -> tr:trace ->
+  sess_id:state_id ->
+  Lemma
+  (requires has_state_for tr prin sess_id)
+  (ensures sess_id.the_id < (compute_new_session_id prin tr).the_id)
+let compute_new_session_id_larger_than_get_state_sid prin tr sess_id =
+  get_state_state_was_set prin sess_id tr;
+  eliminate exists cont. state_was_set tr prin sess_id cont
+  returns sess_id.the_id < (compute_new_session_id prin tr).the_id
+  with _ . compute_new_session_id_larger_than_id_on_trace prin tr sess_id cont
 
 // the result of [compute_new_session_id] stays the same,
 // if there are no more SetState entries for p on the trace
@@ -399,39 +441,21 @@ let rec compute_new_session_id_grows (p:principal) (tr1 tr2:trace):
 
 let get_session_some_get_full_state_some (p:principal) (sid:state_id) (tr:trace):
   Lemma 
-  (requires Some? (fst (get_session p sid tr)))
-  (ensures Some? (fst (get_full_state p tr)) 
-  // /\  sid `List.mem` (List.map fst (Some?.v (fst (get_full_state p tr))))
-  )
-  =
-    get_session_state_was_set p sid tr;
-    eliminate exists cont . state_was_set tr p sid cont
-    returns Some? (fst (get_full_state p tr))
-    with _ .
-        compute_new_session_id_larger_than_id_on_trace p tr sid cont
+  (requires has_session_for tr p sid)
+  (ensures has_full_state_for tr p)
+  [SMTPat (get_session p sid tr)]
+  = compute_new_session_id_larger_than_get_state_sid p tr sid
 
 
 val get_state_some_get_full_state_some:
   tr:trace -> p:principal -> sid:state_id ->
   Lemma 
-  (requires Some? (fst (get_state p sid tr)))
-  (ensures  Some? (fst (get_full_state p tr)))
-let get_state_some_get_full_state_some tr p sid  =  
-  get_session_some_get_full_state_some p sid tr
+  (requires has_state_for tr p sid)
+  (ensures  has_full_state_for tr p)
+  [SMTPat (get_state p sid tr)]
+let get_state_some_get_full_state_some tr p sid = ()
 
 
-// funktioniert noch nicht so richtig
-// let ad (p:principal) (sid:state_id) (tr:trace):
-//   Lemma (
-//       Some? (fst (get_state p sid tr )) <==> Some? (fst (get_session p sid tr))
-//     /\ Some? (fst (get_session p sid tr)) <==> (Some? (fst (get_full_state p tr)) /\ sid `List.mem` (List.map fst (Some?.v (fst (get_full_state p tr)))))
-//   )
-// = 
-//   FStar.Classical.move_requires_3 get_state_some_get_session_some p sid tr;
-//   FStar.Classical.move_requires_3 get_session_some_get_state_some p sid tr;
-//   FStar.Classical.move_requires_3 get_session_some_get_full_state_some p sid tr;
-//   FStar.Classical.move_requires_3 full_state_some_get_session_get_state p sid tr;
-//   ()
   
 (*** Properties of get_full_state ***)
 
@@ -445,10 +469,7 @@ let get_full_state_same (p:principal) (tr1:trace) (tr2:trace):
   )
   (ensures fst (get_full_state p tr1) = fst (get_full_state p tr2))
 = introduce forall sid. get_session_aux_indexed tr1 p sid = get_session_aux_indexed tr2 p sid
-  with (
-    reveal_opaque (`%get_session) get_session; 
-    get_session_aux_same p sid tr1 tr2
-  ); 
+  with get_session_same p sid tr1 tr2; 
   compute_new_session_id_same p tr1 tr2;
   choose_equals
     (get_session_aux_indexed tr1 p) 
@@ -458,16 +479,16 @@ let get_full_state_same (p:principal) (tr1:trace) (tr2:trace):
 
 let full_state_fst_zero_to_sid (tr:trace) (p:principal):
   Lemma
-  (requires Some? (fst (get_full_state p tr)))
+  (requires has_full_state_for tr p)
   (ensures (
-     let (Some full_st,  _) = get_full_state p tr in
+     let full_st = access_full_state tr p in
      let next_sid = compute_new_session_id p tr in
      (List.map fst (full_st)) `List.subset` (zero_to_sid next_sid)
   ))
   =
-    let (Some full_st, _) = get_full_state p tr in
+    let full_st = access_full_state tr p in
     let next_sid = compute_new_session_id p tr in
-    introduce forall sid. sid `List.mem` (List.map fst full_st) ==> sid `List.mem` (zero_to_sid next_sid)
+    introduce forall sid. sid `appears_in_fsts` full_st ==> sid `List.mem` (zero_to_sid next_sid)
     with (
       introduce _ ==> _
       with _ . (
@@ -485,15 +506,15 @@ let get_full_state_on_growing_traces (p:principal) (tr1 tr2:trace) (sid:state_id
   Lemma 
   (requires
        tr1 <$ tr2
-     /\ Some? (fst (get_full_state p tr1))
-     /\ sid `List.mem` (List.map fst (Some?.v (fst (get_full_state p tr1))))
+     /\ has_full_state_for tr1 p
+     /\ sid `appears_in_fsts` access_full_state tr1 p
   )
   (ensures
-       Some? (fst (get_full_state p tr2))    
-     /\ sid `List.mem` (List.map fst (Some?.v (fst (get_full_state p tr2))))
+       has_full_state_for tr2 p
+     /\ sid `appears_in_fsts` access_full_state tr2 p
   )
   = 
-  let (Some full_st1, _) = get_full_state p tr1 in
+  let full_st1 = access_full_state tr1 p in
   let new_sid1 = compute_new_session_id p tr1 in
   let new_sid2 = compute_new_session_id p tr2 in
   compute_new_session_id_grows p tr1 tr2;
@@ -505,84 +526,47 @@ let get_full_state_on_growing_traces (p:principal) (tr1 tr2:trace) (sid:state_id
 
   full_state_some_get_session_get_state p sid tr1;
   get_session_grows p sid tr1 tr2;
-  let (Some sess2, _) = get_session p sid tr2 in
+  let sess2 = access_session tr2 p sid  in
   get_session_some_get_full_state_some p sid tr2;
-  let (Some full_st2, _) = get_full_state p tr2 in
+  let full_st2 = access_full_state tr2 p in
   mem_choose (get_session_aux_indexed tr2 p) sids2 sid;
   FStar.List.Tot.Properties.memP_map_intro fst (sid, sess2) full_st2
    
 (*** More Relations on get_state and get_full_state ***)
 
-let state_was_set_full_state_some (tr:trace) (p:principal) (sid:state_id) (cont:bytes):
-  Lemma 
-  (requires state_was_set tr p sid cont)
-  (ensures Some? (fst (get_full_state p tr)))
-  [SMTPat (state_was_set tr p sid cont)]
-  = 
-  state_was_set_get_state p sid cont tr;
-  get_state_some_get_full_state_some tr p sid
-
-let rec state_was_set_full_state (tr:trace) (p:principal) (sid:state_id) (cont:bytes):
-  Lemma
-  (requires state_was_set tr p sid cont )
-  (ensures (
-     sid `List.mem` (List.map fst (Some?.v (fst (get_full_state p tr))))
-  ))
-= 
-  match tr with
-  | Nil -> ()
-  | Snoc init (SetState p' sid' cont') ->
-      if p' = p 
-        then ( 
-          if sid' = sid
-          then (
-            compute_new_session_id_larger_than_id_on_trace p tr sid cont';
-            zero_to_sid_mem (compute_new_session_id p tr) sid;
-            assert(Some? (fst (get_session p sid tr)));
-            let f = get_session_aux_indexed tr p in
-            let sids = (zero_to_sid (compute_new_session_id p tr)) in
-            let (Some full_st, _) = get_full_state p tr in
-            mem_choose f sids sid;
-            FStar.List.Tot.Properties.memP_map_intro fst (sid, Some?.v (fst (get_session p sid tr))) full_st
-          )
-          else (
-            init_is_prefix tr;
-            state_was_set_full_state init p sid cont;
-            state_was_set_full_state_some init p sid cont;
-
-            get_full_state_on_growing_traces p init tr sid
-          )
-        )
-        else (
-          init_is_prefix tr;
-          get_full_state_same p init tr;
-          state_was_set_full_state init p sid cont
-        ) 
- | Snoc init _ -> 
-     init_is_prefix tr;
-     get_full_state_same p init tr;
-     state_was_set_full_state init p sid cont
-
 val get_state_appears_in_full_state :
   tr:trace -> p:principal -> sid:state_id ->
   Lemma
-  (requires Some? (fst (get_state p sid tr)))
+  (requires has_state_for tr p sid)
   (ensures (
-     let (Some state, _) = get_state p sid tr in
-   
-     get_state_some_get_full_state_some tr p sid;
-     let (Some full_state, _) = get_full_state p tr in
+     let state = access_state tr p sid in   
+     let full_state = access_full_state tr p in
 
-     exists init. (sid, Snoc init state) `List.mem` full_state 
+     sid `appears_in_fsts` full_state /\ 
+     // for some reason we need to make this explicit here,
+     // i.e., the thing below is sometimes not enough
+  
+     (exists init. (sid, Snoc init state) `List.mem` full_state )
   ))
 let get_state_appears_in_full_state  tr p sid =
-  let (Some state, _) = get_state p sid tr in
+  // showing sid `appears_in_fsts` full_state
+     compute_new_session_id_larger_than_get_state_sid p tr sid;
+     zero_to_sid_mem (compute_new_session_id p tr) sid;
+     let f = get_session_aux_indexed tr p in
+     let sids = (zero_to_sid (compute_new_session_id p tr)) in
+     mem_choose f sids sid;
 
-  get_state_some_get_full_state_some tr p sid;
-  let (Some full_state, _) = get_full_state p tr in
-  
-  state_was_set_full_state tr p sid state;
-  FStar.List.Tot.Properties.memP_map_elim fst sid full_state;
   full_state_some_get_session_get_state p sid tr
-  
 
+
+// This Lemma tells us, that whenever we get a Some for get_state or get_session, we can call [full_state_some_get_session_get_state] to know that the state and session are stored in the full state
+let get_sate_session_full_state_some_equivalence (p:principal) (sid:state_id) (tr:trace):
+  Lemma (
+      (has_state_for tr p sid <==> has_session_for tr p sid)
+    /\ (has_state_for tr p sid <==> (has_full_state_for tr p /\ sid `appears_in_fsts` access_full_state tr p))
+  )
+= 
+  introduce has_state_for tr p sid ==> (has_full_state_for tr p /\ sid `appears_in_fsts` access_full_state tr p)
+  with _ . get_state_appears_in_full_state tr p sid;
+  introduce has_full_state_for tr p /\ sid `appears_in_fsts` access_full_state tr p ==> has_state_for tr p sid
+  with _ . full_state_some_get_session_get_state p sid tr 

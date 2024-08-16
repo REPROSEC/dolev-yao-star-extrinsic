@@ -192,24 +192,21 @@ let next_full_state_pred tr p sid =
                        match parse p_state last_i_b with
                        | None -> ()
                        | Some last_i -> 
-                           full_state_some_get_session_get_state p sid_i tr_after_msg;
+                           //full_state_some_get_session_get_state p sid_i tr_after_msg;
 
-                           get_state_aux_same p sid_i tr tr_after_msg;    
-                           reveal_opaque (`%get_state) (get_state);
+                           get_state_same p sid_i tr tr_after_msg;    
                            full_state_mem_get_session_get_state_forall p tr_after_msg;
-                           assert((Some last_i_b, tr_after_msg) = get_state p sid_i tr_after_msg);
+                           assert(last_i_b = access_state tr_after_msg p sid_i);
                            if sid_i = sid
                            then assert(last_i = S idn c)
                            else begin
-                             let (Some state_i, _) =  get_state p sid_i tr_after_msg in
-                             assert(state_i = last_i_b );
                              let oldst_entry = SetState p sid oldst_b in
-                             let tr_after_oldst = tr `suffix_after_event` (SetState p sid oldst_b) in
+                             let tr_after_oldst = tr `suffix_after_event` oldst_entry in
                              let last_i_entry = SetState p sid_i last_i_b in
-                             let tr_after_last_i = (tr `suffix_after_event` (SetState p sid_i last_i_b) ) in
+                             let tr_after_last_i = tr `suffix_after_event` last_i_entry in
                              
                              if tr_after_oldst `has_suffix` tr_after_last_i // last_i after oldst on tr
-                             then ( // admit();
+                             then (//admit();
                                get_state_no_set_state_for_on_suffix_after_event tr p sid;
                                no_set_state_entry_for_on_suffix tr_after_oldst tr_after_last_i p sid;
                                assert(no_set_state_entry_for p sid tr_after_last_i);
@@ -217,18 +214,18 @@ let next_full_state_pred tr p sid =
                                let tr_before_last_i = tr `prefix_before_event` (SetState p sid_i last_i_b) in
                                suff_after_before_event_is_suff_at_event tr last_i_entry;
                                no_set_state_entry_for_concat p sid (Snoc Nil (SetState p sid_i last_i_b)) tr_after_last_i;
-                               get_state_aux_same p sid tr_before_last_i tr;
-                               assert((Some oldst_b, tr_before_last_i) = get_state p sid tr_before_last_i);
-                               match get_full_state p tr_before_last_i with
-                               | (None, _) -> state_was_set_full_state tr_before_last_i p sid oldst_b
-                               | (Some full_state_before_last_i, _) -> (
+                               get_state_same p sid tr_before_last_i tr;
+                               assert(oldst_b = access_state tr_before_last_i p sid);
+                               // match get_full_state p tr_before_last_i with
+                               // | (None, _) -> get_state_appears_in_full_state tr_before_last_i p sid
+                               // | (Some full_state_before_last_i, _) -> (
                                    prefix_before_event_invariant tr_after_msg (SetState p sid_i last_i_b);
                                    assert(global_state_pred tr_before_last_i p sid_i last_i_b);
                                    get_state_appears_in_full_state tr_before_last_i p sid 
-                                 )
+                                 // )
                              )
                              else ( // oldst after last_i on tr
-                               admit();
+                               //admit();
                                suffixes tr tr_after_last_i tr_after_oldst;
                                assert(tr_after_last_i `has_suffix` tr_after_oldst);
   
@@ -237,11 +234,11 @@ let next_full_state_pred tr p sid =
                                let tr_before_old = tr `prefix_before_event` oldst_entry in                               
                                suff_after_before_event_is_suff_at_event tr oldst_entry;
                                no_set_state_entry_for_concat p sid_i (Snoc Nil oldst_entry) tr_after_oldst;
-                               get_state_aux_same p sid_i tr_before_old tr;
-                               let (Some state_i_before_old, _) = get_state p sid_i tr_before_old in
-                               assert(state_i_before_old = state_i);
+                               get_state_same p sid_i tr_before_old tr;
+                               let state_i_before_old = access_state tr_before_old p sid_i in
+                               assert(state_i_before_old = last_i_b);
                                match get_full_state p tr_before_old with
-                               | (None, _) -> state_was_set_full_state tr_before_old p sid_i state_i_before_old
+                               | (None, _) -> get_state_appears_in_full_state tr_before_old p sid_i
                                | (Some full_state_before_old, _) -> 
                                       assert(global_state_pred tr_before_old p sid oldst_b);
                                       get_state_appears_in_full_state tr_before_old p sid_i  
@@ -287,6 +284,29 @@ let next_invariant tr p sid =
         )
     )
 #pop-options
+
+
+
+
+val init_invariant: tr:trace -> p:principal ->
+  Lemma 
+    (requires trace_invariant tr)
+    (ensures  (
+      let (_,tr_out) = init p tr in
+      trace_invariant tr_out
+      )
+    )
+let init_invariant tr p =
+  let (idn, tr_after_new_idn) = new_idn p tr in
+  let new_state = S idn 0 in
+  let (new_sess_id, tr_after_new_session) = set_new_session p (serialize p_state new_state) tr_after_new_idn in
+  //compute_new_session_id_correct p tr _ _;
+  serialize_wf_lemma p_state (is_knowable_by (principal_state_label p new_sess_id) tr_after_new_idn) new_state;
+  admit()
+
+
+
+
 
 let rec forall_rev_list (#a:Type) (p: a -> prop) (xs: rev_list a) : prop =
   match xs with
@@ -537,19 +557,3 @@ let new_idn_does_not_appear_in_full_state p tr =
     | Some fst ->
            curr_max_id_plus_one_does_not_appear_in_full_state fst
 
-
-val init_invariant: tr:trace -> p:principal ->
-  Lemma 
-    (requires trace_invariant tr)
-    (ensures  (
-      let (_,tr_out) = init p tr in
-      trace_invariant tr_out
-      )
-    )
-let init_invariant tr p =
-  let (idn, tr_after_new_idn) = new_idn p tr in
-  let new_state = S idn 0 in
-  let (new_sess_id, tr_after_new_session) = set_new_session p (serialize p_state new_state) tr_after_new_idn in
-  //compute_new_session_id_correct p tr _ _;
-  serialize_wf_lemma p_state (is_knowable_by (principal_state_label p new_sess_id) tr_after_new_idn) new_state;
-  admit()

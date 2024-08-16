@@ -136,7 +136,7 @@ instance protocol_invariants_p: protocol_invariants = {
   }
 }
 
-#push-options "--z3rlimit 50 --z3cliopt 'smt.qi.eager_threshold=100'"
+#push-options "--z3rlimit 50 --z3cliopt 'smt.qi.eager_threshold=50'"
 val next_invariant: tr:trace -> p:principal -> sid:state_id ->
   Lemma 
     (requires trace_invariant tr)
@@ -164,8 +164,8 @@ let next_invariant tr p sid =
 
           no_set_state_entry_for_suffixes_transitive p sid tr tr_after_rand tr_after_msg1;
 
-          get_session_aux_same p sid tr tr_after_msg1;
-          get_session_aux_same p sid tr_after_msg1 tr_after_msg;
+          get_session_same p sid tr tr_after_msg1;
+          get_session_same p sid tr_after_msg1 tr_after_msg;
           assert(fst (get_session p sid tr_after_msg) = fst (get_session p sid tr) );
           let next_state = S idn (c+1) in
           let next_state_b = serialize p_state next_state in
@@ -179,7 +179,7 @@ let next_invariant tr p sid =
           let (_, tr_after_event) = trigger_event p "P" ev_b tr_after_next_state in
           //assert(trace_invariant tr_after_event);
 
-          get_session_aux_same p sid tr_after_next_state tr_after_event;
+          get_session_same p sid tr_after_next_state tr_after_event;
           // assert(get_session p sid tr_after_event = get_session p sid tr_after_next_state);
 
           let other_sid = {the_id = sid.the_id + 1} in
@@ -196,7 +196,7 @@ let next_invariant tr p sid =
                serialize_wf_lemma p_state (is_knowable_by (principal_state_label p other_sid) tr_after_event) other_state;
 
   //             set_state_sets_no_state_for_others p other_sid other_state_b tr_after_event;
-               get_session_aux_same p sid tr_after_event tr_after_other_session;
+               get_session_same p sid tr_after_event tr_after_other_session;
                assert(fst (get_session p sid tr_after_other_session) = fst (get_session p sid tr_after_next_state))
             end
         )
