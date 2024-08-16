@@ -76,6 +76,8 @@ let initiator_forward_secrecy tr alice alice_si bob gx gy k =
     )
   );
 
+  FStar.Classical.forall_intro (FStar.Classical.move_requires (join_equivalent tr (get_dh_label gx) (get_dh_label gy) (principal_state_label alice alice_si)));
+
   // We can deduce from it the label of `k`, up to some corruption
   // (this assert is not needed and only there for pedagogical purposes)
   assert(
@@ -125,6 +127,8 @@ let responder_forward_secrecy tr alice bob bob_si gx gy k =
       )
     )
   );
+
+  FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (join_equivalent tr (get_dh_label gx) (get_dh_label gy)));
 
   // We can deduce from it the label of `k`, up to some corruption
   // (this assert is not needed and only there for pedagogical purposes)

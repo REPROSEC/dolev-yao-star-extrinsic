@@ -225,6 +225,28 @@ let send_msg2_proof tr global_sess_id bob bob_si =
   )
   | _ -> ()
 
+//TODO move, or reconsider SMT patterns?
+val join_equivalent:
+  tr:trace ->
+  x1:label -> x2:label -> y1:label -> y2:label ->
+  Lemma
+  (requires
+    x1 `equivalent tr` y1 /\
+    x2 `equivalent tr` y2
+  )
+  (ensures join x1 x2 `equivalent tr` join y1 y2)
+let join_equivalent tr x1 x2 y1 y2 =
+  join_eq tr x1 x2 (join y1 y2);
+  assert((join y1 y2) `can_flow tr` y1);
+  assert((join y1 y2) `can_flow tr` x1);
+  assert((join y1 y2) `can_flow tr` y2);
+  assert((join y1 y2) `can_flow tr` x2);
+  join_eq tr (join x1 x2) y1 y2;
+  assert(join x1 x2 `can_flow tr` x1);
+  assert(join x1 x2 `can_flow tr` y1);
+  assert(join x1 x2 `can_flow tr` x2);
+  assert(join x1 x2 `can_flow tr` y2)
+
 val prepare_msg3_proof:
   tr:trace ->
   global_sess_id:dh_global_sess_ids ->
@@ -270,6 +292,8 @@ let prepare_msg3_proof tr global_sess_id alice alice_si bob msg_id =
             returns dh_key_and_event_respond1
             with _. (
               assert(event_triggered tr bob (Respond1 alice bob res.gx res.gy y));
+              assert((exists sess_id. is_secret (principal_state_label alice sess_id) tr x));
+              assert((exists sess_id. is_secret (principal_state_label bob sess_id) tr y));
               
               assert(dh_pk y == res.gy);
               assert(dh_pk x = res.gx);              
@@ -277,10 +301,13 @@ let prepare_msg3_proof tr global_sess_id alice alice_si bob msg_id =
               assert(dh y res.gx == dh x res.gy);
               assert(k == k');
               
-              assert(exists si sj. get_label k `equivalent tr` join (principal_state_label alice si) (principal_state_label bob sj));
+              eliminate exists si sj. is_secret (principal_state_label alice si) tr x /\ is_secret (principal_state_label bob sj) tr y
+              returns exists si sj. get_label k `equivalent tr` join (principal_state_label alice si) (principal_state_label bob sj)
+              with _. (
+                join_equivalent tr (principal_state_label alice si) (principal_state_label bob sj) (get_label x) (get_label y)
+              );
 
-              assert(dh_key_and_event_respond1);
-              ()
+              assert(dh_key_and_event_respond1)
             )
           )
         )
@@ -375,6 +402,14 @@ let verify_msg3_proof tr global_sess_id alice bob msg_id bob_si =
               )
             );
 
+            introduce alice_and_bob_not_corrupt ==> (exists si. join (get_dh_label gx) (get_label y) `equivalent tr` join (principal_state_label alice si) (principal_state_label bob bob_si))
+            with _. (
+              eliminate exists si. get_dh_label gx `equivalent tr` (principal_state_label alice si)
+              returns _
+              with _. (
+                join_equivalent tr (principal_state_label alice si) (principal_state_label bob bob_si) (get_dh_label gx) (get_label y)
+              )
+            );
             assert(is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_state_label bob bob_si) \/ 
               (exists si. get_label res.k `equivalent tr` join (principal_state_label alice si) (principal_state_label bob bob_si)));
             assert(get_usage res.k == AeadKey "DH.aead_key" empty);

@@ -105,6 +105,6 @@ val parse_serialize_inv_lemma_smtpat:
   x:a ->
   Lemma
   (ensures parse a (serialize #bytes a x) == Some x)
-  [SMTPat (parse #bytes #bl a #ps_a (serialize #bytes a #ps_a x))]
+  [SMTPat (serialize #bytes a #ps_a x)]
 let parse_serialize_inv_lemma_smtpat #bytes #bl a #ps_a x =
   parse_serialize_inv_lemma #bytes a #ps_a x

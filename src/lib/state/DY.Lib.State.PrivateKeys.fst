@@ -16,6 +16,12 @@ open DY.Lib.State.Map
 
 (*** Private keys types & invariants ***)
 
+type private_key_principal = principal
+%splice [ps_private_key_principal] (gen_parser (`private_key_principal))
+
+instance parseable_serializeable_private_key_principal: parseable_serializeable bytes private_key_principal =
+  mk_parseable_serializeable ps_private_key_principal
+
 [@@ with_bytes bytes]
 type private_key_type =
   | PkDec: [@@@with_parser #bytes ps_string] usage:string -> private_key_type
@@ -52,10 +58,10 @@ val is_private_key_for:
 let is_private_key_for #cinvs tr sk sk_type who =
   match sk_type with
   | PkDec usg -> (
-    is_decryption_key (PkKey usg empty) (principal_label who) tr sk
+    is_decryption_key (PkKey usg (serialize private_key_principal who)) (principal_label who) tr sk
   )
   | Sign usg -> (
-    is_signature_key (SigKey usg empty) (principal_label who) tr sk
+    is_signature_key (SigKey usg (serialize private_key_principal who)) (principal_label who) tr sk
   )
 
 // The `#_` at the end is a workaround for FStarLang/FStar#3286
@@ -76,12 +82,12 @@ val private_keys_tag_and_invariant: {|crypto_invariants|} -> string & local_byte
 let private_keys_tag_and_invariant #ci = (map_types_private_keys.tag, local_state_predicate_to_local_bytes_state_predicate (map_session_invariant private_keys_pred))
 
 val private_key_type_to_usage:
-  private_key_type ->
+  private_key_type -> principal ->
   usage
-let private_key_type_to_usage sk_type =
+let private_key_type_to_usage sk_type who =
   match sk_type with
-  | PkDec usg -> PkKey usg empty
-  | Sign usg -> SigKey usg empty
+  | PkDec usg -> PkKey usg (serialize private_key_principal who)
+  | Sign usg -> SigKey usg (serialize private_key_principal who)
 
 (*** Private Keys API ***)
 
@@ -92,7 +98,7 @@ let initialize_private_keys = initialize_map private_key_key private_key_value #
 [@@ "opaque_to_smt"]
 val generate_private_key: principal -> state_id -> private_key_type -> traceful (option unit)
 let generate_private_key prin sess_id sk_type =
-  let* sk = mk_rand (private_key_type_to_usage sk_type) (principal_label prin) 64 in //TODO
+  let* sk = mk_rand (private_key_type_to_usage sk_type prin) (principal_label prin) 64 in //TODO
   add_key_value prin sess_id ({ty = sk_type}) ({private_key = sk;})
 
 [@@ "opaque_to_smt"]
