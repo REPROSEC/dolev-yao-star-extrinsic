@@ -206,7 +206,7 @@ let next_full_state_pred tr p sid =
                              let tr_after_last_i = tr `suffix_after_event` last_i_entry in
                              
                              if tr_after_oldst `has_suffix` tr_after_last_i // last_i after oldst on tr
-                             then (//admit();
+                             then (admit();
                                get_state_no_set_state_for_on_suffix_after_event tr p sid;
                                no_set_state_entry_for_on_suffix tr_after_oldst tr_after_last_i p sid;
                                assert(no_set_state_entry_for p sid tr_after_last_i);
@@ -251,6 +251,7 @@ let next_full_state_pred tr p sid =
           end
         )
     )
+#pop-options
 
 #push-options "--z3rlimit 25"
 val next_invariant: tr:trace -> p:principal -> sid:state_id ->
@@ -284,29 +285,6 @@ let next_invariant tr p sid =
         )
     )
 #pop-options
-
-
-
-
-val init_invariant: tr:trace -> p:principal ->
-  Lemma 
-    (requires trace_invariant tr)
-    (ensures  (
-      let (_,tr_out) = init p tr in
-      trace_invariant tr_out
-      )
-    )
-let init_invariant tr p =
-  let (idn, tr_after_new_idn) = new_idn p tr in
-  let new_state = S idn 0 in
-  let (new_sess_id, tr_after_new_session) = set_new_session p (serialize p_state new_state) tr_after_new_idn in
-  //compute_new_session_id_correct p tr _ _;
-  serialize_wf_lemma p_state (is_knowable_by (principal_state_label p new_sess_id) tr_after_new_idn) new_state;
-  admit()
-
-
-
-
 
 let rec forall_rev_list (#a:Type) (p: a -> prop) (xs: rev_list a) : prop =
   match xs with
@@ -556,4 +534,72 @@ let new_idn_does_not_appear_in_full_state p tr =
     | None -> ()
     | Some fst ->
            curr_max_id_plus_one_does_not_appear_in_full_state fst
+
+
+
+
+let rec forall_sessions_intro (p: session_raw -> prop) (full_st : full_state_raw)
+  : Lemma 
+    ( requires forall_sessions p full_st
+    )
+    (ensures
+      forall si sess. (si, sess) `List.mem` full_st ==> p sess
+    )
+= match full_st with
+  | [] -> ()
+  | (_, s) :: rest -> forall_sessions_intro p rest
+
+#push-options "--z3rlimit 20"
+val init_invariant: tr:trace -> p:principal ->
+  Lemma 
+    (requires trace_invariant tr)
+    (ensures  (
+      let (_,tr_out) = init p tr in
+      trace_invariant tr_out
+      )
+    )
+let init_invariant tr p =
+  let (idn, tr_after_new_idn) = new_idn p tr in
+  let new_state = S idn 0 in
+  let new_state_b = serialize p_state new_state in
+  let (new_sess_id, tr_after_new_session) = set_new_session p (serialize p_state new_state) tr_after_new_idn in
+  serialize_wf_lemma p_state (is_knowable_by (principal_state_label p new_sess_id) tr_after_new_idn) new_state;
+
+  match fst (get_full_state p tr) with
+  | None -> ()
+  | Some full_st ->
+  assert(parse #bytes p_state new_state_b = Some new_state);
+  introduce forall sess. sess `List.mem` full_st ==> (
+    match sess with
+    | (_, Nil) -> True
+    | (sid_i, Snoc init_i last_i) -> begin
+              match parse p_state last_i with
+                    | None -> True
+                    | Some last_i ->
+                        if sid_i = new_sess_id // if the new state is added to session sid_i
+                          then last_i.idn = idn // the id should stay the same within session sid_i
+                          else last_i.idn <> idn // otherwise the id must be different
+                 end
+    )
+    with (
+      introduce _ ==> _
+      with _ . (
+        match sess with
+        | (_, Nil) -> ()
+        | (sid_i, Snoc init_ last_i) -> 
+             match parse p_state last_i with
+             | None -> ()
+             | Some last_i -> 
+                 if sid_i = new_sess_id
+                 then admit()
+                 else (
+                    new_idn_does_not_appear_in_full_state p tr;
+                    forall_sessions_intro (idn_does_not_appear_in_session idn) full_st
+                    )
+
+    )
+    )
+
+
+
 

@@ -45,10 +45,16 @@ let session_pred_later {|invs:protocol_invariants|} = session_pred_later_ #invs.
 
 
 (*** Convenience Functions to check and access state, session, and full state ***)
+// those are useful in Lemma statements
 
+// read as: "does the trace have a state for p and sid?"
+// if we would use the pair (p, sid) this could be used infix:
+// tr `has_state_for` (p, sid)
 let has_state_for (tr:trace) (p:principal) (sid:state_id)  =
   Some? (fst (get_state p sid tr))
 
+// if the trace has a state entry for p and sid,
+// this returns that state
 let access_state (tr:trace) (p:principal) (sid:state_id{has_state_for tr p sid}) = 
   Some?.v (fst (get_state p sid tr))
 
@@ -66,20 +72,24 @@ let access_full_state (tr:trace) (p:principal{has_full_state_for tr p}) =
   Some?.v (fst (get_full_state p tr))
 
 
-(*** Properties of get_state ***)
+(*** Properties of set_state ***)
 
-let get_state_session_full_state_does_not_change_trace (p:principal) (sid:state_id) (tr:trace):
+let set_state_state_was_set (tr:trace) (p:principal) (sid:state_id) (cont:state_raw):
   Lemma
-  ( let (_, tr_out_st) = get_state p sid tr in
-    let (_, tr_out_sess) = get_session p sid tr in
-    let (_, tr_out_fst) = get_full_state p  tr in
-    tr_out_st = tr /\
-    tr_out_sess = tr /\
-    tr_out_fst = tr
+  ( let (_, tr_out) = set_state p sid cont tr in
+    state_was_set tr_out p sid cont
   )
-  =   reveal_opaque (`%get_state) get_state
+  = reveal_opaque (`%set_state) (set_state)
+   
+let set_new_session_state_was_set (tr:trace) (p:principal) (cont:state_raw):
+  Lemma
+  ( let (sid, tr_out) = set_new_session p cont tr in
+    state_was_set tr_out p sid cont
+  )
+  = reveal_opaque (`%set_state) (set_state)
 
 
+(*** Properties of get_state ***)
 
 val get_state_state_was_set :
   p:principal -> sid:state_id -> tr:trace ->
@@ -142,7 +152,7 @@ val get_state_same:
     (ensures fst (get_state p sid tr1) = fst (get_state p sid tr2))
  //   [SMTPat (tr1 <$ tr2 /\ no_set_state_entry_for p sid (tr2 `suffix_after` tr1))]
 let get_state_same p sid tr1 tr2 =
-  reveal_opaque (`%get_state)get_state;
+  reveal_opaque (`%get_state) get_state;
   get_state_aux_same p sid tr1 tr2
 
 
@@ -151,10 +161,8 @@ let get_state_same p sid tr1 tr2 =
 
 let rec get_session_grows (p:principal) (sid:state_id) (tr1 tr2:trace):
   Lemma
-  (requires tr1 <$ tr2 /\ has_session_for tr1 p sid
-  )
-  (ensures has_session_for tr2 p sid
-  )
+  (requires tr1 <$ tr2 /\ has_session_for tr1 p sid)
+  (ensures has_session_for tr2 p sid)
  = reveal_opaque (`%grows) grows; 
    norm_spec [zeta; delta_only [`%prefix]] (prefix);
    if tr1 = tr2 
@@ -168,10 +176,10 @@ let rec get_session_grows (p:principal) (sid:state_id) (tr1 tr2:trace):
 val get_session_same:
   p:principal -> sid:state_id -> tr1:trace -> tr2:trace ->
   Lemma
-    (requires
-      tr1 <$ tr2 /\ no_set_state_entry_for p sid (tr2 `suffix_after` tr1)
-    )
-    (ensures fst (get_session p sid tr1) = fst (get_session p sid tr2))
+  (requires
+    tr1 <$ tr2 /\ no_set_state_entry_for p sid (tr2 `suffix_after` tr1)
+  )
+  (ensures fst (get_session p sid tr1) = fst (get_session p sid tr2))
 let get_session_same p sid tr1 tr2 =
   get_session_aux_same p sid tr1 tr2
 
