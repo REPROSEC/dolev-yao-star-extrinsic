@@ -43,53 +43,8 @@ type pre_label =
 
 type label =
   | Secret: label
+  | RandLabelAt: time:nat -> label
   | State: pre_label -> label
   | Meet: label -> label -> label
   | Join: label -> label -> label
   | Public: label
-  | RandLabelAt: time:nat -> label
-
-open DY.Core.Internal.Ord
-
-instance integer_encodable_pre_label: integer_encodable pre_label = {
-  encode = (fun x ->
-    match x with
-    | P p -> 0::(encode p)
-    | S p s -> 1::(encode [encode p; encode s.the_id])
-  );
-  encode_inj = (fun x y ->
-    encode_inj_forall (list (list int)) ();
-    encode_inj_forall string ();
-    encode_inj_forall nat ()
-  );
-}
-
-val encode_label: label -> list int
-let rec encode_label l =
-  match l with
-  | Secret -> 0::[]
-  | State s -> 1::(encode [encode s])
-  | Meet l1 l2 -> 2::(encode [encode_label l1; encode_label l2])
-  | Join l1 l2 -> 3::(encode [encode_label l1; encode_label l2])
-  | Public -> 4::[]
-  | RandLabelAt time -> 5::(encode [encode time])
-
-val encode_label_inj:
-  l1:label -> l2:label ->
-  Lemma
-  (requires encode_label l1 == encode_label l2)
-  (ensures l1 == l2)
-let rec encode_label_inj l1 l2 =
-  introduce forall l1' l2'. l1' << l1 /\ l2' << l2 /\ encode_label l1' == encode_label l2' ==> l1' == l2' with (
-    introduce _ ==> _ with _. (
-      encode_label_inj l1' l2'
-    )
-  );
-  encode_inj_forall (list (list int)) ();
-  encode_inj_forall pre_label ();
-  allow_inversion label
-
-instance integer_encodable_label: integer_encodable label = {
-  encode = encode_label;
-  encode_inj = encode_label_inj;
-}

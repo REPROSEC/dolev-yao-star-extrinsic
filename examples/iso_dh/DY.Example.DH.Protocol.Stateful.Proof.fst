@@ -292,8 +292,6 @@ let prepare_msg3_proof tr global_sess_id alice alice_si bob msg_id =
             returns dh_key_and_event_respond1
             with _. (
               assert(event_triggered tr bob (Respond1 alice bob res.gx res.gy y));
-              assert((exists sess_id. is_secret (principal_state_label alice sess_id) tr x));
-              assert((exists sess_id. is_secret (principal_state_label bob sess_id) tr y));
               
               assert(dh_pk y == res.gy);
               assert(dh_pk x = res.gx);              
@@ -307,7 +305,8 @@ let prepare_msg3_proof tr global_sess_id alice alice_si bob msg_id =
                 join_equivalent tr (principal_state_label alice si) (principal_state_label bob sj) (get_label x) (get_label y)
               );
 
-              assert(dh_key_and_event_respond1)
+              assert(dh_key_and_event_respond1);
+              ()
             )
           )
         )
