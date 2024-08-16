@@ -136,7 +136,7 @@ instance protocol_invariants_p: protocol_invariants = {
   }
 }
 
-#push-options "--z3rlimit 25 --z3cliopt 'smt.qi.eager_threshold=100'"
+#push-options "--z3rlimit 50 --z3cliopt 'smt.qi.eager_threshold=100'"
 val next_invariant: tr:trace -> p:principal -> sid:state_id ->
   Lemma 
     (requires trace_invariant tr)
@@ -146,7 +146,7 @@ val next_invariant: tr:trace -> p:principal -> sid:state_id ->
       )
     )
 let next_invariant tr p sid = 
-   match get_state p sid tr with
+  match get_state p sid tr with
   | (None, _) -> ()
   | (Some st_b, _) -> (
       match parse p_state st_b with
@@ -163,10 +163,10 @@ let next_invariant tr p sid =
 
 
           no_set_state_entry_for_suffixes_transitive p sid tr tr_after_rand tr_after_msg1;
+
           get_session_aux_same p sid tr tr_after_msg1;
           get_session_aux_same p sid tr_after_msg1 tr_after_msg;
-          assert(get_session p sid tr_after_msg = get_session p sid tr );
-
+          assert(fst (get_session p sid tr_after_msg) = fst (get_session p sid tr) );
           let next_state = S idn (c+1) in
           let next_state_b = serialize p_state next_state in
           let (_,tr_after_next_state) = set_state p sid next_state_b tr_after_msg in
@@ -195,10 +195,9 @@ let next_invariant tr p sid =
                parse_wf_lemma #bytes p_state #_ (is_knowable_by (principal_state_label p other_sid) tr_after_event) ost_b;
                serialize_wf_lemma p_state (is_knowable_by (principal_state_label p other_sid) tr_after_event) other_state;
 
-//               set_state_sets_no_state_for_others p other_sid other_state_b tr_after_event;
+  //             set_state_sets_no_state_for_others p other_sid other_state_b tr_after_event;
                get_session_aux_same p sid tr_after_event tr_after_other_session;
-               // assert(get_session p sid tr_after_other_session = get_session p sid tr_after_next_state);
-()
+               assert(fst (get_session p sid tr_after_other_session) = fst (get_session p sid tr_after_next_state))
             end
         )
     )

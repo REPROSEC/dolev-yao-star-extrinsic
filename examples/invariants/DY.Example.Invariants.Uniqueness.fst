@@ -524,14 +524,14 @@ let curr_max_id_plus_one_does_not_appear_in_full_state fst =
 val new_idn_does_not_appear_in_full_state: p:principal -> tr:trace ->
   Lemma
     ( let (n_idn,_) = new_idn p tr in
-      let opt_fst = get_full_state p tr in
+      let (opt_fst, _) = get_full_state p tr in
       match opt_fst with
       | None -> True
       | Some fst -> n_idn `idn_does_not_appear_in_full_state` fst
     )
 let new_idn_does_not_appear_in_full_state p tr =
   let (n_idn,_) = new_idn p tr in
-  let opt_fst = get_full_state p tr in
+  let (opt_fst, _) = get_full_state p tr in
     match opt_fst with
     | None -> ()
     | Some fst ->

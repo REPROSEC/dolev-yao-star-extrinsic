@@ -49,6 +49,18 @@ let session_pred_later {|invs:protocol_invariants|} = session_pred_later_ #invs.
 
 (*** Properties of get_state ***)
 
+let get_state_session_full_state_does_not_change_trace (p:principal) (sid:state_id) (tr:trace):
+  Lemma
+  ( let (_, tr_out_st) = get_state p sid tr in
+    let (_, tr_out_sess) = get_session p sid tr in
+    let (_, tr_out_fst) = get_full_state p  tr in
+    tr_out_st = tr /\
+    tr_out_sess = tr /\
+    tr_out_fst = tr
+  )
+  =   reveal_opaque (`%get_state) get_state
+
+
 
 val get_state_state_was_set :
   p:principal -> sid:state_id -> tr:trace ->
@@ -149,6 +161,7 @@ let get_state_some_get_session_some (p:principal) (sid:state_id) (tr:trace):
   Lemma 
   (requires Some? (fst (get_state p sid tr)))
   (ensures  Some? (fst (get_session p sid tr)))
+  [SMTPat (get_state p sid tr)]
   = ()
 
 
