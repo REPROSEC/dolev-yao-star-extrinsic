@@ -247,6 +247,7 @@ let join_equivalent tr x1 x2 y1 y2 =
   assert(join x1 x2 `can_flow tr` x2);
   assert(join x1 x2 `can_flow tr` y2)
 
+#push-options "--ifuel 0 --z3rlimit 50"
 val prepare_msg3_proof:
   tr:trace ->
   global_sess_id:dh_global_sess_ids ->
@@ -317,6 +318,7 @@ let prepare_msg3_proof tr global_sess_id alice alice_si bob msg_id =
     | (None, tr) -> ()
   )
   | _ -> ()
+#pop-options
 
 val send_msg3_proof:
   tr:trace ->
