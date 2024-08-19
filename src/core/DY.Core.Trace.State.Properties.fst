@@ -81,13 +81,6 @@ let set_state_state_was_set (tr:trace) (p:principal) (sid:state_id) (cont:state_
   )
   = reveal_opaque (`%set_state) (set_state)
    
-let set_new_session_state_was_set (tr:trace) (p:principal) (cont:state_raw):
-  Lemma
-  ( let (sid, tr_out) = set_new_session p cont tr in
-    state_was_set tr_out p sid cont
-  )
-  = reveal_opaque (`%set_state) (set_state)
-
 
 (*** Properties of get_state ***)
 
@@ -443,6 +436,71 @@ let rec compute_new_session_id_grows (p:principal) (tr1 tr2:trace):
       | Snoc tr2_init tr2_ev -> compute_new_session_id_grows p tr1 tr2_init
     )
 
+
+(*** Properties of set_session ***)
+
+let compute_new_session_new_sid (p:principal) (tr:trace):
+  Lemma
+  ( let new_sid = compute_new_session_id p tr in
+    forall (ts:timestamp{ts < length tr}).
+      match get_event_at tr ts with
+      | SetState p' sid' _ -> 
+          if p' = p
+          then sid'.the_id <>  new_sid.the_id
+          else True
+      | _ -> True
+  )
+  =  let new_sid = compute_new_session_id p tr in
+    introduce  forall (ts:timestamp{ts < length tr}).
+      match get_event_at tr ts with
+      | SetState p' sid' _ -> 
+          if p' = p
+          then sid'.the_id <> new_sid.the_id
+          else True
+      | _ -> True
+    with (
+     match get_event_at tr ts with
+      | SetState p' sid' cont' -> 
+          if p' = p
+          then
+            compute_new_session_id_larger_than_id_on_trace p tr sid' cont'
+          else ()
+      | _ -> ()
+  )
+
+let new_session_new_sid (p:principal) (tr:trace):
+  Lemma
+  ( let (new_sid, _) = new_session_id p tr in
+    forall (ts:timestamp{ts < length tr}).
+      match get_event_at tr ts with
+      | SetState p' sid' _ -> 
+          if p' = p
+          then sid'.the_id <>  new_sid.the_id
+          else True
+      | _ -> True
+  )
+= reveal_opaque (`%new_session_id) new_session_id; 
+  compute_new_session_new_sid p tr
+
+let set_new_session_new_sid (p:principal) (cont:state_raw) (tr:trace):
+  Lemma
+  ( let (new_sid, tr_out) = set_new_session p cont tr in
+    forall (ts:timestamp{ts < length tr}).
+      match get_event_at tr ts with
+      | SetState p' sid' _ -> 
+          if p' = p
+          then sid'.the_id <> new_sid.the_id
+          else True
+      | _ -> True
+  )
+  = new_session_new_sid p tr
+
+let set_new_session_state_was_set (tr:trace) (p:principal) (cont:state_raw):
+  Lemma
+  ( let (sid, tr_out) = set_new_session p cont tr in
+    state_was_set tr_out p sid cont
+  )
+  = reveal_opaque (`%set_state) (set_state)
 
 
 (*** More Relation on get_state, get_session and get_full_state ***)

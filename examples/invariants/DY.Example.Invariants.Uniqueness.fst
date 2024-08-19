@@ -549,6 +549,8 @@ let rec forall_sessions_intro (p: session_raw -> prop) (full_st : full_state_raw
   | [] -> ()
   | (_, s) :: rest -> forall_sessions_intro p rest
 
+
+
 #push-options "--z3rlimit 20"
 val init_invariant: tr:trace -> p:principal ->
   Lemma 
@@ -590,12 +592,11 @@ let init_invariant tr p =
              match parse p_state last_i with
              | None -> ()
              | Some last_i -> 
-                 if sid_i = new_sess_id
-                 then admit()
-                 else (
-                    new_idn_does_not_appear_in_full_state p tr;
-                    forall_sessions_intro (idn_does_not_appear_in_session idn) full_st
-                    )
+                 set_new_session_new_sid p new_state_b tr;
+                 full_state_mem_get_session_get_state_forall p tr;
+                 assert(sid_i <> new_sess_id);
+                 new_idn_does_not_appear_in_full_state p tr;
+                 forall_sessions_intro (idn_does_not_appear_in_session idn) full_st
 
     )
     )
