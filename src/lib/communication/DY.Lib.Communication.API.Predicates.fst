@@ -71,12 +71,12 @@ let has_communication_layer_invariants cinvs =
 
 noeq
 type comm_higher_layer_event_preds = {
-  send_conf: tr:trace -> sender:principal -> receiver:principal -> payload:bytes -> prop;
+  send_conf: sender:principal -> receiver:principal -> payload:bytes -> tr:trace -> prop;
   // TODO do we need extensibility on the receiver side?
-  receive_conf: tr:trace -> sender:principal -> receiver:principal -> payload:bytes -> prop;
-  send_auth: tr:trace -> sender:principal -> payload:bytes -> prop;
+  receive_conf: sender:principal -> receiver:principal -> payload:bytes -> tr:trace -> prop;
+  send_auth: sender:principal -> payload:bytes -> tr:trace -> prop;
   // TODO do we need extensibility on the receiver side?
-  receive_auth: tr:trace -> sender:principal -> receiver:principal -> payload:bytes -> prop;
+  receive_auth: sender:principal -> receiver:principal -> payload:bytes -> tr:trace -> prop;
 }
 
 val default_comm_higher_layer_event_preds: comm_higher_layer_event_preds
@@ -87,32 +87,36 @@ let default_comm_higher_layer_event_preds = {
   receive_auth = (fun tr sender receiver payload -> True);
 }
 
+val comm_higher_layer_event_preds_later: trace -> (trace -> prop) -> prop
+let comm_higher_layer_event_preds_later tr higher_layer_preds =
+  forall tr'. tr <$ tr' ==> higher_layer_preds tr'
+
 #push-options "--ifuel 1 --fuel 0"
 let event_predicate_communication_layer {|cinvs:crypto_invariants|} (higher_layer_preds:comm_higher_layer_event_preds) : event_predicate communication_event =
   fun tr prin e ->
     (match e with
     | CommConfSendMsg sender receiver payload -> (
       is_knowable_by (join (principal_label sender) (principal_label receiver)) tr payload /\
-      higher_layer_preds.send_conf tr sender receiver payload
+      higher_layer_preds.send_conf sender receiver payload tr
     )
     | CommConfReceiveMsg sender receiver payload -> (
       (
         event_triggered tr sender (CommConfSendMsg sender receiver payload) /\
         is_knowable_by (join (principal_label sender) (principal_label receiver)) tr payload /\
-        higher_layer_preds.receive_conf tr sender receiver payload
+        higher_layer_preds.receive_conf sender receiver payload tr
       ) \/ (
         is_publishable tr payload
       )
     )
     | CommAuthSendMsg sender payload -> (
-      higher_layer_preds.send_auth tr sender payload
+      higher_layer_preds.send_auth sender payload tr
     )
     | CommAuthReceiveMsg sender receiver payload -> (
       is_publishable tr payload /\
       (
         (
           event_triggered tr sender (CommAuthSendMsg sender payload) /\
-          higher_layer_preds.receive_auth tr sender receiver payload
+          higher_layer_preds.receive_auth sender receiver payload tr
         ) \/
         is_corrupt tr (principal_label sender)
       )
