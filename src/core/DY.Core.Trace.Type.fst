@@ -282,6 +282,11 @@ let event_exists tr e =
 val no_set_state_entry_for:
   principal -> state_id -> trace -> prop
 let no_set_state_entry_for p sid tr = 
+  // forall_rev_list (fun e -> 
+  //   match e with
+  //   | SetState p' sid' _ -> p' <> p \/ sid' <> sid
+  //   | _ -> True
+  // ) tr
   forall (ts:timestamp{ts < length tr}).
     match get_event_at tr ts with
     | SetState p' sid' _ -> p' <> p \/ sid' <> sid

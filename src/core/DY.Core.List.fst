@@ -147,3 +147,14 @@ let pair_elem_fst_elem (#a #b:eqtype) (p:(a * b)) (xs: list (a*b)):
 type rev_list (a:Type) =
   | Nil : rev_list a
   | Snoc: rev_list a -> a -> rev_list a
+
+let rec mem (#a:eqtype) (m:a) (xs:rev_list a) : bool =
+  match xs with
+  | Nil -> false
+  | Snoc init last -> if last = m then true else m `mem` init
+
+let forall_rev_list (#a:eqtype) (p: a -> prop) (xs: rev_list a) : prop =
+  forall x. x `mem` xs ==> p x
+  // match xs with
+  // | Nil -> True
+  // | Snoc xs x -> p x /\ forall_rev_list p xs

@@ -218,3 +218,91 @@ let rec get_session_aux_same p sid tr1 tr2 =
               suffix_after_for_prefix tr2 init tr1;
               get_session_aux_same p sid tr1 init
     end
+
+(*** Properties of compute_new_session_id ***)
+
+val compute_new_session_id_larger_than_id_on_trace:
+  prin:principal -> tr:trace ->
+  sess_id:state_id -> state_content:bytes ->
+  Lemma
+  (requires event_exists tr (SetState prin sess_id state_content))
+  (ensures sess_id.the_id < (compute_new_session_id prin tr).the_id)
+let rec compute_new_session_id_larger_than_id_on_trace prin tr sess_id state_content =
+  match tr with
+  | Nil -> ()
+  | Snoc tr_init evt -> (
+    if evt = SetState prin sess_id state_content then ()
+    else (
+      compute_new_session_id_larger_than_id_on_trace prin tr_init sess_id state_content
+    )
+  )
+
+
+let compute_new_session_new_sid (p:principal) (tr:trace):
+  Lemma
+  ( let new_sid = compute_new_session_id p tr in
+    no_set_state_entry_for p new_sid tr
+  )
+  =  let new_sid = compute_new_session_id p tr in
+    introduce  forall (ts:timestamp{ts < length tr}).
+      match get_event_at tr ts with
+      | SetState p' sid' _ -> 
+          if p' = p
+          then sid'.the_id <> new_sid.the_id
+          else True
+      | _ -> True
+    with (
+     match get_event_at tr ts with
+      | SetState p' sid' cont' -> 
+          if p' = p
+          then
+            compute_new_session_id_larger_than_id_on_trace p tr sid' cont'
+          else ()
+      | _ -> ()
+  )
+
+// the result of [compute_new_session_id] stays the same,
+// if there are no more SetState entries for p on the trace
+let rec compute_new_session_id_same (p:principal) (tr1 tr2:trace) :
+  Lemma (
+    requires
+      tr1 <$ tr2 /\ 
+      no_set_state_entry_for_p p (tr2 `suffix_after` tr1)
+  )
+  (ensures
+    compute_new_session_id p tr1 = compute_new_session_id p tr2
+  )
+  = reveal_opaque (`%grows) grows; 
+    norm_spec [zeta; delta_only [`%prefix]] (prefix);
+    if tr1 = tr2 
+    then ()
+    else (
+      match tr2 with
+       | Nil -> ()
+       | Snoc init (SetState p' sid' cont') -> (
+           let ev = (SetState p' sid' cont') in
+           assert(event_exists (tr2 `suffix_after` tr1) ev);
+           suffix_after_for_prefix tr2 init tr1;
+           compute_new_session_id_same p tr1 init
+         )
+       | Snoc init ev -> 
+           suffix_after_for_prefix tr2 init tr1;
+           compute_new_session_id_same p tr1 init
+    )
+
+let rec compute_new_session_id_grows (p:principal) (tr1 tr2:trace):
+  Lemma 
+  (requires tr1 <$ tr2
+  )
+  (ensures
+    (compute_new_session_id p tr1).the_id <= (compute_new_session_id p tr2).the_id
+  )
+  = reveal_opaque (`%grows) grows; 
+    norm_spec [zeta; delta_only [`%prefix]] (prefix);
+    if tr1 = tr2
+    then ()
+    else (
+      match tr2 with
+      | Nil -> ()
+      | Snoc tr2_init tr2_ev -> compute_new_session_id_grows p tr1 tr2_init
+    )

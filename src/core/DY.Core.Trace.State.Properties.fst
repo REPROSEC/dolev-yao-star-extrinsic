@@ -176,6 +176,21 @@ val get_session_same:
 let get_session_same p sid tr1 tr2 =
   get_session_aux_same p sid tr1 tr2
 
+let rec no_set_state_entry_no_session 
+  (p:principal) (sid:state_id) (tr:trace):
+  Lemma
+  ( requires no_set_state_entry_for p sid tr
+  )
+  (ensures
+    Nil? (get_session_ p sid tr)
+  )
+  = match tr with
+   | Nil -> ()
+   | Snoc init _ -> 
+          init_is_prefix tr;
+          no_set_state_entry_no_session p sid init
+
+
 (*** Relations of get_state and get_session ***)
 
 val get_state_is_last_of_get_session:
@@ -318,21 +333,6 @@ let full_state_some_get_session_get_state (p:principal) (sid:state_id) (tr:trace
 
 // most of them are needed for [get_full_state_on_growing_traces]
 
-val compute_new_session_id_larger_than_id_on_trace:
-  prin:principal -> tr:trace ->
-  sess_id:state_id -> state_content:bytes ->
-  Lemma
-  (requires event_exists tr (SetState prin sess_id state_content))
-  (ensures sess_id.the_id < (compute_new_session_id prin tr).the_id)
-let rec compute_new_session_id_larger_than_id_on_trace prin tr sess_id state_content =
-  match tr with
-  | Nil -> ()
-  | Snoc tr_init evt -> (
-    if evt = SetState prin sess_id state_content then ()
-    else (
-      compute_new_session_id_larger_than_id_on_trace prin tr_init sess_id state_content
-    )
-  )
 
 val compute_new_session_id_larger_than_get_state_sid:
   prin:principal -> tr:trace ->
@@ -346,34 +346,6 @@ let compute_new_session_id_larger_than_get_state_sid prin tr sess_id =
   returns sess_id.the_id < (compute_new_session_id prin tr).the_id
   with _ . compute_new_session_id_larger_than_id_on_trace prin tr sess_id cont
 
-// the result of [compute_new_session_id] stays the same,
-// if there are no more SetState entries for p on the trace
-let rec compute_new_session_id_same (p:principal) (tr1 tr2:trace) :
-  Lemma (
-    requires
-      tr1 <$ tr2 /\ 
-      no_set_state_entry_for_p p (tr2 `suffix_after` tr1)
-  )
-  (ensures
-    compute_new_session_id p tr1 = compute_new_session_id p tr2
-  )
-  = reveal_opaque (`%grows) grows; 
-    norm_spec [zeta; delta_only [`%prefix]] (prefix);
-    if tr1 = tr2 
-    then ()
-    else (
-      match tr2 with
-       | Nil -> ()
-       | Snoc init (SetState p' sid' cont') -> (
-           let ev = (SetState p' sid' cont') in
-           assert(event_exists (tr2 `suffix_after` tr1) ev);
-           suffix_after_for_prefix tr2 init tr1;
-           compute_new_session_id_same p tr1 init
-         )
-       | Snoc init ev -> 
-           suffix_after_for_prefix tr2 init tr1;
-           compute_new_session_id_same p tr1 init
-    )
 
 // any number smaller than the bound,
 // appears in [zero_to_sid bound]
@@ -419,48 +391,10 @@ let rec zero_to_sid_mems (bound:state_id) (sid:state_id) :
       )
     )
 
-let rec compute_new_session_id_grows (p:principal) (tr1 tr2:trace):
-  Lemma 
-  (requires tr1 <$ tr2
-  )
-  (ensures
-    (compute_new_session_id p tr1).the_id <= (compute_new_session_id p tr2).the_id
-  )
-  = reveal_opaque (`%grows) grows; 
-    norm_spec [zeta; delta_only [`%prefix]] (prefix);
-    if tr1 = tr2
-    then ()
-    else (
-      match tr2 with
-      | Nil -> ()
-      | Snoc tr2_init tr2_ev -> compute_new_session_id_grows p tr1 tr2_init
-    )
 
 
 (*** Properties of set_session ***)
 
-let compute_new_session_new_sid (p:principal) (tr:trace):
-  Lemma
-  ( let new_sid = compute_new_session_id p tr in
-    no_set_state_entry_for p new_sid tr
-  )
-  =  let new_sid = compute_new_session_id p tr in
-    introduce  forall (ts:timestamp{ts < length tr}).
-      match get_event_at tr ts with
-      | SetState p' sid' _ -> 
-          if p' = p
-          then sid'.the_id <> new_sid.the_id
-          else True
-      | _ -> True
-    with (
-     match get_event_at tr ts with
-      | SetState p' sid' cont' -> 
-          if p' = p
-          then
-            compute_new_session_id_larger_than_id_on_trace p tr sid' cont'
-          else ()
-      | _ -> ()
-  )
 
 let new_session_new_sid (p:principal) (tr:trace):
   Lemma
@@ -484,6 +418,66 @@ let set_new_session_state_was_set (tr:trace) (p:principal) (cont:state_raw):
   )
   = reveal_opaque (`%set_state) (set_state)
 
+
+let set_new_session_get_session
+  (p: principal) (cont:state_raw) (tr:trace):
+  Lemma
+  ( let (new_sid, tr_out) = set_new_session p cont tr in
+    let sess = get_session_aux p new_sid tr_out in
+    sess = Some (Snoc Nil cont)
+  )
+  = reveal_opaque (`%set_state) set_state; 
+   let (new_sid, tr_out) = set_new_session p cont tr in
+   set_new_session_new_sid p cont tr;
+   no_set_state_entry_no_session p new_sid tr
+
+val set_new_session_invariant:
+  {|invs:protocol_invariants|} ->
+  prin:principal -> content:state_raw -> tr:trace ->
+  Lemma
+  (requires (
+      let (new_sid , _)= set_new_session prin content tr in
+      let sess = get_session_aux prin new_sid tr in
+      let full_st = get_full_state_aux prin tr in
+        trace_invariant tr
+      /\ state_pred tr prin new_sid content 
+      /\ session_pred_opt tr sess prin new_sid content
+      /\ full_state_pred_opt tr full_st prin new_sid content
+  )
+  )
+  (ensures (
+    let (new_sid, tr_out) = set_new_session prin content tr in
+    trace_invariant tr_out /\
+    state_was_set tr_out prin new_sid content 
+  ))
+  [SMTPat (set_new_session prin content tr); SMTPat (trace_invariant #invs tr)]
+let set_new_session_invariant #invs prin content tr =
+  let (new_sid , tr_out) = new_session_id prin tr in
+  add_event_invariant (SetState prin new_sid content) tr;
+  normalize_term_spec set_state
+
+val set_new_session_invariant_:
+  {|invs:protocol_invariants|} ->
+  prin:principal -> content:state_raw -> tr:trace ->
+  Lemma
+  (requires (
+      let (new_sid , _)= set_new_session prin content tr in
+      let full_st = get_full_state_aux prin tr in
+        trace_invariant tr
+      /\ state_pred tr prin new_sid content 
+      /\ session_pred tr Nil prin new_sid content
+      /\ full_state_pred_opt tr full_st prin new_sid content
+  )
+  )
+  (ensures (
+    let (new_sid, tr_out) = set_new_session prin content tr in
+    trace_invariant tr_out /\
+    state_was_set tr_out prin new_sid content
+  ))
+let set_new_session_invariant_ p cont tr =
+  let (new_sid , _)= set_new_session p cont tr in
+  set_new_session_new_sid p cont tr; 
+  no_set_state_entry_no_session p new_sid tr
 
 (*** More Relation on get_state, get_session and get_full_state ***)
 
