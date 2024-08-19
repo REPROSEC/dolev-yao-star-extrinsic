@@ -48,8 +48,7 @@ val send_confidential_proof:
     trace_invariant tr /\
     has_pki_invariant invs /\
     has_communication_layer_invariants invs.crypto_invs /\
-    (forall tr'.
-      tr <$ tr' ==> higher_layer_preds.send_conf tr' sender receiver payload) /\
+    comm_higher_layer_event_preds_later tr (higher_layer_preds.send_conf sender receiver payload) /\
     has_communication_layer_event_predicates invs higher_layer_preds /\    
     is_knowable_by (join (principal_label sender) (principal_label receiver)) tr payload
   )
@@ -65,7 +64,7 @@ let send_confidential_proof #invs tr higher_layer_preds keys_sess_ids sender rec
     let (nonce, tr) = mk_rand PkNonce (principal_label sender) 32 tr in
     let ((), tr) = trigger_event sender (CommConfSendMsg sender receiver payload) tr in
     let msg_encrypted = encrypt_message sender receiver payload pk_receiver nonce in
-    assert(higher_layer_preds.send_conf tr sender receiver payload);
+    assert(higher_layer_preds.send_conf sender receiver payload tr);
     assert(event_triggered tr sender (CommConfSendMsg sender receiver payload));
     encrypt_message_proof tr sender receiver payload pk_receiver nonce;
     let (msg_id, tr) = send_msg msg_encrypted tr in
@@ -118,8 +117,8 @@ val receive_confidential_proof:
     (
       match receive_confidential comm_keys_ids receiver msg_id tr with
       | (None, tr_out) -> True
-      | (Some {sender; receiver=receiver'; payload}, tr_out) -> 
-        (forall tr'. tr <$ tr' ==> higher_layer_preds.receive_conf tr' sender receiver payload)
+      | (Some {sender; receiver=receiver'; payload}, tr_out) ->
+        comm_higher_layer_event_preds_later tr (higher_layer_preds.receive_conf sender receiver payload)
     ) /\
     has_communication_layer_event_predicates invs higher_layer_preds
   )
@@ -183,7 +182,7 @@ val send_authenticated_proof:
   (requires
     trace_invariant tr /\ has_private_keys_invariant invs /\
     has_communication_layer_invariants invs.crypto_invs /\
-    (forall tr'. tr <$ tr' ==> higher_layer_preds.send_auth tr' sender payload) /\
+    comm_higher_layer_event_preds_later tr (higher_layer_preds.send_auth sender payload) /\
     has_communication_layer_event_predicates invs higher_layer_preds /\
     is_publishable tr payload
   )
@@ -279,8 +278,11 @@ val receive_authenticated_proof:
     has_communication_layer_invariants invs.crypto_invs /\
     (
       extract_data_from_msg_id tr comm_keys_ids receiver msg_id (
-        fun sender receiver payload ->
-          (forall tr'. tr <$ tr' ==> higher_layer_preds.receive_auth tr' sender receiver payload)
+        fun sender receiver payload -> (
+          comm_higher_layer_event_preds_later tr (
+            higher_layer_preds.receive_auth sender receiver payload
+          )
+        )
       )
     ) /\
     has_communication_layer_event_predicates invs higher_layer_preds
