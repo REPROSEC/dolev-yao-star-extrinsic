@@ -27,21 +27,18 @@ type message =
 instance parseable_serializeable_bytes_message: parseable_serializeable bytes message
  = mk_parseable_serializeable ps_message
 
-
-let max_nat (x:nat) (y:nat) : nat = max x y
-
 let rec find_max_id_in_session (sess:session_raw) : nat = 
     match sess with
     | Nil -> 0
     | Snoc rest state -> 
         match parse p_state state with
         | None -> find_max_id_in_session rest
-        | Some (S id _) -> max_nat id (find_max_id_in_session rest)
+        | Some (S id _) -> max id (find_max_id_in_session rest)
 
 let rec find_curr_max_id (st:full_state_raw) : nat = 
     match st with
     | [] -> 0
-    | (_,sess)::rest -> max_nat (find_max_id_in_session sess) (find_curr_max_id rest)
+    | (_,sess)::rest -> max (find_max_id_in_session sess) (find_curr_max_id rest)
 
 val new_idn: principal -> traceful nat
 let new_idn prin =
@@ -578,9 +575,9 @@ let init_invariant tr p =
               match parse p_state last_i with
                     | None -> True
                     | Some last_i ->
-                        if sid_i = new_sess_id // if the new state is added to session sid_i
-                          then last_i.idn = idn // the id should stay the same within session sid_i
-                          else last_i.idn <> idn // otherwise the id must be different
+                        if sid_i = new_sess_id
+                          then last_i.idn = idn
+                          else last_i.idn <> idn
                  end
     )
     with (
@@ -598,9 +595,91 @@ let init_invariant tr p =
                  new_idn_does_not_appear_in_full_state p tr;
                  forall_sessions_intro (idn_does_not_appear_in_session idn) full_st
 
+      )
     )
-    )
 
 
+let set_new_session_tr_out
+  (p:principal) (cont:state_raw) (tr:trace):
+  Lemma
+  ( let (new_sid, tr_out) = set_new_session p cont tr in
+    tr_out = Snoc tr (SetState p new_sid cont)
+  )
+  [SMTPat (set_new_session p cont tr)]
+  = reveal_opaque (`%set_state) set_state
 
 
+val set_new_session_invariant:
+  {|invs:protocol_invariants|} ->
+  prin:principal -> content:state_raw -> tr:trace ->
+  Lemma
+  (requires (
+      let (new_sid , _)= set_new_session prin content tr in
+      let sess = get_session_aux prin new_sid tr in
+      let full_st = get_full_state_aux prin tr in
+        trace_invariant tr
+      /\ state_pred tr prin new_sid content 
+      /\ session_pred_opt tr sess prin new_sid content
+      /\ full_state_pred_opt tr full_st prin new_sid content
+  )
+  )
+  (ensures (
+    let (new_sid, tr_out) = set_new_session prin content tr in
+    trace_invariant tr_out /\
+    state_was_set tr_out prin new_sid content 
+  ))
+  [SMTPat (set_new_session prin content tr); SMTPat (trace_invariant #invs tr)]
+let set_new_session_invariant #invs prin content tr =
+  let (new_sid , tr_out) = new_session_id prin tr in
+  add_event_invariant (SetState prin new_sid content) tr;
+  normalize_term_spec set_state
+
+
+let rec no_set_state_entry_no_session 
+  (p:principal) (sid:state_id) (tr:trace):
+  Lemma
+  ( requires no_set_state_entry_for p sid tr
+  )
+  (ensures
+    Nil? (get_session_ p sid tr)
+  )
+  = match tr with
+   | Nil -> ()
+   | Snoc init _ -> 
+          init_is_prefix tr;
+          no_set_state_entry_no_session p sid init
+
+let set_new_session_get_session
+  (p: principal) (cont:state_raw) (tr:trace):
+  Lemma
+  ( let (new_sid, tr_out) = set_new_session p cont tr in
+    let sess = get_session_aux p new_sid tr_out in
+    sess = Some (Snoc Nil cont)
+  )
+  = 
+   let (new_sid, tr_out) = set_new_session p cont tr in
+   set_new_session_new_sid p cont tr;
+   no_set_state_entry_no_session p new_sid tr
+    
+val set_new_session_invariant_:
+  {|invs:protocol_invariants|} ->
+  prin:principal -> content:state_raw -> tr:trace ->
+  Lemma
+  (requires (
+      let (new_sid , _)= set_new_session prin content tr in
+      let sess = get_session_aux prin new_sid tr in
+      let full_st = get_full_state_aux prin tr in
+        trace_invariant tr
+      /\ state_pred tr prin new_sid content 
+      // this could/should move to the general invariants (it should always be true)
+      /\ (state_pred tr prin new_sid content ==> session_pred tr (Snoc Nil content) prin new_sid content)
+      /\ full_state_pred_opt tr full_st prin new_sid content
+  )
+  )
+  (ensures (
+    let (new_sid, tr_out) = set_new_session prin content tr in
+    trace_invariant tr_out /\
+    state_was_set tr_out prin new_sid content
+  ))
+let set_new_session_invariant_ p cont tr =
+  set_new_session_get_session p cont tr

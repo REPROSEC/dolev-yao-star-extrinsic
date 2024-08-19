@@ -442,13 +442,7 @@ let rec compute_new_session_id_grows (p:principal) (tr1 tr2:trace):
 let compute_new_session_new_sid (p:principal) (tr:trace):
   Lemma
   ( let new_sid = compute_new_session_id p tr in
-    forall (ts:timestamp{ts < length tr}).
-      match get_event_at tr ts with
-      | SetState p' sid' _ -> 
-          if p' = p
-          then sid'.the_id <>  new_sid.the_id
-          else True
-      | _ -> True
+    no_set_state_entry_for p new_sid tr
   )
   =  let new_sid = compute_new_session_id p tr in
     introduce  forall (ts:timestamp{ts < length tr}).
@@ -471,13 +465,7 @@ let compute_new_session_new_sid (p:principal) (tr:trace):
 let new_session_new_sid (p:principal) (tr:trace):
   Lemma
   ( let (new_sid, _) = new_session_id p tr in
-    forall (ts:timestamp{ts < length tr}).
-      match get_event_at tr ts with
-      | SetState p' sid' _ -> 
-          if p' = p
-          then sid'.the_id <>  new_sid.the_id
-          else True
-      | _ -> True
+    no_set_state_entry_for p new_sid tr
   )
 = reveal_opaque (`%new_session_id) new_session_id; 
   compute_new_session_new_sid p tr
@@ -485,13 +473,7 @@ let new_session_new_sid (p:principal) (tr:trace):
 let set_new_session_new_sid (p:principal) (cont:state_raw) (tr:trace):
   Lemma
   ( let (new_sid, tr_out) = set_new_session p cont tr in
-    forall (ts:timestamp{ts < length tr}).
-      match get_event_at tr ts with
-      | SetState p' sid' _ -> 
-          if p' = p
-          then sid'.the_id <> new_sid.the_id
-          else True
-      | _ -> True
+    no_set_state_entry_for p new_sid tr
   )
   = new_session_new_sid p tr
 
