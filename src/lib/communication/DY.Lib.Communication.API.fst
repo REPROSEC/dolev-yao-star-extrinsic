@@ -32,9 +32,19 @@ type communication_message_sign = {
 %splice [ps_communication_message_sign_is_well_formed] (gen_is_well_formed_lemma (`communication_message_sign))
 
 [@@with_bytes bytes]
+type communication_message_concat = {
+  enc_payload:bytes;
+  signature:bytes;
+}
+
+%splice [ps_communication_message_concat] (gen_parser (`communication_message_concat))
+%splice [ps_communication_message_concat_is_well_formed] (gen_is_well_formed_lemma (`communication_message_concat))
+
+[@@with_bytes bytes]
 type communication_message = 
   | CM: msg:communication_message_base -> communication_message
   | CMSign: msg:communication_message_sign -> communication_message
+  | CMConcat: msg:communication_message_concat -> communication_message
 
 #push-options "--ifuel 1 --fuel 0"
 %splice [ps_communication_message] (gen_parser (`communication_message))
@@ -167,6 +177,60 @@ let receive_authenticated comm_keys_ids receiver msg_id =
   let*? vk_sender = get_public_key receiver comm_keys_ids.pki (Verify comm_layer_sign_tag) sender in
   let*? msg_plain:communication_message_base = return (verify_message receiver msg_signed vk_sender) in
   trigger_event receiver (CommAuthReceiveMsg sender receiver msg_plain.payload);*
+  return (Some msg_plain)
+
+(**** Confidential and Authenticates Send and Receive Functions ****)
+
+val encrypt_and_sign_message: principal -> principal -> bytes -> bytes -> bytes -> bytes -> bytes -> bytes
+let encrypt_and_sign_message sender receiver payload pk sk enc_nonce sign_nonce =
+  let enc_payload = encrypt_message sender receiver payload pk enc_nonce in
+  let signature = sign sk sign_nonce enc_payload in
+  let msg = CMConcat {enc_payload; signature} in
+  serialize communication_message msg
+
+val send_confidential_authenticated:
+  communication_keys_sess_ids ->
+  principal -> principal -> bytes ->
+  traceful (option timestamp)
+let send_confidential_authenticated comm_keys_ids sender receiver payload =
+  let*? pk_receiver = get_public_key sender comm_keys_ids.pki (PkEnc comm_layer_pkenc_tag) receiver in
+  let* enc_nonce = mk_rand PkNonce (principal_label sender) 32 in
+  let*? sk_sender = get_private_key sender comm_keys_ids.private_keys (Sign comm_layer_sign_tag) in
+  let* sig_nonce = mk_rand SigNonce (principal_label sender) 32 in
+  trigger_event sender (CommConfSendMsg sender receiver payload);*
+  trigger_event sender (CommAuthSendMsg sender payload);*
+  let msg_encrypted_signed = encrypt_and_sign_message sender receiver payload pk_receiver sk_sender enc_nonce sig_nonce in
+  let* msg_id = send_msg msg_encrypted_signed in
+  return (Some msg_id)
+
+val verify_and_decrypt_message_part_one: bytes -> bytes -> option communication_message_base
+let verify_and_decrypt_message_part_one msg_encrypted_signed sk_receiver =
+  let? cm_msg = parse communication_message msg_encrypted_signed in
+  guard (CMConcat? cm_msg);?
+  let msg_concat = CMConcat?.msg cm_msg in
+  let? msg_plain:communication_message_base = decrypt_message sk_receiver msg_concat.enc_payload in
+  Some msg_plain
+
+val verify_and_decrypt_message_part_two: principal -> bytes -> bytes -> option unit
+let verify_and_decrypt_message_part_two sender msg_encrypted_signed vk_sender =
+  let? cm_msg = parse communication_message msg_encrypted_signed in
+  guard (CMConcat? cm_msg);?
+  let msg_concat = CMConcat?.msg cm_msg in
+  guard (verify vk_sender msg_concat.enc_payload msg_concat.signature);?
+  Some ()
+
+val receive_confidential_authenticated:
+  communication_keys_sess_ids ->
+  principal -> timestamp ->
+  traceful (option communication_message_base)
+let receive_confidential_authenticated comm_keys_ids receiver msg_id =
+  let*? sk_receiver = get_private_key receiver comm_keys_ids.private_keys (PkDec comm_layer_pkenc_tag) in
+  let*? msg_encrypted_signed = recv_msg msg_id in
+  let*? msg_plain:communication_message_base = return (verify_and_decrypt_message_part_one msg_encrypted_signed sk_receiver) in
+  let*? vk_sender = get_public_key receiver comm_keys_ids.pki (Verify comm_layer_sign_tag) msg_plain.sender in
+  return (verify_and_decrypt_message_part_two msg_plain.sender msg_encrypted_signed vk_sender);*?  
+  trigger_event receiver (CommConfReceiveMsg msg_plain.sender receiver msg_plain.payload);*
+  trigger_event receiver (CommAuthReceiveMsg msg_plain.sender receiver msg_plain.payload);*
   return (Some msg_plain)
 
 
