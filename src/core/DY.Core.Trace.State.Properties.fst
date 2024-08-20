@@ -486,7 +486,9 @@ let get_session_some_get_full_state_some (p:principal) (sid:state_id) (tr:trace)
   (requires has_session_for tr p sid)
   (ensures has_full_state_for tr p)
   [SMTPat (get_session p sid tr)]
-  = compute_new_session_id_larger_than_get_state_sid p tr sid
+  = compute_new_session_id_larger_than_get_state_sid p tr sid;
+    zero_to_sid_mem (compute_new_session_id p tr) sid;
+    mem_choose (get_session_aux_indexed tr p) (zero_to_sid (compute_new_session_id p tr)) sid
 
 
 val get_state_some_get_full_state_some:
@@ -543,22 +545,25 @@ let full_state_fst_zero_to_sid (tr:trace) (p:principal):
       )
     )
 
-// let has_full_state_has_mem (p:principal) (tr:trace):
-//   Lemma 
-//   (requires tr `has_full_state_for` p
-//   )
-//   (ensures exists sid sess. (sid, sess) `List.mem` (access_full_state tr p)
-//   )
-//   =()
+let full_state_has_mem (tr:trace) (p:principal):
+  Lemma
+  (requires tr `has_full_state_for` p)
+  (ensures exists sid sess. (sid,sess) `List.mem` (access_full_state tr p) )
+  = ()
 
-// let has_full_state_grows (p:principal) (tr1 tr2:trace):
-//   Lemma
-//   (requires tr1 <$ tr2 /\ tr1 `has_full_state_for` p)
-//   (ensures tr2 `has_full_state_for` p)
-// = eliminate exists (sid:state_id) (sess:session_raw). (sid,sess) `List.mem` (access_full_state tr1 p)
-//  returns tr2 `has_full_state_for` p
-//  with _ .
-//   admit()
+let has_full_state_grows (p:principal) (tr1 tr2:trace):
+  Lemma
+  (requires tr1 <$ tr2 /\ tr1 `has_full_state_for` p)
+  (ensures tr2 `has_full_state_for` p)
+  [SMTPat (tr1 `has_full_state_for` p); SMTPat (tr1 <$ tr2)]
+  = 
+  full_state_has_mem tr1 p; 
+  eliminate exists sid sess. (sid,sess) `List.mem` (access_full_state tr1 p)
+  returns  tr2 `has_full_state_for` p
+  with _ . ( 
+   full_state_mem_get_session_get_state_forall p tr1;
+    get_session_grows p sid tr1 tr2
+  )
 
 // a sid stored in a full state remains in the full state when the trace grows
 let get_full_state_on_growing_traces (p:principal) (tr1 tr2:trace) (sid:state_id):

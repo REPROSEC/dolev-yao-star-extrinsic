@@ -119,10 +119,14 @@ let get_full_state_aux prin tr =
   if new_sessid.the_id = 0
   then None
   else
-    Some (List.choose 
+    let sessions = 
+      (List.choose 
       (get_session_aux_indexed tr prin) 
       (zero_to_sid new_sessid)
-    )
+    ) in
+    if sessions = []
+    then None
+    else Some sessions
     
 // tests for `get_full_state`
 let _ =

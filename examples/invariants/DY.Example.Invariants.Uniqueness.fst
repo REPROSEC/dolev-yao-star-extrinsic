@@ -151,9 +151,6 @@ let next_full_state_pred tr p sid =
   let next_state = S idn (c+1) in
   let (_,tr_after_next_state) = set_state p sid (serialize p_state next_state) tr_after_msg in
 
-  get_state_appears_in_full_state tr p sid;
-  get_full_state_on_growing_traces p tr tr_after_msg sid;
-  assert(has_full_state_for tr_after_msg p);
   let full_st_b = access_full_state tr_after_msg p in
   forall_sessions_intro full_st_b
     (fun sid_i sess_i -> 
