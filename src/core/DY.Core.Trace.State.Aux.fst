@@ -30,6 +30,17 @@ type full_state_raw = list (state_id * session_raw)
 let forall_sessions (fst:full_state_raw) (p:state_id -> session_raw ->  prop)  : prop =
   forall sid sess. (sid, sess) `List.mem` fst ==> p sid sess
 
+let forall_sessions_intro 
+  (full_st: full_state_raw)
+  (p: state_id -> session_raw -> prop)
+  (pf: ( (sid:state_id) -> (sess:session_raw) -> squash ((sid,sess) `List.mem` full_st) -> Tot (squash ( p sid sess)) ))
+  : (squash ( forall_sessions full_st p ))
+= introduce forall sid sess. (sid, sess) `List.mem` full_st ==> p sid sess 
+  with  
+    introduce (sid, sess) `List.mem` full_st ==> p sid sess 
+    with _ . pf sid sess _
+    
+
 val max: nat -> nat -> nat
 let max x y =
   if x < y then y else x
