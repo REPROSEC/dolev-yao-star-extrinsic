@@ -3,10 +3,9 @@ module DY.Example.Invariants.Uniqueness.Init
 open Comparse
 open DY.Core
 module L = DY.Lib
-// module List = FStar.List.Tot.Base
-// module Trace = DY.Core.Trace.Type
 open DY.Example.Invariants.Uniqueness
 
+#set-options "--fuel 1 --ifuel 1"
 
 let prop_state_on (#a:Type) (#state_t:Type) {|ps_state : parseable_serializeable bytes state_t|} 
   (from_state: state_t  -> a) (p: a -> bool ) (state:state_raw) : prop =
@@ -40,18 +39,17 @@ let rec max_id_in_session_largest sess =
   | Snoc rest state ->
       max_id_in_session_largest rest
 
-let forall_sessions (p:session_raw ->  prop) (fst:full_state_raw) : prop =
-  forall sid sess. (sid, sess) `List.mem` fst ==> p sess
+
 
 let idn_does_not_appear_in_full_state (idn:nat) (fst:full_state_raw) : prop =
-  forall_sessions (idn_does_not_appear_in_session idn) fst
+  forall_sessions fst (fun sid sess -> idn_does_not_appear_in_session idn sess) 
 
 
 val curr_max_id_largest :
   fst:full_state_raw ->
   Lemma 
   ( let c_max = find_curr_max_id fst in
-    forall_sessions (forall_idns (fun idn -> c_max >= idn)) fst    
+    forall_sessions fst (fun sid sess -> forall_idns (fun idn -> c_max >= idn) sess)
   )
 let rec curr_max_id_largest fst =
   let c_max = find_curr_max_id fst in
@@ -74,8 +72,7 @@ let new_idn_does_not_appear_in_full_state p tr =
   let fst = access_full_state tr p in
   curr_max_id_largest fst
 
-
-#push-options "--z3rlimit 20"
+#push-options "--z3rlimit 20 --z3cliopt 'smt.qi.eager_threshold=20'"
 val init_invariant: tr:trace -> p:principal ->
   Lemma 
     (requires trace_invariant tr)
@@ -94,34 +91,32 @@ let init_invariant tr p =
   match fst (get_full_state p tr) with
   | None -> ()
   | Some full_st ->
-  introduce forall sess. sess `List.mem` full_st ==> (
-    match sess with
-    | (_, Nil) -> True
-    | (sid_i, Snoc init_i last_i) -> begin
-              match parse p_state last_i with
-                    | None -> True
-                    | Some last_i ->
-                        if sid_i = new_sess_id
-                          then last_i.idn = idn
-                          else last_i.idn <> idn
-                 end
-    )
-    with (
-      introduce _ ==> _
-      with _ . (
-        match sess with
-        | (_, Nil) -> ()
-        | (sid_i, Snoc init_ last_i) -> 
-             match parse p_state last_i with
-             | None -> ()
-             | Some last_i -> 
-                 set_new_session_new_sid p new_state_b tr;
-                 full_state_mem_get_session_get_state_forall p tr;
-                 assert(sid_i <> new_sess_id);
-                 new_idn_does_not_appear_in_full_state p tr
-
-      )
-    )
+      forall_sessions_intro full_st
+        (fun sid_i sess_i ->
+           match sess_i with
+           | Nil -> True
+           | Snoc init_i last_i -> (
+               match parse p_state last_i with
+               | None -> True
+               | Some last_i ->
+                   if sid_i = new_sess_id
+                     then last_i.idn = idn
+                     else last_i.idn <> idn
+             )
+        )
+        (fun sid_i sess_i _ ->
+           match sess_i with
+           | Nil -> ()
+           | Snoc init_ last_i -> 
+               match parse p_state last_i with
+               | None -> ()
+               | Some last_i -> 
+                   set_new_session_new_sid p new_state_b tr;
+                   full_state_mem_get_session_get_state_forall p tr;
+                   assert(sid_i <> new_sess_id);
+                   new_idn_does_not_appear_in_full_state p tr
+        )
+    
 
 
     

@@ -543,6 +543,23 @@ let full_state_fst_zero_to_sid (tr:trace) (p:principal):
       )
     )
 
+// let has_full_state_has_mem (p:principal) (tr:trace):
+//   Lemma 
+//   (requires tr `has_full_state_for` p
+//   )
+//   (ensures exists sid sess. (sid, sess) `List.mem` (access_full_state tr p)
+//   )
+//   =()
+
+// let has_full_state_grows (p:principal) (tr1 tr2:trace):
+//   Lemma
+//   (requires tr1 <$ tr2 /\ tr1 `has_full_state_for` p)
+//   (ensures tr2 `has_full_state_for` p)
+// = eliminate exists (sid:state_id) (sess:session_raw). (sid,sess) `List.mem` (access_full_state tr1 p)
+//  returns tr2 `has_full_state_for` p
+//  with _ .
+//   admit()
+
 // a sid stored in a full state remains in the full state when the trace grows
 let get_full_state_on_growing_traces (p:principal) (tr1 tr2:trace) (sid:state_id):
   Lemma 

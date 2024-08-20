@@ -27,6 +27,9 @@ type full_state_raw = list (state_id * session_raw)
 //TODO: full_state_raw should be `Map state_id session_raw`, can we extract the generic Map part from DY.Lib.State.Map?
 // or is it not worth the effort?
 
+let forall_sessions (fst:full_state_raw) (p:state_id -> session_raw ->  prop)  : prop =
+  forall sid sess. (sid, sess) `List.mem` fst ==> p sid sess
+
 val max: nat -> nat -> nat
 let max x y =
   if x < y then y else x
