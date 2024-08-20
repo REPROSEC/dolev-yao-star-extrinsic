@@ -5,11 +5,28 @@ open DY.Core.Trace.Type
 open DY.Core.Trace.PrefixSuffix
 open DY.Core.List
 
+
+
+
+/// alternative definition of [no_set_state_entry_for] using timestamps
+val no_set_state_entry_for_:
+  principal -> state_id -> trace -> prop
+let no_set_state_entry_for_ p sid tr = 
+  forall (ts:timestamp{ts < length tr}).
+    not_a_set_state_entry_for p sid tr (get_event_at tr ts)
+
+let no_set_state_entry_for_equi
+  (p:principal) (sid:state_id) (tr:trace):
+  Lemma
+  ( no_set_state_entry_for p sid tr <==> 
+    no_set_state_entry_for_ p sid tr
+  )
+  [SMTPat (no_set_state_entry_for p sid tr)]
+= ()
+
 /// The main property we want to show is
 /// that a particular session of a principal stays the same
 /// if there are no more `SetState` entries for this principal and this session on the trace.
-
-
 
 
 /// if there are no state entries on a trace,
@@ -21,13 +38,7 @@ val no_set_state_entry_for_prefix:
     (requires no_set_state_entry_for p sid tr2 /\ tr1 <$ tr2)
     (ensures no_set_state_entry_for p sid tr1)
     [SMTPat (no_set_state_entry_for p sid tr2); SMTPat (tr1 <$ tr2)]
-let no_set_state_entry_for_prefix p sid tr1 tr2 = 
-  introduce forall (ts:timestamp{ts < length tr1}). get_event_at tr1 ts = get_event_at tr2 ts
-  with begin
-    let ev1 = get_event_at tr1 ts in
-    event_at_grows tr1 tr2 ts ev1
-    end
-
+let no_set_state_entry_for_prefix p sid tr1 tr2 = ()
 
 /// concatenating traces without state entries
 /// results in no state entries

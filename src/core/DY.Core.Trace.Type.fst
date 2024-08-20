@@ -217,6 +217,20 @@ let nil_grows (tr:trace):
   [SMTPat (Nil <$ tr)]
   = reveal_opaque (`%grows) grows
 
+let rec mem_grows (e:trace_event) (tr1:trace) (tr2:trace) :
+  Lemma 
+  (requires e `mem` tr1 /\ tr1 <$ tr2)
+  (ensures e `mem` tr2)
+  [SMTPat (tr1 <$ tr2); SMTPat (e `mem` tr1)]
+  = reveal_opaque (`%grows) (grows);
+    norm_spec [zeta; delta_only [`%prefix]] (prefix);
+    if length tr1 = length tr2
+    then ()
+    else (
+      let Snoc tr2_init _ = tr2 in
+      mem_grows e tr1 tr2_init
+    )
+
 
 /// concatenation of traces  
 let rec trace_concat tr1 tr2 =
@@ -259,6 +273,46 @@ let rec get_event_at tr i =
   )
 
 
+(** Relating [get_event_at] and [mem] **)
+
+let rec get_event_at_mem (tr:trace) (ts:timestamp{ts < length tr}):
+  Lemma
+  ( let e = get_event_at tr ts in
+    e `mem` tr
+  )
+  =
+  let e = get_event_at tr ts in
+  match tr with
+  | Nil -> ()
+  | Snoc init last ->
+     if last = e then () else  get_event_at_mem init ts
+
+let rec mem_get_event_at (tr:trace) (e:trace_event):
+  Lemma
+  (  e `mem` tr ==> (exists ts. ts < length tr /\ e = get_event_at tr ts)
+  )
+  =
+  match tr with
+  | Nil -> ()
+  | Snoc init last ->
+     if last = e then () else  mem_get_event_at init e
+
+let forall_on_trace_equiv
+  (p: trace_event -> prop) (tr:trace):
+  Lemma
+  ( forall_rev_list p tr <==> (forall (ts:timestamp{ts < length tr}). p (get_event_at tr ts)) )
+  [SMTPat (forall_rev_list p tr)]
+=
+  introduce forall_rev_list p tr ==> (forall (ts:timestamp{ts < length tr}). p (get_event_at tr ts))
+  with _ . (
+    introduce forall ts. _
+    with get_event_at_mem tr ts
+  );
+  introduce (forall (ts:timestamp{ts < length tr}). p (get_event_at tr ts)) ==> forall_rev_list p tr
+  with _ . (
+    introduce forall e . _
+    with mem_get_event_at tr e
+  )
 
 /// Has some particular event been triggered at a some particular timestamp in the trace?
 
@@ -279,18 +333,21 @@ let event_exists tr e =
 /// The property that there are no state entries
 /// for the principal and a particular session
 
+let not_a_set_state_entry_for 
+  (p:principal) (sid:state_id) (tr:trace) (e:trace_event)
+  : prop
+  = match e with
+    | SetState p' sid' _ -> p' <> p \/ sid' <> sid
+    | _ -> True
+
 val no_set_state_entry_for:
   principal -> state_id -> trace -> prop
 let no_set_state_entry_for p sid tr = 
-  // forall_rev_list (fun e -> 
-  //   match e with
-  //   | SetState p' sid' _ -> p' <> p \/ sid' <> sid
-  //   | _ -> True
-  // ) tr
-  forall (ts:timestamp{ts < length tr}).
-    match get_event_at tr ts with
-    | SetState p' sid' _ -> p' <> p \/ sid' <> sid
-    | _ -> True
+  forall_rev_list 
+    (not_a_set_state_entry_for p sid tr) 
+    tr
+
+
 
 /// An event in the trace stays here when the trace grows.
 
