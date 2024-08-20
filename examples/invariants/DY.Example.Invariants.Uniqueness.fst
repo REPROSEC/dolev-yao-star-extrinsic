@@ -115,16 +115,6 @@ instance protocol_invariants_p: protocol_invariants = {
   }
 }
 
-let forall_sessions_intro 
-  (full_st: full_state_raw)
-  (p: state_id -> session_raw -> prop)
-  (pf: ( (sid:state_id) -> (sess:session_raw) -> squash ((sid,sess) `List.mem` full_st) -> Tot (squash ( p sid sess)) ))
-  : (squash ( forall_sessions full_st p ))
-= introduce forall sid sess. (sid, sess) `List.mem` full_st ==> p sid sess 
-  with  
-    introduce (sid, sess) `List.mem` full_st ==> p sid sess 
-    with _ . pf sid sess _
-    
 #push-options "--fuel 2 --z3rlimit 50 --z3cliopt 'smt.qi.eager_threshold=100'"
 val next_full_state_pred:
   tr:trace -> p:principal -> sid:state_id ->
