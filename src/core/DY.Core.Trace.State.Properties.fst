@@ -121,6 +121,7 @@ let rec get_state_no_set_state_for_on_suffix_after_event
     no_set_state_entry_for p sid (tr `suffix_after_event` (SetState p sid st)) 
     )
   )
+  [SMTPat (no_set_state_entry_for p sid (tr `suffix_after_event` (SetState p sid (access_state tr p sid))) )]
 = let st = access_state tr p sid in
   reveal_opaque (`%get_state) get_state; 
   match tr with
@@ -218,7 +219,11 @@ let get_state_some_get_session_some (p:principal) (sid:state_id) (tr:trace):
   Lemma 
   (requires has_state_for tr p sid)
   (ensures  has_session_for tr p sid)
-  [SMTPat (get_state p sid tr)]
+  [SMTPatOr [ 
+      [SMTPat (get_state p sid tr); SMTPat (get_session p sid tr)]
+    ; [SMTPat (has_state_for tr p sid)]
+   ]
+  ]
   = ()
 
 
@@ -226,7 +231,11 @@ let get_session_some_get_state_some (p:principal) (sid:state_id) (tr:trace):
   Lemma 
   (requires has_session_for tr p sid)
   (ensures has_state_for tr p sid)
-  [SMTPat (get_session p sid tr)]
+  [SMTPatOr [ 
+      [SMTPat (get_state p sid tr); SMTPat (get_session p sid tr)]
+    ; [SMTPat (has_session_for tr p sid)]
+   ]
+  ]
   = () 
 
 (*** Relation of get_state, get_session and get_full_state ***)
@@ -487,7 +496,11 @@ let get_session_some_get_full_state_some (p:principal) (sid:state_id) (tr:trace)
   Lemma 
   (requires has_session_for tr p sid)
   (ensures has_full_state_for tr p)
-  [SMTPat (get_session p sid tr)]
+  [SMTPatOr [ 
+      [SMTPat (get_session p sid tr); SMTPat (get_full_state p tr)]
+    ; [SMTPat (has_session_for tr p sid)]
+   ]
+  ]
   = compute_new_session_id_larger_than_get_state_sid p tr sid;
     zero_to_sid_mem (compute_new_session_id p tr) sid;
     mem_choose (get_session_aux_indexed tr p) (zero_to_sid (compute_new_session_id p tr)) sid
@@ -498,9 +511,12 @@ val get_state_some_get_full_state_some:
   Lemma 
   (requires has_state_for tr p sid)
   (ensures  has_full_state_for tr p)
-  [SMTPat (get_state p sid tr)]
+  [SMTPatOr [
+      [SMTPat (get_state p sid tr); SMTPat (get_full_state p tr)]
+    ; [SMTPat (has_state_for tr p sid)]
+    ]
+  ]
 let get_state_some_get_full_state_some tr p sid = ()
-
 
   
 (*** Properties of get_full_state ***)
@@ -605,7 +621,7 @@ val get_state_appears_in_full_state :
   Lemma
   (requires has_state_for tr p sid)
   (ensures (
-     let state = access_state tr p sid in   
+     let state = access_state tr p sid in  
      let full_state = access_full_state tr p in
 
      sid `appears_in_fsts` full_state /\ 

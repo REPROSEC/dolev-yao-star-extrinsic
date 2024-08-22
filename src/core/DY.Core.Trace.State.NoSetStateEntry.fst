@@ -97,6 +97,7 @@ let rec no_set_state_entry_for_on_suffix (tr:trace) (suff:trace) (p:principal) (
   (ensures
     no_set_state_entry_for p sid suff
   )
+  [SMTPat (tr `has_suffix` suff); SMTPat (no_set_state_entry_for p sid suff)]
   = match suff with
   | Nil -> ()
   | Snoc suff_init suff_ev ->

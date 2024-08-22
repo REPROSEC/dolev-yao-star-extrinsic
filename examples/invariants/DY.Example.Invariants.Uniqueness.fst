@@ -271,19 +271,19 @@ let next_full_state_pred tr p sid =
            if tr_after_oldst `has_suffix` tr_after_last_i
            then ( // last_i after oldst on tr
              //admit();
-             get_state_no_set_state_for_on_suffix_after_event tr p sid;
-             no_set_state_entry_for_on_suffix tr_after_oldst tr_after_last_i p sid;
+             //get_state_no_set_state_for_on_suffix_after_event tr p sid;
+             //no_set_state_entry_for_on_suffix tr_after_oldst tr_after_last_i p sid;
              assert(no_set_state_entry_for p sid tr_after_last_i);
-             let tr_before_last_i = tr `prefix_before_event` (SetState p sid_i last_i_b) in
+             let tr_before_last_i = tr `prefix_before_event` last_i_entry in
              suff_after_before_event_is_suff_at_event tr last_i_entry;
-             no_set_state_entry_for_concat p sid (Snoc Nil (SetState p sid_i last_i_b)) tr_after_last_i;
+             no_set_state_entry_for_concat p sid (Snoc Nil last_i_entry) tr_after_last_i;
              get_state_same p sid tr_before_last_i tr;
              assert(oldst_b = access_state tr_before_last_i p sid);
              assert(global_state_pred tr_before_last_i p sid_i last_i_b);
              get_state_appears_in_full_state tr_before_last_i p sid
            )
            else ( // oldst after last_i on tr
-             //admit();
+             admit();
              suffixes tr tr_after_last_i tr_after_oldst;
              assert(tr_after_last_i `has_suffix` tr_after_oldst);
 
