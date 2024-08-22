@@ -423,8 +423,10 @@ let set_new_session_get_session
   (p: principal) (cont:state_raw) (tr:trace):
   Lemma
   ( let (new_sid, tr_out) = set_new_session p cont tr in
-    let sess = get_session_aux p new_sid tr_out in
-    sess = Some (Snoc Nil cont)
+    let (sess_before, _) = get_session p new_sid tr in
+    let (sess_after, _) = get_session p new_sid tr_out in
+    sess_after = Some (Snoc Nil cont)
+    /\ None? sess_before
   )
   = reveal_opaque (`%set_state) set_state; 
    let (new_sid, tr_out) = set_new_session p cont tr in

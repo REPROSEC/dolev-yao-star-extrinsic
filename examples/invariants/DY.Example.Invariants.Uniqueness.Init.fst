@@ -88,26 +88,21 @@ let init_invariant tr p =
   let (new_sess_id, tr_after_new_session) = set_new_session p (serialize p_state new_state) tr_after_new_idn in
   serialize_wf_lemma p_state (is_knowable_by (principal_state_label p new_sess_id) tr_after_new_idn) new_state;
 
+  set_new_session_get_session p (serialize p_state new_state) tr_after_new_idn;
+
   match fst (get_full_state p tr) with
   | None -> ()
   | Some full_st ->
-      forall_sessions_intro full_st
+      full_state_pred_forall_session_intro full_st new_sess_id
         (fun sid_i sess_i ->
-           match sess_i with
-           | Nil -> True
-           | Snoc init_i last_i -> (
+           let Snoc init_i last_i = sess_i in
                match parse p_state last_i with
                | None -> True
                | Some last_i ->
-                   if sid_i = new_sess_id
-                     then last_i.idn = idn
-                     else last_i.idn <> idn
-             )
+                   last_i.idn <> idn
         )
-        (fun sid_i sess_i _ ->
-           match sess_i with
-           | Nil -> ()
-           | Snoc init_ last_i -> 
+        (fun sid_i sess_i -> 
+           let Snoc init_ last_i = sess_i in
                match parse p_state last_i with
                | None -> ()
                | Some last_i -> 
@@ -115,8 +110,8 @@ let init_invariant tr p =
                    full_state_mem_get_session_get_state_forall p tr;
                    assert(sid_i <> new_sess_id);
                    new_idn_does_not_appear_in_full_state p tr
+                   
         )
-    
 
 
     
