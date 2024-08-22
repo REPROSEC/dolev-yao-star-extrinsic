@@ -89,8 +89,9 @@ let init_invariant tr p =
   serialize_wf_lemma p_state (is_knowable_by (principal_state_label p new_sess_id) tr_after_new_idn) new_state;
 
   set_new_session_get_session p (serialize p_state new_state) tr_after_new_idn;
+assert(session_pred_ #p_cinvs #(f p_state_pred) tr_after_new_idn ( fst (get_session p new_sess_id tr_after_new_idn) ) p new_sess_id new_state_b);
 
-  match fst (get_full_state p tr) with
+  match fst (get_full_state p tr_after_new_idn) with
   | None -> ()
   | Some full_st ->
       full_state_pred_forall_session_intro full_st new_sess_id
@@ -106,9 +107,9 @@ let init_invariant tr p =
                match parse p_state last_i with
                | None -> ()
                | Some last_i -> 
-                   set_new_session_new_sid p new_state_b tr;
-                   full_state_mem_get_session_get_state_forall p tr;
-                   assert(sid_i <> new_sess_id);
+                   set_new_session_new_sid p new_state_b tr_after_new_idn;
+                   full_state_mem_get_session_get_state_forall p tr_after_new_idn;
+                   assert(tr = tr_after_new_idn);
                    new_idn_does_not_appear_in_full_state p tr
                    
         )
