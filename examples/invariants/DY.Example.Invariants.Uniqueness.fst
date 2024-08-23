@@ -30,6 +30,16 @@ type message =
 instance parseable_serializeable_bytes_message: parseable_serializeable bytes message
  = mk_parseable_serializeable ps_message
 
+type p_event =
+  | E: a:principal -> p_event
+
+%splice [ps_p_event] (gen_parser (`p_event))
+%splice [ps_p_event_is_well_formed] (gen_is_well_formed_lemma (`p_event))
+
+instance parseable_serializeable_bytes_p_event: parseable_serializeable bytes p_event
+ = mk_parseable_serializeable ps_p_event
+
+
 let rec find_max_id_in_session (sess:session_raw) : nat = 
     match sess with
     | Nil -> 0
@@ -61,13 +71,18 @@ let init prin =
 val next: principal -> state_id -> traceful (option unit)
 let next prin sid =
   let*? curr_state = get_state prin sid in
-  match parse p_state curr_state with
-  | None -> return None
-  | Some (S idn c) -> (
-         send_msg (serialize message (M prin));*
-         set_state prin sid (serialize p_state (S idn (c+1)));*
-         return (Some ())
-  )
+  let*? S idn c = return (parse p_state curr_state) in
+  send_msg (serialize message (M prin));*
+  let* nonce = mk_rand NoUsage public 7 in
+  set_state prin sid (serialize p_state (S idn (c+1)));*
+  let ev = E prin in
+  trigger_event prin "P" (serialize p_event ev);*
+
+  let other_sid = {the_id = sid.the_id + 1} in
+  let*? other_state = get_state prin other_sid in
+  let*? S other_idn other_c = return (parse p_state other_state) in
+  set_state prin other_sid (serialize p_state (S other_idn (other_c+1)));*
+  return (Some ())
 
 let p_cinvs = {
  usages = default_crypto_usages;
@@ -147,15 +162,18 @@ let p_state_pred: state_predicate_forall_sessions p_cinvs = {
     pred = (fun tr p sid cont -> is_knowable_by #p_cinvs (principal_state_label p sid) tr cont)
   ; session_pred = (fun tr sess prin sid cont ->
      // within a session the idn should stay the same
+     // and the counter must increase
      match parse p_state cont with
      | None -> False
-     | Some (S the_idn _) -> (
+     | Some (S the_idn the_ctr) -> (
          match sess with
          | Nil -> True
          | Snoc init last -> (
              match parse p_state last with
              | None -> True
-             | Some last -> last.idn = the_idn
+             | Some last -> 
+                   last.idn = the_idn 
+                 /\ last.ctr < the_ctr
            )
        )
     )
@@ -217,122 +235,3 @@ let full_state_pred_forall_session_intro
     introduce (sid_i, sess_i) `List.mem` full_st /\ sid_i <> sid /\ Snoc? sess_i ==> p sid_i sess_i 
     with _ . pf sid_i sess_i
   )
-
-#push-options "--fuel 2 --z3rlimit 20 --z3cliopt 'smt.qi.eager_threshold=20'"
-val next_full_state_pred:
-  tr:trace -> p:principal -> sid:state_id ->
-  Lemma 
-  (requires
-       trace_invariant tr
-     /\ has_state_for tr p sid
-     /\ Some? (parse p_state (access_state tr p sid))
-  )
-  (ensures (
-     let S idn c = Some?.v (parse p_state (access_state tr p sid)) in
-     let (_, tr_after_msg) = send_msg (serialize message (M p)) tr in
-     let (_, tr_after_next_state) = set_state p sid (serialize p_state (S idn (c+1))) tr_after_msg in
-
-       has_full_state_for tr_after_msg p
-     /\ full_state_pred tr_after_msg (access_full_state tr_after_msg p) p sid (serialize p_state (S idn (c+1)))
-  ))
-let next_full_state_pred tr p sid =
-  let oldst_b = access_state tr p sid in
-  let S idn c = Some?.v (parse p_state oldst_b) in
-  let msg = M p in
-  let (_, tr_after_msg) = send_msg (serialize message msg) tr in
-  let full_st_b = access_full_state tr_after_msg p in
-
-  // using the new method to proof the full_state_pred
-  full_state_pred_forall_session_intro full_st_b sid
-    // the property p is exactly the full_state_pred 
-    (fun sid_i sess_i -> 
-       let Snoc init_i last_i = sess_i in 
-       match parse p_state last_i with
-       | None -> True
-       | Some last_i -> last_i.idn <> idn
-    )
-    (fun sid_i sess_i -> 
-      // in the proof we can make use of:
-      // sid_i <> sid
-      // Snoc? sess_i
-      // and (sid_i, sess_i) `List.mem` full_st_b
-       let Snoc _ last_i_b = sess_i in 
-       match parse p_state last_i_b with
-       | None -> ()
-       | Some last_i -> 
-           get_state_same p sid_i tr tr_after_msg;    
-           full_state_mem_get_session_get_state_forall p tr_after_msg;
-           assert(last_i_b = access_state tr_after_msg p sid_i);
-           let oldst_entry = SetState p sid oldst_b in
-           let tr_after_oldst = tr `suffix_after_event` oldst_entry in
-           let last_i_entry = SetState p sid_i last_i_b in
-           let tr_after_last_i = tr `suffix_after_event` last_i_entry in
-
-           if tr_after_oldst `has_suffix` tr_after_last_i
-           then ( // last_i after oldst on tr
-             //admit();
-             //get_state_no_set_state_for_on_suffix_after_event tr p sid;
-             //no_set_state_entry_for_on_suffix tr_after_oldst tr_after_last_i p sid;
-             assert(no_set_state_entry_for p sid tr_after_last_i);
-             let tr_before_last_i = tr `prefix_before_event` last_i_entry in
-             suff_after_before_event_is_suff_at_event tr last_i_entry;
-             no_set_state_entry_for_concat p sid (Snoc Nil last_i_entry) tr_after_last_i;
-             get_state_same p sid tr_before_last_i tr;
-             assert(oldst_b = access_state tr_before_last_i p sid);
-             assert(global_state_pred tr_before_last_i p sid_i last_i_b);
-             get_state_appears_in_full_state tr_before_last_i p sid
-           )
-           else ( // oldst after last_i on tr
-             admit();
-             suffixes tr tr_after_last_i tr_after_oldst;
-             assert(tr_after_last_i `has_suffix` tr_after_oldst);
-
-             get_state_no_set_state_for_on_suffix_after_event tr p sid_i;
-             no_set_state_entry_for_on_suffix tr_after_last_i tr_after_oldst p sid_i;
-             let tr_before_old = tr `prefix_before_event` oldst_entry in                               
-             suff_after_before_event_is_suff_at_event tr oldst_entry;
-             no_set_state_entry_for_concat p sid_i (Snoc Nil oldst_entry) tr_after_oldst;
-             get_state_same p sid_i tr_before_old tr;
-             let state_i_before_old = access_state tr_before_old p sid_i in
-             assert(state_i_before_old = last_i_b);
-             assert(global_state_pred tr_before_old p sid oldst_b);
-             get_state_appears_in_full_state tr_before_old p sid_i  
-           )
-    )
-#pop-options
-
-
-#push-options "--z3rlimit 25"
-val next_invariant: tr:trace -> p:principal -> sid:state_id ->
-  Lemma 
-    (requires trace_invariant tr)
-    (ensures  (
-      let (_,tr_out) = next p sid tr in
-      trace_invariant tr_out
-      )
-    )
-let next_invariant tr p sid = 
-  match get_state p sid tr with
-  | (None, _) -> ()
-  | (Some oldst_b, _) -> (
-      match parse p_state oldst_b with
-      | None -> ()
-      | Some (S idn c) -> (          
-          let msg = M p in
-          let msg_b = serialize message msg in
-          let (_, tr_after_msg) = send_msg msg_b tr in
-
-          let next_state = S idn (c+1) in
-          let next_state_b = serialize p_state next_state in
-          let (_,tr_after_next_state) = set_state p sid next_state_b tr_after_msg in
-          
-          serialize_wf_lemma message (is_publishable tr) msg;
-
-          serialize_wf_lemma p_state (is_knowable_by (principal_state_label p sid) tr_after_msg) next_state;
-
-          get_session_same p sid tr tr_after_msg;
-
-          next_full_state_pred tr p sid
-        )
-    )
-#pop-options

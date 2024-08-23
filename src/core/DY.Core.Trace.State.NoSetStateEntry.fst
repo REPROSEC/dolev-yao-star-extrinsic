@@ -78,6 +78,7 @@ val no_set_state_entry_for_suffixes_transitive:
   (ensures
     no_set_state_entry_for p sid (tr3 `suffix_after` tr1)
   )
+  [SMTPat (no_set_state_entry_for p sid (tr2 `suffix_after` tr1)) ; SMTPat (no_set_state_entry_for p sid (tr3 `suffix_after` tr1))]
 let no_set_state_entry_for_suffixes_transitive p sid tr1 tr2 tr3 =
   suffix_after_concat tr1 tr2 tr3;
   no_set_state_entry_for_concat p sid (tr2 `suffix_after` tr1) (tr3 `suffix_after` tr2)
