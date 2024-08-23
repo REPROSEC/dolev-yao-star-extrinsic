@@ -103,6 +103,7 @@ let rec state_was_set_get_state
   Lemma 
   (requires state_was_set tr p sid cont)
   (ensures has_state_for tr p sid)
+  [SMTPat (state_was_set tr p sid cont)]
   = reveal_opaque (`%get_state) get_state; 
     match tr with
     | Nil -> ()
@@ -149,23 +150,30 @@ let get_state_same p sid tr1 tr2 =
   reveal_opaque (`%get_state) get_state;
   get_state_aux_same p sid tr1 tr2
 
-
-
-(*** Properties of get_session ***)
-
-let rec get_session_grows (p:principal) (sid:state_id) (tr1 tr2:trace):
-  Lemma
-  (requires tr1 <$ tr2 /\ has_session_for tr1 p sid)
-  (ensures has_session_for tr2 p sid)
- = reveal_opaque (`%grows) grows; 
+val get_state_grows:
+  p:principal -> sid:state_id -> tr1:trace -> tr2:trace ->
+  Lemma 
+    (requires
+       tr1 <$ tr2 /\
+       has_state_for tr1 p sid
+    )
+    (ensures
+       has_state_for tr2 p sid
+    )
+    [SMTPat (tr1 <$ tr2); SMTPat (get_state p sid tr1 )]
+let rec get_state_grows p sid tr1 tr2 = 
+   reveal_opaque (`%get_state) get_state;
+   reveal_opaque (`%grows) grows; 
    norm_spec [zeta; delta_only [`%prefix]] (prefix);
    if tr1 = tr2 
    then ()
    else (
      match tr2 with
      | Nil -> ()
-     | Snoc init _ -> get_session_grows p sid tr1 init
+     | Snoc init _ -> get_state_grows p sid tr1 init
    )
+
+(*** Properties of get_session ***)
 
 val get_session_same:
   p:principal -> sid:state_id -> tr1:trace -> tr2:trace ->
@@ -580,7 +588,7 @@ let has_full_state_grows (p:principal) (tr1 tr2:trace):
   returns  tr2 `has_full_state_for` p
   with _ . ( 
    full_state_mem_get_session_get_state_forall p tr1;
-    get_session_grows p sid tr1 tr2
+    get_state_grows p sid tr1 tr2
   )
 
 // a sid stored in a full state remains in the full state when the trace grows
@@ -607,7 +615,7 @@ let get_full_state_on_growing_traces (p:principal) (tr1 tr2:trace) (sid:state_id
   zero_to_sid_mem new_sid2 sid;
 
   full_state_some_get_session_get_state p sid tr1;
-  get_session_grows p sid tr1 tr2;
+  get_state_grows p sid tr1 tr2;
   let sess2 = access_session tr2 p sid  in
   get_session_some_get_full_state_some p sid tr2;
   let full_st2 = access_full_state tr2 p in
