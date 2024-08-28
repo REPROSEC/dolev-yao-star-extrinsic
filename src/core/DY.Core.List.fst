@@ -3,6 +3,9 @@ module DY.Core.List
 module List = FStar.List.Tot.Base
 module ListProp = FStar.List.Tot.Properties
 
+
+(*** Helper Lemmas on Lists ***)
+
 let rec choose_equals (#a #b:eqtype) (f g: a -> option b) (xs: list a):
   Lemma 
   ( requires
@@ -50,94 +53,8 @@ let pair_elem_fst_elem (#a #b:eqtype) (p:(a * b)) (xs: list (a*b)):
   [SMTPat (p `List.mem` xs) ]
   = FStar.List.Tot.Properties.memP_map_intro fst p xs
 
-// let rec index_is_mem (#a:eqtype) (xs:list a) (i:nat{i < List.length xs}):
-//   Lemma(
-//     (xs `List.index` i) `List.mem` xs
-//   )
-//   = match xs with
-//   | [] -> ()
-//   | hd::tl ->
-//       if i = 0 
-//       then ()
-//       else index_is_mem tl ((i-1) <: nat)
 
-
-// let rec mem_has_index (#a:eqtype) (xs: list a) (x:a):
-//   Lemma
-//   (requires
-//     x `List.mem` xs
-//   )
-//   (ensures (exists i. x = List.index xs i)
-//   )
-//   = match xs with
-//   | [] -> ()
-//   | hd :: tl -> 
-//     if hd = x 
-//     then (
-//       introduce exists i. x = List.index xs i
-//       with 0
-//       and ()
-//     )
-//     else ( 
-//       mem_has_index tl x;
-//       eliminate exists i. x = List.index tl i
-//       returns (exists i. x = List.index xs i)
-//       with _ .
-//       ( introduce exists i. x = List.index xs i
-//         with (i+1) and ()
-//       )
-//     )
-
-// let distinct_mems_have_distinct_indices (#a:eqtype) (xs:list a) (x y : a):
-//   Lemma
-//   ( requires 
-//       x <> y
-//       /\ x `List.mem` xs /\ y `List.mem` xs
-//   )
-//   (ensures
-//      exists i j. x = xs `List.index` i /\ y = xs `List.index` j /\ i <> j
-//   )
-//   = mem_has_index xs x;
-//     mem_has_index xs y
-    
-
-// let rec xy (#a #b:eqtype) (f: a -> option b) (xs:list a) (y:a):
-//   Lemma
-//   (requires List.noRepeats xs
-//     /\ (forall x x'. x <> x' /\ Some? (f x) /\ Some? (f x') ==> f x <> f x')
-//     /\ Some? (f y)
-//     /\ ~ (y `List.mem` xs)
-//   )
-//   (ensures (
-//      let Some fy = f y in
-//      ~ (fy `List.mem` (List.choose f xs))
-//   )
-//   )
-// = let Some fy = f y in
-//   match xs with
-//   | [] -> ()
-//   | hd::tl -> xy f tl y
-      
-
-// let rec choose_no_repeats (#a #b:eqtype) (f: a  -> option b) (xs:list a):
-//   Lemma 
-//   ( requires 
-//       List.noRepeats xs
-//       /\ (forall x y . x <> y /\ Some? (f x) /\ Some? (f y) ==>
-//         f x <> f y)
-//   )
-//   (ensures List.noRepeats (List.choose f xs)
-//   )
-//   = match xs with
-//  | [] -> ()
-//  | hd :: tl ->
-//      match f hd with
-//      | Some x -> (
-//          choose_no_repeats f tl;
-//          xy f tl hd
-//        )
-//      | None -> choose_no_repeats f tl 
-
+(*** Reversed Lists ***)
 
 /// The trace is a list of trace events.
 /// Because the trace grows with time and the time is often represented going from left to right,

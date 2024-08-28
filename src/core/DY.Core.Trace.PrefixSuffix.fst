@@ -6,6 +6,7 @@ module Trace = DY.Core.Trace.Type
 open DY.Core.Bytes.Type
 open DY.Core.Label.Type
 
+(*** Helper Lemmas for dealing with prefixes and suffixes of traces ***)
 
 let rec prefix_including_event (tr:trace) (the_ev:trace_event{event_exists tr the_ev}) =
   match tr with

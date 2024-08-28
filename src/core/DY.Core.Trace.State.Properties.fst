@@ -7,6 +7,7 @@ open DY.Core.Bytes.Type
 open DY.Core.Bytes
 open DY.Core.Label.Type
 open DY.Core.Trace.Type
+open DY.Core.Trace.Invariant
 open DY.Core.Trace.PrefixSuffix
 open DY.Core.Trace.State.Aux
 open DY.Core.Trace.State.NoSetStateEntry
@@ -15,34 +16,6 @@ open DY.Core.List
 
 module List = FStar.List.Tot.Base
 module ListProps = FStar.List.Tot.Properties
-
-
-
-open DY.Core.Trace.Invariant
-
-/// the session predicate remains true
-/// if the trace grows
-/// but there are no more state entries for the principal and the session
-
-val session_pred_later_:
-  {|cinvs: crypto_invariants |} -> {|sp:state_predicate cinvs |} ->
-  tr1:trace -> tr2:trace  -> p:principal -> sid:state_id -> cont:state_raw ->
-  Lemma
-    (requires 
-        tr1 <$ tr2 
-      /\ no_set_state_entry_for p sid (tr2 `suffix_after` tr1)
-      /\ session_pred_ tr1 (get_session_aux p sid tr1) p sid cont
-    )
-    (ensures session_pred_ tr2 (get_session_aux p sid tr2) p sid cont)
-let session_pred_later_ #_ #sp tr1 tr2 p sid cont =
-  get_session_aux_same p sid tr1 tr2;
-  match get_session_aux p sid tr1 with
-  | None -> ()
-  | Some session ->
-         sp.session_pred_grows tr1 tr2 session p sid cont
-
-let session_pred_later {|invs:protocol_invariants|} = session_pred_later_ #invs.crypto_invs #invs.trace_invs.state_pred
-
 
 (*** Convenience Functions to check and access state, session, and full state ***)
 // those are useful in Lemma statements

@@ -16,7 +16,7 @@ module List = FStar.List.Tot.Base
 /// This module defines helper functions for state handling on traces.
 /// The functions will be used in `DY.Core.Trace.Invariant`
 /// to define the trace invariant
-/// and in `DY.Core.Trace.Maniplation` where some are lifted to the `traceful` monad.
+/// and in `DY.Core.Trace.Manipulation` where some are lifted to the `traceful` monad.
 
 
 /// Type aliases for the internal state layout

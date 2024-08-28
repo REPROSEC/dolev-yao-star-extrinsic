@@ -114,6 +114,27 @@ let global_state_pred_ #cinvs #sp tr prin sid content =
   /\ full_state_pred_ tr full_state prin sid content 
 
 
+/// In the predicates we have the [session_pred_grows] property,
+/// which says that the session pred should stay true on growing traces if the session is the same.
+/// Here we have the same Lemma with a specific condition on when the session stays the same.
+/// Namely, if there are no more SetState entries for the respective session on the longer trace.
+val session_pred_later_:
+  {|cinvs: crypto_invariants |} -> {|sp:state_predicate cinvs |} ->
+  tr1:trace -> tr2:trace  -> p:principal -> sid:state_id -> cont:state_raw ->
+  Lemma
+    (requires 
+        tr1 <$ tr2 
+      /\ no_set_state_entry_for p sid (tr2 `suffix_after` tr1)
+      /\ session_pred_ tr1 (get_session_aux p sid tr1) p sid cont
+    )
+    (ensures session_pred_ tr2 (get_session_aux p sid tr2) p sid cont)
+let session_pred_later_ #_ #sp tr1 tr2 p sid cont =
+  get_session_aux_same p sid tr1 tr2;
+  match get_session_aux p sid tr1 with
+  | None -> ()
+  | Some session ->
+         sp.session_pred_grows tr1 tr2 session p sid cont
+
 
 /// The parameters of the trace invariant.
 
@@ -145,6 +166,7 @@ let state_pred_knowable {|invs:protocol_invariants|} = invs.trace_invs.state_pre
 let state_pred_later {|invs:protocol_invariants|} = invs.trace_invs.state_pred.pred_later
 let session_pred_grows {|invs:protocol_invariants|} = invs.trace_invs.state_pred.session_pred_grows
 let session_pred_opt {|invs:protocol_invariants|} = session_pred_ #_ #invs.trace_invs.state_pred
+let session_pred_later {|invs:protocol_invariants|} = session_pred_later_ #invs.crypto_invs #invs.trace_invs.state_pred
 let full_state_pred_opt {|invs:protocol_invariants|} = full_state_pred_ #_ #invs.trace_invs.state_pred
 let global_state_pred {|invs:protocol_invariants|} = global_state_pred_ #invs.crypto_invs #invs.trace_invs.state_pred
 let event_pred {|invs:protocol_invariants|} = invs.trace_invs.event_pred
