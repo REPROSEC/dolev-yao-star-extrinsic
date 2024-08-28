@@ -28,16 +28,16 @@ type full_state_raw = list (state_id * session_raw)
 // or is it not worth the effort?
 
 let forall_sessions (fst:full_state_raw) (p:state_id -> session_raw ->  prop)  : prop =
-  forall sid sess. (sid, sess) `List.mem` fst ==> p sid sess
+  forall sid sess. (sid, sess) `List.memP` fst ==> p sid sess
 
 let forall_sessions_intro 
   (full_st: full_state_raw)
   (p: state_id -> session_raw -> prop)
-  (pf: ( (sid:state_id) -> (sess:session_raw{(sid,sess) `List.mem` full_st}) -> Tot (squash ( p sid sess)) ))
+  (pf: ( (sid:state_id) -> (sess:session_raw{(sid,sess) `List.memP` full_st}) -> Tot (squash ( p sid sess)) ))
   : (squash ( forall_sessions full_st p ))
-= introduce forall sid sess. (sid, sess) `List.mem` full_st ==> p sid sess 
+= introduce forall sid sess. (sid, sess) `List.memP` full_st ==> p sid sess 
   with  
-    introduce (sid, sess) `List.mem` full_st ==> p sid sess 
+    introduce (sid, sess) `List.memP` full_st ==> p sid sess 
     with _ . pf sid sess 
     
 

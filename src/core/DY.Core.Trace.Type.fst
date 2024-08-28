@@ -217,18 +217,18 @@ let nil_grows (tr:trace):
   [SMTPat (Nil <$ tr)]
   = reveal_opaque (`%grows) grows
 
-let rec mem_grows (e:trace_event) (tr1:trace) (tr2:trace) :
+let rec memP_grows (e:trace_event) (tr1:trace) (tr2:trace) :
   Lemma 
-  (requires e `mem` tr1 /\ tr1 <$ tr2)
-  (ensures e `mem` tr2)
-  [SMTPat (tr1 <$ tr2); SMTPat (e `mem` tr1)]
+  (requires e `memP` tr1 /\ tr1 <$ tr2)
+  (ensures e `memP` tr2)
+  [SMTPat (tr1 <$ tr2); SMTPat (e `memP` tr1)]
   = reveal_opaque (`%grows) (grows);
     norm_spec [zeta; delta_only [`%prefix]] (prefix);
     if length tr1 = length tr2
     then ()
     else (
       let Snoc tr2_init _ = tr2 in
-      mem_grows e tr1 tr2_init
+      memP_grows e tr1 tr2_init
     )
 
 
@@ -278,7 +278,7 @@ let rec get_event_at tr i =
 let rec get_event_at_mem (tr:trace) (ts:timestamp{ts < length tr}):
   Lemma
   ( let e = get_event_at tr ts in
-    e `mem` tr
+    e `memP` tr
   )
   =
   let e = get_event_at tr ts in
@@ -289,7 +289,7 @@ let rec get_event_at_mem (tr:trace) (ts:timestamp{ts < length tr}):
 
 let rec mem_get_event_at (tr:trace) (e:trace_event):
   Lemma
-  (  e `mem` tr ==> (exists ts. ts < length tr /\ e = get_event_at tr ts)
+  (  e `memP` tr ==> (exists ts. ts < length tr /\ e = get_event_at tr ts)
   )
   =
   match tr with
@@ -300,15 +300,15 @@ let rec mem_get_event_at (tr:trace) (e:trace_event):
 let forall_on_trace_equiv
   (p: trace_event -> prop) (tr:trace):
   Lemma
-  ( forall_rev_list p tr <==> (forall (ts:timestamp{ts < length tr}). p (get_event_at tr ts)) )
-  [SMTPat (forall_rev_list p tr)]
+  ( forall_rev_list tr p <==> (forall (ts:timestamp{ts < length tr}). p (get_event_at tr ts)) )
+  [SMTPat (forall_rev_list tr p)]
 =
-  introduce forall_rev_list p tr ==> (forall (ts:timestamp{ts < length tr}). p (get_event_at tr ts))
+  introduce forall_rev_list tr p ==> (forall (ts:timestamp{ts < length tr}). p (get_event_at tr ts))
   with _ . (
     introduce forall ts. _
     with get_event_at_mem tr ts
   );
-  introduce (forall (ts:timestamp{ts < length tr}). p (get_event_at tr ts)) ==> forall_rev_list p tr
+  introduce (forall (ts:timestamp{ts < length tr}). p (get_event_at tr ts)) ==> forall_rev_list tr p
   with _ . (
     introduce forall e . _
     with mem_get_event_at tr e
@@ -343,9 +343,8 @@ let not_a_set_state_entry_for
 val no_set_state_entry_for:
   principal -> state_id -> trace -> prop
 let no_set_state_entry_for p sid tr = 
-  forall_rev_list 
+  forall_rev_list tr
     (not_a_set_state_entry_for p sid tr) 
-    tr
 
 
 

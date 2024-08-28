@@ -148,13 +148,12 @@ type rev_list (a:Type) =
   | Nil : rev_list a
   | Snoc: rev_list a -> a -> rev_list a
 
-let rec mem (#a:eqtype) (m:a) (xs:rev_list a) : bool =
+// membership of an elemnt in a reversed list (the same as List.memP)
+let rec memP (#a:Type) (m:a) (xs:rev_list a) : prop =
   match xs with
   | Nil -> false
-  | Snoc init last -> if last = m then true else m `mem` init
+  | Snoc init last -> 
+      last == m \/ memP m init
 
-let forall_rev_list (#a:eqtype) (p: a -> prop) (xs: rev_list a) : prop =
-  forall x. x `mem` xs ==> p x
-  // match xs with
-  // | Nil -> True
-  // | Snoc xs x -> p x /\ forall_rev_list p xs
+let forall_rev_list (#a:Type) (xs: rev_list a) (p: a -> prop) : prop =
+  forall x. x `memP` xs ==> p x
