@@ -277,3 +277,61 @@ let full_state_pred_forall_session_intro
     introduce (sid_i, sess_i) `List.memP` full_st /\ sid_i <> sid /\ Snoc? sess_i ==> p sid_i sess_i 
     with _ . pf sid_i sess_i
   )
+
+
+
+let memP_singleton (#a:Type) (x: a) (y:a):
+  Lemma
+  ( y `memP` (Snoc Nil x) ==> x == y
+  )
+  = normalize_term_spec (memP #a)
+
+
+
+let rec session_parse_all 
+  (tr:trace) (p:principal) (sid:state_id) (st:state_raw):
+  Lemma
+  (requires
+     trace_invariant tr
+     /\ has_session_for tr p sid
+     /\ (let sess = access_session tr p sid in
+        st `memP` sess
+     )
+  )
+  (ensures (
+ Some? (parse p_state st)
+  ))
+  =
+  match tr with
+  | Nil -> ()
+  | Snoc init last -> (
+   let sess = access_session tr p sid in
+   introduce not_a_set_state_entry_for p sid tr last ==> Some? (parse p_state st)
+   with _ . (
+     init_is_prefix tr;
+     normalize_term_spec trace_invariant;
+     session_parse_all init p sid st 
+     );
+   introduce ~(not_a_set_state_entry_for p sid tr last) ==> Some? (parse p_state st)
+   with _ . (
+   let sess = access_session tr p sid in
+   let Snoc sess_init sess_last = sess in
+   assert(last = SetState p sid sess_last);
+   prefix_before_event_invariant tr last;
+   let tr_before_last = tr `prefix_before_event` last in
+   match fst (get_session p sid tr_before_last) with
+   | None ->  (
+      prefix_before_event_invariant tr last;
+      assert(tr `prefix_before_event` last = init);
+      assert(global_state_pred init p sid sess_last);
+      assert(sess = Snoc Nil sess_last);
+      memP_singleton sess_last st;
+      assert(st = sess_last)
+   )
+   | sess_before -> (
+       if st = sess_last
+       then ()
+       else session_parse_all init p sid st
+     )
+     ))
+   

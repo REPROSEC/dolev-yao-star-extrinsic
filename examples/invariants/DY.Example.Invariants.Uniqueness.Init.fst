@@ -43,10 +43,10 @@ let init_invariant tr p =
         )
         (fun sid_i sess_i ->
            let Snoc init_ last_i = sess_i in
+           full_state_mem_get_session_get_state_forall p tr_after_new_idn2;
            match parse p_state last_i with
-           | None -> assume(forall s . s `memP` sess_i ==> Some? (parse p_state s))
+           | None -> session_parse_all tr p sid_i last_i
            | Some last_i -> 
-               full_state_mem_get_session_get_state_forall p tr_after_new_idn2;
                assert(tr = tr_after_new_idn2);
                new_idn_does_not_appear_in_full_state #p_state #has_identifier_p_state_1 p tr;
                new_idn_does_not_appear_in_full_state #p_state #has_identifier_p_state_2 p tr

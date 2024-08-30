@@ -65,10 +65,10 @@ let state_same_idn_full_state_pred tr p sid new_cont =
   )
   (fun sid_i sess_i ->
      let Snoc _ last_i_b = sess_i in
-     match parse p_state last_i_b with
-     | None -> assume(forall s . s `memP` sess_i ==> Some? (parse p_state s))
-     | Some last_i -> (
      full_state_mem_get_session_get_state_forall p tr;
+     match parse p_state last_i_b with
+     | None -> session_parse_all tr p sid_i last_i_b
+     | Some last_i -> (
          let tr_after_old = tr `suffix_after_event` old_entry in
          let last_i_entry = SetState p sid_i last_i_b in
          let tr_after_last_i = tr `suffix_after_event` last_i_entry in
