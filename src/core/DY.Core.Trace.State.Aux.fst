@@ -26,10 +26,11 @@ type state_raw = bytes
 // the current state of a session is the last entry
 // TODO: mabye just rev_list is enough ? instead of this complicated type
 // instead of None/Some we would then have Nil/Snoc for no session or some session
+// but with the restiction, we immediately get that the full state contains only non-empty sessions,
+// which is also useful
 type session_raw = sess:rev_list state_raw{Snoc? sess}
 type full_state_raw = list (state_id * session_raw) 
 //TODO: full_state_raw should be `Map state_id session_raw`, can we extract the generic Map part from DY.Lib.State.Map?
-// or is it not worth the effort?
 
 let forall_sessions (fst:full_state_raw) (p:state_id -> session_raw ->  prop)  : prop =
   forall sid sess. (sid, sess) `List.memP` fst ==> p sid sess

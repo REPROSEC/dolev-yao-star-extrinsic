@@ -267,3 +267,43 @@ let suff_after_before_event_is_suff_at_event (tr:trace) (ev:trace_event{event_ex
     event_splits_trace tr ev;
     suffix_after_concat_ tr_before (prepend ev tr_after)
     
+
+
+let before_on (tr:trace) (ev1:trace_event{ev1 `memP` tr}) (ev2:trace_event{ev2 `memP` tr /\ ev2 <> ev1}) =
+  ev1 `memP` (tr `prefix_including_event` ev2)
+//  ev2 `memP` ( tr `suffix_after_event` ev1 )
+
+let prefixes
+  (tr:trace) (pre1:trace) (pre2:trace):
+  Lemma
+  (requires
+     pre1 <$ tr /\ pre2 <$ tr
+  )
+  (ensures
+     pre1 <$ pre2 \/ pre2 <$ pre1
+  )
+  [SMTPat (pre1 <$ tr); SMTPat (pre2 <$ tr)]
+  = reveal_opaque (`%grows) grows 
+  
+  
+let one_is_before 
+  (tr:trace) (ev1:trace_event) (ev2:trace_event):
+  Lemma
+  (requires
+       ev1 `memP` tr
+     /\ ev2 `memP` tr
+     /\ ev1 <> ev2
+  )
+  (ensures
+     ev1 `before_on tr` ev2 \/ ev2 `before_on tr` ev1
+  )
+  = 
+  let tr_before_ev1 = (tr `prefix_including_event` ev1) in
+  let tr_before_ev2 = (tr `prefix_including_event` ev2) in
+//  prefixes tr tr_before_ev1 tr_before_ev2;
+  introduce tr_before_ev1 <$ tr_before_ev2 ==> ev1 `before_on tr` ev2
+  with _ . ( memP_grows ev1 tr_before_ev1 tr_before_ev2 );
+  introduce tr_before_ev2 <$ tr_before_ev1 ==> ev2 `before_on tr` ev1
+  with _ . (memP_grows ev2 tr_before_ev2 tr_before_ev1 )
+  
+  
