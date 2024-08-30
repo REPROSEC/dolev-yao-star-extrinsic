@@ -1951,7 +1951,7 @@ let bytes_invariant_kdf_extract tr salt ikm =
 /// User lemma (kdf_extract usage)
 
 val get_usage_kdf_extract:
-  {|crypto_invariants|} ->
+  {|crypto_usages|} ->
   salt:bytes -> ikm:bytes ->
   Lemma
   (requires
@@ -1971,7 +1971,7 @@ let get_usage_kdf_extract salt ikm =
 /// User lemma (kdf_extract label)
 
 val get_label_kdf_extract:
-  {|crypto_invariants|} ->
+  {|crypto_usages|} ->
   salt:bytes -> ikm:bytes ->
   Lemma
   (requires
@@ -2013,7 +2013,7 @@ let bytes_invariant_kdf_expand tr prk info len =
 /// User lemma (kdf_expand usage)
 
 val get_usage_kdf_expand:
-  {|crypto_invariants|} ->
+  {|crypto_usages|} ->
   prk:bytes -> info:bytes -> len:nat{len <> 0} ->
   Lemma
   (requires KdfExpandKey? (get_usage prk))
@@ -2028,7 +2028,7 @@ let get_usage_kdf_expand prk info len =
 /// User lemma (kdf_expand label)
 
 val get_label_kdf_expand:
-  {|crypto_invariants|} ->
+  {|crypto_usages|} ->
   prk:bytes -> info:bytes -> len:nat{len <> 0} ->
   Lemma
   (requires KdfExpandKey? (get_usage prk))
@@ -2043,7 +2043,7 @@ let get_label_kdf_expand prk info len =
 /// User lemma (kdf_expand label can flow)
 
 val get_label_kdf_expand_can_flow:
-  {|crypto_invariants|} ->
+  {|crypto_usages|} ->
   tr:trace ->
   prk:bytes -> info:bytes -> len:nat{len <> 0} ->
   Lemma (get_label (kdf_expand prk info len) `can_flow tr` (get_label prk))
