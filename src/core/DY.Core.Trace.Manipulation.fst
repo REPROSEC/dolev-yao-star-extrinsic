@@ -204,6 +204,7 @@ let recv_msg_invariant #invs i tr =
   match opt_msg with
   | None -> ()
   | Some msg -> (
+    memP_exists_event_at tr (MsgSent msg);
     msg_sent_on_network_are_publishable tr msg
   )
 
@@ -382,7 +383,7 @@ val set_state_invariant:
       let full_st = get_full_state_aux prin tr in
         trace_invariant tr
       /\ state_pred tr prin sess_id content 
-      /\ session_pred_opt tr sess prin sess_id content
+      /\ session_pred tr sess prin sess_id content
       /\ full_state_pred_opt tr full_st prin sess_id content
   )
   )

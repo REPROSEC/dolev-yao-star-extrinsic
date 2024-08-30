@@ -9,7 +9,7 @@ module L = DY.Lib
 (*** A class for identifiers stored in states ***)
 /// all of this is very similar to [compute_new_session_id]
 
-type session_t #state_t = rev_list state_t
+type session_t #state_t = sess:rev_list state_t{Snoc? sess}
 type full_state_t #state_t = list (state_id * session_t #state_t)
 
 // For now, identifiers are nats.
@@ -32,16 +32,19 @@ class has_identifier (state_t:Type) = {
 
 (*** Generating a new Identifier ***)
 
-let rec find_max_id_in_session (#state_t:Type) {|hid: has_identifier state_t |} 
-    (sess:session_raw) : identifier = 
+let rec find_max_id_in_session_ (#state_t:Type) {|hid: has_identifier state_t |} 
+    (sess:rev_list state_raw) : identifier = 
     match sess with
     | Nil -> 0
     | Snoc rest state -> 
         match parse state_t #hid.base state with
-        | None -> find_max_id_in_session #state_t rest
+        | None -> find_max_id_in_session_ #state_t rest
         | Some st ->
-        max (to_id st) (find_max_id_in_session #state_t rest)
+        max (to_id st) (find_max_id_in_session_ #state_t rest)
 
+let find_max_id_in_session (#state_t:Type) {|hid: has_identifier state_t |} 
+    (sess:session_raw) : identifier =
+    find_max_id_in_session_ #state_t sess
 
 let rec find_max_id_in_full_state (#state_t:Type) {|hid: has_identifier state_t|}  
   (st:full_state_raw): identifier = 
@@ -91,6 +94,14 @@ let idn_does_not_appear_in_full_state (#state_t:Type) {|has_identifier state_t|}
 
 (** Proofs **)
 
+
+let forall_rev_list_singleton (#a:Type) (x: a) (p: a -> prop):
+  Lemma
+  (forall_rev_list (Snoc Nil x) p <==> p x
+  )
+  [SMTPat (forall_rev_list (Snoc Nil x) p)]
+  = normalize_term_spec (memP #a)
+  
 val max_id_in_session_largest:
   (#state_t:Type) -> {| hid: has_identifier state_t|} ->
   sess:session_raw ->
@@ -101,7 +112,11 @@ val max_id_in_session_largest:
 let rec max_id_in_session_largest #state_t #hid sess = 
   let m_idn = find_max_id_in_session #state_t sess in
   match sess with
-  | Nil -> ()
+  | Snoc Nil state -> (
+      match parse state_t #hid.base state with
+      | None -> ()
+      | Some st -> ()
+  )
   | Snoc rest state ->
       max_id_in_session_largest #state_t #hid rest
 

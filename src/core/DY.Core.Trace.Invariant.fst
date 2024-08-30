@@ -50,7 +50,9 @@ noeq
 type state_predicate (cinvs:crypto_invariants) = {
   // the three predicates for adding a new state
   pred: trace -> principal -> state_id -> state_raw -> prop;
-  session_pred: trace -> session_raw -> principal -> state_id -> state_raw -> prop; // the session argument is the current session on the trace
+  // the session argument is the current session on the trace 
+  // potentially there is no prior session on the trace for this sid (hence the option)
+  session_pred: trace -> sess:option session_raw -> principal -> state_id -> state_raw -> prop;
   full_state_pred: trace -> full_state_raw -> principal -> state_id -> state_raw -> prop; // the full_state argument is the current full state on the trace
 
   // for single states, we enforce that the stored content is knowable to the storing principal
@@ -76,7 +78,7 @@ type state_predicate (cinvs:crypto_invariants) = {
   // if the trace grows but the session stays the same
   session_pred_grows: 
     tr1:trace -> tr2:trace -> 
-    sess:session_raw -> prin:principal -> sess_id:state_id -> content:state_raw ->
+    sess:option session_raw -> prin:principal -> sess_id:state_id -> content:state_raw ->
     Lemma
       (requires
         tr1 <$ tr2 /\ session_pred tr1 sess prin sess_id content
@@ -90,11 +92,11 @@ type state_predicate (cinvs:crypto_invariants) = {
 
 // convenience functions lifting the session and full state predicates to `option`
 // (no restriction for `None`)
-val session_pred_: {|cinvs: crypto_invariants|} -> {|sp:state_predicate cinvs|} -> trace -> option session_raw -> principal -> state_id -> state_raw -> prop
-let session_pred_ #cinvs #sp  tr session prin sid content =
-  match session with
-  | None -> True
-  | Some sess -> sp.session_pred tr sess prin sid content
+// val session_pred_: {|cinvs: crypto_invariants|} -> {|sp:state_predicate cinvs|} -> trace -> option session_raw -> principal -> state_id -> state_raw -> prop
+// let session_pred_ #cinvs #sp  tr session prin sid content =
+//   match session with
+//   | None -> True
+//   | Some sess -> sp.session_pred tr sess prin sid content
 
 val full_state_pred_: {|cinvs: crypto_invariants|} -> {|sp:state_predicate cinvs|} -> trace -> option full_state_raw -> principal -> state_id -> state_raw -> prop
 let full_state_pred_ #cinvs #sp tr full_state prin sid content =
@@ -110,7 +112,7 @@ let global_state_pred_ #cinvs #sp tr prin sid content =
   let session = get_session_aux prin sid tr in
   let full_state = get_full_state_aux prin tr in
     sp.pred tr prin sid content
-  /\ session_pred_ tr session prin sid content
+  /\ sp.session_pred tr session prin sid content
   /\ full_state_pred_ tr full_state prin sid content 
 
 
@@ -125,15 +127,12 @@ val session_pred_later_:
     (requires 
         tr1 <$ tr2 
       /\ no_set_state_entry_for p sid (tr2 `suffix_after` tr1)
-      /\ session_pred_ tr1 (get_session_aux p sid tr1) p sid cont
+      /\ sp.session_pred tr1 (get_session_aux p sid tr1) p sid cont
     )
-    (ensures session_pred_ tr2 (get_session_aux p sid tr2) p sid cont)
+    (ensures sp.session_pred tr2 (get_session_aux p sid tr2) p sid cont)
 let session_pred_later_ #_ #sp tr1 tr2 p sid cont =
   get_session_aux_same p sid tr1 tr2;
-  match get_session_aux p sid tr1 with
-  | None -> ()
-  | Some session ->
-         sp.session_pred_grows tr1 tr2 session p sid cont
+  sp.session_pred_grows tr1 tr2 (get_session_aux p sid tr1) p sid cont
 
 
 /// The parameters of the trace invariant.
@@ -165,7 +164,7 @@ let full_state_pred {|invs:protocol_invariants|} = invs.trace_invs.state_pred.fu
 let state_pred_knowable {|invs:protocol_invariants|} = invs.trace_invs.state_pred.pred_knowable
 let state_pred_later {|invs:protocol_invariants|} = invs.trace_invs.state_pred.pred_later
 let session_pred_grows {|invs:protocol_invariants|} = invs.trace_invs.state_pred.session_pred_grows
-let session_pred_opt {|invs:protocol_invariants|} = session_pred_ #_ #invs.trace_invs.state_pred
+// let session_pred_opt {|invs:protocol_invariants|} = session_pred_ #_ #invs.trace_invs.state_pred
 let session_pred_later {|invs:protocol_invariants|} = session_pred_later_ #invs.crypto_invs #invs.trace_invs.state_pred
 let full_state_pred_opt {|invs:protocol_invariants|} = full_state_pred_ #_ #invs.trace_invs.state_pred
 let global_state_pred {|invs:protocol_invariants|} = global_state_pred_ #invs.crypto_invs #invs.trace_invs.state_pred
@@ -262,6 +261,7 @@ val msg_sent_on_network_are_publishable:
   )
   (ensures is_publishable tr msg)
 let msg_sent_on_network_are_publishable #invs tr msg =
+  memP_exists_event_at tr (MsgSent msg);
   eliminate exists i. event_at tr i (MsgSent msg)
   returns is_publishable tr msg
   with _. (
@@ -303,6 +303,7 @@ val state_was_set_implies_pred:
    SMTPat (trace_invariant #invs tr);
   ]
 let state_was_set_implies_pred #invs tr prin sess_id content =
+  memP_exists_event_at tr (SetState prin sess_id content);
   eliminate exists i. event_at tr i (SetState prin sess_id content)
   returns invs.trace_invs.state_pred.pred tr prin sess_id content
   with _. (
@@ -323,6 +324,7 @@ val state_is_knowable_by:
   )
   (ensures is_knowable_by (L.principal_state_label prin sess_id) tr content)
 let state_is_knowable_by #invs tr prin sess_id content =
+  memP_exists_event_at tr (SetState prin sess_id content);
   eliminate exists ts. event_at tr ts (SetState prin sess_id content)
   returns (is_knowable_by #invs.crypto_invs (L.principal_state_label prin sess_id) tr content)
   with _. (

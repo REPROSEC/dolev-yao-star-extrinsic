@@ -327,8 +327,32 @@ let event_at tr i e =
 
 val event_exists: trace -> trace_event -> prop
 let event_exists tr e =
-  exists i. event_at tr i e
+//  exists i. event_at tr i e
+ e `memP` tr
 
+let rec memP_exists_event_at (tr:trace) (ev:trace_event):
+  Lemma
+  ( (exists i. event_at tr i ev) <==> ev `memP` tr )
+  = 
+  introduce (exists i. event_at tr i ev) ==> ev `memP` tr
+  with _ . (
+    match tr with
+    | Nil -> ()
+    | Snoc init last -> 
+        memP_exists_event_at init ev
+  );
+  introduce ev `memP` tr ==> (exists i. event_at tr i ev)
+  with _ . (
+    match tr with
+    | Nil -> ()
+    | Snoc init last -> 
+        if last = ev
+        then (
+          introduce exists i . event_at tr i ev
+          with (length tr - 1) and ()
+        )
+        else memP_exists_event_at init ev    
+  )
 
 /// The property that there are no state entries
 /// for the principal and a particular session
@@ -378,8 +402,7 @@ let last_event_exists (tr:trace):
      )
   )
   [SMTPat (Snoc? tr)]
-  = let Snoc _ ev = tr in
-    assert(event_at tr (length tr - 1) ev)
+  = ()
 
 /// given an event on a trace, we often need the trace up until right before that entry
 

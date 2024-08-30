@@ -5,7 +5,6 @@ open DY.Core
 module L = DY.Core.Label
 module Lib = DY.Lib
 module List = FStar.List.Tot.Base
-module Trace = DY.Core.Trace.Type
 
 open DY.Example.Invariants.Uniqueness.Identifier
 
@@ -138,7 +137,7 @@ let p_cinvs = {
 
 noeq type state_predicate_forall_sessions (cinvs:crypto_invariants) = {
   pred: trace -> principal -> state_id -> state_raw -> prop;
-  session_pred: trace -> session_raw -> principal -> state_id -> state_raw -> prop; 
+  session_pred: trace -> option session_raw -> principal -> state_id -> state_raw -> prop; 
   // notice the new type of the full_state_pred:
   // the full_state_raw argument is replaced by sid_i and sess_i (an element of the full state)
   // with the respective restrictions from above
@@ -162,7 +161,7 @@ noeq type state_predicate_forall_sessions (cinvs:crypto_invariants) = {
   ;
   session_pred_grows: 
     tr1:trace -> tr2:trace -> 
-    sess:session_raw -> prin:principal -> sess_id:state_id -> content:state_raw ->
+    sess:option session_raw -> prin:principal -> sess_id:state_id -> content:state_raw ->
     Lemma
       (requires
         tr1 <$ tr2 /\ session_pred tr1 sess prin sess_id content
@@ -203,10 +202,10 @@ let p_state_pred: state_predicate_forall_sessions p_cinvs = {
      | None -> False
      | Some (S the_idn1 the_idn2 the_ctr) -> (
          match sess with
-         | Nil -> True
-         | Snoc init last -> (
+         | None -> True
+         | Some (Snoc init last) -> (
              match parse p_state last with
-             | None -> True
+             | None -> False //True
              | Some last -> 
                    last.idn1 = the_idn1
                  /\ last.idn2 = the_idn2
@@ -225,7 +224,7 @@ let p_state_pred: state_predicate_forall_sessions p_cinvs = {
         // and we only talk about sid_i <> sid
             let Snoc _ last_i = sess_i in
             match parse p_state last_i with
-            | None -> True
+            | None -> False
             | Some last_i -> 
                      last_i.idn1 <> the_idn1
                    /\ last_i.idn2 <> the_idn2

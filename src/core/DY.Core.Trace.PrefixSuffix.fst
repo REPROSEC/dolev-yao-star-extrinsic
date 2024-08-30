@@ -28,6 +28,17 @@ let rec prefix_including_event_is_prefix (tr:trace) (the_ev:trace_event{event_ex
            else
              prefix_including_event_is_prefix init the_ev
 
+let rec prefix_including_event_struct (tr:trace) (ev:trace_event{event_exists tr ev}) :
+  Lemma (tr `prefix_including_event` ev = Snoc (tr `prefix_before_event` ev) ev)
+  [SMTPat (tr `prefix_including_event` ev)]
+= let Snoc init last = tr in
+  if ev = last 
+  then ()
+  else prefix_including_event_struct init ev
+
+let prefix_including_event_memP_event (tr:trace) (ev:trace_event{event_exists tr ev}) :
+  Lemma (ev `memP` (tr `prefix_including_event` ev))
+  = ()
 
 /// definition of "trace substraction"
 /// (it holds: tr2 = tr1 ++ tr2 `suffix_after` tr1)

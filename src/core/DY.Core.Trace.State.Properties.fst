@@ -234,7 +234,7 @@ let full_state_mem_get_session_get_state_forall (p:principal) (tr:trace):
   (requires has_full_state_for tr p)
   (ensures (
      let full_st = access_full_state tr p in
-     forall sid cont. (sid, cont) `List.mem` full_st ==> (
+     forall sid (cont:session_raw). (sid, cont) `List.mem` full_st ==> (
        let (session_opt, _) = get_session p sid tr in
        let (state_opt, _)   = get_state p sid tr in
 
@@ -244,8 +244,8 @@ let full_state_mem_get_session_get_state_forall (p:principal) (tr:trace):
             // is [get_session p sid]
             cont = sess
           /\ // the content stored is not empty
-            ( Snoc? cont 
-            /\ (let Snoc _ last = cont in
+            ( 
+            (let Snoc _ last = cont in
                // there is a state for p and sid on tr
                Some? state_opt 
                /\ // and this state is the last entry in the stored content
@@ -256,15 +256,15 @@ let full_state_mem_get_session_get_state_forall (p:principal) (tr:trace):
        )
   ))
 =  let full_st = access_full_state tr p in
-   introduce forall sid cont. (sid, cont) `List.mem` full_st ==> (
+   introduce forall sid (cont:session_raw). (sid, cont) `List.mem` full_st ==> (
      let (session_opt, _) = get_session p sid tr in
      let (state_opt, _) = get_state p sid tr in
 
        Some? session_opt
      /\ (let Some sess = session_opt in
           cont = sess
-        /\ ( Snoc? cont 
-          /\ (let Snoc _ last = cont in
+        /\ ( 
+          (let Snoc _ last = cont in
                Some? state_opt 
              /\ Some?.v state_opt = last
             )
@@ -433,7 +433,7 @@ val set_new_session_invariant:
       let full_st = get_full_state_aux prin tr in
         trace_invariant tr
       /\ state_pred tr prin new_sid content 
-      /\ session_pred_opt tr sess prin new_sid content
+      /\ session_pred tr sess prin new_sid content
       /\ full_state_pred_opt tr full_st prin new_sid content
   )
   )
@@ -457,7 +457,7 @@ val set_new_session_invariant_:
       let full_st = get_full_state_aux prin tr in
         trace_invariant tr
       /\ state_pred tr prin new_sid content 
-      /\ session_pred tr Nil prin new_sid content
+      /\ session_pred tr None prin new_sid content
       /\ full_state_pred_opt tr full_st prin new_sid content
   )
   )
@@ -621,6 +621,41 @@ let get_state_appears_in_full_state  tr p sid =
 
   full_state_some_get_session_get_state p sid tr
 
+
+let rec state_was_set_appears_in_session 
+  (tr:trace) (p:principal) (sid:state_id) (cont: state_raw) :
+  Lemma
+  (requires state_was_set tr p sid cont
+  )
+  (ensures (
+     let sess = access_session tr p sid in
+
+     cont `memP` sess
+  ))
+= if cont = access_state tr p sid 
+  then ()
+  else (
+    let Snoc init _ = tr in
+    init_is_prefix tr;
+    state_was_set_appears_in_session init p sid cont
+  )
+  
+
+let state_was_set_appears_in_full_state
+  (tr:trace) (p:principal) (sid:state_id) (cont: state_raw) :
+  Lemma
+  (requires state_was_set tr p sid cont
+  )
+  (ensures (
+     let f_st = access_full_state tr p in
+
+     sid `appears_in_fsts` f_st 
+     /\ (exists sess. (sid, sess) `List.mem` f_st /\ cont `memP` sess)
+  ))
+= 
+    state_was_set_appears_in_session tr p sid cont
+    ; get_state_appears_in_full_state tr p sid
+    ; full_state_some_get_session_get_state p sid tr
 
 // This Lemma tells us, that whenever we get a Some for get_state or get_session, we can call [full_state_some_get_session_get_state] to know that the state and session are stored in the full state
 let get_sate_session_full_state_some_equivalence (p:principal) (sid:state_id) (tr:trace):

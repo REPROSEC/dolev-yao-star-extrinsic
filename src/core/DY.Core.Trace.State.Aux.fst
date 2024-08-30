@@ -22,7 +22,11 @@ module List = FStar.List.Tot.Base
 /// Type aliases for the internal state layout
  
 type state_raw = bytes
-type session_raw = rev_list state_raw // the current state of a session is the last entry
+// a session is a *non-empty* rev_list of states
+// the current state of a session is the last entry
+// TODO: mabye just rev_list is enough ? instead of this complicated type
+// instead of None/Some we would then have Nil/Snoc for no session or some session
+type session_raw = sess:rev_list state_raw{Snoc? sess}
 type full_state_raw = list (state_id * session_raw) 
 //TODO: full_state_raw should be `Map state_id session_raw`, can we extract the generic Map part from DY.Lib.State.Map?
 // or is it not worth the effort?
@@ -77,7 +81,7 @@ let rec get_state_aux prin sess_id tr =
   | Snoc tr_init _ ->
       get_state_aux prin sess_id tr_init
 
-val get_session_: principal -> state_id -> trace -> session_raw
+val get_session_: principal -> state_id -> trace -> rev_list state_raw // session_raw
 let rec get_session_ prin sess_id tr = 
   match tr with
   | Nil -> Nil
@@ -101,6 +105,7 @@ let _ =
   let tr = Snoc (Snoc Nil (SetState p sid b)) (SetState p sid b) in
   assert(get_session_aux p sid tr = Some (Snoc (Snoc Nil b) b));
   assert(None? (get_session_aux "b" sid tr))
+
 
 
 /// Helper function for `get_full_state`
@@ -273,8 +278,10 @@ let compute_new_session_new_sid (p:principal) (tr:trace):
      match get_event_at tr ts with
       | SetState p' sid' cont' -> 
           if p' = p
-          then
+          then (
+            memP_exists_event_at tr (SetState p sid' cont');
             compute_new_session_id_larger_than_id_on_trace p tr sid' cont'
+            )
           else ()
       | _ -> ()
   )

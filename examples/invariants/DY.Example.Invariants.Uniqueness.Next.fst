@@ -60,13 +60,13 @@ let state_same_idn_full_state_pred tr p sid new_cont =
   (fun sid_i sess_i ->
     let Snoc _ last_i = sess_i in
          match parse p_state last_i with
-         | None -> True
+         | None -> False
          | Some last_i -> last_i.idn1 <> the_idn1 /\ last_i.idn2 <> the_idn2
   )
   (fun sid_i sess_i ->
      let Snoc _ last_i_b = sess_i in
      match parse p_state last_i_b with
-     | None -> ()
+     | None -> assume(forall s . s `memP` sess_i ==> Some? (parse p_state s))
      | Some last_i -> (
      full_state_mem_get_session_get_state_forall p tr;
          let tr_after_old = tr `suffix_after_event` old_entry in
