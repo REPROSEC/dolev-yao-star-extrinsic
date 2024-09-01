@@ -81,7 +81,7 @@ let initiator_forward_secrecy tr alice alice_si bob gx gy k =
   assert(
     is_corrupt tr (principal_label bob) \/
     is_corrupt tr (principal_state_label alice alice_si) \/
-    (exists bob_si. get_label k `equivalent tr` join (principal_state_label alice alice_si) (principal_state_label bob bob_si))
+    (exists bob_si. get_label tr k `equivalent tr` join (principal_state_label alice alice_si) (principal_state_label bob bob_si))
   );
 
   // We deduce from the following this assertion,
@@ -131,7 +131,7 @@ let responder_forward_secrecy tr alice bob bob_si gx gy k =
   assert(
     is_corrupt tr (principal_label alice) \/
     is_corrupt tr (principal_state_label bob bob_si) \/
-    (exists alice_si. get_label k `equivalent tr` join (principal_state_label alice alice_si) (principal_state_label bob bob_si))
+    (exists alice_si. get_label tr k `equivalent tr` join (principal_state_label alice alice_si) (principal_state_label bob bob_si))
   );
 
   // We deduce from the following this assertion,

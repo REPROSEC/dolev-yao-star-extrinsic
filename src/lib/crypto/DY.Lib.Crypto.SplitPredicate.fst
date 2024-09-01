@@ -23,6 +23,8 @@ type split_crypto_predicate_parameters = {
   apply_global_pred: global_pred_t -> (trace & key_t & data_t) -> prop;
   mk_global_pred: ((trace & key_t & data_t) -> prop) -> global_pred_t;
 
+  key_and_data_well_formed: trace -> key_t -> data_t -> prop;
+
   apply_mk_global_pred: bare:((trace & key_t & data_t) -> prop) -> x:(trace & key_t & data_t) -> Lemma
     (apply_global_pred (mk_global_pred bare) x == bare x);
   apply_local_pred_later:
@@ -30,7 +32,10 @@ type split_crypto_predicate_parameters = {
     tr1:trace -> tr2:trace ->
     key:key_t -> data:data_t ->
     Lemma
-    (requires apply_local_pred lpred (tr1, key, data) /\ tr1 <$ tr2)
+    (requires
+      apply_local_pred lpred (tr1, key, data) /\
+      key_and_data_well_formed tr1 key data /\
+      tr1 <$ tr2)
     (ensures apply_local_pred lpred (tr2, key, data))
   ;
 }
@@ -93,7 +98,11 @@ val mk_global_crypto_predicate_later:
   tr1:trace -> tr2:trace ->
   key:params.key_t -> data:params.data_t ->
   Lemma
-  (requires params.apply_global_pred (mk_global_crypto_predicate params tagged_local_preds) (tr1, key, data) /\ tr1 <$ tr2)
+  (requires
+    params.apply_global_pred (mk_global_crypto_predicate params tagged_local_preds) (tr1, key, data) /\
+    params.key_and_data_well_formed tr1 key data /\
+    tr1 <$ tr2
+  )
   (ensures params.apply_global_pred (mk_global_crypto_predicate params tagged_local_preds) (tr2, key, data))
 let mk_global_crypto_predicate_later params tagged_local_preds tr1 tr2 key data =
   let fparams = split_crypto_predicate_parameters_to_split_function_parameters params in

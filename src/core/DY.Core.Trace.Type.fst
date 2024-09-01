@@ -31,6 +31,7 @@ open DY.Core.Label.Type
 
 /// The type for events in the trace.
 
+noeq
 type trace_event =
   // A message has been sent on the network.
   | MsgSent: bytes -> trace_event
@@ -48,6 +49,7 @@ type trace_event =
 /// the trace is actually a reversed list.
 /// To avoid confusions, we define a custom inductive to swap the arguments of the "cons" constructor.
 
+noeq
 type trace =
   | Nil: trace
   | Snoc: trace -> trace_event -> trace
@@ -301,6 +303,6 @@ let event_triggered_grows tr1 tr2 prin tag content = ()
 val rand_generated_at: trace -> timestamp -> bytes -> prop
 let rand_generated_at tr i b =
   match b with
-  | Rand usg lab len time ->
-    time == i /\ event_at tr i (RandGen usg lab len)
+  | Rand usg len time ->
+    time == i /\ (exists lab. event_at tr i (RandGen usg lab len))
   | _ -> False

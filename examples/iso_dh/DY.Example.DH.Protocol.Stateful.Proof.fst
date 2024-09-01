@@ -19,7 +19,7 @@ let is_dh_shared_key tr alice bob k = exists si sj.
   // the label is either ``join (principal_state_label alice si) (principal_state_label bob sj)`` or
   // ``join (principal_state_label bob sj) (principal_state_label alice si)``.
   // This is because k is either build from ``dh x (dh_pk y)`` or ``dh y (dh_pk x)``.
-  get_label k `equivalent tr` join (principal_state_label alice si) (principal_state_label bob sj) /\ 
+  get_label tr k `equivalent tr` join (principal_state_label alice si) (principal_state_label bob sj) /\ 
   get_usage k == AeadKey "DH.aead_key" empty
 
 let dh_session_pred: local_state_predicate dh_session = {
@@ -277,7 +277,7 @@ let prepare_msg3_proof tr global_sess_id alice alice_si bob msg_id =
               assert(dh y res.gx == dh x res.gy);
               assert(k == k');
               
-              assert(exists si sj. get_label k `equivalent tr` join (principal_state_label alice si) (principal_state_label bob sj));
+              assert(exists si sj. get_label tr k `equivalent tr` join (principal_state_label alice si) (principal_state_label bob sj));
 
               assert(dh_key_and_event_respond1);
               ()
@@ -376,7 +376,7 @@ let verify_msg3_proof tr global_sess_id alice bob msg_id bob_si =
             );
 
             assert(is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_state_label bob bob_si) \/ 
-              (exists si. get_label res.k `equivalent tr` join (principal_state_label alice si) (principal_state_label bob bob_si)));
+              (exists si. get_label tr res.k `equivalent tr` join (principal_state_label alice si) (principal_state_label bob bob_si)));
             assert(get_usage res.k == AeadKey "DH.aead_key" empty);
             assert(is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_state_label bob bob_si) \/
               (is_dh_shared_key tr alice bob res.k /\ event_triggered tr alice (Initiate2 alice bob gx gy res.k)));
