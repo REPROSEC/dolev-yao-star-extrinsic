@@ -385,9 +385,9 @@ let rec get_label #cusages tr b =
     if time < DY.Core.Trace.Type.length tr then (
       match get_event_at tr time with
       | RandGen _ lab _ -> lab
-      | _ -> public // case doesn't happen in well-formed bytes
+      | _ -> DY.Core.Label.Unknown.unknown_label
     ) else (
-      public // case doesn't happen in well-formed bytes
+      DY.Core.Label.Unknown.unknown_label
     )
   | Concat left right ->
     meet (get_label tr left) (get_label tr right)
