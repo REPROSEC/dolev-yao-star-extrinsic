@@ -1,4 +1,4 @@
-module Ord
+module PreOrd
 
 /// The Ord Typeclass
 /// -----------------

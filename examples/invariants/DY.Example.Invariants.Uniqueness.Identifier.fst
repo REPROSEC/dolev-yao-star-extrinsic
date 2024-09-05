@@ -156,7 +156,7 @@ let new_idn_does_not_appear_in_full_state #state_t #hid p tr =
   
 (*** More general  ***)
 
-open Ord
+open PreOrd
 
 class identifier_ (id_t:eqtype) {|ord_leq id_t|} = {
   initial_id: id_t;

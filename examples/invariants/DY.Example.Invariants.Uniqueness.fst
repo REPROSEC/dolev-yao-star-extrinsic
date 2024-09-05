@@ -62,7 +62,7 @@ instance has_identifier_p_state_2: has_identifier p_state = {
 }
 
 
-open Ord
+open PreOrd
 
 instance has_identifier__p_state_1: has_identifier_ p_state nat #ord_leq_nat #identifier_nat  = {
    base_ = parseable_serializeable_bytes_p_state;
