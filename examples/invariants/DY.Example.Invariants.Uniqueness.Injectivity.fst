@@ -10,14 +10,6 @@ module Trace = DY.Core.Trace.Type
 
 #set-options "--fuel 1 --ifuel 1"
 
-
-
-
-val grows_: trace -> trace -> bool
-let grows_ tr1 tr2 =
-  Trace.length tr1 <= Trace.length tr2 &&
-  tr1 = prefix tr2 (Trace.length tr1)
-
 let rec sessions_history
   (tr:trace) (p:principal) (sid:state_id):
   Lemma
@@ -124,27 +116,6 @@ let rec session_has_same_idn1
   )
 #pop-options 
 
-let symmetric_proof
-  (tr:trace)
-  (ev1:trace_event{event_exists tr ev1})
-  (ev2:trace_event{event_exists tr ev2 /\ ev1 <> ev2})
-  (cond: trace -> trace_event -> trace_event -> prop)
-  (pf_symm: squash (cond tr ev1 ev2 <==> cond tr ev2 ev1))
-  (p: prop)
-  (proof:
-    (ev1:trace_event{event_exists tr ev1}) -> (ev2:trace_event{event_exists tr ev2 /\ ev1 <> ev2 /\ cond tr ev1 ev2 }) ->
-    squash ( ev1 `before_on tr` ev2 ==>  p)
-  )
-  : squash (
-           cond tr ev1 ev2 ==> p
-      //   (ev1 `before_on tr` ev2 ==> p)
-      // /\ (ev2 `before_on tr` ev1 ==> p )
-  )
-  = one_is_before tr ev1 ev2;
-    introduce ev1 `before_on tr` ev2 /\ cond tr ev1 ev2 ==> p
-    with _ . proof ev1 ev2;
-    introduce ev2 `before_on tr` ev1 /\ cond tr ev2 ev1 ==> p
-    with _ . (pf_symm; proof ev2 ev1)
 
 
 #push-options "--z3rlimit 20 --z3cliopt 'smt.qi.eager_threshold=20'"
@@ -152,11 +123,12 @@ let state_injective_ (tr:trace)
   (p:principal)
   // (sid sid': state_id)
   // (cont:state_raw) (cont':state_raw{cont <> cont'}): 
-  (ev_sid:trace_event) (ev_sid':trace_event{ev_sid <> ev_sid'}):
+  (ev_sid:trace_event) (ev_sid':trace_event):
   Lemma
   (requires
        trace_invariant tr
      /\ ev_sid `memP` tr /\ ev_sid' `memP` tr
+     /\ ev_sid <> ev_sid'
      /\  SetState? ev_sid
      /\ SetState? ev_sid'
      /\ ( let SetState p_sid sid cont = ev_sid in
@@ -169,12 +141,13 @@ let state_injective_ (tr:trace)
         let st' = Some?.v (parse p_state cont') in  
         st.idn1 = st'.idn1
      ))
+     /\ ev_sid `before_on tr` ev_sid'
    
      )
   (ensures
     (let SetState p sid cont = ev_sid in
      let SetState p sid' cont' = ev_sid' in
-     ev_sid `before_on tr` ev_sid' ==> sid = sid'
+      sid = sid'
      )
   )
   = let SetState p sid cont = ev_sid in
@@ -204,6 +177,19 @@ let state_injective_ (tr:trace)
    )
 #pop-options 
 
+(** The arity 3 version of [move_requires] *)
+val move_requires_4
+      (#a #b #c #d: Type)
+      (#p #q: (a -> b -> c -> d -> Type))
+      ($_: (x: a -> y: b -> z: c -> zz:d -> Lemma (requires (p x y z zz)) (ensures (q x y z zz))))
+      (x: a)
+      (y: b)
+      (z: c)
+      (zz : d)
+    : Lemma (p x y z zz ==> q x y z zz)
+let move_requires_4 #a #b #c #d #p #q f x y z zz = FStar.Classical.move_requires (f x y z) zz
+
+#push-options "--z3rlimit 20 --fuel 4  --z3cliopt 'smt.qi.eager_threshold=20'"
 let state_injective (tr:trace)
   (p:principal)
   (sid sid': state_id)
@@ -224,35 +210,7 @@ let state_injective (tr:trace)
   = 
    let cont'_entry = SetState p sid' cont' in
    let cont_entry = SetState p sid cont in
-   
-   // symmetric_proof
-   //   tr
-   //   cont_entry
-   //   cont'_entry
-   //   (fun tr ev_sid ev_sid' -> 
-   //      trace_invariant tr
-   //      /\ ev_sid <> ev_sid'
-   //   /\ ev_sid `memP` tr /\ ev_sid' `memP` tr
-   //   /\  SetState? ev_sid
-   //   /\ SetState? ev_sid'
-   //   /\ ( let SetState p_sid sid cont = ev_sid in
-   //     let SetState p_sid' sid' cont' = ev_sid' in
-   //     p_sid = p /\ p_sid' = p
-   //     /\ (
-   //   assert(state_was_set tr p sid cont);
-   //   assert(state_was_set tr p sid' cont');
-   //     let st = Some?.v (parse p_state cont) in  
-   //      let st' = Some?.v (parse p_state cont') in  
-   //      st.idn1 = st'.idn1
-   //   ))
-   //   )
-   //   ()
-   //   (sid = sid')
-   //   (fun e1 e2 ->
-   //     state_injective_ tr p e1 e2
-   //   )
-   
-   
+  
    one_is_before tr cont_entry cont'_entry;
    introduce 
       cont_entry `before_on tr` cont'_entry ==> sid = sid' 

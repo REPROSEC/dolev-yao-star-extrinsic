@@ -10,7 +10,7 @@ open DY.Example.Invariants.Uniqueness.Identifier
 
 (*** Showing that the initial step maintains the trace invariant ***)
 
-#push-options "--z3rlimit 20 --z3cliopt 'smt.qi.eager_threshold=20'"
+#push-options " --z3rlimit 30 --z3cliopt 'smt.qi.eager_threshold=20'"
 val init_invariant: tr:trace -> p:principal ->
   Lemma 
     (requires trace_invariant tr)
@@ -29,7 +29,7 @@ let init_invariant tr p =
   serialize_wf_lemma p_state (is_knowable_by (principal_state_label p new_sess_id) tr_after_new_idn2) new_state;
 
   set_new_session_get_session p new_state_b tr_after_new_idn2;
-
+  assert(tr = tr_after_new_idn2);
   match fst (get_full_state p tr_after_new_idn2) with
   | None -> ()
   | Some full_st ->
@@ -47,8 +47,8 @@ let init_invariant tr p =
            match parse p_state last_i with
            | None -> session_parse_all tr p sid_i last_i
            | Some last_i -> 
-               assert(tr = tr_after_new_idn2);
-               new_idn_does_not_appear_in_full_state #p_state #has_identifier_p_state_1 p tr;
+               
+              new_idn_does_not_appear_in_full_state_gen #p_state #nat #_ #_ #has_identifier__p_state_1 p tr;
                new_idn_does_not_appear_in_full_state #p_state #has_identifier_p_state_2 p tr
         )
 
