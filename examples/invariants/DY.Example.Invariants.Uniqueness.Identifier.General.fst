@@ -7,16 +7,7 @@ open PreOrd
 
 #set-options "--fuel 1 --ifuel 1"
 
-(** Stating Properties **)
-
-let prop_state_on (#a:Type) (#state_t:Type) {|ps_state : parseable_serializeable bytes state_t|} 
-  (from_state: state_t  -> a) (p: a -> bool ) (state:state_raw) : prop =
-  match parse state_t state with
-  | None -> True
-  | Some state -> p (from_state state)
-
-
-(*** The idenfier class ***)
+(*** The identifier class ***)
 // any type that is a total preorder can be made an identifier
 // by specifying:
 // * an initial value (chosen if no prior identifier exists)
@@ -82,7 +73,7 @@ class has_identifier (state_t:Type) (id_t:eqtype) {|preord_leq id_t|} {|identifi
 // * generate the next identifier from this current largest one
 // * if there is no prior identifier use the initial identifier
 
-let rec find_max_id_in_session  (#state_t:Type) (#id_t:eqtype) {|preord_leq id_t |} {|identifier id_t|} {|hid: has_identifier state_t id_t|} 
+let rec find_max_id_in_session  (#state_t:Type) (#id_t:eqtype) {|preord_leq id_t|} {|identifier id_t|} {|hid: has_identifier state_t id_t|} 
     (sess:rev_list state_raw) 
     : option id_t = 
     match sess with
@@ -126,8 +117,14 @@ let compute_new_id #state_t #id_t #_ #hid prin =
 // a newly generated identifier is unique
 // first we need some helper lemmas
 
+let prop_state_on (#a:Type) (#state_t:Type) {|ps_state : parseable_serializeable bytes state_t|} 
+  (from_state: state_t  -> a) (p: a -> bool ) (state:state_raw) : prop =
+  match parse state_t state with
+  | None -> True
+  | Some state -> p (from_state state)
+
 let rec find_max_id_in_session_none
-(#state_t:Type) (#id_t:eqtype) {|preord_leq id_t |} {|identifier id_t|} {|hid: has_identifier state_t id_t|} 
+(#state_t:Type) (#id_t:eqtype) {|preord_leq id_t|} {|identifier id_t|} {|hid: has_identifier state_t id_t|} 
     (sess:rev_list state_raw) 
     : Lemma 
     (requires None? (find_max_id_in_session #state_t #id_t sess))
@@ -146,7 +143,7 @@ let forall_ids  (#state_t:Type) (#id_t:eqtype) {|preord_leq id_t|} {|identifier 
 
 #push-options "--fuel 4 --ifuel 4"
 val max_id_in_session_largest:
-  (#state_t:Type) -> (#id_t:eqtype) -> {|preord_leq id_t |} -> {|identifier id_t|} -> {| hid: has_identifier state_t id_t|} ->
+  (#state_t:Type) -> (#id_t:eqtype) -> {|preord_leq id_t|} -> {|identifier id_t|} -> {| hid: has_identifier state_t id_t|} ->
   sess:session_raw ->
   Lemma 
   ( let m_idn = find_max_id_in_session #state_t #id_t #_ #_ #_ sess in
@@ -193,7 +190,7 @@ let rec find_max_id_in_full_state_none
 
 #push-options "--z3rlimit 20"
 val max_id_in_full_state_largest :
-(#state_t:Type) -> (#id_t:eqtype) -> {|preord_leq id_t |} -> {|identifier id_t|} -> {|hid:has_identifier state_t id_t|}  ->
+(#state_t:Type) -> (#id_t:eqtype) -> {|preord_leq id_t|} -> {|identifier id_t|} -> {|hid:has_identifier state_t id_t|}  ->
   (to_id: (state_t -> id_t)) ->
   fst: full_state_raw -> 
   Lemma 
