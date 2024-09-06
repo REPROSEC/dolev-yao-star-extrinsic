@@ -12,7 +12,7 @@ open DY.Example.DH.Protocol.Stateful.Proof
 
 (*** Authentication Properties ***)
 
-val initiator_authentication:
+val responder_authentication:
   tr:trace -> i:nat ->
   alice:principal -> bob:principal ->
   gx:bytes -> gy:bytes -> k:bytes ->
@@ -26,9 +26,9 @@ val initiator_authentication:
     (exists y. event_triggered (prefix tr i) bob (Respond1 alice bob gx gy y) /\
     k == dh y gx)
   )
-let initiator_authentication tr i alice bob gx gy k = ()
+let responder_authentication tr i alice bob gx gy k = ()
 
-val responder_authentication: 
+val initiator_authentication:
   tr:trace -> i:nat ->
   alice:principal -> bob:principal ->
   gx:bytes -> gy:bytes -> k:bytes ->
@@ -41,7 +41,7 @@ val responder_authentication:
     is_corrupt tr (principal_label alice) \/ 
     event_triggered (prefix tr i) alice (Initiate2 alice bob gx gy k)
   )
-let responder_authentication tr i alice bob gx gy k = ()
+let initiator_authentication tr i alice bob gx gy k = ()
 
 (*** Forward Secrecy Properties ***)
 
@@ -66,7 +66,6 @@ let initiator_forward_secrecy tr alice alice_si bob gx gy k =
     (exists x. gx == dh_pk x /\ k == dh x gy /\ is_secret (principal_state_label alice alice_si) tr x) /\
     (
       is_corrupt tr (principal_label bob) \/
-      is_corrupt tr (principal_state_label alice alice_si) \/
       (exists y.
         (exists bob_si. is_secret (principal_state_label bob bob_si) tr y) /\
         gy = dh_pk y
@@ -78,7 +77,6 @@ let initiator_forward_secrecy tr alice alice_si bob gx gy k =
   // (this assert is not needed and only there for pedagogical purposes)
   assert(
     is_corrupt tr (principal_label bob) \/
-    is_corrupt tr (principal_state_label alice alice_si) \/
     (exists bob_si. get_label k `equivalent tr` join (principal_state_label alice alice_si) (principal_state_label bob bob_si))
   );
 
@@ -86,7 +84,6 @@ let initiator_forward_secrecy tr alice alice_si bob gx gy k =
   // that will trigger transitivity of `can_flow tr` from `join ...` to `get_label k` to `public`
   assert(
     is_corrupt tr (principal_label bob) \/
-    is_corrupt tr (principal_state_label alice alice_si) \/
     (exists bob_si. join (principal_state_label alice alice_si) (principal_state_label bob bob_si) `can_flow tr` public)
   );
 
@@ -116,7 +113,6 @@ let responder_forward_secrecy tr alice bob bob_si gx gy k =
     (exists y. gy == dh_pk y /\ k == dh y gx /\ is_secret (principal_state_label bob bob_si) tr y) /\
     (
       is_corrupt tr (principal_label alice) \/
-      is_corrupt tr (principal_state_label bob bob_si) \/
       (exists x.
         (exists alice_si. is_secret (principal_state_label alice alice_si) tr x) /\
         k == dh x gy
@@ -128,7 +124,6 @@ let responder_forward_secrecy tr alice bob bob_si gx gy k =
   // (this assert is not needed and only there for pedagogical purposes)
   assert(
     is_corrupt tr (principal_label alice) \/
-    is_corrupt tr (principal_state_label bob bob_si) \/
     (exists alice_si. get_label k `equivalent tr` join (principal_state_label alice alice_si) (principal_state_label bob bob_si))
   );
 
@@ -136,7 +131,6 @@ let responder_forward_secrecy tr alice bob bob_si gx gy k =
   // that will trigger transitivity of `can_flow tr` from `join ...` to `get_label k` to `public`
   assert(
     is_corrupt tr (principal_label alice) \/
-    is_corrupt tr (principal_state_label bob bob_si) \/
     (exists alice_si. join (principal_state_label alice alice_si) (principal_state_label bob bob_si) `can_flow tr` public)
   );
 
