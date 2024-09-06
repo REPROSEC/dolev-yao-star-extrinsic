@@ -177,18 +177,6 @@ let state_injective_ (tr:trace)
    )
 #pop-options 
 
-(** The arity 3 version of [move_requires] *)
-val move_requires_4
-      (#a #b #c #d: Type)
-      (#p #q: (a -> b -> c -> d -> Type))
-      ($_: (x: a -> y: b -> z: c -> zz:d -> Lemma (requires (p x y z zz)) (ensures (q x y z zz))))
-      (x: a)
-      (y: b)
-      (z: c)
-      (zz : d)
-    : Lemma (p x y z zz ==> q x y z zz)
-let move_requires_4 #a #b #c #d #p #q f x y z zz = FStar.Classical.move_requires (f x y z) zz
-
 #push-options "--z3rlimit 20 --fuel 4  --z3cliopt 'smt.qi.eager_threshold=20'"
 let state_injective (tr:trace)
   (p:principal)

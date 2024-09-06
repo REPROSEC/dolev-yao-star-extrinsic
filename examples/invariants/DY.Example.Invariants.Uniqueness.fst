@@ -62,21 +62,43 @@ instance has_identifier_p_state_2: has_identifier p_state = {
 }
 
 
-open PreOrd
+// open PreOrd
 
-instance has_identifier__p_state_1: has_identifier_ p_state nat #ord_leq_nat #identifier_nat  = {
-   base_ = parseable_serializeable_bytes_p_state;
-   to_id_ = (fun state -> state.idn1);
-}
+
+// instance has_identifier_p_state_1: has_identifier_ p_state nat #ord_leq_nat #identifier_nat  = {
+//    base_ = parseable_serializeable_bytes_p_state;
+//    to_id_ = (fun state -> state.idn1);
+// }
+
+// instance has_identifier_p_state_2: has_identifier_ p_state nat #ord_leq_nat #identifier_nat  = {
+//    base_ = parseable_serializeable_bytes_p_state;
+//    to_id_ = (fun state -> state.idn2);
+// }
+
+// instance identifier_rand (u:usage) (l:label) (len:nat{len <> 0}): identifier_ rand_bytes #ord_leq_rand_bytes_time = {
+//   initial_id = (Rand u l len 0);
+//   next_id = (fun (r:rand_bytes) -> 
+//     let Rand u l len t = r in
+//     Rand u l len (t+1)
+//   );
+//   next_id_larger = (fun r -> ())
+// }
+
+// instance has_identifier_p_state_nonce: has_identifier_ p_state rand_bytes #ord_leq_rand_bytes_time #identifier_rand = {
+//    base_ = parseable_serializeable_bytes_p_state;
+//    to_id_ = (fun state -> state.idn2);
+// }
 
 
 val new_idn1: principal -> traceful nat
 let new_idn1 prin = 
-  compute_new_id_gen #p_state #nat #_ #_ #has_identifier__p_state_1 prin
+  compute_new_id #p_state #has_identifier_p_state_1 prin
+//  compute_new_id_gen #p_state #nat #_ #_ #has_identifier_p_state_1 prin
 
 val new_idn2: principal -> traceful nat
 let new_idn2 prin = 
   compute_new_id #p_state #has_identifier_p_state_2 prin
+//  compute_new_id_gen #p_state #nat #_ #_ #has_identifier_p_state_2 prin
 
 
 (*** The Protocol ***)
@@ -87,7 +109,7 @@ val init: principal -> traceful state_id
 let init prin =
   let* idn1 = new_idn1 prin in
   let* idn2 = new_idn2 prin in
-  let new_state = S idn1 idn2  0 in
+  let new_state = S idn1 idn2 0 in
   let* new_sess_id = set_new_session prin (serialize p_state new_state) in
   return new_sess_id
 
@@ -343,17 +365,3 @@ let rec session_parse_all
        else session_parse_all init p sid st
      )
      ))
-
-#push-options "--fuel 3"
-let _ =
-  let state1 = S 1 3 0 in
-  let state2 = S 5 7 3 in
-  let sess1 = (Snoc Nil (serialize p_state state1)) in
-  let sess2 = Snoc sess1 (serialize p_state state2) in
-  assert(find_max_id_in_session_gen #_ #_ #_ #_ #has_identifier__p_state_1 Nil = None);
-  assert(find_max_id_in_session_gen #_ #_ #_ #_ #has_identifier__p_state_1 sess1 = Some (1 <: nat));
-  assert(find_max_id_in_session_gen #_ #_ #_ #_ #has_identifier__p_state_1 sess2 = Some (5 <: nat));
-  let sid1 = {the_id = 1} in
-  let sid2 = {the_id = 2} in
-  let full_st = [(sid1, sess1); (sid2, sess2)] in
-  assert(find_max_id_in_full_state_gen #_ #_ #_ #_ #has_identifier__p_state_1 full_st = Some (5 <: nat))

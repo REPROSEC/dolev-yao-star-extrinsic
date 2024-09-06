@@ -48,7 +48,7 @@ let init_invariant tr p =
            | None -> session_parse_all tr p sid_i last_i
            | Some last_i -> 
                
-              new_idn_does_not_appear_in_full_state_gen #p_state #nat #_ #_ #has_identifier__p_state_1 p tr;
+              new_idn_does_not_appear_in_full_state #p_state #has_identifier_p_state_1 p tr;
                new_idn_does_not_appear_in_full_state #p_state #has_identifier_p_state_2 p tr
         )
 

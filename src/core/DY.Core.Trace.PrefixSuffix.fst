@@ -305,5 +305,3 @@ let one_is_before
   with _ . ( memP_grows ev1 tr_before_ev1 tr_before_ev2 );
   introduce tr_before_ev2 <$ tr_before_ev1 ==> ev2 `before_on tr` ev1
   with _ . (memP_grows ev2 tr_before_ev2 tr_before_ev1 )
-  
-  
