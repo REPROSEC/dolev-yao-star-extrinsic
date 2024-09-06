@@ -61,44 +61,13 @@ instance has_identifier_p_state_2: has_identifier p_state = {
   to_id = fun state -> state.idn2
 }
 
-
-// open PreOrd
-
-
-// instance has_identifier_p_state_1: has_identifier_ p_state nat #ord_leq_nat #identifier_nat  = {
-//    base_ = parseable_serializeable_bytes_p_state;
-//    to_id_ = (fun state -> state.idn1);
-// }
-
-// instance has_identifier_p_state_2: has_identifier_ p_state nat #ord_leq_nat #identifier_nat  = {
-//    base_ = parseable_serializeable_bytes_p_state;
-//    to_id_ = (fun state -> state.idn2);
-// }
-
-// instance identifier_rand (u:usage) (l:label) (len:nat{len <> 0}): identifier_ rand_bytes #ord_leq_rand_bytes_time = {
-//   initial_id = (Rand u l len 0);
-//   next_id = (fun (r:rand_bytes) -> 
-//     let Rand u l len t = r in
-//     Rand u l len (t+1)
-//   );
-//   next_id_larger = (fun r -> ())
-// }
-
-// instance has_identifier_p_state_nonce: has_identifier_ p_state rand_bytes #ord_leq_rand_bytes_time #identifier_rand = {
-//    base_ = parseable_serializeable_bytes_p_state;
-//    to_id_ = (fun state -> state.idn2);
-// }
-
-
 val new_idn1: principal -> traceful nat
 let new_idn1 prin = 
   compute_new_id #p_state #has_identifier_p_state_1 prin
-//  compute_new_id_gen #p_state #nat #_ #_ #has_identifier_p_state_1 prin
 
 val new_idn2: principal -> traceful nat
 let new_idn2 prin = 
   compute_new_id #p_state #has_identifier_p_state_2 prin
-//  compute_new_id_gen #p_state #nat #_ #_ #has_identifier_p_state_2 prin
 
 
 (*** The Protocol ***)
@@ -308,15 +277,6 @@ let full_state_pred_forall_session_intro
     introduce (sid_i, sess_i) `List.memP` full_st /\ sid_i <> sid /\ Snoc? sess_i ==> p sid_i sess_i 
     with _ . pf sid_i sess_i
   )
-
-
-
-let memP_singleton (#a:Type) (x: a) (y:a):
-  Lemma
-  ( y `memP` (Snoc Nil x) ==> x == y
-  )
-  = normalize_term_spec (memP #a)
-
 
 
 let rec session_parse_all 

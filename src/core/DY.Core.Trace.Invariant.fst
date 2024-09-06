@@ -92,12 +92,6 @@ type state_predicate (cinvs:crypto_invariants) = {
 
 // convenience functions lifting the session and full state predicates to `option`
 // (no restriction for `None`)
-// val session_pred_: {|cinvs: crypto_invariants|} -> {|sp:state_predicate cinvs|} -> trace -> option session_raw -> principal -> state_id -> state_raw -> prop
-// let session_pred_ #cinvs #sp  tr session prin sid content =
-//   match session with
-//   | None -> True
-//   | Some sess -> sp.session_pred tr sess prin sid content
-
 val full_state_pred_: {|cinvs: crypto_invariants|} -> {|sp:state_predicate cinvs|} -> trace -> option full_state_raw -> principal -> state_id -> state_raw -> prop
 let full_state_pred_ #cinvs #sp tr full_state prin sid content =
   match full_state with
@@ -164,7 +158,6 @@ let full_state_pred {|invs:protocol_invariants|} = invs.trace_invs.state_pred.fu
 let state_pred_knowable {|invs:protocol_invariants|} = invs.trace_invs.state_pred.pred_knowable
 let state_pred_later {|invs:protocol_invariants|} = invs.trace_invs.state_pred.pred_later
 let session_pred_grows {|invs:protocol_invariants|} = invs.trace_invs.state_pred.session_pred_grows
-// let session_pred_opt {|invs:protocol_invariants|} = session_pred_ #_ #invs.trace_invs.state_pred
 let session_pred_later {|invs:protocol_invariants|} = session_pred_later_ #invs.crypto_invs #invs.trace_invs.state_pred
 let full_state_pred_opt {|invs:protocol_invariants|} = full_state_pred_ #_ #invs.trace_invs.state_pred
 let global_state_pred {|invs:protocol_invariants|} = global_state_pred_ #invs.crypto_invs #invs.trace_invs.state_pred

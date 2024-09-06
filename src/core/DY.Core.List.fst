@@ -72,5 +72,14 @@ let rec memP (#a:Type) (m:a) (xs:rev_list a) : prop =
   | Snoc init last -> 
       last == m \/ memP m init
 
+
+let memP_singleton (#a:Type) (x: a) (y:a):
+  Lemma
+  ( y `memP` (Snoc Nil x) ==> x == y
+  )
+  = normalize_term_spec (memP #a)
+
+
+
 let forall_rev_list (#a:Type) (xs: rev_list a) (p: a -> prop) : prop =
   forall x. x `memP` xs ==> p x

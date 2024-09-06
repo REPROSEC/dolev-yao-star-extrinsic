@@ -219,6 +219,71 @@ let get_session_some_get_state_some (p:principal) (sid:state_id) (tr:trace):
   ]
   = () 
 
+let rec sessions_history
+  (tr:trace) (p:principal) (sid:state_id):
+  Lemma
+  (requires has_session_for tr p sid
+  )
+  (ensures (
+    let Snoc init last = access_session tr p sid in
+
+    match init with
+    | Nil -> True
+    | _ -> 
+      let tr_before =(tr `prefix_before_event` (SetState p sid last)) in
+    has_session_for tr_before p sid
+    /\ init = access_session tr_before p sid
+  ))
+  (decreases (length tr))
+  = 
+  let Snoc init last = access_session tr p sid in
+  match init with
+  | Nil -> ()
+  | _ -> (
+    match tr with 
+    | Nil -> ()
+    | Snoc tr_init (SetState p' sid' cont') -> (
+        if p' = p && sid' = sid
+        then (
+      let tr_before =(tr `prefix_before_event` (SetState p sid last)) in
+      sessions_history tr_before p sid
+   )
+      else sessions_history tr_init p sid
+  )
+    | Snoc tr_init _ -> sessions_history tr_init p sid
+    )
+
+
+let rec session_mem_state_was_set
+  (tr:trace) (p:principal) (sid:state_id) (sess:session_raw) (cont:state_raw):
+  Lemma
+  (requires (
+     has_session_for tr p sid /\
+     sess = access_session tr p sid /\
+     cont `memP` sess
+  ))
+  (ensures (
+     let Snoc _ last = access_session tr p sid in
+
+     if cont = last
+     then True
+     else
+     state_was_set (tr `prefix_before_event` (SetState p sid last)) p sid cont
+  ))
+  (decreases length tr)
+  = 
+     let Snoc init last = access_session tr p sid in
+     if last = cont
+     then ()
+     else (
+     memP_singleton  last cont;
+     assert(Snoc? init);
+        sessions_history tr p sid;
+     session_mem_state_was_set (tr `prefix_before_event` (SetState p sid last)) p sid init cont
+     )
+
+
+
 (*** Relation of get_state, get_session and get_full_state ***)
 
 
