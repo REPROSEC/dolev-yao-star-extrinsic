@@ -1,17 +1,16 @@
 module PreOrd
 
-/// The Ord Typeclass
-/// -----------------
+/// A Typeclass for a total Preorder
+/// ---------------------------------
 ///
-/// * total order defined by a "less or equal" operator ``leq_``
-/// * containing proofs that ``leq_`` is a total order
-///   (reflexivity ``refl``, totality ``total_``, anti-symmetry ``anti_symm``, transitivity ``trans`` )
+/// * preorder defined by a "less or equal" operator ``leq_``
+/// * containing proofs that ``leq_`` is a total preorder
+///   (reflexivity ``refl``, totality ``total_`` and  transitivity ``trans`` )
 
-class ord_leq (a:eqtype) =
+class preord_leq (a:eqtype) =
   { leq_: a -> a -> bool
   ; refl: (x:a) -> Lemma (x `leq_` x)
   ; total_: (x:a) -> (y:a) -> Lemma (x `leq_` y \/ y `leq_` x)
-  //; anti_symm: (x:a) -> (y:a) -> Lemma (x `leq_` y /\ y `leq_` x ==> x = y)
   ; trans: (x:a) -> (y:a) -> (z:a) ->  Lemma (x `leq_` y /\ y `leq_` z ==> x `leq_` z)
   }
 
@@ -19,23 +18,49 @@ class ord_leq (a:eqtype) =
 /// comparison functions derived from ``leq_``
 /// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ///
-/// corresponding to "<", "<=", ">" and ">="
+/// corresponding to "<", "<="
 
-let lt (#a:eqtype){|ord_leq a|} (x y : a) : bool =
+let lt (#a:eqtype){|preord_leq a|} (x y : a) : bool =
   match (leq_ x y, x = y) with
   | (true, false) -> true
   | _ -> false
 
-let leq (#a:eqtype){|ord_leq a|} (x y : a) : bool = leq_ x y
+let leq (#a:eqtype){|preord_leq a|} (x y : a) : bool = leq_ x y
 
-let lt_implies_leq {|ord_leq 'a|} (x y : 'a) :
+
+/// the preorder properties as separate lemmas
+/// (needed for helpful SMTPats)
+
+let reflexivity {|preord_leq 'a |} (x : 'a)
+  : Lemma (x `leq` x)
+    [SMTPat (x `leq` x)]
+  = refl x
+
+let totality {|preord_leq 'a|} (x y:'a)
+  : Lemma (x `leq` y \/ y `leq` x)
+    [SMTPat (x `leq`y)]
+    = total_ x y
+
+let transitivity {| preord_leq 'a |} (x y z : 'a)
+  : Lemma (x `leq` y /\ y `leq` z ==> x `leq` z)
+  [SMTPat (x `leq` y); SMTPat (y `leq` z)]
+  = trans x y z
+
+let transitivity_forall #a {| preord_leq a |} unit
+  : Lemma (forall (x y z : a). x `leq` y /\ y `leq` z ==> x `leq` z )
+= ()
+
+
+/// Properties
+
+let lt_implies_leq {|preord_leq 'a|} (x y : 'a) :
   Lemma 
   (requires x `lt` y)
   (ensures x `leq` y /\ x <> y)
   [SMTPat (x `lt` y)]
   = ()
 
-let leq_is_lt_or_equal {|ord_leq 'a|} (x y : 'a) :
+let leq_is_lt_or_equal {|preord_leq 'a|} (x y : 'a) :
   Lemma
   (requires
      x `leq` y
@@ -47,39 +72,13 @@ let leq_is_lt_or_equal {|ord_leq 'a|} (x y : 'a) :
   [SMTPat (x `leq` y)]
   = ()
 
-/// the total order properties as separate lemmas
-/// (needed for helpful SMTPats)
 
-let reflexivity {|ord_leq 'a |} (x : 'a)
-  : Lemma (x `leq` x)
-    [SMTPat (x `leq` x)]
-  = refl x
-
-let totality {| ord_leq 'a |} (x y : 'a)
-  : Lemma (x `leq` y \/ y `leq` x)
-  [SMTPat (x `leq` y); SMTPat (y `leq` x)]
-  = total_ x y
-
-// let anti_symmetry #a {| oa: ord_leq a |} (x y : a)
-//   : Lemma (x `leq` y /\ y `leq` x ==> x = y)
-//   [SMTPat (leq #a #oa x  y)] //; SMTPat (y `leq` x)]
-//  = anti_symm x y
-
-let transitivity {| ord_leq 'a |} (x y z : 'a)
-  : Lemma (x `leq` y /\ y `leq` z ==> x `leq` z)
-  [SMTPat (x `leq` y); SMTPat (y `leq` z)]
-  = trans x y z
-
-let transitivity_forall #a {| ord_leq a |} unit
-  : Lemma (forall (x y z : a). x `leq` y /\ y `leq` z ==> x `leq` z )
-= ()
-
-let transitivity_lt {| ord_leq 'a |} (x y z : 'a)
+let transitivity_lt {| preord_leq 'a |} (x y z : 'a)
   : Lemma (x `lt` y /\ y `lt` z ==> x `lt` z)
   [SMTPat (x `lt` y); SMTPat (y `lt` z)]
   = admit()
 
-let transitivity_leq_lt {|ord_leq 'a|} (x y z : 'a)
+let transitivity_leq_lt {|preord_leq 'a|} (x y z : 'a)
   : Lemma 
     (requires
        x `leq` y /\ y `lt` z
@@ -90,17 +89,19 @@ let transitivity_leq_lt {|ord_leq 'a|} (x y z : 'a)
     = () 
 
 
-let lt_not_eq {|ord_leq 'a|} (x y : 'a)
+let lt_not_eq {|preord_leq 'a|} (x y : 'a)
   : Lemma 
     (requires x `lt` y)
     (ensures x <> y)
     [SMTPat (x `lt` y)]
     = ()
 
-let max {| ord_leq 'a |} (x y : 'a) =
+/// Maximum
+
+let max {| preord_leq 'a |} (x y : 'a) =
   if x `leq` y then y else x
 
-let max_is_largest {|ord_leq 'a|} (x y :'a) :
+let max_is_largest {|preord_leq 'a|} (x y :'a) :
   Lemma (x `leq` max x y /\ y `leq` max x y)
   = ()
 
@@ -110,21 +111,19 @@ let max_is_largest {|ord_leq 'a|} (x y :'a) :
 /// Int
 /// ~~~
 
-instance ord_leq_int : ord_leq int =
+instance preord_leq_int : preord_leq int =
   { leq_ = (<=)
   ; refl = (fun _ -> ())
   ; total_ = (fun _ _ -> ())
-  // ; anti_symm = (fun _ _ -> ())
   ; trans = (fun _ _ _ -> ())
   }
 
 /// Nat
 /// ~~~
 
-instance ord_leq_nat : ord_leq nat =
+instance preord_leq_nat : preord_leq nat =
   { leq_ = (<=)
   ; refl = (fun _ -> ())
   ; total_ = (fun _ _ -> ())
-  // ; anti_symm = (fun _ _ -> ())
   ; trans = (fun _ _ _ -> ())
   }
