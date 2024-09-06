@@ -22,7 +22,6 @@ val initiator_authentication:
     event_triggered_at tr i alice (Initiate2 alice bob gx gy k)
   )
   (ensures 
-    (exists alice_si. is_corrupt tr (principal_state_label alice alice_si)) \/ 
     is_corrupt tr (principal_label bob) \/
     (exists y. event_triggered (prefix tr i) bob (Respond1 alice bob gx gy y) /\
     k == dh y gx)
@@ -40,7 +39,6 @@ val responder_authentication:
   )
   (ensures 
     is_corrupt tr (principal_label alice) \/ 
-    (exists bob_si. is_corrupt tr (principal_state_label bob bob_si)) \/
     event_triggered (prefix tr i) alice (Initiate2 alice bob gx gy k)
   )
 let responder_authentication tr i alice bob gx gy k = ()

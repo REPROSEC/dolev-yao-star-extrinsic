@@ -182,7 +182,7 @@ val decode_and_verify_message2_proof:
     | Some res -> (
       let sig_msg = SigMsg2 {alice; gx=(dh_pk x); gy=res.gy} in
       is_publishable tr res.gy /\
-      (is_corrupt tr (principal_state_label alice alice_si) \/ is_corrupt tr (principal_label bob) \/
+      (is_corrupt tr (principal_label bob) \/
       (exists y. event_triggered tr bob (Respond1 alice bob (dh_pk x) res.gy y)))
     )
     | None -> True
@@ -199,7 +199,7 @@ let decode_and_verify_message2_proof tr msg2_bytes alice alice_si bob x pk_b =
       // It just shows what we need to show to prove the lemma.
       assert(is_publishable tr res.gy);
       
-      assert(is_corrupt tr (principal_label alice) \/
+      assert(
         is_corrupt tr (principal_label bob) \/
         (exists y. res.gy == dh_pk y /\ event_triggered tr bob (Respond1 alice bob gx gy y))
       );
@@ -266,7 +266,7 @@ val decode_and_verify_message3_proof:
     match decode_and_verify_message3 msg3_bytes bob gx gy y pk_a with
     | Some res -> (
       let sig_msg = SigMsg3 {bob; gx; gy} in
-      (is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_state_label bob bob_si) \/
+      (is_corrupt tr (principal_label alice) \/
       (exists x. gx == dh_pk x /\ event_triggered tr alice (Initiate2 alice bob gx gy (dh x gy))))
     )
     | None -> True
