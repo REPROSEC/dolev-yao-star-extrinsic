@@ -35,9 +35,9 @@ let rec attacker_knows_aux step tr msg =
     ) \/
     // - states that the attacker has corrupt
     (
-      exists prin sess_id.
-        is_corrupt tr (principal_state_label prin sess_id) /\
-        state_was_set tr prin sess_id msg
+      exists time prin sess_id.
+        event_exists tr (Corrupt time) /\
+        event_at tr time (SetState prin sess_id msg)
     ) \/
     // - public literals
     (
@@ -193,16 +193,17 @@ let move_requires_4 #a #b #c #d #p #q pf x y z w =
 
 val corrupted_state_is_publishable:
   {|protocol_invariants|} ->
-  tr:trace -> prin:principal -> sess_id:state_id -> content:bytes ->
+  tr:trace -> time:timestamp -> prin:principal -> sess_id:state_id -> content:bytes ->
   Lemma
   (requires
-    is_corrupt tr (principal_state_label prin sess_id) /\
-    state_was_set tr prin sess_id content /\
+    event_exists tr (Corrupt time) /\
+    event_at tr time (SetState prin sess_id content) /\
     trace_invariant tr
   )
   (ensures is_publishable tr content)
-let corrupted_state_is_publishable #invs tr prin sess_id content =
-  state_is_knowable_by tr prin sess_id content
+let corrupted_state_is_publishable #invs tr time prin sess_id content =
+  state_is_knowable_by tr prin sess_id content;
+  is_corrupt_state_pred_label tr (principal_state_content_label_pred prin sess_id content) time prin sess_id content
 
 #push-options "--z3rlimit 25"
 val attacker_only_knows_publishable_values_aux:
@@ -218,7 +219,7 @@ let rec attacker_only_knows_publishable_values_aux #invs step tr msg =
   if step = 0 then (
     FStar.Classical.forall_intro   (FStar.Classical.move_requires   (msg_sent_on_network_are_publishable tr));
     FStar.Classical.forall_intro   (FStar.Classical.move_requires   (msg_sent_on_network_are_publishable tr));
-    FStar.Classical.forall_intro_3 (FStar.Classical.move_requires_3 (corrupted_state_is_publishable tr));
+    FStar.Classical.forall_intro_4 (                move_requires_4 (corrupted_state_is_publishable tr));
     FStar.Classical.forall_intro   (FStar.Classical.move_requires   (literal_to_bytes_is_publishable tr))
   ) else (
     FStar.Classical.forall_intro   (FStar.Classical.move_requires   (attacker_only_knows_publishable_values_aux (step-1) tr));

@@ -45,7 +45,7 @@ type state_predicate {|crypto_invariants|} = {
     Lemma
     (requires pred tr prin sess_id content)
     (ensures
-      is_knowable_by (principal_state_label prin sess_id) tr content
+      is_knowable_by (principal_state_content_label prin sess_id content) tr content
     )
   ;
 }
@@ -187,7 +187,7 @@ val state_is_knowable_by:
     trace_invariant tr /\
     state_was_set tr prin sess_id content
   )
-  (ensures is_knowable_by (principal_state_label prin sess_id) tr content)
+  (ensures is_knowable_by (principal_state_content_label prin sess_id content) tr content)
 let state_is_knowable_by #invs tr prin sess_id content =
   state_pred.pred_knowable tr prin sess_id content
 

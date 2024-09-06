@@ -39,6 +39,10 @@ type principal = string
 
 type state_id = { the_id: nat; }
 
+/// a type macro for timestamps (indices on the trace)
+
+type timestamp = nat
+
 /// The type for events in the trace.
 
 noeq
@@ -48,7 +52,7 @@ type trace_event_ (label_t:Type) =
   // A random number has been generated, with some usage and label.
   | RandGen: usg:usage -> label_t -> len:nat{len <> 0} -> trace_event_ label_t
   // A state of a principal has been corrupt.
-  | Corrupt: prin:principal -> sess_id:state_id -> trace_event_ label_t
+  | Corrupt: time:timestamp -> trace_event_ label_t
   // A principal stored some state.
   | SetState: prin:principal -> sess_id:state_id -> content:bytes -> trace_event_ label_t
   // A custom and protocol-specific event has been triggered by a principal.
