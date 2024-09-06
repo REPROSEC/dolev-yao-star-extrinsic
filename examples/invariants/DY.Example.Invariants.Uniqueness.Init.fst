@@ -4,7 +4,7 @@ open Comparse
 open DY.Core
 module L = DY.Lib
 open DY.Example.Invariants.Uniqueness
-open DY.Example.Invariants.Uniqueness.Identifier
+open DY.Example.Invariants.Uniqueness.Identifier.General
 
 #set-options "--fuel 1 --ifuel 1"
 
@@ -17,8 +17,7 @@ val init_invariant: tr:trace -> p:principal ->
     (ensures  (
       let (_,tr_out) = init p tr in
       trace_invariant tr_out
-      )
-    )
+    ))
 let init_invariant tr p =
   let (idn1, tr_after_new_idn1) = new_idn1 p tr in
   let (idn2, tr_after_new_idn2) = new_idn2 p tr in
@@ -46,10 +45,9 @@ let init_invariant tr p =
            full_state_mem_get_session_get_state_forall p tr_after_new_idn2;
            match parse p_state last_i with
            | None -> session_parse_all tr p sid_i last_i
-           | Some last_i -> 
-               
-              new_idn_does_not_appear_in_full_state #p_state #has_identifier_p_state_1 p tr;
-               new_idn_does_not_appear_in_full_state #p_state #has_identifier_p_state_2 p tr
+           | Some last_i ->                
+               new_idn_does_not_appear_in_full_state #_ #_ #_ #_ #has_identifier_p_state_1 p tr;
+               new_idn_does_not_appear_in_full_state #_ #_ #_ #_ #has_identifier_p_state_2 p tr
         )
 
 

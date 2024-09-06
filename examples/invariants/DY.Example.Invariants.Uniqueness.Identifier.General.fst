@@ -69,11 +69,11 @@ instance identifier_rand (u:usage) (l:label) (len:nat{len <> 0}): identifier ran
 // we can say that the "idn" field should be an idenfier for the state with:
 // instance has_identifier state_t nat = {
 //   base = ...
-//   to_id_ = (fun state -> state.idn)
+//   to_id = (fun state -> state.idn)
 // }
 class has_identifier (state_t:Type) (id_t:eqtype) {|preord_leq id_t|} {|identifier id_t|} = {
-  base_: parseable_serializeable bytes state_t;
-  to_id_: state_t -> id_t;
+  base: parseable_serializeable bytes state_t;
+  to_id: state_t -> id_t;
 }
 
 (*** Compute a new identifier ***)
@@ -88,13 +88,13 @@ let rec find_max_id_in_session  (#state_t:Type) (#id_t:eqtype) {|preord_leq id_t
     match sess with
     | Nil -> None
     | Snoc rest state -> 
-        match parse state_t #hid.base_ state with
+        match parse state_t #hid.base state with
         | None -> find_max_id_in_session #state_t #_ #_ #_ #hid rest
         | Some st ->
             match find_max_id_in_session #state_t #_ #_ #_ #hid rest with
-            | None -> Some (to_id_ st)
+            | None -> Some (to_id st)
             | Some cur_max ->
-                Some (max (hid.to_id_ st) cur_max)
+                Some (max (hid.to_id st) cur_max)
 
 let rec find_max_id_in_full_state (#state_t:Type) (#id_t:eqtype) {|preord_leq id_t|} {|identifier id_t|} {|hid: has_identifier state_t id_t|}  
   (st:full_state_raw): option id_t = 
@@ -132,7 +132,7 @@ let rec find_max_id_in_session_none
     : Lemma 
     (requires None? (find_max_id_in_session #state_t #id_t sess))
     (ensures
-       forall_rev_list sess (fun st -> None? (parse state_t #hid.base_ st))
+       forall_rev_list sess (fun st -> None? (parse state_t #hid.base st))
     )
 = match sess with
   | Nil -> ()
@@ -142,7 +142,7 @@ let rec find_max_id_in_session_none
 let forall_ids  (#state_t:Type) (#id_t:eqtype) {|preord_leq id_t|} {|identifier id_t|} {|hid:has_identifier state_t id_t|}  
    (sess:(session_raw)) (p: id_t -> bool) : prop =
   forall_rev_list sess 
-    (fun state -> prop_state_on #_ #state_t #hid.base_ hid.to_id_ p state )
+    (fun state -> prop_state_on #_ #state_t #hid.base hid.to_id p state )
 
 #push-options "--fuel 4 --ifuel 4"
 val max_id_in_session_largest:
@@ -164,13 +164,13 @@ let rec max_id_in_session_largest #state_t #id_t #_ #_ #hid sess =
       | Snoc Nil state -> ()
       | Snoc rest state -> 
           max_id_in_session_largest #state_t #id_t rest;
-          match parse state_t #hid.base_ state with
+          match parse state_t #hid.base state with
           | None -> ()
           | Some st ->
               match find_max_id_in_session #state_t #id_t rest with
               | None -> find_max_id_in_session_none #state_t #id_t rest
               | Some m_idn_rest ->
-               max_is_largest (hid.to_id_ st) m_idn_rest
+               max_is_largest (hid.to_id st) m_idn_rest
 #pop-options
 
 
@@ -182,7 +182,7 @@ let rec find_max_id_in_full_state_none
   (ensures
      forall_sessions f_st 
        (fun sid sess ->
-         forall_rev_list sess (fun st -> None? (parse state_t #hid.base_ st))
+         forall_rev_list sess (fun st -> None? (parse state_t #hid.base st))
        )
   )
   = match f_st with
@@ -252,7 +252,7 @@ p:principal -> tr:trace ->
 let new_idn_does_not_appear_in_full_state #state_t #id_t #_ #_ #hid p tr =
   let f_st = access_full_state tr p in
   let (n_id,_) = compute_new_id #state_t #id_t p tr in
-  max_id_in_full_state_largest #state_t #id_t hid.to_id_ f_st;
+  max_id_in_full_state_largest #state_t #id_t hid.to_id f_st;
   match find_max_id_in_full_state #state_t #id_t f_st with
   | None ->
       find_max_id_in_full_state_none #state_t #id_t f_st

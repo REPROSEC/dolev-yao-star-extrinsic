@@ -6,7 +6,7 @@ module L = DY.Core.Label
 module Lib = DY.Lib
 module List = FStar.List.Tot.Base
 
-open DY.Example.Invariants.Uniqueness.Identifier
+open DY.Example.Invariants.Uniqueness.Identifier.General
 
 #set-options "--fuel 1 --ifuel 1"
 
@@ -51,23 +51,23 @@ instance parseable_serializeable_bytes_p_event: parseable_serializeable bytes p_
 /// Saying that idn1 and idn2 are supposed to be identifiers of the state
 /// with this we can call [compute_new_id] for both of them to generate a fresh identifier
 /// and we get the corresponding properties (in particular [new_idn_does_not_appear_in_full_state])
-instance has_identifier_p_state_1: has_identifier p_state = {
+instance has_identifier_p_state_1: has_identifier p_state nat #_ #identifier_nat = {
   base = parseable_serializeable_bytes_p_state;
   to_id = fun state -> state.idn1
 }
 
-instance has_identifier_p_state_2: has_identifier p_state = {
+instance has_identifier_p_state_2: has_identifier p_state nat #_ #identifier_nat = {
   base = parseable_serializeable_bytes_p_state;
   to_id = fun state -> state.idn2
 }
 
 val new_idn1: principal -> traceful nat
 let new_idn1 prin = 
-  compute_new_id #p_state #has_identifier_p_state_1 prin
+  compute_new_id #_ #_ #_ #_ #has_identifier_p_state_1 prin
 
 val new_idn2: principal -> traceful nat
 let new_idn2 prin = 
-  compute_new_id #p_state #has_identifier_p_state_2 prin
+  compute_new_id #_ #_ #_ #_ #has_identifier_p_state_2 prin
 
 
 (*** The Protocol ***)
