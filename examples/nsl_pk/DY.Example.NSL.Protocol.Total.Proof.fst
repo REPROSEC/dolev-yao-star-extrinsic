@@ -14,6 +14,24 @@ open DY.Example.NSL.Protocol.Stateful
 
 (*** Cryptographic invariants ***)
 
+val long_decryption_key_label:
+  principal ->
+  label
+let long_decryption_key_label prin =
+  principal_tag_label prin "DY.Lib.State.PrivateKeys"
+
+val nsl_session_label:
+  principal ->
+  label
+let nsl_session_label prin =
+  principal_tag_label prin "NSL.Session"
+
+val nsl_nonce_label:
+  principal ->
+  label
+let nsl_nonce_label prin =
+  join (long_decryption_key_label prin) (nsl_session_label prin)
+
 instance crypto_usages_nsl : crypto_usages = default_crypto_usages
 
 #push-options "--ifuel 2 --fuel 0"
@@ -24,22 +42,22 @@ let crypto_predicates_nsl = {
   pkenc_pred = {
     pred = (fun tr pk msg ->
       get_sk_usage pk == PkKey "NSL.PublicKey" empty /\
-      (exists prin. get_sk_label tr pk == principal_label prin /\ (
+      (exists prin. get_sk_label tr pk == long_decryption_key_label prin /\ (
         match parse message msg with
         | Some (Msg1 msg1) -> (
           let (alice, bob) = (msg1.alice, prin) in
           event_triggered tr alice (Initiate1 alice bob msg1.n_a) /\
-          get_label tr msg1.n_a == join (principal_label alice) (principal_label bob)
+          get_label tr msg1.n_a == join (nsl_nonce_label alice) (nsl_nonce_label bob)
         )
         | Some (Msg2 msg2) -> (
           let (alice, bob) = (prin, msg2.bob) in
           event_triggered tr bob (Respond1 alice bob msg2.n_a msg2.n_b) /\
-          get_label tr msg2.n_b == join (principal_label alice) (principal_label bob)
+          get_label tr msg2.n_b == join (nsl_nonce_label alice) (nsl_nonce_label bob)
         )
         | Some (Msg3 msg3) -> (
           let bob = prin in
           exists alice n_a.
-            get_label tr msg3.n_b `can_flow tr` (principal_label alice) /\
+            get_label tr msg3.n_b `can_flow tr` (nsl_nonce_label alice) /\
             event_triggered tr alice (Initiate2 alice bob n_a msg3.n_b)
         )
         | None -> False
@@ -67,19 +85,21 @@ val compute_message1_proof:
     // From the stateful code
     event_triggered tr alice (Initiate1 alice bob n_a) /\
     // From random generation
-    is_secret (join (principal_label alice) (principal_label bob)) tr n_a  /\
+    is_secret (join (nsl_nonce_label alice) (nsl_nonce_label bob)) tr n_a  /\
     // From random generation
-    is_secret (principal_label alice) tr nonce /\
+    is_secret (long_decryption_key_label alice) tr nonce /\
     // From random generation
     PkNonce? (get_usage nonce) /\
     // From PKI invariants
-    is_encryption_key (PkKey "NSL.PublicKey" empty) (principal_label bob) tr pk_b
+    is_encryption_key (PkKey "NSL.PublicKey" empty) (long_decryption_key_label bob) tr pk_b
   )
   (ensures is_publishable tr (compute_message1 alice bob pk_b n_a nonce))
 let compute_message1_proof tr alice bob pk_b n_a nonce =
   let msg = Msg1 {n_a; alice;} in
-  serialize_wf_lemma message (is_knowable_by (principal_label alice) tr) msg;
-  serialize_wf_lemma message (is_knowable_by (principal_label bob) tr) msg
+  assert(join (nsl_nonce_label alice) (nsl_nonce_label bob) `can_flow tr` (nsl_nonce_label alice));
+  assert(join (nsl_nonce_label alice) (nsl_nonce_label bob) `can_flow tr` (nsl_nonce_label bob));
+  serialize_wf_lemma message (is_knowable_by (long_decryption_key_label alice) tr) msg;
+  serialize_wf_lemma message (is_knowable_by (long_decryption_key_label bob) tr) msg
 
 // If bob successfully decrypt the first message,
 // then n_a is knownable both by alice (in the message) and bob (the principal)
@@ -93,7 +113,7 @@ val decode_message1_proof:
   Lemma
   (requires
     // From PrivateKeys invariants
-    is_decryption_key (PkKey "NSL.PublicKey" empty) (principal_label bob) tr sk_b /\
+    is_decryption_key (PkKey "NSL.PublicKey" empty) (long_decryption_key_label bob) tr sk_b /\
     // From the network
     bytes_invariant tr msg_cipher
   )
@@ -101,10 +121,11 @@ val decode_message1_proof:
     match decode_message1 bob msg_cipher sk_b with
     | None -> True
     | Some msg1 -> (
-      is_knowable_by (join (principal_label msg1.alice) (principal_label bob)) tr msg1.n_a
+      is_knowable_by (join (nsl_nonce_label msg1.alice) (nsl_nonce_label bob)) tr msg1.n_a
     )
   ))
 let decode_message1_proof tr bob msg_cipher sk_b =
+  assume(forall p. (long_decryption_key_label bob) == (long_decryption_key_label p) ==> bob == p);
   match decode_message1 bob msg_cipher sk_b with
   | None -> ()
   | Some msg1 ->
@@ -121,23 +142,25 @@ val compute_message2_proof:
     // From the stateful code
     event_triggered tr bob (Respond1 msg1.alice bob msg1.n_a n_b) /\
     // From decode_message1_proof
-    is_knowable_by (join (principal_label msg1.alice) (principal_label bob)) tr msg1.n_a /\
+    is_knowable_by (join (nsl_nonce_label msg1.alice) (nsl_nonce_label bob)) tr msg1.n_a /\
     // From the random generation
-    is_secret (join (principal_label msg1.alice) (principal_label bob)) tr n_b /\
+    is_secret (join (nsl_nonce_label msg1.alice) (nsl_nonce_label bob)) tr n_b /\
     // From the random generation
-    is_secret (principal_label bob) tr nonce /\
+    is_secret (long_decryption_key_label bob) tr nonce /\
     // From the random generation
     PkNonce? (get_usage nonce) /\
     // From the PKI
-    is_encryption_key (PkKey "NSL.PublicKey" empty) (principal_label msg1.alice) tr pk_a
+    is_encryption_key (PkKey "NSL.PublicKey" empty) (long_decryption_key_label msg1.alice) tr pk_a
   )
   (ensures
     is_publishable tr (compute_message2 bob msg1 pk_a n_b nonce)
   )
 let compute_message2_proof tr bob msg1 pk_a n_b nonce =
   let msg = Msg2 {n_a = msg1.n_a;  n_b; bob;} in
-  serialize_wf_lemma message (is_knowable_by (principal_label msg1.alice) tr) msg;
-  serialize_wf_lemma message (is_knowable_by (principal_label bob) tr) msg
+  assert(join (nsl_nonce_label msg1.alice) (nsl_nonce_label bob) `can_flow tr` (nsl_nonce_label msg1.alice));
+  assert(join (nsl_nonce_label msg1.alice) (nsl_nonce_label bob) `can_flow tr` (nsl_nonce_label bob));
+  serialize_wf_lemma message (is_knowable_by (nsl_nonce_label msg1.alice) tr) msg;
+  serialize_wf_lemma message (is_knowable_by (nsl_nonce_label bob) tr) msg
 
 // If alice successfully decrypt the second message,
 // then n_b is knownable both by alice (in the message) and bob (the principal)
@@ -151,9 +174,9 @@ val decode_message2_proof:
   Lemma
   (requires
     // From the NSL state invariant
-    is_secret (join (principal_label alice) (principal_label bob)) tr n_a /\
+    is_secret (join (nsl_nonce_label alice) (nsl_nonce_label bob)) tr n_a /\
     // From the PrivateKeys invariant
-    is_decryption_key (PkKey "NSL.PublicKey" empty) (principal_label alice) tr sk_a /\
+    is_decryption_key (PkKey "NSL.PublicKey" empty) (long_decryption_key_label alice) tr sk_a /\
     // From the network
     bytes_invariant tr msg_cipher
   )
@@ -161,14 +184,15 @@ val decode_message2_proof:
     match decode_message2 alice bob msg_cipher sk_a n_a with
     | None -> True
     | Some msg2 -> (
-      is_knowable_by (join (principal_label alice) (principal_label bob)) tr msg2.n_b /\ (
-      (is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob)) \/ (
+      is_knowable_by (join (nsl_nonce_label alice) (nsl_nonce_label bob)) tr msg2.n_b /\ (
+      (is_corrupt tr (nsl_nonce_label alice) \/ is_corrupt tr (nsl_nonce_label bob)) \/ (
         event_triggered tr bob (Respond1 alice bob n_a msg2.n_b)
       )
       )
     )
   ))
 let decode_message2_proof tr alice bob msg_cipher sk_a n_a =
+  assume(forall p. (long_decryption_key_label alice) == (long_decryption_key_label p) ==> alice == p);
   match decode_message2 alice bob msg_cipher sk_a n_a with
   | None -> ()
   | Some msg2 -> (
@@ -186,13 +210,13 @@ val compute_message3_proof:
     // From the stateful code
     (exists n_a. event_triggered tr alice (Initiate2 alice bob n_a n_b)) /\
     // From decode_message2_proof
-    is_knowable_by (join (principal_label alice) (principal_label bob)) tr n_b /\
+    is_knowable_by (join (nsl_nonce_label alice) (nsl_nonce_label bob)) tr n_b /\
     // From the random generation
-    is_secret (principal_label alice) tr nonce /\
+    is_secret (long_decryption_key_label alice) tr nonce /\
     // From the random generation
     PkNonce? (get_usage nonce) /\
     // From the PKI
-    is_encryption_key (PkKey "NSL.PublicKey" empty) (principal_label bob) tr pk_b
+    is_encryption_key (PkKey "NSL.PublicKey" empty) (long_decryption_key_label bob) tr pk_b
   )
   (ensures
     is_publishable tr (compute_message3 alice bob pk_b n_b nonce)
@@ -200,8 +224,8 @@ val compute_message3_proof:
 let compute_message3_proof tr alice bob pk_b n_b nonce =
   assert(exists alice n_a. event_triggered tr alice (Initiate2 alice bob n_a n_b));
   let msg = Msg3 {n_b;} in
-  serialize_wf_lemma message (is_knowable_by (principal_label alice) tr) msg;
-  serialize_wf_lemma message (is_knowable_by (principal_label bob) tr) msg;
+  serialize_wf_lemma message (is_knowable_by (long_decryption_key_label alice) tr) msg;
+  serialize_wf_lemma message (is_knowable_by (long_decryption_key_label bob) tr) msg;
   let msg3: message3 = {n_b;} in
   assert(msg3.n_b == n_b)
 
@@ -215,9 +239,9 @@ val decode_message3_proof:
   Lemma
   (requires
     // From the NSL state invariant
-    get_label tr n_b == join (principal_label alice) (principal_label bob) /\
+    get_label tr n_b == join (nsl_nonce_label alice) (nsl_nonce_label bob) /\
     // From the PrivateKeys invariant
-    is_decryption_key (PkKey "NSL.PublicKey" empty) (principal_label bob) tr sk_b /\
+    is_decryption_key (PkKey "NSL.PublicKey" empty) (long_decryption_key_label bob) tr sk_b /\
     // From the network
     bytes_invariant tr msg_cipher
   )
@@ -225,14 +249,15 @@ val decode_message3_proof:
     match decode_message3 alice bob msg_cipher sk_b n_b with
     | None -> True
     | Some msg3 -> (
-      (is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob)) \/ (
+      (is_corrupt tr (nsl_nonce_label alice) \/ is_corrupt tr (nsl_nonce_label bob)) \/ (
         (exists alice n_a.
-          get_label tr msg3.n_b `can_flow tr` (principal_label alice) /\
+          get_label tr msg3.n_b `can_flow tr` (nsl_nonce_label alice) /\
           event_triggered tr alice (Initiate2 alice bob n_a n_b))
       )
     )
   ))
 let decode_message3_proof tr alice bob msg_cipher sk_b n_b =
+  assume(forall p. (long_decryption_key_label bob) == (long_decryption_key_label p) ==> bob == p);
   match decode_message3 alice bob msg_cipher sk_b n_b with
   | None -> ()
   | Some msg3 -> (

@@ -52,13 +52,14 @@ val is_private_key_for:
 let is_private_key_for #cinvs tr sk sk_type who =
   match sk_type with
   | PkDec usg -> (
-    is_decryption_key (PkKey usg empty) (principal_label who) tr sk
+    is_decryption_key (PkKey usg empty) (principal_tag_label who "DY.Lib.State.PrivateKeys") tr sk
   )
   | Sign usg -> (
-    is_signature_key (SigKey usg empty) (principal_label who) tr sk
+    is_signature_key (SigKey usg empty) (principal_tag_label who "DY.Lib.State.PrivateKeys") tr sk
   )
 
 // The `#_` at the end is a workaround for FStarLang/FStar#3286
+#push-options "--z3rlimit 10"
 val private_keys_pred: {|crypto_invariants|} -> map_predicate private_key_key private_key_value #_
 let private_keys_pred #cinvs = {
   pred = (fun tr prin sess_id key value ->
@@ -67,13 +68,14 @@ let private_keys_pred #cinvs = {
   pred_later = (fun tr1 tr2 prin sess_id key value -> ());
   pred_knowable = (fun tr prin sess_id key value -> ());
 }
+#pop-options
 
 val has_private_keys_invariant: {|protocol_invariants|} -> prop
 let has_private_keys_invariant #invs =
   has_map_session_invariant private_keys_pred
 
-val private_keys_tag_and_invariant: {|crypto_invariants|} -> string & local_bytes_state_predicate
-let private_keys_tag_and_invariant #ci = (map_types_private_keys.tag, local_state_predicate_to_local_bytes_state_predicate (map_session_invariant private_keys_pred))
+val private_keys_tag_and_invariant: {|crypto_invariants|} -> dtuple2 string local_bytes_state_predicate
+let private_keys_tag_and_invariant #ci = (|map_types_private_keys.tag, local_state_predicate_to_local_bytes_state_predicate (map_session_invariant private_keys_pred)|)
 
 val private_key_type_to_usage:
   private_key_type ->
@@ -92,7 +94,7 @@ let initialize_private_keys = initialize_map private_key_key private_key_value #
 [@@ "opaque_to_smt"]
 val generate_private_key: principal -> state_id -> private_key_type -> traceful (option unit)
 let generate_private_key prin sess_id sk_type =
-  let* sk = mk_rand (private_key_type_to_usage sk_type) (principal_label prin) 64 in //TODO
+  let* sk = mk_rand (private_key_type_to_usage sk_type) (principal_tag_label prin "DY.Lib.State.PrivateKeys") 64 in //TODO
   add_key_value prin sess_id ({ty = sk_type}) ({private_key = sk;})
 
 [@@ "opaque_to_smt"]

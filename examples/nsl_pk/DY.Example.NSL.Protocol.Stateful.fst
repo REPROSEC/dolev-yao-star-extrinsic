@@ -60,7 +60,11 @@ type nsl_global_sess_ids = {
 
 val prepare_msg1: principal -> principal -> traceful state_id
 let prepare_msg1 alice bob =
-  let* n_a = mk_rand NoUsage (join (principal_label alice) (principal_label bob)) 32 in
+  let* n_a = mk_rand NoUsage (
+    join
+      (join (principal_tag_label alice "DY.Lib.State.PrivateKeys") (principal_tag_label alice "NSL.Session"))
+      (join (principal_tag_label bob "DY.Lib.State.PrivateKeys") (principal_tag_label bob "NSL.Session"))
+  ) 32 in
   trigger_event alice (Initiate1 alice bob n_a);*
   let* sess_id = new_session_id alice in
   set_state alice sess_id (InitiatorSentMsg1 bob n_a <: nsl_session);*
@@ -72,7 +76,7 @@ let send_msg1 global_sess_id alice sess_id =
   match st with
   | InitiatorSentMsg1 bob n_a -> (
     let*? pk_b = get_public_key alice global_sess_id.pki (PkEnc "NSL.PublicKey") bob in
-    let* nonce = mk_rand PkNonce (principal_label alice) 32 in
+    let* nonce = mk_rand PkNonce (principal_tag_label alice "DY.Lib.State.PrivateKeys") 32 in
     let msg = compute_message1 alice bob pk_b n_a nonce in
     let* msg_id = send_msg msg in
     return (Some msg_id)
@@ -84,7 +88,11 @@ let prepare_msg2 global_sess_id bob msg_id =
   let*? msg = recv_msg msg_id in
   let*? sk_b = get_private_key bob global_sess_id.private_keys (PkDec "NSL.PublicKey") in
   let*? msg1: message1 = return (decode_message1 bob msg sk_b) in
-  let* n_b = mk_rand NoUsage (join (principal_label msg1.alice) (principal_label bob)) 32 in
+  let* n_b = mk_rand NoUsage (
+    join
+      (join (principal_tag_label msg1.alice "DY.Lib.State.PrivateKeys") (principal_tag_label msg1.alice "NSL.Session"))
+      (join (principal_tag_label bob "DY.Lib.State.PrivateKeys") (principal_tag_label bob "NSL.Session"))
+  ) 32 in
   trigger_event bob (Respond1 msg1.alice bob msg1.n_a n_b);*
   let* sess_id = new_session_id bob in
   set_state bob sess_id (ResponderSentMsg2 msg1.alice msg1.n_a n_b <: nsl_session);*
@@ -96,7 +104,7 @@ let send_msg2 global_sess_id bob sess_id =
   match st with
   | ResponderSentMsg2 alice n_a n_b -> (
     let*? pk_a = get_public_key bob global_sess_id.pki (PkEnc "NSL.PublicKey") alice in
-    let* nonce = mk_rand PkNonce (principal_label bob) 32 in
+    let* nonce = mk_rand PkNonce (principal_tag_label bob "DY.Lib.State.PrivateKeys") 32 in
     let msg = compute_message2 bob {n_a; alice;} pk_a n_b nonce in
     let* msg_id = send_msg msg in
     return (Some msg_id)
@@ -123,7 +131,7 @@ let send_msg3 global_sess_id alice sess_id =
   match st with
   | InitiatorSentMsg3 bob n_a n_b -> (
     let*? pk_b = get_public_key alice global_sess_id.pki (PkEnc "NSL.PublicKey") bob in
-    let* nonce = mk_rand PkNonce (principal_label alice) 32 in
+    let* nonce = mk_rand PkNonce (principal_tag_label alice "DY.Lib.State.PrivateKeys") 32 in
     let msg = compute_message3 alice bob pk_b n_b nonce in
     let* msg_id = send_msg msg in
     return (Some msg_id)

@@ -60,10 +60,10 @@ val is_public_key_for:
 let is_public_key_for #cinvs tr pk pk_type who =
   match pk_type with
   | PkEnc usg -> (
-    is_encryption_key (PkKey usg empty) (principal_label who) tr pk
+    is_encryption_key (PkKey usg empty) (principal_tag_label who "DY.Lib.State.PrivateKeys") tr pk
   )
   | Verify usg -> (
-    is_verification_key (SigKey usg empty) (principal_label who) tr pk
+    is_verification_key (SigKey usg empty) (principal_tag_label who "DY.Lib.State.PrivateKeys") tr pk
   )
 
 // The `#_` at the end is a workaround for FStarLang/FStar#3286
@@ -80,8 +80,8 @@ val has_pki_invariant: {|protocol_invariants|} -> prop
 let has_pki_invariant #invs =
   has_map_session_invariant pki_pred
 
-val pki_tag_and_invariant: {|crypto_invariants|} -> string & local_bytes_state_predicate
-let pki_tag_and_invariant #ci = (map_types_pki.tag, local_state_predicate_to_local_bytes_state_predicate (map_session_invariant pki_pred))
+val pki_tag_and_invariant: {|crypto_invariants|} -> dtuple2 string local_bytes_state_predicate
+let pki_tag_and_invariant #ci = (|map_types_pki.tag, local_state_predicate_to_local_bytes_state_predicate (map_session_invariant pki_pred)|)
 
 (*** PKI API ***)
 
