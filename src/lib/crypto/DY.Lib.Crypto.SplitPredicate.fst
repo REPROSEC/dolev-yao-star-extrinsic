@@ -55,7 +55,7 @@ let split_crypto_predicate_parameters_to_split_function_parameters (params:split
 
   default_global_fun = params.mk_global_pred always_false;
 
-  apply_local_fun = (fun lpred x -> params.apply_local_pred lpred x);
+  apply_local_fun = (fun #tag_set -> params.apply_local_pred);
   apply_global_fun = params.apply_global_pred;
   mk_global_fun = params.mk_global_pred;
   apply_mk_global_fun = params.apply_mk_global_pred;
