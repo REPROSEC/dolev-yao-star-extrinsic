@@ -298,18 +298,18 @@ let mk_rand_get_label #invs usg lab len tr =
 
 /// Usage of random bytestrings.
 
-val mk_rand_get_usage:
+val mk_rand_has_usage:
   {|protocol_invariants|} ->
   usg:usage -> lab:label -> len:nat{len <> 0} -> tr:trace ->
   Lemma
   (ensures (
     let (b, tr_out) = mk_rand usg lab len tr in
-    get_usage b == usg
+    b `has_usage tr_out` usg
   ))
   [SMTPat (mk_rand usg lab len tr); SMTPat (trace_invariant tr)]
-let mk_rand_get_usage #invs usg lab len tr =
+let mk_rand_has_usage #invs usg lab len tr =
   normalize_term_spec mk_rand;
-  normalize_term_spec get_usage
+  normalize_term_spec has_usage
 
 (*** State ***)
 

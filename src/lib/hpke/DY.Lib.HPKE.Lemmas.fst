@@ -82,9 +82,9 @@ let get_hpke_sk_label #cusages pk =
 
 /// Obtain the usage of the corresponding HPKE private key of a HPKE public key.
 
-val get_hpke_sk_usage: {|crypto_usages|} -> bytes -> usage
-let get_hpke_sk_usage #cusages pk =
-  get_kem_sk_usage pk
+val has_hpke_sk_usage: {|crypto_usages|} -> trace -> bytes -> usage -> prop
+let has_hpke_sk_usage #cusages tr pk usg =
+  pk `has_kem_sk_usage tr` usg
 
 /// Type for the HPKE predicate
 
@@ -151,16 +151,16 @@ let hpke_kdf_expand_usage: kdf_expand_crypto_usage = {
 
 val hpke_aead_pred: {|crypto_usages|} -> {|hpke_crypto_invariants|} -> aead_crypto_predicate
 let hpke_aead_pred #cusgs #hpke = {
-  pred = (fun tr key nonce msg ad ->
-    let AeadKey usg data = get_usage key in
+  pred = (fun tr key_usage nonce msg ad ->
+    let AeadKey usg data = key_usage in
     match parse hpke_aead_usage_data data with
     | Some { hpke_usg; info; } ->
       hpke_pred.pred tr (hpke_usg.usage_tag, hpke_usg.usage_data) msg info ad
     | _ ->
       False
   );
-  pred_later = (fun tr1 tr2 key nonce msg ad ->
-    let AeadKey usg data = get_usage key in
+  pred_later = (fun tr1 tr2 key_usage nonce msg ad ->
+    let AeadKey usg data = key_usage in
     match parse hpke_aead_usage_data data with
     | Some { hpke_usg; info; } ->
       hpke_pred.pred_later tr1 tr2 (hpke_usg.usage_tag, hpke_usg.usage_data) msg info ad
@@ -207,12 +207,12 @@ val get_label_hpke_pk:
   [SMTPat (get_label (hpke_pk sk))]
 let get_label_hpke_pk #cu sk = ()
 
-val get_hpke_sk_usage_hpke_pk:
+val has_hpke_sk_usage_hpke_pk:
   {|crypto_usages|} ->
-  sk:bytes ->
+  tr:trace -> sk:bytes -> usg:usage ->
   Lemma
-  (ensures get_hpke_sk_usage (hpke_pk sk) == get_usage sk)
-  [SMTPat (get_hpke_sk_usage (hpke_pk sk))]
+  (ensures (hpke_pk sk) `has_hpke_sk_usage tr` usg == sk `has_usage tr` usg)
+  [SMTPat ((hpke_pk sk) `has_hpke_sk_usage tr` usg)]
 let get_hpke_sk_usage_hpke_pk #cu sk = ()
 
 val get_hpke_sk_label_hpke_pk:
