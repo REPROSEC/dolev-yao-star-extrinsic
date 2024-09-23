@@ -241,7 +241,7 @@ val mk_rand: usg:usage -> lab:label -> len:nat{len <> 0} -> traceful bytes
 let mk_rand usg lab len =
   let* time = get_time in
   add_event (RandGen usg lab len);*
-  return (Rand usg lab len time)
+  return (Rand usg len time)
 
 /// Generating a random bytestrings always preserve the trace invariant.
 
@@ -289,7 +289,7 @@ val mk_rand_get_label:
   Lemma
   (ensures (
     let (b, tr_out) = mk_rand usg lab len tr in
-    get_label b == lab
+    get_label tr_out b == lab
   ))
   [SMTPat (mk_rand usg lab len tr); SMTPat (trace_invariant tr)]
 let mk_rand_get_label #invs usg lab len tr =
@@ -354,10 +354,13 @@ let rec compute_new_session_id_correct prin tr sess_id state_content =
   match tr with
   | Nil -> ()
   | Snoc tr_init evt -> (
-    if evt = SetState prin sess_id state_content then ()
-    else (
-      compute_new_session_id_correct prin tr_init sess_id state_content
-    )
+    match evt with
+    | SetState prin' sess_id' state_content' ->
+      if prin = prin' && sess_id = sess_id' && state_content = state_content' then ()
+      else (
+        compute_new_session_id_correct prin tr_init sess_id state_content
+      )
+    | _ -> compute_new_session_id_correct prin tr_init sess_id state_content
   )
 
 /// Compute a fresh state identifier for a principal.

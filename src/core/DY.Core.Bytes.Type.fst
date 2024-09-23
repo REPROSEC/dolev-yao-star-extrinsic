@@ -62,7 +62,7 @@ and bytes =
   // Public values (strings, numbers, ...)
   | Literal: FStar.Seq.seq FStar.UInt8.t -> bytes
   // Randomly generated numbers. `time` is used to ensure two random numbers are distinct.
-  | Rand: usage:usage -> label:label -> len:nat{len <> 0} -> time:nat -> bytes
+  | Rand: usage:usage -> len:nat{len <> 0} -> time:nat -> bytes
 
   // Concatenation
   | Concat: left:bytes -> right:bytes -> bytes
@@ -116,7 +116,7 @@ let rec encode_usage usg =
 and encode_bytes b =
   match b with
   | Literal l -> 0::(encode_list [encode l])
-  | Rand usg lab len time -> 1::(encode_list [encode_usage usg; encode lab; encode (len <: nat); encode time])
+  | Rand usg len time -> 1::(encode_list [encode_usage usg; encode (len <: nat); encode time])
   | Concat left right -> 2::(encode_list [encode_bytes left; encode_bytes right])
   | AeadEnc key nonce msg ad -> 3::(encode_list [encode_bytes key; encode_bytes nonce; encode_bytes msg; encode_bytes ad])
   | Pk sk -> 4::(encode_list [encode_bytes sk])
@@ -133,7 +133,7 @@ and encode_bytes b =
   | KemSecretShared ss -> 15::(encode_list [encode_bytes ss])
 
 // --warn_error is a workaround for FStar/FStarLang#3220
-#push-options "--z3rlimit 25 --fuel 4 --ifuel 4 --warn_error +290"
+#push-options "--z3rlimit 25 --fuel 3 --ifuel 3 --warn_error +290"
 val encode_usage_inj: usg1:usage -> usg2:usage -> Lemma (requires encode_usage usg1 == encode_usage usg2) (ensures usg1 == usg2)
 val encode_bytes_inj: b1:bytes -> b2:bytes -> Lemma (requires encode_bytes b1 == encode_bytes b2) (ensures b1 == b2)
 let rec encode_usage_inj usg1 usg2 =
@@ -160,10 +160,13 @@ and encode_bytes_inj b1 b2 =
   encode_inj_forall (list (list int)) ();
   match b1, b2 with
   | Literal x1, Literal x2 ->
+    encode_list_inj [encode x1] [encode x2];
     encode_inj x1 x2
-  | Rand x1 x2 _ _, Rand y1 y2 _ _ ->
+  | Rand x1 x2 x3, Rand y1 y2 y3 ->
+    encode_list_inj [encode_usage x1; encode (x2 <: nat); encode x3] [encode_usage y1; encode (y2 <: nat); encode y3];
     encode_usage_inj x1 y1;
-    encode_inj x2 y2
+    encode_inj x2 y2;
+    encode_inj x3 y3
   | Pk x1, Pk y1
   | Vk x1, Vk y1
   | Hash x1, Hash y1

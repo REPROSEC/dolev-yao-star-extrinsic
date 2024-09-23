@@ -24,28 +24,30 @@ let crypto_predicates_nsl = {
   pkenc_pred = {
     pred = (fun tr pk msg ->
       get_sk_usage pk == PkKey "NSL.PublicKey" empty /\
-      (exists prin. get_sk_label pk = principal_label prin /\ (
+      (exists prin. get_sk_label tr pk == principal_label prin /\ (
         match parse message msg with
         | Some (Msg1 msg1) -> (
           let (alice, bob) = (msg1.alice, prin) in
           event_triggered tr alice (Initiate1 alice bob msg1.n_a) /\
-          get_label msg1.n_a == join (principal_label alice) (principal_label bob)
+          get_label tr msg1.n_a == join (principal_label alice) (principal_label bob)
         )
         | Some (Msg2 msg2) -> (
           let (alice, bob) = (prin, msg2.bob) in
           event_triggered tr bob (Respond1 alice bob msg2.n_a msg2.n_b) /\
-          get_label msg2.n_b == join (principal_label alice) (principal_label bob)
+          get_label tr msg2.n_b == join (principal_label alice) (principal_label bob)
         )
         | Some (Msg3 msg3) -> (
           let bob = prin in
           exists alice n_a.
-            get_label msg3.n_b `can_flow tr` (principal_label alice) /\
+            get_label tr msg3.n_b `can_flow tr` (principal_label alice) /\
             event_triggered tr alice (Initiate2 alice bob n_a msg3.n_b)
         )
         | None -> False
       ))
     );
-    pred_later = (fun tr1 tr2 pk msg -> ());
+    pred_later = (fun tr1 tr2 pk msg ->
+      parse_wf_lemma message (bytes_well_formed tr1) msg
+    );
   };
 }
 #pop-options
@@ -213,7 +215,7 @@ val decode_message3_proof:
   Lemma
   (requires
     // From the NSL state invariant
-    get_label n_b = join (principal_label alice) (principal_label bob) /\
+    get_label tr n_b == join (principal_label alice) (principal_label bob) /\
     // From the PrivateKeys invariant
     is_decryption_key (PkKey "NSL.PublicKey" empty) (principal_label bob) tr sk_b /\
     // From the network
@@ -225,7 +227,7 @@ val decode_message3_proof:
     | Some msg3 -> (
       (is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob)) \/ (
         (exists alice n_a.
-          get_label msg3.n_b `can_flow tr` (principal_label alice) /\
+          get_label tr msg3.n_b `can_flow tr` (principal_label alice) /\
           event_triggered tr alice (Initiate2 alice bob n_a n_b))
       )
     )

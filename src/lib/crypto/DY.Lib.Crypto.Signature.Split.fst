@@ -25,6 +25,11 @@ let split_sign_predicate_params {|crypto_usages|}: split_crypto_predicate_parame
     pred (tr, vk, msg)
   );
 
+  key_and_data_well_formed = (fun tr vk msg ->
+    bytes_well_formed tr vk /\
+    bytes_well_formed tr msg
+  );
+
   apply_mk_global_pred = (fun bare x -> ());
   apply_local_pred_later = (fun lpred tr1 tr2 vk msg ->
     lpred.pred_later tr1 tr2 vk msg

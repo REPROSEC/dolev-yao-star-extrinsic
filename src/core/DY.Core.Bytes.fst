@@ -60,7 +60,7 @@ let rec length b =
   match b with
   | Literal buf ->
     Seq.length buf
-  | Rand usg label len time ->
+  | Rand usg len time ->
     len
   | Concat left right ->
     length left + length right
@@ -90,6 +90,124 @@ let rec length b =
     32
   | KemSecretShared nonce ->
     32
+
+/// The well-formedness invariant preserved by any protocol using the DY* API,
+/// whether it is proved secure or not.
+/// It checks whether all `Rand`om bytes inside a given `bytes`
+/// correspond to a `RandGen` event in the trace.
+/// This property is weaker than the full-fledged `bytes_invariant` (see theorem `bytes_invariant_implies_well_formed`).
+/// It is a crucial precondition to ensure that the result of `get_label`
+/// is independent of the trace (see theorem `get_label_later`).
+
+[@@"opaque_to_smt"]
+val bytes_well_formed: trace -> bytes -> prop
+let rec bytes_well_formed tr b =
+  match b with
+  | Literal buf ->
+    True
+  | Rand usg len time ->
+    time < DY.Core.Trace.Type.length tr /\
+    RandGen? (get_event_at tr time)
+  | Concat left right ->
+    bytes_well_formed tr left /\
+    bytes_well_formed tr right
+  | AeadEnc key nonce msg ad ->
+    bytes_well_formed tr key /\
+    bytes_well_formed tr nonce /\
+    bytes_well_formed tr msg /\
+    bytes_well_formed tr ad
+  | Pk sk ->
+    bytes_well_formed tr sk
+  | PkEnc pk nonce msg ->
+    bytes_well_formed tr pk /\
+    bytes_well_formed tr nonce /\
+    bytes_well_formed tr msg
+  | Vk sk ->
+    bytes_well_formed tr sk
+  | Sign sk nonce msg ->
+    bytes_well_formed tr sk /\
+    bytes_well_formed tr nonce /\
+    bytes_well_formed tr msg
+  | Hash msg ->
+    bytes_well_formed tr msg
+  | DhPub sk ->
+    bytes_well_formed tr sk
+  | Dh sk pk ->
+    bytes_well_formed tr sk /\
+    bytes_well_formed tr pk
+  | KdfExtract salt ikm ->
+    bytes_well_formed tr salt /\
+    bytes_well_formed tr ikm
+  | KdfExpand prk info len ->
+    bytes_well_formed tr prk /\
+    bytes_well_formed tr info
+  | KemPub sk ->
+    bytes_well_formed tr sk
+  | KemEncap pk nonce ->
+    bytes_well_formed tr pk /\
+    bytes_well_formed tr nonce
+  | KemSecretShared nonce ->
+    bytes_well_formed tr nonce
+
+val bytes_well_formed_later:
+  tr1:trace -> tr2:trace ->
+  b:bytes ->
+  Lemma
+  (requires
+    bytes_well_formed tr1 b /\
+    tr1 <$ tr2
+  )
+  (ensures bytes_well_formed tr2 b)
+  [SMTPat (bytes_well_formed tr1 b);
+   SMTPat (bytes_well_formed tr2 b);
+   SMTPat (tr1 <$ tr2)]
+let rec bytes_well_formed_later tr1 tr2 b =
+  normalize_term_spec bytes_well_formed;
+  introduce forall b_sub. (b_sub << b /\ bytes_well_formed tr1 b_sub) ==> bytes_well_formed tr2 b_sub with (
+    introduce _ ==> _ with _. (
+      bytes_well_formed_later tr1 tr2 b_sub
+    )
+  );
+  match b with
+  | Literal buf -> ()
+  | Rand usg len time -> (
+    assert(event_at tr1 time (get_event_at tr1 time))
+  )
+  | Concat left right -> ()
+  | AeadEnc key nonce msg ad -> ()
+  | Pk sk -> ()
+  | PkEnc pk nonce msg -> ()
+  | Vk sk -> ()
+  | Sign sk nonce msg -> ()
+  | Hash msg -> ()
+  | DhPub sk -> ()
+  | Dh sk pk -> ()
+  | KdfExtract salt ikm -> ()
+  | KdfExpand prk info len -> ()
+  | KemPub sk -> ()
+  | KemEncap pk nonce -> ()
+  | KemSecretShared nonce -> ()
+
+/// Many lemmas with SMT patterns can help proving `bytes_well_formed`.
+/// These lemmas are not expected to be useful in most situations:
+/// - in general we have `bytes_invariant` that implies `bytes_well_formed`
+///   (see theorem `bytes_invariant_implies_well_formed`),
+/// - the only place where we cannot rely on `bytes_invariant`
+///   are in the `pred_later` lemmas inside `crypto_predicates`,
+///   which is only a small amount of the security proof.
+/// Hence the SMT patterns do not trigger by default,
+/// and can be enabled by doing `enable_bytes_well_formed_smtpats tr;`.
+/// See https://github.com/FStarLang/FStar/wiki/Quantifiers-and-patterns
+/// for more information on this technique.
+
+[@@"opaque_to_smt"]
+let bytes_well_formed_smtpats_enabled (tr:trace) = True
+
+val enable_bytes_well_formed_smtpats:
+  tr:trace ->
+  Lemma (bytes_well_formed_smtpats_enabled tr)
+let enable_bytes_well_formed_smtpats tr =
+  normalize_term_spec (bytes_well_formed_smtpats_enabled tr)
 
 /// Customizable functions stating how labels and usages evolve
 /// when using some cryptographic functions.
@@ -220,7 +338,7 @@ let default_crypto_usages = {
 val get_usage: {|crypto_usages|} -> b:bytes -> usage
 let rec get_usage #cusages b =
   match b with
-  | Rand usg label len time ->
+  | Rand usg len time ->
     usg
   | Dh sk1 (DhPub sk2) -> (
     match get_usage sk1, get_usage sk2 with
@@ -265,15 +383,21 @@ let rec get_usage #cusages b =
 
 #push-options "--ifuel 2"
 [@@"opaque_to_smt"]
-val get_label: {|crypto_usages|} -> bytes -> label
-let rec get_label #cusages b =
+val get_label: {|crypto_usages|} -> trace -> bytes -> label
+let rec get_label #cusages tr b =
   match b with
   | Literal buf ->
     public
-  | Rand usg label len time ->
-    label
+  | Rand usg len time ->
+    if time < DY.Core.Trace.Type.length tr then (
+      match get_event_at tr time with
+      | RandGen _ lab _ -> lab
+      | _ -> DY.Core.Label.Unknown.unknown_label
+    ) else (
+      DY.Core.Label.Unknown.unknown_label
+    )
   | Concat left right ->
-    meet (get_label left) (get_label right)
+    meet (get_label tr left) (get_label tr right)
   | AeadEnc key nonce msg ad ->
     public
   | Pk sk ->
@@ -283,46 +407,90 @@ let rec get_label #cusages b =
   | Vk sk ->
     public
   | Sign sk nonce msg ->
-    get_label msg
+    get_label tr msg
   | Hash msg ->
-    get_label msg
+    get_label tr msg
   | DhPub sk ->
     public
   | Dh sk1 (DhPub sk2) ->
-    join (get_label sk1) (get_label sk2)
+    join (get_label tr sk1) (get_label tr sk2)
   | Dh sk pk ->
     public
   | KdfExtract salt ikm ->
     let salt_usage = get_usage salt in
     let ikm_usage = get_usage ikm in
     if KdfExtractSaltKey? salt_usage || KdfExtractIkmKey? ikm_usage then
-      kdf_extract_usage.get_label salt_usage ikm_usage (get_label salt) (get_label ikm) salt ikm
+      kdf_extract_usage.get_label salt_usage ikm_usage (get_label tr salt) (get_label tr ikm) salt ikm
     else
-      meet (get_label salt) (get_label ikm)
+      meet (get_label tr salt) (get_label tr ikm)
   | KdfExpand prk info len -> (
     let prk_usage = get_usage prk in
     if KdfExpandKey? prk_usage then
-      kdf_expand_usage.get_label prk_usage (get_label prk) info
+      kdf_expand_usage.get_label prk_usage (get_label tr prk) info
     else
-      get_label prk
+      get_label tr prk
   )
   | KemPub sk ->
     public
   | KemEncap pk nonce ->
     public
   | KemSecretShared nonce ->
-    get_label nonce
+    get_label tr nonce
 #pop-options
+
+val get_label_later:
+  {|crypto_usages|} ->
+  tr1:trace -> tr2:trace ->
+  b:bytes ->
+  Lemma
+  (requires
+    bytes_well_formed tr1 b /\
+    tr1 <$ tr2
+  )
+  (ensures get_label tr1 b == get_label tr2 b)
+  [SMTPat (get_label tr1 b); SMTPat (tr1 <$ tr2)]
+let rec get_label_later #cusgs tr1 tr2 b =
+  normalize_term_spec bytes_well_formed;
+  normalize_term_spec get_label;
+  match b with
+  | Literal buf -> ()
+  | Rand usg len time ->
+    assert(event_at tr1 time (get_event_at tr1 time))
+  | Concat left right ->
+    get_label_later tr1 tr2 left;
+    get_label_later tr1 tr2 right
+  | AeadEnc key nonce msg ad -> ()
+  | Pk sk -> ()
+  | PkEnc pk nonce msg -> ()
+  | Vk sk -> ()
+  | Sign sk nonce msg ->
+    get_label_later tr1 tr2 msg
+  | Hash msg ->
+    get_label_later tr1 tr2 msg
+  | DhPub sk -> ()
+  | Dh sk1 (DhPub sk2) ->
+    get_label_later tr1 tr2 sk1;
+    get_label_later tr1 tr2 sk2
+  | Dh sk pk -> ()
+  | KdfExtract salt ikm ->
+    get_label_later tr1 tr2 salt;
+    get_label_later tr1 tr2 ikm
+  | KdfExpand prk info len ->
+    get_label_later tr1 tr2 prk
+  | KemPub sk -> ()
+  | KemEncap pk nonce -> ()
+  | KemSecretShared nonce ->
+    get_label_later tr1 tr2 nonce
 
 /// Obtain the label of the corresponding decryption key of an encryption key.
 /// Although the encryption key label is public,
 /// this is useful to reason on the corresponding decryption key label.
 
 [@@"opaque_to_smt"]
-val get_sk_label: {|crypto_usages|} -> bytes -> label
-let get_sk_label #cusages pk =
+val get_sk_label: {|crypto_usages|} -> trace -> bytes -> label
+let get_sk_label #cusages tr pk =
   match pk with
-  | Pk sk -> get_label sk
+  | Pk sk -> get_label tr sk
   | _ -> public
 
 /// Same as above, for usage.
@@ -334,15 +502,30 @@ let get_sk_usage #cusages pk =
   | Pk sk -> get_usage sk
   | _ -> NoUsage
 
+val get_sk_label_later:
+  {|crypto_usages|} ->
+  tr1:trace -> tr2:trace ->
+  pk:bytes ->
+  Lemma
+  (requires
+    bytes_well_formed tr1 pk /\
+    tr1 <$ tr2
+  )
+  (ensures get_sk_label tr1 pk == get_sk_label tr2 pk)
+  [SMTPat (get_sk_label tr1 pk); SMTPat (tr1 <$ tr2)]
+let get_sk_label_later #cusgs tr1 tr2 pk =
+  normalize_term_spec bytes_well_formed;
+  normalize_term_spec get_sk_label
+
 /// Obtain the label of the corresponding signature key of a verification key.
 /// Although the verification key label is public,
 /// this is useful to reason on the corresponding signature key label.
 
 [@@"opaque_to_smt"]
-val get_signkey_label: {|crypto_usages|} -> bytes -> label
-let get_signkey_label #cusages pk =
+val get_signkey_label: {|crypto_usages|} -> trace -> bytes -> label
+let get_signkey_label #cusages tr pk =
   match pk with
-  | Vk sk -> get_label sk
+  | Vk sk -> get_label tr sk
   | _ -> public
 
 /// Same as above, for usage.
@@ -354,15 +537,30 @@ let get_signkey_usage #cusages pk =
   | Vk sk -> get_usage sk
   | _ -> NoUsage
 
+val get_signkey_label_later:
+  {|crypto_usages|} ->
+  tr1:trace -> tr2:trace ->
+  pk:bytes ->
+  Lemma
+  (requires
+    bytes_well_formed tr1 pk /\
+    tr1 <$ tr2
+  )
+  (ensures get_signkey_label tr1 pk == get_signkey_label tr2 pk)
+  [SMTPat (get_signkey_label tr1 pk); SMTPat (tr1 <$ tr2)]
+let get_signkey_label_later #cusgs tr1 tr2 pk =
+  normalize_term_spec bytes_well_formed;
+  normalize_term_spec get_signkey_label
+
 /// Obtain the label of the corresponding DH private key of a DH public key.
 /// Although the DH public key label is public,
 /// this is useful to reason on the corresponding DH private key label.
 
 [@@"opaque_to_smt"]
-val get_dh_label: {|crypto_usages|} -> bytes -> label
-let get_dh_label #cusages pk =
+val get_dh_label: {|crypto_usages|} -> trace -> bytes -> label
+let get_dh_label #cusages tr pk =
   match pk with
-  | DhPub sk -> get_label sk
+  | DhPub sk -> get_label tr sk
   | _ -> public
 
 /// Same as above, for usage.
@@ -374,15 +572,30 @@ let get_dh_usage #cusages pk =
   | DhPub sk -> get_usage sk
   | _ -> NoUsage
 
+val get_dh_label_later:
+  {|crypto_usages|} ->
+  tr1:trace -> tr2:trace ->
+  pk:bytes ->
+  Lemma
+  (requires
+    bytes_well_formed tr1 pk /\
+    tr1 <$ tr2
+  )
+  (ensures get_dh_label tr1 pk == get_dh_label tr2 pk)
+  [SMTPat (get_dh_label tr1 pk); SMTPat (tr1 <$ tr2)]
+let get_dh_label_later #cusgs tr1 tr2 pk =
+  normalize_term_spec bytes_well_formed;
+  normalize_term_spec get_dh_label
+
 /// Obtain the label of the corresponding KEM private key of a KEM public key.
 /// Although the KEM public key label is public,
 /// this is useful to reason on the corresponding KEM private key label.
 
 [@@"opaque_to_smt"]
-val get_kem_sk_label: {|crypto_usages|} -> bytes -> label
-let get_kem_sk_label #cusages pk =
+val get_kem_sk_label: {|crypto_usages|} -> trace -> bytes -> label
+let get_kem_sk_label #cusages tr pk =
   match pk with
-  | KemPub sk -> get_label sk
+  | KemPub sk -> get_label tr sk
   | _ -> public
 
 /// Same as above, for usage.
@@ -394,6 +607,20 @@ let get_kem_sk_usage #cusages pk =
   | KemPub sk -> get_usage sk
   | _ -> NoUsage
 
+val get_kem_sk_label_later:
+  {|crypto_usages|} ->
+  tr1:trace -> tr2:trace ->
+  pk:bytes ->
+  Lemma
+  (requires
+    bytes_well_formed tr1 pk /\
+    tr1 <$ tr2
+  )
+  (ensures get_kem_sk_label tr1 pk == get_kem_sk_label tr2 pk)
+  [SMTPat (get_kem_sk_label tr1 pk); SMTPat (tr1 <$ tr2)]
+let get_kem_sk_label_later #cusgs tr1 tr2 pk =
+  normalize_term_spec bytes_well_formed;
+  normalize_term_spec get_kem_sk_label
 
 /// Customizable predicates stating how cryptographic functions may be used
 /// by honest principals.
@@ -405,7 +632,14 @@ type aead_crypto_predicate {|crypto_usages|} = {
     tr1:trace -> tr2:trace ->
     key:bytes{AeadKey? (get_usage key)} -> nonce:bytes -> msg:bytes -> ad:bytes ->
     Lemma
-    (requires pred tr1 key nonce msg ad /\ tr1 <$ tr2)
+    (requires
+      pred tr1 key nonce msg ad /\
+      bytes_well_formed tr1 key /\
+      bytes_well_formed tr1 nonce /\
+      bytes_well_formed tr1 msg /\
+      bytes_well_formed tr1 ad /\
+      tr1 <$ tr2
+    )
     (ensures pred tr2 key nonce msg ad)
   ;
 }
@@ -417,7 +651,12 @@ type pkenc_crypto_predicate {|crypto_usages|} = {
     tr1:trace -> tr2:trace ->
     pk:bytes{PkKey? (get_sk_usage pk)} -> msg:bytes ->
     Lemma
-    (requires pred tr1 pk msg /\ tr1 <$ tr2)
+    (requires
+      pred tr1 pk msg /\
+      bytes_well_formed tr1 pk /\
+      bytes_well_formed tr1 msg /\
+      tr1 <$ tr2
+    )
     (ensures pred tr2 pk msg)
   ;
 }
@@ -429,7 +668,12 @@ type sign_crypto_predicate {|crypto_usages|} = {
     tr1:trace -> tr2:trace ->
     vk:bytes{SigKey? (get_signkey_usage vk)} -> msg:bytes ->
     Lemma
-    (requires pred tr1 vk msg /\ tr1 <$ tr2)
+    (requires
+      pred tr1 vk msg /\
+      bytes_well_formed tr1 vk /\
+      bytes_well_formed tr1 msg /\
+      tr1 <$ tr2
+    )
     (ensures pred tr2 vk msg)
   ;
 }
@@ -503,9 +747,9 @@ let rec bytes_invariant #cinvs tr b =
   match b with
   | Literal buf ->
     True
-  | Rand usage label len time ->
+  | Rand usage len time ->
     // Random bytes correspond to an event
-    event_at tr time (RandGen usage label len)
+    (exists lab. event_at tr time (RandGen usage lab len))
   | Concat left right ->
     bytes_invariant tr left /\
     bytes_invariant tr right
@@ -516,10 +760,10 @@ let rec bytes_invariant #cinvs tr b =
     bytes_invariant tr ad /\
     // the nonce is a public value
     // (e.g. it is often transmitted on the network)
-    (get_label nonce) `can_flow tr` public /\
+    (get_label tr nonce) `can_flow tr` public /\
     // the standard IND-CCA assumption do not guarantee indistinguishability of additional data,
     // hence it must flow to public
-    (get_label ad) `can_flow tr` public /\
+    (get_label tr ad) `can_flow tr` public /\
     (
       (
         // Honest case:
@@ -529,12 +773,12 @@ let rec bytes_invariant #cinvs tr b =
         aead_pred.pred tr key nonce msg ad /\
         // - the message is less secret than the key
         //   (this is crucial so that decryption preserve publishability)
-        (get_label msg) `can_flow tr` (get_label key)
+        (get_label tr msg) `can_flow tr` (get_label tr key)
       ) \/ (
         // Attacker case:
         // the key and message are both public
-        (get_label key) `can_flow tr` public /\
-        (get_label msg) `can_flow tr` public
+        (get_label tr key) `can_flow tr` public /\
+        (get_label tr msg) `can_flow tr` public
       )
     )
   | Pk sk ->
@@ -552,20 +796,20 @@ let rec bytes_invariant #cinvs tr b =
         pkenc_pred.pred tr pk msg /\
         // - the message is less secret than the decryption key
         //   (this is crucial so that decryption preserve publishability)
-        (get_label msg) `can_flow tr` (get_sk_label pk) /\
+        (get_label tr msg) `can_flow tr` (get_sk_label tr pk) /\
         // - the message is less secret than the nonce
         //   (this is because the standard IND-CCA security assumption
         //   do not give guarantees on the indistinguishability of the message
         //   when the attacker knows the nonce)
-        (get_label msg) `can_flow tr` (get_label nonce) /\
+        (get_label tr msg) `can_flow tr` (get_label tr nonce) /\
         // - the nonce has the correct usage (for the same reason as above)
         PkNonce? (get_usage nonce)
       ) \/ (
         // Attacker case:
         // the attacker knows the nonce, key and message
-        (get_label pk) `can_flow tr` public /\
-        (get_label nonce) `can_flow tr` public /\
-        (get_label msg) `can_flow tr` public
+        (get_label tr pk) `can_flow tr` public /\
+        (get_label tr nonce) `can_flow tr` public /\
+        (get_label tr msg) `can_flow tr` public
       )
     )
   | Vk sk ->
@@ -587,15 +831,15 @@ let rec bytes_invariant #cinvs tr b =
         //   in practice knowing the nonce used to sign a message
         //   can be used to obtain the private key,
         //   hence this restriction)
-        (get_label sk) `can_flow tr` (get_label nonce) /\
+        (get_label tr sk) `can_flow tr` (get_label tr nonce) /\
         // - the nonce has the correct usage (for the same reason as above)
         SigNonce? (get_usage nonce)
       ) \/ (
         // Attacker case:
         // the attacker knows the signature key, nonce and message
-        (get_label sk) `can_flow tr` public /\
-        (get_label nonce) `can_flow tr` public /\
-        (get_label msg) `can_flow tr` public
+        (get_label tr sk) `can_flow tr` public /\
+        (get_label tr nonce) `can_flow tr` public /\
+        (get_label tr msg) `can_flow tr` public
       )
     )
   | Hash msg ->
@@ -614,19 +858,19 @@ let rec bytes_invariant #cinvs tr b =
       ) \/ (
         // Attacker case:
         // the attacker knows one of the secret keys
-        (get_label sk1) `can_flow tr` public \/
-        (get_label sk2) `can_flow tr` public
+        (get_label tr sk1) `can_flow tr` public \/
+        (get_label tr sk2) `can_flow tr` public
       )
     )
   | Dh sk pk ->
     bytes_invariant tr pk /\
     bytes_invariant tr sk /\
-    (get_label pk) `can_flow tr` public /\
+    (get_label tr pk) `can_flow tr` public /\
     (
       (
         DhKey? (get_usage sk)
       ) \/ (
-        (get_label sk) `can_flow tr` public
+        (get_label tr sk) `can_flow tr` public
       )
     )
   | KdfExtract salt ikm ->
@@ -642,8 +886,8 @@ let rec bytes_invariant #cinvs tr b =
       ) \/ (
         // Attacker case:
         // the attacker knows both salt and ikm
-        (get_label salt) `can_flow tr` public /\
-        (get_label ikm) `can_flow tr` public
+        (get_label tr salt) `can_flow tr` public /\
+        (get_label tr ikm) `can_flow tr` public
       )
     )
   | KdfExpand prk info len ->
@@ -657,7 +901,7 @@ let rec bytes_invariant #cinvs tr b =
       ) \/ (
         // Attacker case:
         // the attacker knows both prk and info
-        (get_label prk) `can_flow tr` public
+        (get_label tr prk) `can_flow tr` public
       )
     )
   | KemPub sk ->
@@ -670,7 +914,7 @@ let rec bytes_invariant #cinvs tr b =
         // Honest case:
         // nonce is knowable by the holder of pk
         // (because the nonce roughly corresponds to the shared secret)
-        (get_label nonce) `can_flow tr` (get_kem_sk_label pk) /\ (
+        (get_label tr nonce) `can_flow tr` (get_kem_sk_label tr pk) /\ (
         // nonce and pk agree on the usage of the shared secret
         // (this is because this KEM model does not bind the public key to the shared secret)
           match get_kem_sk_usage pk, get_usage nonce with
@@ -681,16 +925,33 @@ let rec bytes_invariant #cinvs tr b =
       ) \/ (
         // Attacker case:
         // the attacker knows both pk and nonce
-        (get_label pk) `can_flow tr` public /\
-        (get_label nonce) `can_flow tr` public
+        (get_label tr pk) `can_flow tr` public /\
+        (get_label tr nonce) `can_flow tr` public
       )
     )
   | KemSecretShared nonce ->
     bytes_invariant tr nonce
 
+val bytes_invariant_implies_well_formed:
+  {|crypto_invariants|} ->
+  tr:trace -> msg:bytes ->
+  Lemma
+  (requires bytes_invariant tr msg)
+  (ensures bytes_well_formed tr msg)
+  [SMTPat (bytes_well_formed tr msg);
+   SMTPat (bytes_invariant tr msg)]
+let rec bytes_invariant_implies_well_formed #cinvs tr b =
+  normalize_term_spec bytes_invariant;
+  normalize_term_spec bytes_well_formed;
+  introduce forall b_sub. (b_sub << b /\ bytes_invariant tr b_sub) ==> bytes_well_formed tr b_sub with (
+    introduce _ ==> _ with _. (
+      bytes_invariant_implies_well_formed tr b_sub
+    )
+  )
 
 /// The bytes invariant is preserved as the trace grows.
 
+#push-options "--ifuel 2"
 val bytes_invariant_later:
   {|crypto_invariants|} ->
   tr1:trace -> tr2:trace -> msg:bytes ->
@@ -702,7 +963,7 @@ let rec bytes_invariant_later #cinvs tr1 tr2 msg =
   normalize_term_spec bytes_invariant;
   match msg with
   | Literal buf -> ()
-  | Rand usage label len time -> ()
+  | Rand usage len time -> ()
   | Concat left right ->
     bytes_invariant_later tr1 tr2 left;
     bytes_invariant_later tr1 tr2 right
@@ -731,6 +992,7 @@ let rec bytes_invariant_later #cinvs tr1 tr2 msg =
     bytes_invariant_later tr1 tr2 sk;
     bytes_invariant_later tr1 tr2 nonce;
     bytes_invariant_later tr1 tr2 msg;
+    assert(bytes_invariant tr1 (Vk sk)); // to prove well-formedness
     match get_signkey_usage (Vk sk) with
     | SigKey _ _ -> FStar.Classical.move_requires (cinvs.preds.sign_pred.pred_later tr1 tr2 (Vk sk)) msg
     | _ -> ()
@@ -758,6 +1020,7 @@ let rec bytes_invariant_later #cinvs tr1 tr2 msg =
     bytes_invariant_later tr1 tr2 nonce
   | KemSecretShared nonce ->
     bytes_invariant_later tr1 tr2 nonce
+#pop-options
 
 (*** Various predicates ***)
 
@@ -771,7 +1034,7 @@ let rec bytes_invariant_later #cinvs tr1 tr2 msg =
 
 val is_knowable_by: {|crypto_invariants|} -> label -> trace -> bytes -> prop
 let is_knowable_by #cinvs lab tr b =
-  bytes_invariant tr b /\ (get_label b) `can_flow tr` lab
+  bytes_invariant tr b /\ (get_label tr b) `can_flow tr` lab
 
 /// Particular case of the above predicate:
 /// can a given bytestring be published (e.g. on the network)?
@@ -786,13 +1049,13 @@ let is_publishable #cinvs tr b =
 
 val is_secret: {|crypto_invariants|} -> label -> trace -> bytes -> prop
 let is_secret #cinvs lab tr b =
-  bytes_invariant tr b /\ (get_label b) == lab
+  bytes_invariant tr b /\ (get_label tr b) == lab
 
 /// Shorthand predicates for the various type of keys.
 
 val is_verification_key: {|crypto_invariants|} -> usg:usage{SigKey? usg} -> label -> trace -> bytes -> prop
 let is_verification_key #cinvs usg lab tr b =
-  is_publishable tr b /\ (get_signkey_label b) == lab /\
+  is_publishable tr b /\ (get_signkey_label tr b) == lab /\
   get_signkey_usage b == usg
 
 val is_signature_key: {|crypto_invariants|} -> usg:usage{SigKey? usg} -> label -> trace -> bytes -> prop
@@ -802,7 +1065,7 @@ let is_signature_key #cinvs usg lab tr b =
 
 val is_encryption_key: {|crypto_invariants|} -> usg:usage{PkKey? usg} -> label -> trace -> bytes -> prop
 let is_encryption_key #cinvs usg lab tr b =
-  is_publishable tr b /\ (get_sk_label b) == lab /\
+  is_publishable tr b /\ (get_sk_label tr b) == lab /\
   get_sk_usage b == usg
 
 val is_decryption_key: {|crypto_invariants|} -> usg:usage{PkKey? usg} -> label -> trace -> bytes -> prop
@@ -863,7 +1126,6 @@ let bytes_to_literal_to_bytes b =
   normalize_term_spec literal_to_bytes;
   normalize_term_spec bytes_to_literal
 
-
 /// User lemma (length).
 
 val length_literal_to_bytes:
@@ -873,6 +1135,18 @@ val length_literal_to_bytes:
 let length_literal_to_bytes lit =
   normalize_term_spec literal_to_bytes;
   normalize_term_spec length
+
+/// User lemma (well-formedness)
+
+val bytes_well_formed_literal_to_bytes:
+  tr:trace ->
+  lit:FStar.Seq.seq FStar.UInt8.t ->
+  Lemma (bytes_well_formed tr (literal_to_bytes lit))
+  [SMTPat (bytes_well_formed tr (literal_to_bytes lit));
+   SMTPat (bytes_well_formed_smtpats_enabled tr)]
+let bytes_well_formed_literal_to_bytes tr lit =
+  normalize_term_spec bytes_well_formed;
+  normalize_term_spec literal_to_bytes
 
 /// User lemma (bytes invariant).
 /// Coincidentally this is the same as the attacker knowledge lemma above,
@@ -991,6 +1265,36 @@ let split_length b i =
   normalize_term_spec split;
   normalize_term_spec length
 
+/// User lemma (concatenation well-formedness)
+
+val bytes_well_formed_concat:
+  tr:trace ->
+  b1:bytes -> b2:bytes ->
+  Lemma
+  (bytes_well_formed tr (concat b1 b2) == (bytes_well_formed tr b1 /\ bytes_well_formed tr b2))
+  [SMTPat (bytes_well_formed tr (concat b1 b2));
+   SMTPat (bytes_well_formed_smtpats_enabled tr)]
+let bytes_well_formed_concat tr b1 b2 =
+  normalize_term_spec concat;
+  normalize_term_spec bytes_well_formed
+
+/// User lemma (splitting well-formedness)
+
+val bytes_well_formed_split:
+  tr:trace ->
+  b:bytes -> i:nat ->
+  Lemma (
+    match split b i with
+    | None -> True
+    | Some (b1, b2) -> bytes_well_formed tr b == (bytes_well_formed tr b1 /\ bytes_well_formed tr b2)
+  )
+  [SMTPat (bytes_well_formed tr b);
+   SMTPat (split b i);
+   SMTPat (bytes_well_formed_smtpats_enabled tr)]
+let bytes_well_formed_split tr b i =
+  normalize_term_spec split;
+  normalize_term_spec bytes_well_formed
+
 /// User lemma (concatenation bytes invariant).
 
 val bytes_invariant_concat:
@@ -1025,11 +1329,12 @@ let bytes_invariant_split #cinvs tr b i =
 
 val get_label_concat:
   {|crypto_usages|} ->
+  tr:trace ->
   b1:bytes -> b2:bytes ->
   Lemma
-  (ensures get_label (concat b1 b2) == meet (get_label b1) (get_label b2))
-  [SMTPat (get_label (concat b1 b2))]
-let get_label_concat b1 b2 =
+  (ensures get_label tr (concat b1 b2) == meet (get_label tr b1) (get_label tr b2))
+  [SMTPat (get_label tr (concat b1 b2))]
+let get_label_concat tr b1 b2 =
   normalize_term_spec concat;
   normalize_term_spec get_label
 
@@ -1140,6 +1445,53 @@ let aead_dec_preserves_publishability #cinvs tr key nonce msg ad =
   | Some res -> ()
   | None -> ()
 
+/// User lemma (AEAD encryption well-formedness)
+
+val bytes_well_formed_aead_enc:
+  tr:trace ->
+  key:bytes -> nonce:bytes -> msg:bytes -> ad:bytes ->
+  Lemma (
+    bytes_well_formed tr (aead_enc key nonce msg ad) == (
+      bytes_well_formed tr key /\
+      bytes_well_formed tr nonce /\
+      bytes_well_formed tr msg /\
+      bytes_well_formed tr ad
+    )
+  )
+  [SMTPat (bytes_well_formed tr (aead_enc key nonce msg ad));
+   SMTPat (bytes_well_formed_smtpats_enabled tr)]
+let bytes_well_formed_aead_enc tr key nonce msg ad =
+  normalize_term_spec aead_enc;
+  normalize_term_spec bytes_well_formed
+
+/// User lemma (AEAD decryption well-formedness)
+
+val bytes_well_formed_aead_dec:
+  tr:trace ->
+  key:bytes -> nonce:bytes -> msg:bytes -> ad:bytes ->
+  Lemma
+  (
+    match aead_dec key nonce msg ad with
+    | None -> True
+    | Some plaintext -> (
+      bytes_well_formed tr msg == (
+        bytes_well_formed tr key /\
+        bytes_well_formed tr nonce /\
+        bytes_well_formed tr plaintext /\
+        bytes_well_formed tr ad
+      )
+    )
+  )
+  [SMTPat (aead_dec key nonce msg ad);
+   SMTPat (bytes_well_formed tr msg);
+   SMTPat (bytes_well_formed_smtpats_enabled tr)]
+let bytes_well_formed_aead_dec tr key nonce msg ad =
+  normalize_term_spec aead_dec;
+  normalize_term_spec bytes_well_formed;
+  match aead_dec key nonce msg ad with
+  | None -> ()
+  | Some msg -> ()
+
 /// User lemma (AEAD encryption bytes invariant).
 
 val bytes_invariant_aead_enc:
@@ -1151,15 +1503,15 @@ val bytes_invariant_aead_enc:
     bytes_invariant tr nonce /\
     bytes_invariant tr msg /\
     bytes_invariant tr ad /\
-    (get_label nonce) `can_flow tr` public /\
-    (get_label ad) `can_flow tr` public /\
-    (get_label msg) `can_flow tr` (get_label key) /\
+    (get_label tr nonce) `can_flow tr` public /\
+    (get_label tr ad) `can_flow tr` public /\
+    (get_label tr msg) `can_flow tr` (get_label tr key) /\
     (
       (
         AeadKey? (get_usage key) /\
         aead_pred.pred tr key nonce msg ad
       ) \/ (
-        get_label key `can_flow tr` public
+        get_label tr key `can_flow tr` public
       )
     )
   )
@@ -1173,11 +1525,12 @@ let bytes_invariant_aead_enc #cinvs tr key nonce msg ad =
 
 val get_label_aead_enc:
   {|crypto_usages|} ->
+  tr:trace ->
   key:bytes -> nonce:bytes -> msg:bytes -> ad:bytes ->
   Lemma
-  (ensures get_label (aead_enc key nonce msg ad) = public)
-  [SMTPat (get_label (aead_enc key nonce msg ad))]
-let get_label_aead_enc #cusages key nonce msg ad =
+  (ensures get_label tr (aead_enc key nonce msg ad) == public)
+  [SMTPat (get_label tr (aead_enc key nonce msg ad))]
+let get_label_aead_enc #cusages tr key nonce msg ad =
   normalize_term_spec aead_enc;
   normalize_term_spec get_label
 
@@ -1198,7 +1551,7 @@ val bytes_invariant_aead_dec:
     match aead_dec key nonce msg ad with
     | None -> True
     | Some plaintext -> (
-      is_knowable_by (get_label key) tr plaintext /\
+      is_knowable_by (get_label tr key) tr plaintext /\
       (
         (
           AeadKey? (get_usage key) ==>
@@ -1310,6 +1663,63 @@ let pk_dec_preserves_publishability #cinvs tr sk msg =
   normalize_term_spec get_label
 #pop-options
 
+/// User lemma (public encryption key well-formedness)
+
+val bytes_well_formed_pk:
+  tr:trace ->
+  sk:bytes ->
+  Lemma
+  (bytes_well_formed tr (pk sk) == bytes_well_formed tr sk)
+  [SMTPat (bytes_well_formed tr (pk sk));
+   SMTPat (bytes_well_formed_smtpats_enabled tr)]
+let bytes_well_formed_pk tr sk =
+  normalize_term_spec pk;
+  normalize_term_spec bytes_well_formed
+
+/// User lemma (public-key encryption well-formedness)
+
+val bytes_well_formed_pk_enc:
+  tr:trace ->
+  pk:bytes -> nonce:bytes -> msg:bytes ->
+  Lemma (
+    bytes_well_formed tr (pk_enc pk nonce msg) == (
+      bytes_well_formed tr pk /\
+      bytes_well_formed tr nonce /\
+      bytes_well_formed tr msg
+    )
+  )
+  [SMTPat (bytes_well_formed tr (pk_enc pk nonce msg));
+   SMTPat (bytes_well_formed_smtpats_enabled tr)]
+let bytes_well_formed_pk_enc tr pk nonce msg =
+  normalize_term_spec pk_enc;
+  normalize_term_spec bytes_well_formed
+
+/// User lemma (public-key decryption well-formedness)
+
+val bytes_well_formed_pk_dec:
+  tr:trace ->
+  sk:bytes -> msg:bytes ->
+  Lemma
+  (ensures (
+    match pk_dec sk msg with
+    | None -> True
+    | Some plaintext ->
+      bytes_well_formed tr msg ==> (
+        bytes_well_formed tr sk /\
+        bytes_well_formed tr plaintext
+        // would have equality if we could add `bytes_well_formed tr nonce`
+        // (unfortunately we don't have the nonce)
+      )
+  ))
+  [SMTPat (pk_dec sk msg);
+   SMTPat (bytes_well_formed tr msg);
+   SMTPat (bytes_well_formed_smtpats_enabled tr)]
+let bytes_well_formed_pk_dec tr sk msg =
+  normalize_term_spec pk_dec;
+  normalize_term_spec pk;
+  normalize_term_spec bytes_well_formed
+
+
 /// User lemma (public encryption key bytes invariant).
 
 val bytes_invariant_pk:
@@ -1327,11 +1737,12 @@ let bytes_invariant_pk #cinvs tr sk =
 
 val get_label_pk:
   {|crypto_usages|} ->
+  tr:trace ->
   sk:bytes ->
   Lemma
-  (ensures get_label (pk sk) == public)
-  [SMTPat (get_label (pk sk))]
-let get_label_pk #cusages sk =
+  (ensures get_label tr (pk sk) == public)
+  [SMTPat (get_label tr (pk sk))]
+let get_label_pk #cusages tr sk =
   normalize_term_spec pk;
   normalize_term_spec get_label
 
@@ -1339,11 +1750,12 @@ let get_label_pk #cusages sk =
 
 val get_sk_label_pk:
   {|crypto_usages|} ->
+  tr:trace ->
   sk:bytes ->
   Lemma
-  (ensures get_sk_label (pk sk) == get_label sk)
-  [SMTPat (get_sk_label (pk sk))]
-let get_sk_label_pk #cusages sk =
+  (ensures get_sk_label tr (pk sk) == get_label tr sk)
+  [SMTPat (get_sk_label tr (pk sk))]
+let get_sk_label_pk #cusages tr sk =
   normalize_term_spec pk;
   normalize_term_spec get_sk_label
 
@@ -1369,8 +1781,8 @@ val bytes_invariant_pk_enc:
     bytes_invariant tr pk /\
     bytes_invariant tr nonce /\
     bytes_invariant tr msg /\
-    (get_label msg) `can_flow tr` (get_sk_label pk) /\
-    (get_label msg) `can_flow tr` (get_label nonce) /\
+    (get_label tr msg) `can_flow tr` (get_sk_label tr pk) /\
+    (get_label tr msg) `can_flow tr` (get_label tr nonce) /\
     PkKey? (get_sk_usage pk) /\
     PkNonce? (get_usage nonce) /\
     pkenc_pred.pred tr pk msg
@@ -1385,11 +1797,12 @@ let bytes_invariant_pk_enc #cinvs tr pk nonce msg =
 
 val get_label_pk_enc:
   {|crypto_usages|} ->
+  tr:trace ->
   pk:bytes -> nonce:bytes -> msg:bytes ->
   Lemma
-  (ensures get_label (pk_enc pk nonce msg) == public)
-  [SMTPat (get_label (pk_enc pk nonce msg))]
-let get_label_pk_enc #cusages pk nonce msg =
+  (ensures get_label tr (pk_enc pk nonce msg) == public)
+  [SMTPat (get_label tr (pk_enc pk nonce msg))]
+let get_label_pk_enc #cusages tr pk nonce msg =
   normalize_term_spec pk_enc;
   normalize_term_spec get_label
 
@@ -1408,7 +1821,7 @@ val bytes_invariant_pk_dec:
     match pk_dec sk msg with
     | None -> True
     | Some plaintext ->
-      is_knowable_by (get_label sk) tr plaintext /\
+      is_knowable_by (get_label tr sk) tr plaintext /\
       (
         (
           PkKey? (get_sk_usage (pk sk)) ==>
@@ -1493,6 +1906,37 @@ let sign_preserves_publishability #cinvs tr sk nonce msg =
   normalize_term_spec bytes_invariant;
   normalize_term_spec get_label
 
+/// User lemma (verification key well-formedness)
+
+val bytes_well_formed_vk:
+  tr:trace ->
+  sk:bytes ->
+  Lemma (bytes_well_formed tr (vk sk) == bytes_well_formed tr sk)
+  [SMTPat (bytes_well_formed tr (vk sk));
+   SMTPat (bytes_well_formed_smtpats_enabled tr)]
+let bytes_well_formed_vk tr sk =
+  normalize_term_spec vk;
+  normalize_term_spec bytes_well_formed
+
+/// User lemma (signature bytes well-formedness)
+
+val bytes_well_formed_sign:
+  tr:trace ->
+  sk:bytes -> nonce:bytes -> msg:bytes ->
+  Lemma (
+    bytes_well_formed tr (sign sk nonce msg) == (
+      bytes_well_formed tr sk /\
+      bytes_well_formed tr nonce /\
+      bytes_well_formed tr msg
+    )
+  )
+  [SMTPat (bytes_well_formed tr (sign sk nonce msg));
+   SMTPat (bytes_well_formed_smtpats_enabled tr)]
+let bytes_well_formed_sign tr sk nonce msg =
+  normalize_term_spec sign;
+  normalize_term_spec vk;
+  normalize_term_spec bytes_well_formed
+
 /// User lemma (verification key bytes invariant).
 
 val bytes_invariant_vk:
@@ -1510,11 +1954,12 @@ let bytes_invariant_vk #cinvs tr sk =
 
 val get_label_vk:
   {|crypto_usages|} ->
+  tr:trace ->
   sk:bytes ->
   Lemma
-  (ensures get_label (vk sk) == public)
-  [SMTPat (get_label (vk sk))]
-let get_label_vk #cusages sk =
+  (ensures get_label tr (vk sk) == public)
+  [SMTPat (get_label tr (vk sk))]
+let get_label_vk #cusages tr sk =
   normalize_term_spec vk;
   normalize_term_spec get_label
 
@@ -1522,11 +1967,12 @@ let get_label_vk #cusages sk =
 
 val get_signkey_label_vk:
   {|crypto_usages|} ->
+  tr:trace ->
   sk:bytes ->
   Lemma
-  (ensures get_signkey_label (vk sk) == get_label sk)
-  [SMTPat (get_signkey_label (vk sk))]
-let get_signkey_label_vk #cusages sk =
+  (ensures get_signkey_label tr (vk sk) == get_label tr sk)
+  [SMTPat (get_signkey_label tr (vk sk))]
+let get_signkey_label_vk #cusages tr sk =
   normalize_term_spec vk;
   normalize_term_spec get_signkey_label
 
@@ -1555,7 +2001,7 @@ val bytes_invariant_sign:
     SigKey? (get_usage sk) /\
     SigNonce? (get_usage nonce) /\
     sign_pred.pred tr (vk sk) msg /\
-    (get_label sk) `can_flow tr` (get_label nonce)
+    (get_label tr sk) `can_flow tr` (get_label tr nonce)
   )
   (ensures bytes_invariant tr (sign sk nonce msg))
   [SMTPat (bytes_invariant tr (sign sk nonce msg))]
@@ -1568,11 +2014,12 @@ let bytes_invariant_sign #cinvs tr sk nonce msg =
 
 val get_label_sign:
   {|crypto_usages|} ->
+  tr:trace ->
   sk:bytes -> nonce:bytes -> msg:bytes ->
   Lemma
-  (ensures get_label (sign sk nonce msg) == get_label msg)
-  [SMTPat (get_label (sign sk nonce msg))]
-let get_label_sign #cusages sk nonce msg =
+  (ensures get_label tr (sign sk nonce msg) == get_label tr msg)
+  [SMTPat (get_label tr (sign sk nonce msg))]
+let get_label_sign #cusages tr sk nonce msg =
   normalize_term_spec sign;
   normalize_term_spec get_label
 
@@ -1593,7 +2040,7 @@ val bytes_invariant_verify:
       SigKey? (get_signkey_usage vk) ==>
       sign_pred.pred tr vk msg
     ) \/ (
-      (get_signkey_label vk) `can_flow tr` public
+      (get_signkey_label tr vk) `can_flow tr` public
     )
   )
   [SMTPat (verify vk msg signature); SMTPat (bytes_invariant tr signature)]
@@ -1624,6 +2071,18 @@ let hash_preserves_publishability #cinvs tr msg =
   normalize_term_spec bytes_invariant;
   normalize_term_spec get_label
 
+/// User lemma (hash bytes well-formedness)
+
+val bytes_well_formed_hash:
+  tr:trace ->
+  msg:bytes ->
+  Lemma (bytes_well_formed tr (hash msg) == bytes_well_formed tr msg)
+  [SMTPat (bytes_well_formed tr (hash msg));
+   SMTPat (bytes_well_formed_smtpats_enabled tr)]
+let bytes_well_formed_hash tr msg =
+  normalize_term_spec hash;
+  normalize_term_spec bytes_well_formed
+
 /// User lemma (hash bytes invariant).
 
 val bytes_invariant_hash:
@@ -1641,10 +2100,11 @@ let bytes_invariant_hash #cinvs tr msg =
 
 val get_label_hash:
   {|crypto_usages|} ->
+  tr:trace ->
   msg:bytes ->
-  Lemma (get_label (hash msg) == get_label msg)
-  [SMTPat (get_label (hash msg))]
-let get_label_hash #cusages msg =
+  Lemma (get_label tr (hash msg) == get_label tr msg)
+  [SMTPat (get_label tr (hash msg))]
+let get_label_hash #cusages tr msg =
   normalize_term_spec hash;
   normalize_term_spec get_label
 
@@ -1727,6 +2187,31 @@ let dh_preserves_publishability tr sk pk =
   normalize_term_spec bytes_invariant;
   normalize_term_spec get_label
 
+/// User lemma (dh_pk well-formedness)
+
+val bytes_well_formed_dh_pk:
+  tr:trace ->
+  sk:bytes ->
+  Lemma (bytes_well_formed tr (dh_pk sk) == bytes_well_formed tr sk)
+  [SMTPat (bytes_well_formed tr (dh_pk sk));
+   SMTPat (bytes_well_formed_smtpats_enabled tr)]
+let bytes_well_formed_dh_pk tr sk =
+  reveal_opaque (`%dh_pk) (dh_pk);
+  normalize_term_spec bytes_well_formed
+
+/// User lemma (dh well-formedness)
+
+val bytes_well_formed_dh:
+  tr:trace ->
+  sk:bytes -> pk:bytes ->
+  Lemma (bytes_well_formed tr (dh sk pk) <==> (bytes_well_formed tr sk /\ bytes_well_formed tr pk))
+  [SMTPat (bytes_well_formed tr (dh sk pk));
+   SMTPat (bytes_well_formed_smtpats_enabled tr)]
+let bytes_well_formed_dh tr sk pk =
+  reveal_opaque (`%dh_pk) (dh_pk);
+  reveal_opaque (`%dh) (dh);
+  normalize_term_spec bytes_well_formed
+
 /// User lemma (dh_pk preserves bytes invariant)
 
 val bytes_invariant_dh_pk:
@@ -1744,11 +2229,12 @@ let bytes_invariant_dh_pk tr sk =
 
 val get_label_dh_pk:
   {|crypto_usages|} ->
+  tr:trace ->
   sk:bytes ->
   Lemma
-  (ensures get_label (dh_pk sk) == public)
-  [SMTPat (get_label (dh_pk sk))]
-let get_label_dh_pk sk =
+  (ensures get_label tr (dh_pk sk) == public)
+  [SMTPat (get_label tr (dh_pk sk))]
+let get_label_dh_pk tr sk =
   reveal_opaque (`%dh_pk) (dh_pk);
   normalize_term_spec get_label
 
@@ -1756,11 +2242,12 @@ let get_label_dh_pk sk =
 
 val get_dh_label_dh_pk:
   {|crypto_usages|} ->
+  tr:trace ->
   sk:bytes ->
   Lemma
-  (get_dh_label (dh_pk sk) == get_label sk)
-  [SMTPat (get_dh_label (dh_pk sk))]
-let get_dh_label_dh_pk sk =
+  (get_dh_label tr (dh_pk sk) == get_label tr sk)
+  [SMTPat (get_dh_label tr (dh_pk sk))]
+let get_dh_label_dh_pk tr sk =
   reveal_opaque (`%dh_pk) (dh_pk);
   reveal_opaque (`%get_dh_label) (get_dh_label)
 
@@ -1799,16 +2286,17 @@ let bytes_invariant_dh tr sk pk =
 #push-options "--z3rlimit 25"
 val get_label_dh:
   {|crypto_usages|} ->
+  tr:trace ->
   sk:bytes -> pk:bytes ->
   Lemma
-  (ensures (get_label (dh sk pk)) `always_equivalent` ((get_label sk) `join` (get_dh_label pk)))
-  [SMTPat (get_label (dh sk pk))]
-let get_label_dh sk pk =
+  (ensures (get_label tr (dh sk pk)) `always_equivalent` ((get_label tr sk) `join` (get_dh_label tr pk)))
+  [SMTPat (get_label tr (dh sk pk))]
+let get_label_dh tr sk pk =
   reveal_opaque (`%dh_pk) (dh_pk);
   reveal_opaque (`%dh) (dh);
   normalize_term_spec get_dh_label;
   normalize_term_spec get_label;
-  join_always_commutes (get_label sk) (get_dh_label pk)
+  join_always_commutes (get_label tr sk) (get_dh_label tr pk)
 #pop-options
 
 /// User lemma (dh bytes usage with known peer)
@@ -1888,7 +2376,7 @@ let kdf_extract_preserves_publishability tr salt ikm =
   let salt_usage = get_usage salt in
   let ikm_usage = get_usage ikm in
   if KdfExtractSaltKey? salt_usage || KdfExtractIkmKey? ikm_usage then
-    kdf_extract_usage.get_label_lemma tr salt_usage ikm_usage (get_label salt) (get_label ikm) salt ikm
+    kdf_extract_usage.get_label_lemma tr salt_usage ikm_usage (get_label tr salt) (get_label tr ikm) salt ikm
   else ()
 
 /// Lemma for attacker knowledge theorem.
@@ -1909,7 +2397,7 @@ let kdf_expand_preserves_publishability tr prk info len =
   normalize_term_spec get_label;
   let prk_usage = get_usage prk in
   if KdfExpandKey? prk_usage then
-    kdf_expand_usage.get_label_lemma tr prk_usage (get_label prk) info
+    kdf_expand_usage.get_label_lemma tr prk_usage (get_label tr prk) info
   else ()
 
 /// Lemma for attacker knowledge theorem.
@@ -1929,6 +2417,40 @@ let kdf_expand_shorter_preserves_publishability tr prk info len1 len2 =
   reveal_opaque (`%kdf_expand) (kdf_expand);
   normalize_term_spec bytes_invariant;
   normalize_term_spec get_label
+
+/// User lemma (kdf_extract well-formedness)
+
+val bytes_well_formed_kdf_extract:
+  tr:trace ->
+  salt:bytes -> ikm:bytes ->
+  Lemma (
+    bytes_well_formed tr (kdf_extract salt ikm) == (
+      bytes_well_formed tr salt /\
+      bytes_well_formed tr ikm
+    )
+  )
+  [SMTPat (bytes_well_formed tr (kdf_extract salt ikm));
+   SMTPat (bytes_well_formed_smtpats_enabled tr)]
+let bytes_well_formed_kdf_extract tr salt ikm =
+  reveal_opaque (`%kdf_extract) (kdf_extract);
+  normalize_term_spec bytes_well_formed
+
+/// User lemma (kdf_expand well-formedness)
+
+val bytes_well_formed_kdf_expand:
+  tr:trace ->
+  prk:bytes -> info:bytes -> len:nat{len <> 0} ->
+  Lemma (
+    bytes_well_formed tr (kdf_expand prk info len) == (
+      bytes_well_formed tr prk /\
+      bytes_well_formed tr info
+    )
+  )
+  [SMTPat (bytes_well_formed tr (kdf_expand prk info len));
+   SMTPat (bytes_well_formed_smtpats_enabled tr)]
+let bytes_well_formed_kdf_expand tr prk info len =
+  reveal_opaque (`%kdf_expand) (kdf_expand);
+  normalize_term_spec bytes_well_formed
 
 /// User lemma (kdf_extract preserves bytes invariant)
 
@@ -1972,20 +2494,21 @@ let get_usage_kdf_extract salt ikm =
 
 val get_label_kdf_extract:
   {|crypto_usages|} ->
+  tr:trace ->
   salt:bytes -> ikm:bytes ->
   Lemma
   (requires
     (KdfExtractSaltKey? (get_usage salt) \/ KdfExtractIkmKey? (get_usage ikm))
   )
   (ensures
-    get_label (kdf_extract salt ikm) ==
+    get_label tr (kdf_extract salt ikm) ==
     kdf_extract_usage.get_label
       (get_usage salt) (get_usage ikm)
-      (get_label salt) (get_label ikm)
+      (get_label tr salt) (get_label tr ikm)
       salt ikm
   )
-  [SMTPat (get_label (kdf_extract salt ikm))]
-let get_label_kdf_extract salt ikm =
+  [SMTPat (get_label tr (kdf_extract salt ikm))]
+let get_label_kdf_extract tr salt ikm =
   reveal_opaque (`%kdf_extract) (kdf_extract);
   normalize_term_spec get_label
 
@@ -2001,7 +2524,7 @@ val bytes_invariant_kdf_expand:
     bytes_invariant tr info /\
     (
       KdfExpandKey? (get_usage prk) \/
-      get_label prk `can_flow tr` public
+      get_label tr prk `can_flow tr` public
     )
   )
   (ensures bytes_invariant tr (kdf_expand prk info len))
@@ -2029,14 +2552,15 @@ let get_usage_kdf_expand prk info len =
 
 val get_label_kdf_expand:
   {|crypto_usages|} ->
+  tr:trace ->
   prk:bytes -> info:bytes -> len:nat{len <> 0} ->
   Lemma
   (requires KdfExpandKey? (get_usage prk))
   (ensures (
-    get_label (kdf_expand prk info len) == kdf_expand_usage.get_label (get_usage prk) (get_label prk) info
+    get_label tr (kdf_expand prk info len) == kdf_expand_usage.get_label (get_usage prk) (get_label tr prk) info
   ))
-  [SMTPat (get_label (kdf_expand prk info len))]
-let get_label_kdf_expand prk info len =
+  [SMTPat (get_label tr (kdf_expand prk info len))]
+let get_label_kdf_expand tr prk info len =
   reveal_opaque (`%kdf_expand) (kdf_expand);
   normalize_term_spec get_label
 
@@ -2046,14 +2570,14 @@ val get_label_kdf_expand_can_flow:
   {|crypto_usages|} ->
   tr:trace ->
   prk:bytes -> info:bytes -> len:nat{len <> 0} ->
-  Lemma (get_label (kdf_expand prk info len) `can_flow tr` (get_label prk))
-  [SMTPat (can_flow tr (get_label (kdf_expand prk info len)))]
+  Lemma (get_label tr (kdf_expand prk info len) `can_flow tr` (get_label tr prk))
+  [SMTPat (can_flow tr (get_label tr (kdf_expand prk info len)))]
 let get_label_kdf_expand_can_flow tr prk info len =
   reveal_opaque (`%kdf_expand) (kdf_expand);
   normalize_term_spec get_label;
   match get_usage prk with
   | KdfExpandKey _ _ ->
-    kdf_expand_usage.get_label_lemma tr (get_usage prk) (get_label prk) info
+    kdf_expand_usage.get_label_lemma tr (get_usage prk) (get_label tr prk) info
   | _ -> ()
 
 (*** KEM ***)
@@ -2116,62 +2640,6 @@ let kem_pk_preserves_publishability #ci tr sk =
   normalize_term_spec bytes_invariant;
   normalize_term_spec get_label
 
-/// User lemma (kem_pk bytes invariant)
-
-val bytes_invariant_kem_pk:
-  {|crypto_invariants|} ->
-  tr:trace ->
-  sk:bytes ->
-  Lemma
-  (requires bytes_invariant tr sk)
-  (ensures bytes_invariant tr (kem_pk sk))
-  [SMTPat (bytes_invariant tr (kem_pk sk))]
-let bytes_invariant_kem_pk #ci tr sk =
-  normalize_term_spec bytes_invariant;
-  normalize_term_spec kem_pk
-
-/// User lemma (kem_pk sk label)
-
-val get_label_kem_pk:
-  {|crypto_usages|} ->
-  sk:bytes ->
-  Lemma
-  (ensures (
-    get_label (kem_pk sk) == public
-  ))
-  [SMTPat (get_label (kem_pk sk))]
-let get_label_kem_pk #cu sk =
-  normalize_term_spec get_label;
-  normalize_term_spec kem_pk
-
-/// User lemma (kem_pk sk usage)
-
-val get_kem_sk_usage_kem_pk:
-  {|crypto_usages|} ->
-  sk:bytes ->
-  Lemma
-  (ensures (
-    get_kem_sk_usage (kem_pk sk) == get_usage sk
-  ))
-  [SMTPat (get_kem_sk_usage (kem_pk sk))]
-let get_kem_sk_usage_kem_pk #cu sk =
-  normalize_term_spec get_kem_sk_usage;
-  normalize_term_spec kem_pk
-
-/// User lemma (kem_pk sk label)
-
-val get_kem_sk_label_kem_pk:
-  {|crypto_usages|} ->
-  sk:bytes ->
-  Lemma
-  (ensures (
-    get_kem_sk_label (kem_pk sk) == get_label sk
-  ))
-  [SMTPat (get_kem_sk_label (kem_pk sk))]
-let get_kem_sk_label_kem_pk #cu sk =
-  normalize_term_spec get_kem_sk_label;
-  normalize_term_spec kem_pk
-
 /// Lemma for attacker knowledge theorem.
 
 val kem_encap_preserves_publishability:
@@ -2215,9 +2683,127 @@ let kem_decap_preserves_publishability #ci tr sk encap =
   normalize_term_spec get_kem_sk_label;
   match encap with
   | KemEncap (KemPub sk') nonce ->
+    if sk = sk' then (
+      assert(get_label tr (KemSecretShared nonce) `can_flow tr` public)
+    )
+    else ()
+  | _ -> ()
+
+/// User lemma (kem_pk well-formedness)
+
+val bytes_well_formed_kem_pk:
+  tr:trace ->
+  sk:bytes ->
+  Lemma (bytes_well_formed tr (kem_pk sk) == bytes_well_formed tr sk)
+  [SMTPat (bytes_well_formed tr (kem_pk sk));
+   SMTPat (bytes_well_formed_smtpats_enabled tr)]
+let bytes_well_formed_kem_pk tr sk =
+  normalize_term_spec bytes_well_formed;
+  normalize_term_spec kem_pk
+
+/// User lemma (kem_encap well-formedness)
+
+val bytes_well_formed_kem_encap:
+  tr:trace ->
+  pk:bytes -> nonce:bytes ->
+  Lemma
+  (ensures (
+    let (kem_output, ss) = kem_encap pk nonce in
+    bytes_well_formed tr kem_output == (
+      bytes_well_formed tr pk /\
+      bytes_well_formed tr nonce
+    ) /\
+    bytes_well_formed tr ss == bytes_well_formed tr nonce
+  ))
+  [SMTPat (kem_encap pk nonce);
+   SMTPat (bytes_well_formed tr nonce);
+   SMTPat (bytes_well_formed_smtpats_enabled tr)]
+let bytes_well_formed_kem_encap tr pk nonce =
+  normalize_term_spec kem_encap;
+  normalize_term_spec bytes_well_formed;
+  let (kem_output, ss) = kem_encap pk nonce in
+  ()
+
+/// User lemma (kem_decap well-formedness)
+
+val bytes_well_formed_kem_decap:
+  tr:trace ->
+  sk:bytes -> encap:bytes ->
+  Lemma
+  (ensures (
+    match kem_decap sk encap with
+    | Some ss -> bytes_well_formed tr encap == (bytes_well_formed tr sk /\ bytes_well_formed tr ss)
+    | None -> True
+  ))
+  [SMTPat (kem_decap sk encap);
+   SMTPat (bytes_well_formed tr encap);
+   SMTPat (bytes_well_formed_smtpats_enabled tr)]
+let bytes_well_formed_kem_decap tr sk encap =
+  normalize_term_spec kem_decap;
+  normalize_term_spec bytes_well_formed;
+  match encap with
+  | KemEncap (KemPub sk') nonce ->
     if sk = sk' then ()
     else ()
   | _ -> ()
+
+/// User lemma (kem_pk bytes invariant)
+
+val bytes_invariant_kem_pk:
+  {|crypto_invariants|} ->
+  tr:trace ->
+  sk:bytes ->
+  Lemma
+  (requires bytes_invariant tr sk)
+  (ensures bytes_invariant tr (kem_pk sk))
+  [SMTPat (bytes_invariant tr (kem_pk sk))]
+let bytes_invariant_kem_pk #ci tr sk =
+  normalize_term_spec bytes_invariant;
+  normalize_term_spec kem_pk
+
+/// User lemma (kem_pk sk label)
+
+val get_label_kem_pk:
+  {|crypto_usages|} ->
+  tr:trace ->
+  sk:bytes ->
+  Lemma
+  (ensures (
+    get_label tr (kem_pk sk) == public
+  ))
+  [SMTPat (get_label tr (kem_pk sk))]
+let get_label_kem_pk #cu tr sk =
+  normalize_term_spec get_label;
+  normalize_term_spec kem_pk
+
+/// User lemma (kem_pk sk usage)
+
+val get_kem_sk_usage_kem_pk:
+  {|crypto_usages|} ->
+  sk:bytes ->
+  Lemma
+  (ensures (
+    get_kem_sk_usage (kem_pk sk) == get_usage sk
+  ))
+  [SMTPat (get_kem_sk_usage (kem_pk sk))]
+let get_kem_sk_usage_kem_pk #cu sk =
+  normalize_term_spec get_kem_sk_usage;
+  normalize_term_spec kem_pk
+
+/// User lemma (kem_pk sk label)
+
+val get_kem_sk_label_kem_pk:
+  {|crypto_usages|} ->
+  tr:trace ->
+  sk:bytes ->
+  Lemma
+  (ensures (
+    get_kem_sk_label tr (kem_pk sk) == get_label tr sk
+  ))
+  [SMTPat (get_kem_sk_label tr (kem_pk sk))]
+let get_kem_sk_label_kem_pk #cu tr sk =
+  normalize_term_spec get_kem_sk_label;
+  normalize_term_spec kem_pk
 
 /// User lemma (kem_encap properties)
 
@@ -2229,8 +2815,8 @@ val bytes_invariant_kem_encap:
     is_publishable tr pk /\
     bytes_invariant tr nonce /\
     KemNonce? (get_usage nonce) /\
-    (get_label nonce) `can_flow tr` (get_kem_sk_label pk) /\ (
-      get_label nonce `can_flow tr` public \/
+    (get_label tr nonce) `can_flow tr` (get_kem_sk_label tr pk) /\ (
+      get_label tr nonce `can_flow tr` public \/
       get_kem_sk_usage pk == KemKey (KemNonce?.usg (get_usage nonce))
     )
   )
@@ -2238,7 +2824,7 @@ val bytes_invariant_kem_encap:
     let (kem_output, ss) = kem_encap pk nonce in
     is_publishable tr kem_output /\
     bytes_invariant tr ss /\
-    get_label ss == get_label nonce /\
+    get_label tr ss == get_label tr nonce /\
     get_usage ss == (KemNonce?.usg (get_usage nonce))
   ))
   [SMTPat (kem_encap pk nonce); SMTPat (bytes_invariant tr nonce)]
@@ -2262,11 +2848,11 @@ val get_usage_kem_decap:
   (requires
     bytes_invariant tr sk /\
     bytes_invariant tr encap /\
-    (KemKey? (get_usage sk) \/ (get_label sk) `can_flow tr` public)
+    (KemKey? (get_usage sk) \/ (get_label tr sk) `can_flow tr` public)
   )
   (ensures (
     match kem_decap sk encap with
-    | Some ss -> get_usage sk == KemKey (get_usage ss) \/ get_label ss `can_flow tr` public
+    | Some ss -> get_usage sk == KemKey (get_usage ss) \/ get_label tr ss `can_flow tr` public
     | None -> True
   ))
   [SMTPat (kem_decap sk encap); SMTPat (bytes_invariant tr encap)]
@@ -2297,7 +2883,7 @@ val bytes_invariant_kem_decap:
   )
   (ensures (
     match kem_decap sk encap with
-    | Some ss -> is_knowable_by (get_label sk) tr ss
+    | Some ss -> is_knowable_by (get_label tr sk) tr ss
     | None -> True
   ))
   [SMTPat (kem_decap sk encap); SMTPat (bytes_invariant tr encap)]
