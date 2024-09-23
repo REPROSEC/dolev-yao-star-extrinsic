@@ -67,7 +67,7 @@ val bytes_well_formed_is_pre_compatible:
   (bytes_pre_is_compatible (bytes_well_formed tr))
   [SMTPat (bytes_pre_is_compatible (bytes_well_formed tr))]
 let bytes_well_formed_is_pre_compatible tr =
-  assert(enable_bytes_well_formed_smtpats tr);
+  enable_bytes_well_formed_smtpats tr;
   bytes_pre_is_compatible_intro #bytes (bytes_well_formed tr)
     ()
     (fun b1 b2 -> ())

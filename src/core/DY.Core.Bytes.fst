@@ -196,11 +196,18 @@ let rec bytes_well_formed_later tr1 tr2 b =
 ///   are in the `pred_later` lemmas inside `crypto_predicates`,
 ///   which is only a small amount of the security proof.
 /// Hence the SMT patterns do not trigger by default,
-/// and can be enabled by doing `assert (enable_bytes_well_formed_smtpats tr);`.
+/// and can be enabled by doing `enable_bytes_well_formed_smtpats tr;`.
 /// See https://github.com/FStarLang/FStar/wiki/Quantifiers-and-patterns
 /// for more information on this technique.
 
-let enable_bytes_well_formed_smtpats (tr:trace) = True
+[@@"opaque_to_smt"]
+let bytes_well_formed_smtpats_enabled (tr:trace) = True
+
+val enable_bytes_well_formed_smtpats:
+  tr:trace ->
+  Lemma (bytes_well_formed_smtpats_enabled tr)
+let enable_bytes_well_formed_smtpats tr =
+  normalize_term_spec (bytes_well_formed_smtpats_enabled tr)
 
 /// Customizable functions stating how labels and usages evolve
 /// when using some cryptographic functions.
@@ -1136,7 +1143,7 @@ val bytes_well_formed_literal_to_bytes:
   lit:FStar.Seq.seq FStar.UInt8.t ->
   Lemma (bytes_well_formed tr (literal_to_bytes lit))
   [SMTPat (bytes_well_formed tr (literal_to_bytes lit));
-   SMTPat (enable_bytes_well_formed_smtpats tr)]
+   SMTPat (bytes_well_formed_smtpats_enabled tr)]
 let bytes_well_formed_literal_to_bytes tr lit =
   normalize_term_spec bytes_well_formed;
   normalize_term_spec literal_to_bytes
@@ -1266,7 +1273,7 @@ val bytes_well_formed_concat:
   Lemma
   (bytes_well_formed tr (concat b1 b2) == (bytes_well_formed tr b1 /\ bytes_well_formed tr b2))
   [SMTPat (bytes_well_formed tr (concat b1 b2));
-   SMTPat (enable_bytes_well_formed_smtpats tr)]
+   SMTPat (bytes_well_formed_smtpats_enabled tr)]
 let bytes_well_formed_concat tr b1 b2 =
   normalize_term_spec concat;
   normalize_term_spec bytes_well_formed
@@ -1283,7 +1290,7 @@ val bytes_well_formed_split:
   )
   [SMTPat (bytes_well_formed tr b);
    SMTPat (split b i);
-   SMTPat (enable_bytes_well_formed_smtpats tr)]
+   SMTPat (bytes_well_formed_smtpats_enabled tr)]
 let bytes_well_formed_split tr b i =
   normalize_term_spec split;
   normalize_term_spec bytes_well_formed
@@ -1452,7 +1459,7 @@ val bytes_well_formed_aead_enc:
     )
   )
   [SMTPat (bytes_well_formed tr (aead_enc key nonce msg ad));
-   SMTPat (enable_bytes_well_formed_smtpats tr)]
+   SMTPat (bytes_well_formed_smtpats_enabled tr)]
 let bytes_well_formed_aead_enc tr key nonce msg ad =
   normalize_term_spec aead_enc;
   normalize_term_spec bytes_well_formed
@@ -1477,7 +1484,7 @@ val bytes_well_formed_aead_dec:
   )
   [SMTPat (aead_dec key nonce msg ad);
    SMTPat (bytes_well_formed tr msg);
-   SMTPat (enable_bytes_well_formed_smtpats tr)]
+   SMTPat (bytes_well_formed_smtpats_enabled tr)]
 let bytes_well_formed_aead_dec tr key nonce msg ad =
   normalize_term_spec aead_dec;
   normalize_term_spec bytes_well_formed;
@@ -1664,7 +1671,7 @@ val bytes_well_formed_pk:
   Lemma
   (bytes_well_formed tr (pk sk) == bytes_well_formed tr sk)
   [SMTPat (bytes_well_formed tr (pk sk));
-   SMTPat (enable_bytes_well_formed_smtpats tr)]
+   SMTPat (bytes_well_formed_smtpats_enabled tr)]
 let bytes_well_formed_pk tr sk =
   normalize_term_spec pk;
   normalize_term_spec bytes_well_formed
@@ -1682,7 +1689,7 @@ val bytes_well_formed_pk_enc:
     )
   )
   [SMTPat (bytes_well_formed tr (pk_enc pk nonce msg));
-   SMTPat (enable_bytes_well_formed_smtpats tr)]
+   SMTPat (bytes_well_formed_smtpats_enabled tr)]
 let bytes_well_formed_pk_enc tr pk nonce msg =
   normalize_term_spec pk_enc;
   normalize_term_spec bytes_well_formed
@@ -1706,7 +1713,7 @@ val bytes_well_formed_pk_dec:
   ))
   [SMTPat (pk_dec sk msg);
    SMTPat (bytes_well_formed tr msg);
-   SMTPat (enable_bytes_well_formed_smtpats tr)]
+   SMTPat (bytes_well_formed_smtpats_enabled tr)]
 let bytes_well_formed_pk_dec tr sk msg =
   normalize_term_spec pk_dec;
   normalize_term_spec pk;
@@ -1906,7 +1913,7 @@ val bytes_well_formed_vk:
   sk:bytes ->
   Lemma (bytes_well_formed tr (vk sk) == bytes_well_formed tr sk)
   [SMTPat (bytes_well_formed tr (vk sk));
-   SMTPat (enable_bytes_well_formed_smtpats tr)]
+   SMTPat (bytes_well_formed_smtpats_enabled tr)]
 let bytes_well_formed_vk tr sk =
   normalize_term_spec vk;
   normalize_term_spec bytes_well_formed
@@ -1924,7 +1931,7 @@ val bytes_well_formed_sign:
     )
   )
   [SMTPat (bytes_well_formed tr (sign sk nonce msg));
-   SMTPat (enable_bytes_well_formed_smtpats tr)]
+   SMTPat (bytes_well_formed_smtpats_enabled tr)]
 let bytes_well_formed_sign tr sk nonce msg =
   normalize_term_spec sign;
   normalize_term_spec vk;
@@ -2071,7 +2078,7 @@ val bytes_well_formed_hash:
   msg:bytes ->
   Lemma (bytes_well_formed tr (hash msg) == bytes_well_formed tr msg)
   [SMTPat (bytes_well_formed tr (hash msg));
-   SMTPat (enable_bytes_well_formed_smtpats tr)]
+   SMTPat (bytes_well_formed_smtpats_enabled tr)]
 let bytes_well_formed_hash tr msg =
   normalize_term_spec hash;
   normalize_term_spec bytes_well_formed
@@ -2187,7 +2194,7 @@ val bytes_well_formed_dh_pk:
   sk:bytes ->
   Lemma (bytes_well_formed tr (dh_pk sk) == bytes_well_formed tr sk)
   [SMTPat (bytes_well_formed tr (dh_pk sk));
-   SMTPat (enable_bytes_well_formed_smtpats tr)]
+   SMTPat (bytes_well_formed_smtpats_enabled tr)]
 let bytes_well_formed_dh_pk tr sk =
   reveal_opaque (`%dh_pk) (dh_pk);
   normalize_term_spec bytes_well_formed
@@ -2199,7 +2206,7 @@ val bytes_well_formed_dh:
   sk:bytes -> pk:bytes ->
   Lemma (bytes_well_formed tr (dh sk pk) <==> (bytes_well_formed tr sk /\ bytes_well_formed tr pk))
   [SMTPat (bytes_well_formed tr (dh sk pk));
-   SMTPat (enable_bytes_well_formed_smtpats tr)]
+   SMTPat (bytes_well_formed_smtpats_enabled tr)]
 let bytes_well_formed_dh tr sk pk =
   reveal_opaque (`%dh_pk) (dh_pk);
   reveal_opaque (`%dh) (dh);
@@ -2423,7 +2430,7 @@ val bytes_well_formed_kdf_extract:
     )
   )
   [SMTPat (bytes_well_formed tr (kdf_extract salt ikm));
-   SMTPat (enable_bytes_well_formed_smtpats tr)]
+   SMTPat (bytes_well_formed_smtpats_enabled tr)]
 let bytes_well_formed_kdf_extract tr salt ikm =
   reveal_opaque (`%kdf_extract) (kdf_extract);
   normalize_term_spec bytes_well_formed
@@ -2440,7 +2447,7 @@ val bytes_well_formed_kdf_expand:
     )
   )
   [SMTPat (bytes_well_formed tr (kdf_expand prk info len));
-   SMTPat (enable_bytes_well_formed_smtpats tr)]
+   SMTPat (bytes_well_formed_smtpats_enabled tr)]
 let bytes_well_formed_kdf_expand tr prk info len =
   reveal_opaque (`%kdf_expand) (kdf_expand);
   normalize_term_spec bytes_well_formed
@@ -2689,7 +2696,7 @@ val bytes_well_formed_kem_pk:
   sk:bytes ->
   Lemma (bytes_well_formed tr (kem_pk sk) == bytes_well_formed tr sk)
   [SMTPat (bytes_well_formed tr (kem_pk sk));
-   SMTPat (enable_bytes_well_formed_smtpats tr)]
+   SMTPat (bytes_well_formed_smtpats_enabled tr)]
 let bytes_well_formed_kem_pk tr sk =
   normalize_term_spec bytes_well_formed;
   normalize_term_spec kem_pk
@@ -2710,7 +2717,7 @@ val bytes_well_formed_kem_encap:
   ))
   [SMTPat (kem_encap pk nonce);
    SMTPat (bytes_well_formed tr nonce);
-   SMTPat (enable_bytes_well_formed_smtpats tr)]
+   SMTPat (bytes_well_formed_smtpats_enabled tr)]
 let bytes_well_formed_kem_encap tr pk nonce =
   normalize_term_spec kem_encap;
   normalize_term_spec bytes_well_formed;
@@ -2730,7 +2737,7 @@ val bytes_well_formed_kem_decap:
   ))
   [SMTPat (kem_decap sk encap);
    SMTPat (bytes_well_formed tr encap);
-   SMTPat (enable_bytes_well_formed_smtpats tr)]
+   SMTPat (bytes_well_formed_smtpats_enabled tr)]
 let bytes_well_formed_kem_decap tr sk encap =
   normalize_term_spec kem_decap;
   normalize_term_spec bytes_well_formed;
