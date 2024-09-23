@@ -54,15 +54,15 @@ let event_predicate_nsl: event_predicate nsl_event =
     match e with
     | Initiate1 alice bob n_a -> (
       prin == alice /\
-      get_label n_a == join (principal_label alice) (principal_label bob) /\
-      0 < DY.Core.Trace.Type.length tr /\
-      rand_generated_at tr (DY.Core.Trace.Type.length tr - 1) n_a
+      is_secret (join (principal_label alice) (principal_label bob)) tr n_a /\
+      0 < DY.Core.Trace.Base.length tr /\
+      rand_generated_at tr (DY.Core.Trace.Base.length tr - 1) n_a
     )
     | Respond1 alice bob n_a n_b -> (
       prin == bob /\
-      get_label n_b == join (principal_label alice) (principal_label bob) /\
-      0 < DY.Core.Trace.Type.length tr /\
-      rand_generated_at tr (DY.Core.Trace.Type.length tr - 1) n_b
+      is_secret (join (principal_label alice) (principal_label bob)) tr n_b /\
+      0 < DY.Core.Trace.Base.length tr /\
+      rand_generated_at tr (DY.Core.Trace.Base.length tr - 1) n_b
     )
     | Initiate2 alice bob n_a n_b -> (
       prin == alice /\
@@ -320,8 +320,8 @@ let prepare_msg4 tr global_sess_id bob sess_id msg_id =
           // because we know the label of n_b (which is (join (principal_label alice) (principal_label bob))).
           // It is useful in the "modulo corruption" part of the proof.
           introduce (~((join (principal_label alice) (principal_label bob)) `can_flow tr` public)) ==> event_triggered tr alice (Initiate2 alice bob n_a n_b) with _. (
-            assert(exists alice' n_a'. get_label n_b `can_flow tr` (principal_label alice') /\ event_triggered tr alice' (Initiate2 alice' bob n_a' n_b));
-            eliminate exists alice' n_a'. get_label n_b `can_flow tr` (principal_label alice') /\ event_triggered tr alice' (Initiate2 alice' bob n_a' n_b)
+            assert(exists alice' n_a'. get_label tr n_b `can_flow tr` (principal_label alice') /\ event_triggered tr alice' (Initiate2 alice' bob n_a' n_b));
+            eliminate exists alice' n_a'. get_label tr n_b `can_flow tr` (principal_label alice') /\ event_triggered tr alice' (Initiate2 alice' bob n_a' n_b)
             returns _
             with _. (
               event_respond1_injective tr alice alice' bob n_a n_a' n_b
