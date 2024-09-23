@@ -111,6 +111,7 @@ include DY.Core.Label.Derived
 include DY.Core.Trace.Invariant
 include DY.Core.Trace.Manipulation
 include DY.Core.Trace.Type
+include DY.Core.Trace.Base
 // include Bytes after Trace because of shadowing `length` function
 include DY.Core.Bytes
 include DY.Core.Bytes.Type

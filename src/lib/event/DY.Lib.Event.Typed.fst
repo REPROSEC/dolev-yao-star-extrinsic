@@ -171,7 +171,7 @@ val event_triggered_at_implies_pred:
     has_event_pred epred /\
     trace_invariant tr
   )
-  (ensures i <= DY.Core.Trace.Type.length tr /\ epred (prefix tr i) prin e)
+  (ensures i <= DY.Core.Trace.Base.length tr /\ epred (prefix tr i) prin e)
   [SMTPat (event_triggered_at tr i prin e);
    SMTPat (has_event_pred epred);
    SMTPat (trace_invariant tr);
@@ -199,7 +199,7 @@ val event_triggered_at_implies_trace_event_at:
   Lemma
   (requires event_triggered_at tr i prin e)
   (ensures
-    i < DY.Core.Trace.Type.length tr /\
+    i < DY.Core.Trace.Base.length tr /\
     get_event_at tr i == Event prin ev.tag (serialize a e) /\
     parse #bytes a (serialize a e) == Some e
   )

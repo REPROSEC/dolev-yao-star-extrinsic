@@ -1,7 +1,7 @@
 module DY.Core.Label.Derived
 
 open DY.Core.Label.Type
-open DY.Core.Trace.Type
+open DY.Core.Trace.Base
 open DY.Core.Label
 
 /// This module defines auxillary predicates and lemmas

@@ -234,7 +234,7 @@ let trace_event_to_string printers tr_event i =
 
 val trace_to_string_helper:
   trace_to_string_printers ->
-  (tr:trace) -> (i:nat{i = DY.Core.Trace.Type.length tr}) ->
+  (tr:trace) -> (i:nat{i = DY.Core.Trace.Base.length tr}) ->
   string
 let rec trace_to_string_helper printers tr i =
   match tr with
@@ -257,7 +257,7 @@ let rec trace_to_string_helper printers tr i =
 
 val trace_to_string: trace_to_string_printers -> trace -> string
 let trace_to_string printers tr =
-  trace_to_string_helper printers tr (DY.Core.Trace.Type.length tr)
+  trace_to_string_helper printers tr (DY.Core.Trace.Base.length tr)
 
 
 (*** Helper Functions to Setup the Printer Functions Record ***)

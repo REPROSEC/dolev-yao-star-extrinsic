@@ -2,6 +2,7 @@ module DY.Core.Bytes
 
 open DY.Core.Bytes.Type
 open DY.Core.Trace.Type
+open DY.Core.Trace.Base
 open DY.Core.Label.Type
 open DY.Core.Label
 open DY.Core.Label.Derived
@@ -106,7 +107,7 @@ let rec bytes_well_formed tr b =
   | Literal buf ->
     True
   | Rand usg len time ->
-    time < DY.Core.Trace.Type.length tr /\
+    time < DY.Core.Trace.Base.length tr /\
     RandGen? (get_event_at tr time)
   | Concat left right ->
     bytes_well_formed tr left /\
@@ -389,7 +390,7 @@ let rec get_label #cusages tr b =
   | Literal buf ->
     public
   | Rand usg len time ->
-    if time < DY.Core.Trace.Type.length tr then (
+    if time < DY.Core.Trace.Base.length tr then (
       match get_event_at tr time with
       | RandGen _ lab _ -> lab
       | _ -> DY.Core.Label.Unknown.unknown_label

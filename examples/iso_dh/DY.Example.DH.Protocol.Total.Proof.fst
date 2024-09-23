@@ -165,7 +165,7 @@ let compute_message2_proof tr alice bob gx y sk_b n_sig =
   assert(is_publishable tr (compute_message2 alice bob gx gy sk_b n_sig));
   ()
 
-#push-options "--ifuel 1 --z3rlimit 10"
+#push-options "--ifuel 1 --z3rlimit 20"
 val decode_and_verify_message2_proof:
   tr:trace ->
   msg2_bytes:bytes ->
