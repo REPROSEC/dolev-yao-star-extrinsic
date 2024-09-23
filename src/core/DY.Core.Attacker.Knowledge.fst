@@ -3,6 +3,7 @@ module DY.Core.Attacker.Knowledge
 open DY.Core.Bytes.Type
 open DY.Core.Bytes
 open DY.Core.Trace.Type
+open DY.Core.Trace.Base
 open DY.Core.Trace.Invariant
 open DY.Core.Label.Type
 open DY.Core.Label

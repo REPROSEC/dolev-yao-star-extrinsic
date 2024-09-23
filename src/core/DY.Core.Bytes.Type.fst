@@ -1,7 +1,5 @@
 module DY.Core.Bytes.Type
 
-open DY.Core.Label.Type
-
 /// This module defines the types associated with bytes.
 /// It is separated from functions and predicates on bytes
 /// in order to avoid dependency cycles.
