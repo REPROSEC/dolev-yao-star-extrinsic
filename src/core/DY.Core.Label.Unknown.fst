@@ -5,6 +5,10 @@ module DY.Core.Label.Unknown
 /// unless we `friend DY.Core.Label.Unknown`, which we shouldn't do.
 
 let unknown_label = {
-  is_corrupt = (fun tr -> True);
-  is_corrupt_later = (fun tr ev -> ());
+  is_corrupt = FStar.FunctionalExtensionality.on _ (fun tr ->
+    True <: prop
+  );
+  is_corrupt_later = (
+    reveal_opaque (`%is_monotonic) is_monotonic
+  );
 }

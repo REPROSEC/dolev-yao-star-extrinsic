@@ -298,27 +298,74 @@ let rand_generated_at tr i b =
 /// Functions to replace labels in a trace by `()`.
 /// This is useful to use labels that are predicates on `trace_ unit`
 /// with actual traces that are `trace_ label`.
-/// See `DY.Core.Label.Type` for more information
+/// See `DY.Core.Label.Type` for more information.
+/// This is defined using a `fmap` function on traces,
+/// which can help proving properties on `trace_forget_labels`.
+/// It is named after Haskell's fmap `(a -> b) -> f a -> f b`,
+/// where here `f` is either `trace_event_` or `trace_`.
+/// Furthermore, `a` and `b` are types for labels
+/// (in practice either `label` or `unit`),
+/// and the `a -> b` function is applied on labels in the trace.
 
-val trace_event_forget_labels:
-  trace_event ->
-  trace_event_ unit
-let trace_event_forget_labels ev =
+val fmap_trace_event:
+  #a:Type -> #b:Type ->
+  (a -> b) -> trace_event_ a ->
+  trace_event_ b
+let fmap_trace_event #a #b f ev =
   match ev with
   | MsgSent msg -> MsgSent msg
-  | RandGen usg lab len -> RandGen usg () len
+  | RandGen usg lab len -> RandGen usg (f lab) len
   | Corrupt prin sess_id -> Corrupt prin sess_id
   | SetState prin sess_id content -> SetState prin sess_id content
   | Event prin tag content -> Event prin tag content
 
-val trace_forget_labels:
-  trace ->
-  trace_ unit
-let rec trace_forget_labels tr =
+val fmap_trace:
+  #a:Type -> #b:Type ->
+  (a -> b) -> trace_ a ->
+  trace_ b
+let rec fmap_trace f tr =
   match tr with
   | Nil -> Nil
   | Snoc init last ->
-    Snoc (trace_forget_labels init) (trace_event_forget_labels last)
+    Snoc (fmap_trace f init) (fmap_trace_event f last)
+
+val forget_label:
+  #a:Type -> #b:Type ->
+  b ->
+  a -> b
+let forget_label #a #b x _ = x
+
+val trace_forget_labels:
+  trace ->
+  trace_ unit
+let trace_forget_labels tr =
+  fmap_trace (forget_label ()) tr
+
+val fmap_trace_identity:
+  #a:Type ->
+  f:(a -> a) ->
+  tr:trace_ a ->
+  Lemma
+  (requires forall x. f x == x)
+  (ensures fmap_trace f tr == tr)
+let rec fmap_trace_identity #a f tr =
+  match tr with
+  | Nil -> ()
+  | Snoc init last ->
+    fmap_trace_identity f init
+
+val fmap_trace_compose:
+  #a:Type -> #b:Type -> #c:Type ->
+  f:(a -> b) -> g:(b -> c) -> h:(a -> c) ->
+  tr:trace_ a ->
+  Lemma
+  (requires forall x. g (f x) == h x)
+  (ensures fmap_trace g (fmap_trace f tr) == fmap_trace h tr)
+let rec fmap_trace_compose #a #b #c f g h tr =
+  match tr with
+  | Nil -> ()
+  | Snoc init last ->
+    fmap_trace_compose f g h init
 
 val length_trace_forget_labels:
   tr:trace ->
@@ -346,4 +393,3 @@ let rec trace_forget_labels_later tr1 tr2 =
     let Snoc tr2_init tr2_last = tr2 in
     trace_forget_labels_later tr1 tr2_init
   )
-
