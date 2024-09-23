@@ -1,5 +1,6 @@
 module DY.Core.Label.Type
 
+open FStar.FunctionalExtensionality
 open DY.Core.Trace.Type
 
 /// This module defines the types associated with labels.
@@ -21,15 +22,28 @@ open DY.Core.Trace.Type
 /// which respects the positivity condition.
 /// It means that labels cannot decide about their corruption depending on other labels in the trace,
 /// but this is not a problem in practice.
+///
+/// We use the restricted arrow type `^->` to benefit from predicate extensionality.
+/// This implies that two labels that behave the same are equal, see `DY.Core.Label.intro_label_equal`.
+
+#set-options "--fuel 0 --ifuel 0"
+
+/// Monotonicity property of labels.
+/// This is hidden from the SMT to avoid polluting the context with the content of `is_corrupt_later` for each label.
+/// `is_corrupt_later` is a `squash` rather than a `Lemma` to better prove extensionality.
+/// Monotonicity is not formulated with the `<$` relation as in the rest of DY*
+/// to simplify the dependency graph.
+
+[@@"opaque_to_smt"]
+val is_monotonic:
+  (trace_ unit -> prop) ->
+  prop
+let is_monotonic is_corrupt =
+  forall tr ev. is_corrupt tr ==> is_corrupt (Snoc tr ev)
 
 [@@erasable]
 noeq
 type label = {
-  is_corrupt: trace_ unit -> prop;
-  is_corrupt_later:
-    tr:trace_ unit -> ev:trace_event_ unit ->
-    Lemma
-    (requires is_corrupt tr)
-    (ensures is_corrupt (Snoc tr ev))
-  ;
+  is_corrupt: trace_ unit ^-> prop;
+  is_corrupt_later: squash (is_monotonic is_corrupt);
 }

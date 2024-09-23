@@ -2284,21 +2284,20 @@ let bytes_invariant_dh tr sk pk =
 
 /// User lemma (dh bytes label)
 
-#push-options "--z3rlimit 25"
 val get_label_dh:
   {|crypto_usages|} ->
   tr:trace ->
   sk:bytes -> pk:bytes ->
   Lemma
-  (ensures (get_label tr (dh sk pk)) `always_equivalent` ((get_label tr sk) `join` (get_dh_label tr pk)))
+  (ensures (get_label tr (dh sk pk)) == ((get_label tr sk) `join` (get_dh_label tr pk)))
   [SMTPat (get_label tr (dh sk pk))]
 let get_label_dh tr sk pk =
   reveal_opaque (`%dh_pk) (dh_pk);
   reveal_opaque (`%dh) (dh);
   normalize_term_spec get_dh_label;
   normalize_term_spec get_label;
-  join_always_commutes (get_label tr sk) (get_dh_label tr pk)
-#pop-options
+  join_commutes (get_label tr sk) (get_dh_label tr pk);
+  join_public (get_label tr sk)
 
 /// User lemma (dh bytes usage with known peer)
 
