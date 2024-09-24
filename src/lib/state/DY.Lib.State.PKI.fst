@@ -54,13 +54,22 @@ instance map_types_pki: map_types pki_key pki_value = {
   ps_value_t = ps_pki_value;
 }
 
+type public_key_usage_data = {
+  who: principal;
+}
+
+%splice [ps_public_key_usage_data] (gen_parser (`public_key_usage_data))
+
+instance parseable_serializeable_bytes_public_key_usage_data: parseable_serializeable bytes public_key_usage_data =
+  mk_parseable_serializeable ps_public_key_usage_data
+
 val public_key_type_to_usage:
-  public_key_type ->
+  public_key_type -> principal ->
   usage
-let public_key_type_to_usage sk_type =
+let public_key_type_to_usage sk_type who =
   match sk_type with
-  | LongTermPkEncKey usg -> PkKey usg empty
-  | LongTermSigKey usg -> SigKey usg empty
+  | LongTermPkEncKey usg -> PkKey usg (serialize _ {who})
+  | LongTermSigKey usg -> SigKey usg (serialize _ {who})
 
 val is_public_key_for:
   {|crypto_invariants|} -> trace ->
@@ -68,16 +77,16 @@ val is_public_key_for:
 let is_public_key_for #cinvs tr pk pk_type who =
   match pk_type with
   | LongTermPkEncKey usg -> (
-    is_encryption_key (public_key_type_to_usage pk_type) (principal_label who) tr pk
+    is_encryption_key (public_key_type_to_usage pk_type who) (principal_label who) tr pk
   )
   | LongTermSigKey usg -> (
-    is_verification_key (public_key_type_to_usage pk_type) (principal_label who) tr pk
+    is_verification_key (public_key_type_to_usage pk_type who) (principal_label who) tr pk
   )
 
 // The `#_` at the end is a workaround for FStarLang/FStar#3286
 val pki_pred: {|crypto_invariants|} -> map_predicate pki_key pki_value #_
 let pki_pred #cinvs = {
-  pred = (fun tr prin sess_id key value ->
+  pred = (fun tr prin sess_id (key: pki_key) value ->
     is_public_key_for tr value.public_key key.ty key.who
   );
   pred_later = (fun tr1 tr2 prin sess_id key value -> ());

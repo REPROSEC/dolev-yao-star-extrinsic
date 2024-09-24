@@ -45,10 +45,10 @@ val is_private_key_for:
 let is_private_key_for #cinvs tr sk sk_type who =
   match sk_type with
   | LongTermPkEncKey usg -> (
-    is_decryption_key (public_key_type_to_usage sk_type) (principal_label who) tr sk
+    is_decryption_key (public_key_type_to_usage sk_type who) (principal_label who) tr sk
   )
   | LongTermSigKey usg -> (
-    is_signature_key (public_key_type_to_usage sk_type) (principal_label who) tr sk
+    is_signature_key (public_key_type_to_usage sk_type who) (principal_label who) tr sk
   )
 
 // The `#_` at the end is a workaround for FStarLang/FStar#3286
@@ -77,7 +77,7 @@ let initialize_private_keys = initialize_map private_key_key private_key_value #
 [@@ "opaque_to_smt"]
 val generate_private_key: principal -> state_id -> public_key_type -> traceful (option unit)
 let generate_private_key prin sess_id sk_type =
-  let* sk = mk_rand (public_key_type_to_usage sk_type) (principal_label prin) 64 in //TODO
+  let* sk = mk_rand (public_key_type_to_usage sk_type prin) (principal_label prin) 64 in //TODO
   add_key_value prin sess_id ({ty = sk_type}) ({private_key = sk;})
 
 [@@ "opaque_to_smt"]
