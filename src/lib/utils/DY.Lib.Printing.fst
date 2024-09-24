@@ -15,19 +15,6 @@ open DY.Lib.State.Map
 
 (*** Print Functions for Basic DY* Types ***)
 
-val label_to_string: (l:label) -> string
-let rec label_to_string l =
-  match l with
-  | Secret -> "Secret"
-  | State pre_label -> (
-    match pre_label with
-    | P p -> Printf.sprintf "Principal %s" p
-    | S p s -> Printf.sprintf "Principal %s state %d" p s.the_id
-  ) 
-  | Meet l1 l2 -> Printf.sprintf "Meet [%s; %s]" (label_to_string l1) (label_to_string l2)
-  | Join l1 l2 -> Printf.sprintf "Join [%s; %s]" (label_to_string l1) (label_to_string l2)
-  | Public -> "Public"
-
 val uint_list_to_string: list FStar.UInt8.t -> string
 let rec uint_list_to_string seq =
   match seq with
@@ -44,7 +31,7 @@ let rec bytes_to_string b =
   match b with
   | Literal s -> uint_list_to_string (FStar.Seq.seq_to_list s)
   
-  | Rand usage label len time -> Printf.sprintf "Nonce #%d" time
+  | Rand usage len time -> Printf.sprintf "Nonce #%d" time
   
   | Concat (Literal s) right -> (
       Printf.sprintf "%s%s" 
@@ -226,8 +213,8 @@ let trace_event_to_string printers tr_event i =
       i msg_str
   )
   | RandGen usg lab len -> (
-    Printf.sprintf "{\"TraceID\": %d, \"Type\": \"Nonce\", \"Usage\": %s, \"Label\": \"%s\"}\n" 
-    i (usage_to_string usg) (label_to_string lab)
+    Printf.sprintf "{\"TraceID\": %d, \"Type\": \"Nonce\", \"Usage\": %s}\n" 
+    i (usage_to_string usg)
   )
   | Corrupt prin sess_id -> ""
   | SetState prin sess_id full_content -> (
@@ -247,7 +234,7 @@ let trace_event_to_string printers tr_event i =
 
 val trace_to_string_helper:
   trace_to_string_printers ->
-  (tr:trace) -> (i:nat{i = DY.Core.Trace.Type.length tr}) ->
+  (tr:trace) -> (i:nat{i = DY.Core.Trace.Base.length tr}) ->
   string
 let rec trace_to_string_helper printers tr i =
   match tr with
@@ -270,7 +257,7 @@ let rec trace_to_string_helper printers tr i =
 
 val trace_to_string: trace_to_string_printers -> trace -> string
 let trace_to_string printers tr =
-  trace_to_string_helper printers tr (DY.Core.Trace.Type.length tr)
+  trace_to_string_helper printers tr (DY.Core.Trace.Base.length tr)
 
 
 (*** Helper Functions to Setup the Printer Functions Record ***)

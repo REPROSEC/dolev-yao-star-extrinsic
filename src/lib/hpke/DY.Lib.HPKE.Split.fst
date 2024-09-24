@@ -25,6 +25,12 @@ let split_hpke_predicate_params {|crypto_usages|}: split_crypto_predicate_parame
     pred (tr, usage, (plaintext, info, ad))
   );
 
+  key_and_data_well_formed = (fun tr usage (plaintext, info, ad) ->
+    bytes_well_formed tr plaintext /\
+    bytes_well_formed tr info /\
+    bytes_well_formed tr ad
+  );
+
   apply_mk_global_pred = (fun bare x -> ());
   apply_local_pred_later = (fun lpred tr1 tr2 usage (plaintext, info, ad) ->
     lpred.pred_later tr1 tr2 usage plaintext info ad

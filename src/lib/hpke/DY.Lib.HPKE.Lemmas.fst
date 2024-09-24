@@ -67,9 +67,9 @@ let mk_hpke_entropy_usage (usage_tag, usage_data) =
 
 /// Obtain the label of the corresponding HPKE private key of a HPKE public key.
 
-val get_hpke_sk_label: {|crypto_usages|} -> bytes -> label
-let get_hpke_sk_label #cusages pk =
-  get_kem_sk_label pk
+val get_hpke_sk_label: {|crypto_usages|} -> trace -> bytes -> label
+let get_hpke_sk_label #cusages tr pk =
+  get_kem_sk_label tr pk
 
 /// Obtain the usage of the corresponding HPKE private key of a HPKE public key.
 
@@ -86,7 +86,13 @@ type hpke_crypto_predicate {|crypto_usages|} = {
     tr1:trace -> tr2:trace ->
     usage:(string & bytes) -> msg:bytes -> info:bytes -> ad:bytes ->
     Lemma
-    (requires pred tr1 usage msg info ad /\ tr1 <$ tr2)
+    (requires
+      pred tr1 usage msg info ad /\
+      bytes_well_formed tr1 msg /\
+      bytes_well_formed tr1 info /\
+      bytes_well_formed tr1 ad /\
+      tr1 <$ tr2
+    )
     (ensures pred tr2 usage msg info ad)
   ;
 }
@@ -146,8 +152,10 @@ let hpke_aead_pred #cusgs #hpke = {
     let AeadKey usg data = key_usage in
     match parse hpke_aead_usage_data data with
     | Some { hpke_usg; info; } ->
-      get_label msg `can_flow tr` public \/
-      hpke_pred.pred tr (hpke_usg.usage_tag, hpke_usg.usage_data) msg info ad
+      bytes_well_formed tr info /\ (
+        get_label tr msg `can_flow tr` public \/
+        hpke_pred.pred tr (hpke_usg.usage_tag, hpke_usg.usage_data) msg info ad
+      )
     | _ ->
       False
   );
@@ -193,11 +201,12 @@ let bytes_invariant_hpke_pk #ci tr sk = ()
 
 val get_label_hpke_pk:
   {|crypto_usages|} ->
+  tr:trace ->
   sk:bytes ->
   Lemma
-  (ensures get_label (hpke_pk sk) == public)
-  [SMTPat (get_label (hpke_pk sk))]
-let get_label_hpke_pk #cu sk = ()
+  (ensures get_label tr (hpke_pk sk) == public)
+  [SMTPat (get_label tr (hpke_pk sk))]
+let get_label_hpke_pk #cu tr sk = ()
 
 val has_hpke_sk_usage_hpke_pk:
   {|crypto_usages|} ->
@@ -209,11 +218,12 @@ let has_hpke_sk_usage_hpke_pk #cu tr sk usg = ()
 
 val get_hpke_sk_label_hpke_pk:
   {|crypto_usages|} ->
+  tr:trace ->
   sk:bytes ->
   Lemma
-  (ensures get_hpke_sk_label (hpke_pk sk) == get_label sk)
-  [SMTPat (get_hpke_sk_label (hpke_pk sk))]
-let get_hpke_sk_label_hpke_pk #cu sk = ()
+  (ensures get_hpke_sk_label tr (hpke_pk sk) == get_label tr sk)
+  [SMTPat (get_hpke_sk_label tr (hpke_pk sk))]
+let get_hpke_sk_label_hpke_pk #cu tr sk = ()
 
 /// Lemma for `hpke_enc`.
 /// It is a bit more complex than `DY.Core.Bytes.bytes_invariant_pk_enc`,
@@ -233,9 +243,9 @@ val bytes_invariant_hpke_enc:
     bytes_invariant tr info /\
     is_publishable tr ad /\
     // the message must flow to the shared secret (derived from the entropy), a requirement of AEAD
-    (get_label msg) `can_flow tr` (get_label entropy) /\
+    (get_label tr msg) `can_flow tr` (get_label tr entropy) /\
     // shared secret (derived from the entropy) must flow to the secret key, a requirement of KEM
-    (get_label entropy) `can_flow tr` (get_hpke_sk_label pkR) /\
+    (get_label tr entropy) `can_flow tr` (get_hpke_sk_label tr pkR) /\
     // the entropy and public key must agree on the usage,
     // or the entropy (hence shared secret) must be publishable:
     // without this precondition, there could be cross-protocol attacks,
@@ -248,7 +258,7 @@ val bytes_invariant_hpke_enc:
       (
         hpke_pred.pred tr usg msg info ad
       ) \/ (
-        get_label msg `can_flow tr` public
+        get_label tr msg `can_flow tr` public
       )
     ) /\
     // the global protocol invariants must contain the HPKE invariants
@@ -302,7 +312,7 @@ val bytes_invariant_hpke_dec:
     match hpke_dec skR (enc, ciphertext) info ad with
     | None -> True
     | Some plaintext ->
-      is_knowable_by (get_label skR) tr plaintext /\
+      is_knowable_by (get_label tr skR) tr plaintext /\
       (
         (
           hpke_pred.pred tr usg plaintext info ad
@@ -335,10 +345,10 @@ let bytes_invariant_hpke_dec #cinvs #hpke tr skR enc ciphertext info ad (usage_t
     assert(shared_secret `has_usage tr` KdfExpandKey "DY.Lib.HPKE" (serialize _ {usage_tag; usage_data}));
     let aead_key = kdf_expand shared_secret key_info_bytes 32 in
     assert(aead_key `has_usage tr` AeadKey "DY.Lib.HPKE" (serialize _ {hpke_usg = {usage_tag; usage_data}; info}));
-    assert(get_label aead_key `equivalent tr` get_label shared_secret);
+    assert(get_label tr aead_key `equivalent tr` get_label tr shared_secret);
     let aead_nonce = kdf_expand shared_secret nonce_info_bytes 32 in
     assert(aead_nonce `has_usage tr` NoUsage);
-    assert(get_label aead_nonce `equivalent tr` public);
+    assert(get_label tr aead_nonce `equivalent tr` public);
     match aead_dec aead_key aead_nonce ciphertext ad with
     | None -> ()
     | Some plaintext -> (

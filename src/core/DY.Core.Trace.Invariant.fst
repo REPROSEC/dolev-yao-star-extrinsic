@@ -1,6 +1,7 @@
 module DY.Core.Trace.Invariant
 
 open DY.Core.Trace.Type
+open DY.Core.Trace.Base
 open DY.Core.Bytes.Type
 open DY.Core.Bytes
 open DY.Core.Label.Type
@@ -126,8 +127,8 @@ val event_at_implies_trace_event_invariant:
   )
 let rec event_at_implies_trace_event_invariant #invs tr i event =
   norm_spec [zeta; delta_only [`%trace_invariant]] (trace_invariant);
-  norm_spec [zeta; delta_only [`%prefix]] (prefix);
-  if i+1 = DY.Core.Trace.Type.length tr then ()
+  norm_spec [zeta; delta_only [`%prefix]] (prefix #label);
+  if i+1 = DY.Core.Trace.Base.length tr then ()
   else (
     let Snoc tr_init _ = tr in
     event_at_implies_trace_event_invariant tr_init i event
