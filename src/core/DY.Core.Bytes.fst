@@ -483,7 +483,19 @@ let rec get_label_later #cusgs tr1 tr2 b =
   | KemSecretShared nonce ->
     get_label_later tr1 tr2 nonce
 
-/// TODO comment
+/// Is it safe to use a bytestring as if it had some given usage?
+///
+/// In real-world protocols, we are rarely 100% certain that a key has some usage.
+/// Indeed, the usage information might come from verifying a signature,
+/// but when the signature key is corrupt we might be wrong on the actual key usage.
+///
+/// The meaning of
+///   key `has_usage tr` usg
+/// is:
+/// - either the usage of `key` is `usg`,
+/// - or `key` is publishable.
+/// In the second case, it is safe to use as a key with usage `usg`
+/// because it would be as-if the computations were performed by the attacker.
 
 [@@"opaque_to_smt"]
 val has_usage:
@@ -531,7 +543,9 @@ val has_usage_publishable:
 let has_usage_publishable #cusgs tr msg usg =
   reveal_opaque (`%has_usage) has_usage
 
-/// TODO comment
+/// Helper functions to lift `get_label` and `has_usage` to private keys corresponding to given public keys.
+/// Although the public keys are public,
+/// these functions are useful to reason on the corresponding private key.
 
 // TODO the extract functions should be ghost?
 
@@ -635,9 +649,7 @@ let mk_has_xxx_usage_publishable #cusgs extract tr msg usg =
   | Some sk -> has_usage_publishable tr sk usg
   | None -> ()
 
-/// Obtain the label of the corresponding decryption key of an encryption key.
-/// Although the encryption key label is public,
-/// this is useful to reason on the corresponding decryption key label.
+/// Instantiation for public-key encryption
 
 [@@"opaque_to_smt"]
 val extract_sk: bytes -> option bytes
@@ -658,14 +670,10 @@ let extract_sk_preserves_well_formedness pk =
 val get_sk_label: {|crypto_usages|} -> trace -> bytes -> label
 let get_sk_label #cusgs = mk_get_xxx_label extract_sk
 
-/// Same as above, for usage.
-
 val has_sk_usage: {|crypto_usages|} -> trace -> bytes -> usage -> prop
 let has_sk_usage #cusgs = mk_has_xxx_usage extract_sk
 
-/// Obtain the label of the corresponding signature key of a verification key.
-/// Although the verification key label is public,
-/// this is useful to reason on the corresponding signature key label.
+/// Instantiation for signatures
 
 [@@"opaque_to_smt"]
 val extract_signkey: bytes -> option bytes
@@ -686,14 +694,10 @@ let extract_signkey_preserves_well_formedness pk =
 val get_signkey_label: {|crypto_usages|} -> trace -> bytes -> label
 let get_signkey_label #cusgs = mk_get_xxx_label extract_signkey
 
-/// Same as above, for usage.
-
 val has_signkey_usage: {|crypto_usages|} -> trace -> bytes -> usage -> prop
 let has_signkey_usage #cusgs = mk_has_xxx_usage extract_signkey
 
-/// Obtain the label of the corresponding DH private key of a DH public key.
-/// Although the DH public key label is public,
-/// this is useful to reason on the corresponding DH private key label.
+/// Instantiation for Diffie-Hellman
 
 [@@"opaque_to_smt"]
 val extract_dh_sk: bytes -> option bytes
@@ -714,14 +718,10 @@ let extract_dh_sk_preserves_well_formedness pk =
 val get_dh_label: {|crypto_usages|} -> trace -> bytes -> label
 let get_dh_label #cusgs = mk_get_xxx_label extract_dh_sk
 
-/// Same as above, for usage.
-
 val has_dh_usage: {|crypto_usages|} -> trace -> bytes -> usage -> prop
 let has_dh_usage #cusgs = mk_has_xxx_usage extract_dh_sk
 
-/// Obtain the label of the corresponding KEM private key of a KEM public key.
-/// Although the KEM public key label is public,
-/// this is useful to reason on the corresponding KEM private key label.
+/// Instantiation for KEM
 
 [@@"opaque_to_smt"]
 val extract_kem_sk: bytes -> option bytes
@@ -741,8 +741,6 @@ let extract_kem_sk_preserves_well_formedness pk =
 
 val get_kem_sk_label: {|crypto_usages|} -> trace -> bytes -> label
 let get_kem_sk_label #cusgs = mk_get_xxx_label extract_kem_sk
-
-/// Same as above, for usage.
 
 val has_kem_sk_usage: {|crypto_usages|} -> trace -> bytes -> usage -> prop
 let has_kem_sk_usage #cusgs = mk_has_xxx_usage extract_kem_sk
@@ -2487,7 +2485,7 @@ let has_usage_dh_known_peer tr sk sk_usg pk pk_usg =
 
 /// User lemma (dh bytes usage with unknown peer)
 
-val get_usage_dh_unknown_peer:
+val has_usage_dh_unknown_peer:
   {|crypto_usages|} ->
   tr:trace ->
   sk:bytes -> sk_usg:usage -> pk:bytes ->
@@ -2502,7 +2500,7 @@ val get_usage_dh_unknown_peer:
   ))
   [SMTPat (has_usage tr (dh sk pk));
    SMTPat (sk `has_usage tr` sk_usg)]
-let get_usage_dh_unknown_peer tr sk sk_usg pk =
+let has_usage_dh_unknown_peer tr sk sk_usg pk =
   reveal_opaque (`%dh_pk) (dh_pk);
   reveal_opaque (`%dh) (dh);
   normalize_term_spec get_usage;
