@@ -2500,7 +2500,7 @@ val get_usage_dh_unknown_peer:
   (ensures (
     (dh sk pk) `has_usage tr` (dh_usage.unknown_peer_usage sk_usg)
   ))
-  [SMTPat (get_usage (dh sk pk));
+  [SMTPat (has_usage tr (dh sk pk));
    SMTPat (sk `has_usage tr` sk_usg)]
 let get_usage_dh_unknown_peer tr sk sk_usg pk =
   reveal_opaque (`%dh_pk) (dh_pk);
