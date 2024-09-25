@@ -212,7 +212,7 @@ val send_msg2_proof:
 let send_msg2_proof tr global_sess_id bob bob_si =
   match get_state bob bob_si tr with
   | (Some (ResponderSentMsg2 alice gx gy y), tr) -> (
-    match get_private_key bob global_sess_id.private_keys (Sign "DH.SigningKey") tr with
+    match get_private_key bob global_sess_id.private_keys (LongTermSigKey "DH.SigningKey") tr with
     | (Some sk_b, tr) -> (
       let (n_sig, tr) = mk_rand SigNonce (principal_label bob) 32 tr in
       compute_message2_proof tr alice bob gx y sk_b n_sig
@@ -238,7 +238,7 @@ let prepare_msg3_proof tr global_sess_id alice alice_si bob msg_id =
   | (Some (InitiatorSentMsg1 bob x), tr) -> (
     match recv_msg msg_id tr with
     | (Some msg_bytes, tr) -> (
-      match get_public_key alice global_sess_id.pki (Verify "DH.SigningKey") bob tr with
+      match get_public_key alice global_sess_id.pki (LongTermSigKey "DH.SigningKey") bob tr with
       | (Some pk_b, tr) -> (
         match decode_and_verify_message2 msg_bytes alice x pk_b with
         | Some res -> (
@@ -301,7 +301,7 @@ val send_msg3_proof:
 let send_msg3_proof tr global_sess_id alice alice_si bob =
   match get_state alice alice_si tr with
   | (Some (InitiatorSendMsg3 bob gx gy k), tr') -> (
-    match get_private_key alice global_sess_id.private_keys (Sign "DH.SigningKey") tr' with
+    match get_private_key alice global_sess_id.private_keys (LongTermSigKey "DH.SigningKey") tr' with
     | (Some sk_a, tr') -> (
       let (n_sig, tr') = mk_rand SigNonce (principal_label alice) 32 tr' in
 
@@ -336,7 +336,7 @@ let verify_msg3_proof tr global_sess_id alice bob msg_id bob_si =
   | (Some (ResponderSentMsg2 alice gx gy y), tr) -> (
     match recv_msg msg_id tr with
     | (Some msg_bytes, tr) -> (
-      match get_public_key bob global_sess_id.pki (Verify "DH.SigningKey") alice tr with
+      match get_public_key bob global_sess_id.pki (LongTermSigKey "DH.SigningKey") alice tr with
       | (Some pk_a, tr) -> (
           decode_and_verify_message3_proof tr msg_bytes alice bob bob_si gx y pk_a;
           
