@@ -69,15 +69,13 @@ let prepare_msg1 alice bob =
 val send_msg1: nsl_global_sess_ids -> principal -> state_id -> traceful (option timestamp)
 let send_msg1 global_sess_id alice sess_id =
   let*? st: nsl_session = get_state alice sess_id in
-  match st with
-  | InitiatorSentMsg1 bob n_a -> (
-    let*? pk_b = get_public_key alice global_sess_id.pki (PkEnc "NSL.PublicKey") bob in
-    let* nonce = mk_rand PkNonce (principal_label alice) 32 in
-    let msg = compute_message1 alice bob pk_b n_a nonce in
-    let* msg_id = send_msg msg in
-    return (Some msg_id)
-  )
-  | _ -> return None
+  guard_tr (InitiatorSentMsg1? st);*?
+  let InitiatorSentMsg1 bob n_a = st in
+  let*? pk_b = get_public_key alice global_sess_id.pki (PkEnc "NSL.PublicKey") bob in
+  let* nonce = mk_rand PkNonce (principal_label alice) 32 in
+  let msg = compute_message1 alice bob pk_b n_a nonce in
+  let* msg_id = send_msg msg in
+  return (Some msg_id)
 
 val prepare_msg2: nsl_global_sess_ids -> principal -> timestamp -> traceful (option state_id)
 let prepare_msg2 global_sess_id bob msg_id =
