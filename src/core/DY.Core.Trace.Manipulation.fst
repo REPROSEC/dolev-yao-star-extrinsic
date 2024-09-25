@@ -73,10 +73,18 @@ let get_trace tr =
 
 /// guard function for the option monad.
 
-val guard: b:bool -> option unit
+val guard: b:bool -> option (squash b)
 let guard b =
-  if b then Some ()
+  if b
+  then Some ()
   else None
+
+/// guard function for the traceful + option monad
+
+val guard_tr : (b:bool) -> traceful (option (squash b))
+let guard_tr b =
+  return (guard b)
+
 
 // Some inversion lemmas to keep ifuel low.
 // See FStarLang/FStar#3076 for more information.
