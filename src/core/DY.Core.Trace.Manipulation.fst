@@ -1,6 +1,7 @@
 module DY.Core.Trace.Manipulation
 
 open DY.Core.Trace.Type
+open DY.Core.Trace.Base
 open DY.Core.Trace.Invariant
 open DY.Core.Bytes.Type
 open DY.Core.Bytes
@@ -58,16 +59,16 @@ let (let*?) #a #b x f tr0 =
 
 val return: #a:Type -> a -> traceful a
 let return #a x tr =
-  reveal_opaque (`%grows) (grows);
-  norm_spec [zeta; delta_only [`%prefix]] (prefix);
+  reveal_opaque (`%grows) (grows #label);
+  norm_spec [zeta; delta_only [`%prefix]] (prefix #label);
   (x, tr)
 
 /// getter for the trace monad.
 
 val get_trace: traceful trace
 let get_trace tr =
-  reveal_opaque (`%grows) (grows);
-  norm_spec [zeta; delta_only [`%prefix]] (prefix);
+  reveal_opaque (`%grows) (grows #label);
+  norm_spec [zeta; delta_only [`%prefix]] (prefix #label);
   (tr, tr)
 
 /// guard function for the option monad.
@@ -110,8 +111,8 @@ let invert_traceful_option a =
 
 val add_event: trace_event -> traceful unit
 let add_event e tr =
-  reveal_opaque (`%grows) (grows);
-  norm_spec [zeta; delta_only [`%prefix]] (prefix);
+  reveal_opaque (`%grows) (grows #label);
+  norm_spec [zeta; delta_only [`%prefix]] (prefix #label);
   ((), Snoc tr e)
 
 /// Adding a trace event preserves the trace invariant
@@ -138,7 +139,7 @@ let add_event_invariant #invs e tr =
 val get_time: traceful timestamp
 let get_time =
   let* tr = get_trace in
-  return (DY.Core.Trace.Type.length tr)
+  return (DY.Core.Trace.Base.length tr)
 
 (*** Sending messages ***)
 
@@ -178,7 +179,7 @@ let send_msg_invariant #invs msg tr =
 val recv_msg: timestamp -> traceful (option bytes)
 let recv_msg i =
   let* tr = get_trace in
-  if i < DY.Core.Trace.Type.length tr then
+  if i < DY.Core.Trace.Base.length tr then
     match get_event_at tr i with
     | MsgSent msg -> return (Some msg)
     | _ -> return None
@@ -249,7 +250,7 @@ val mk_rand: usg:usage -> lab:label -> len:nat{len <> 0} -> traceful bytes
 let mk_rand usg lab len =
   let* time = get_time in
   add_event (RandGen usg lab len);*
-  return (Rand usg lab len time)
+  return (Rand usg len time)
 
 /// Generating a random bytestrings always preserve the trace invariant.
 
@@ -262,8 +263,8 @@ val mk_rand_trace_invariant:
   (ensures (
     let (b, tr_out) = mk_rand usg lab len tr in
     trace_invariant tr_out /\
-    1 <= DY.Core.Trace.Type.length tr_out /\
-    rand_generated_at tr_out (DY.Core.Trace.Type.length tr_out - 1) b
+    1 <= DY.Core.Trace.Base.length tr_out /\
+    rand_generated_at tr_out (DY.Core.Trace.Base.length tr_out - 1) b
   ))
   [SMTPat (mk_rand usg lab len tr); SMTPat (trace_invariant tr)]
 let mk_rand_trace_invariant #invs usg lab len tr =
@@ -297,7 +298,7 @@ val mk_rand_get_label:
   Lemma
   (ensures (
     let (b, tr_out) = mk_rand usg lab len tr in
-    get_label b == lab
+    get_label tr_out b == lab
   ))
   [SMTPat (mk_rand usg lab len tr); SMTPat (trace_invariant tr)]
 let mk_rand_get_label #invs usg lab len tr =
@@ -362,10 +363,13 @@ let rec compute_new_session_id_correct prin tr sess_id state_content =
   match tr with
   | Nil -> ()
   | Snoc tr_init evt -> (
-    if evt = SetState prin sess_id state_content then ()
-    else (
-      compute_new_session_id_correct prin tr_init sess_id state_content
-    )
+    match evt with
+    | SetState prin' sess_id' state_content' ->
+      if prin = prin' && sess_id = sess_id' && state_content = state_content' then ()
+      else (
+        compute_new_session_id_correct prin tr_init sess_id state_content
+      )
+    | _ -> compute_new_session_id_correct prin tr_init sess_id state_content
   )
 
 /// Compute a fresh state identifier for a principal.
@@ -446,9 +450,9 @@ val get_state_aux_state_invariant:
     | Some content -> state_pred.pred tr prin sess_id content
   ))
 let rec get_state_aux_state_invariant #invs prin sess_id tr =
-  reveal_opaque (`%grows) (grows);
+  reveal_opaque (`%grows) (grows #label);
   norm_spec [zeta; delta_only [`%trace_invariant]] (trace_invariant);
-  norm_spec [zeta; delta_only [`%prefix]] (prefix);
+  norm_spec [zeta; delta_only [`%prefix]] (prefix #label);
   match tr with
   | Nil -> ()
   | Snoc tr_init (SetState prin' sess_id' content) -> (

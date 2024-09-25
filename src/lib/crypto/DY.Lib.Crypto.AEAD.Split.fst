@@ -25,6 +25,13 @@ let split_aead_predicate_params {|crypto_usages|}: split_crypto_predicate_parame
     pred (tr, key, (nonce, msg, ad))
   );
 
+  key_and_data_well_formed = (fun tr key (nonce, msg, ad) ->
+    bytes_well_formed tr key /\
+    bytes_well_formed tr nonce /\
+    bytes_well_formed tr msg /\
+    bytes_well_formed tr ad
+  );
+
   apply_mk_global_pred = (fun bare x -> ());
   apply_local_pred_later = (fun lpred tr1 tr2 key (nonce, msg, ad) ->
     lpred.pred_later tr1 tr2 key nonce msg ad

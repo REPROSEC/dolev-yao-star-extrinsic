@@ -15,11 +15,7 @@ open DY.Example.DH.Protocol.Stateful
 
 val is_dh_shared_key: trace -> principal -> principal -> bytes -> prop
 let is_dh_shared_key tr alice bob k = exists si sj.
-  // We are using the equivalent relation here because depending on the party we are looking at
-  // the label is either ``join (principal_state_label alice si) (principal_state_label bob sj)`` or
-  // ``join (principal_state_label bob sj) (principal_state_label alice si)``.
-  // This is because k is either build from ``dh x (dh_pk y)`` or ``dh y (dh_pk x)``.
-  get_label k `equivalent tr` join (principal_state_label alice si) (principal_state_label bob sj) /\ 
+  get_label tr k == join (principal_state_label alice si) (principal_state_label bob sj) /\ 
   get_usage k == AeadKey "DH.aead_key" empty
 
 let dh_session_pred: local_state_predicate dh_session = {
@@ -79,11 +75,11 @@ let dh_event_pred: event_predicate dh_event =
       is_publishable tr gx /\ is_publishable tr gy /\
       (exists x sess_id. is_secret (principal_state_label alice sess_id) tr x /\
       gx = dh_pk x /\ k == dh x gy) /\
-      ((exists alice_si. is_corrupt tr (principal_state_label alice alice_si)) \/ is_corrupt tr (principal_label bob) \/
+      (is_corrupt tr (principal_label bob) \/
         (exists y. k == dh y gx /\ is_dh_shared_key tr alice bob k /\ event_triggered tr bob (Respond1 alice bob gx gy y)))
     )
     | Respond2 alice bob gx gy k -> (
-      is_corrupt tr (principal_label alice) \/ (exists bob_si. is_corrupt tr (principal_state_label bob bob_si)) \/
+      is_corrupt tr (principal_label alice) \/
       (is_dh_shared_key tr alice bob k /\
         event_triggered tr alice (Initiate2 alice bob gx gy k))
     )
@@ -116,31 +112,37 @@ instance dh_protocol_invs: protocol_invariants = {
 
 /// Lemmas that the global state predicate contains all the local ones
 
-val all_sessions_has_all_sessions: unit -> Lemma (norm [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP has_local_bytes_state_predicate all_sessions))
+// Below, the `has_..._predicate` are called with the implicit argument `#dh_protocol_invs`.
+// This argument could be omitted as it can be instantiated automatically by F*'s typeclass resolution algorithm.
+// However we instantiate it explicitly here so that the meaning of `has_..._predicate` is easier to understand.
+
+val all_sessions_has_all_sessions: unit -> Lemma (norm [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP (has_local_bytes_state_predicate #dh_protocol_invs) all_sessions))
 let all_sessions_has_all_sessions () =
   assert_norm(List.Tot.no_repeats_p (List.Tot.map fst (all_sessions)));
-  mk_state_pred_correct all_sessions;
-  norm_spec [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP has_local_bytes_state_predicate all_sessions)
+  mk_state_pred_correct #dh_protocol_invs all_sessions;
+  norm_spec [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP (has_local_bytes_state_predicate #dh_protocol_invs) all_sessions)
 
-val full_dh_session_pred_has_pki_invariant: squash has_pki_invariant
+val full_dh_session_pred_has_pki_invariant: squash (has_pki_invariant #dh_protocol_invs)
 let full_dh_session_pred_has_pki_invariant = all_sessions_has_all_sessions ()
 
-val full_dh_session_pred_has_private_keys_invariant: squash has_private_keys_invariant
+val full_dh_session_pred_has_private_keys_invariant: squash (has_private_keys_invariant #dh_protocol_invs)
 let full_dh_session_pred_has_private_keys_invariant = all_sessions_has_all_sessions ()
 
+// As an example, below `#dh_protocol_invs` is omitted and instantiated using F*'s typeclass resolution algorithm
 val full_dh_session_pred_has_dh_invariant: squash (has_local_state_predicate dh_session_pred)
 let full_dh_session_pred_has_dh_invariant = all_sessions_has_all_sessions ()
 
 /// Lemmas that the global event predicate contains all the local ones
 
-val all_events_has_all_events: unit -> Lemma (norm [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP has_compiled_event_pred all_events))
+val all_events_has_all_events: unit -> Lemma (norm [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP (has_compiled_event_pred #dh_protocol_invs) all_events))
 let all_events_has_all_events () =
   assert_norm(List.Tot.no_repeats_p (List.Tot.map fst (all_events)));
-  mk_event_pred_correct all_events;
-  norm_spec [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP has_compiled_event_pred all_events);
+  mk_event_pred_correct #dh_protocol_invs all_events;
+  norm_spec [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP (has_compiled_event_pred #dh_protocol_invs) all_events);
   let dumb_lemma (x:prop) (y:prop): Lemma (requires x /\ x == y) (ensures y) = () in
-  dumb_lemma (for_allP has_compiled_event_pred all_events) (norm [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP has_compiled_event_pred all_events))
+  dumb_lemma (for_allP (has_compiled_event_pred #dh_protocol_invs) all_events) (norm [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP (has_compiled_event_pred #dh_protocol_invs) all_events))
 
+// As an example, below `#dh_protocol_invs` is omitted and instantiated using F*'s typeclass resolution algorithm
 val full_dh_event_pred_has_dh_invariant: squash (has_event_pred dh_event_pred)
 let full_dh_event_pred_has_dh_invariant = all_events_has_all_events ()
 
@@ -255,9 +257,9 @@ let prepare_msg3_proof tr global_sess_id alice alice_si bob msg_id =
           assert(get_usage k = AeadKey "DH.aead_key" empty);
           assert(exists si. is_knowable_by (principal_state_label alice si) tr k);
 
-          let alice_and_bob_not_corrupt = (~(is_corrupt tr (principal_state_label alice alice_si) \/ is_corrupt tr (principal_label bob))) in
+          let bob_not_corrupt = (~(is_corrupt tr (principal_label bob))) in
           let dh_key_and_event_respond1 = (exists y. k == dh y res.gx /\ is_dh_shared_key tr alice bob k /\ event_triggered tr bob (Respond1 alice bob res.gx res.gy y)) in
-          introduce alice_and_bob_not_corrupt ==> dh_key_and_event_respond1 
+          introduce bob_not_corrupt ==> dh_key_and_event_respond1
           with _. (
             assert(exists y k'. k' == dh y res.gx /\ res.gy == dh_pk y /\ event_triggered tr bob (Respond1 alice bob res.gx res.gy y));
             eliminate exists y k'. k' == dh y res.gx /\ event_triggered tr bob (Respond1 alice bob res.gx res.gy y)
@@ -271,7 +273,7 @@ let prepare_msg3_proof tr global_sess_id alice alice_si bob msg_id =
               assert(dh y res.gx == dh x res.gy);
               assert(k == k');
               
-              assert(exists si sj. get_label k `equivalent tr` join (principal_state_label alice si) (principal_state_label bob sj));
+              assert(exists si sj. get_label tr k == join (principal_state_label alice si) (principal_state_label bob sj));
 
               assert(dh_key_and_event_respond1);
               ()
@@ -352,9 +354,9 @@ let verify_msg3_proof tr global_sess_id alice bob msg_id bob_si =
 
             // Proof strategy: We want to work without the corruption case
             // so we introduce this implication.
-            let alice_and_bob_not_corrupt = (~(is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_state_label bob bob_si))) in
+            let alice_not_corrupt = ~(is_corrupt tr (principal_label alice)) in
             let event_initiate2 = event_triggered tr alice (Initiate2 alice bob gx gy res.k) in
-            introduce alice_and_bob_not_corrupt ==> event_initiate2
+            introduce alice_not_corrupt ==> event_initiate2
             with _. (
               // We can now assert that there exists a x such that the event Initiate2 has been triggered
               // without the corruption case.
@@ -369,10 +371,10 @@ let verify_msg3_proof tr global_sess_id alice bob msg_id bob_si =
               )
             );
 
-            assert(is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_state_label bob bob_si) \/ 
-              (exists si. get_label res.k `equivalent tr` join (principal_state_label alice si) (principal_state_label bob bob_si)));
+            assert(is_corrupt tr (principal_label alice) \/
+              (exists si. get_label tr res.k == join (principal_state_label alice si) (principal_state_label bob bob_si)));
             assert(get_usage res.k == AeadKey "DH.aead_key" empty);
-            assert(is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_state_label bob bob_si) \/
+            assert(is_corrupt tr (principal_label alice) \/
               (is_dh_shared_key tr alice bob res.k /\ event_triggered tr alice (Initiate2 alice bob gx gy res.k)));
             ()
           )

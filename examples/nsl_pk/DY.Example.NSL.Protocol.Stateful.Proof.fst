@@ -54,15 +54,15 @@ let event_predicate_nsl: event_predicate nsl_event =
     match e with
     | Initiate1 alice bob n_a -> (
       prin == alice /\
-      get_label n_a == join (principal_label alice) (principal_label bob) /\
-      0 < DY.Core.Trace.Type.length tr /\
-      rand_generated_at tr (DY.Core.Trace.Type.length tr - 1) n_a
+      is_secret (join (principal_label alice) (principal_label bob)) tr n_a /\
+      0 < DY.Core.Trace.Base.length tr /\
+      rand_generated_at tr (DY.Core.Trace.Base.length tr - 1) n_a
     )
     | Respond1 alice bob n_a n_b -> (
       prin == bob /\
-      get_label n_b == join (principal_label alice) (principal_label bob) /\
-      0 < DY.Core.Trace.Type.length tr /\
-      rand_generated_at tr (DY.Core.Trace.Type.length tr - 1) n_b
+      is_secret (join (principal_label alice) (principal_label bob)) tr n_b /\
+      0 < DY.Core.Trace.Base.length tr /\
+      rand_generated_at tr (DY.Core.Trace.Base.length tr - 1) n_b
     )
     | Initiate2 alice bob n_a n_b -> (
       prin == alice /\
@@ -107,31 +107,37 @@ instance protocol_invariants_nsl: protocol_invariants = {
 
 /// Lemmas that the global state predicate contains all the local ones
 
-val all_sessions_has_all_sessions: unit -> Lemma (norm [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP has_local_bytes_state_predicate all_sessions))
+// Below, the `has_..._predicate` are called with the implicit argument `#protocol_invariants_nsl`.
+// This argument could be omitted as it can be instantiated automatically by F*'s typeclass resolution algorithm.
+// However we instantiate it explicitly here so that the meaning of `has_..._predicate` is easier to understand.
+
+val all_sessions_has_all_sessions: unit -> Lemma (norm [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP (has_local_bytes_state_predicate #protocol_invariants_nsl) all_sessions))
 let all_sessions_has_all_sessions () =
   assert_norm(List.Tot.no_repeats_p (List.Tot.map fst (all_sessions)));
-  mk_state_pred_correct all_sessions;
-  norm_spec [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP has_local_bytes_state_predicate all_sessions)
+  mk_state_pred_correct #protocol_invariants_nsl all_sessions;
+  norm_spec [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP (has_local_bytes_state_predicate #protocol_invariants_nsl) all_sessions)
 
-val protocol_invariants_nsl_has_pki_invariant: squash has_pki_invariant
+val protocol_invariants_nsl_has_pki_invariant: squash (has_pki_invariant #protocol_invariants_nsl)
 let protocol_invariants_nsl_has_pki_invariant = all_sessions_has_all_sessions ()
 
-val protocol_invariants_nsl_has_private_keys_invariant: squash has_private_keys_invariant
+val protocol_invariants_nsl_has_private_keys_invariant: squash (has_private_keys_invariant #protocol_invariants_nsl)
 let protocol_invariants_nsl_has_private_keys_invariant = all_sessions_has_all_sessions ()
 
+// As an example, below `#protocol_invariants_nsl` is omitted and instantiated using F*'s typeclass resolution algorithm
 val protocol_invariants_nsl_has_nsl_session_invariant: squash (has_local_state_predicate state_predicate_nsl)
 let protocol_invariants_nsl_has_nsl_session_invariant = all_sessions_has_all_sessions ()
 
 /// Lemmas that the global event predicate contains all the local ones
 
-val all_events_has_all_events: unit -> Lemma (norm [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP has_compiled_event_pred all_events))
+val all_events_has_all_events: unit -> Lemma (norm [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP (has_compiled_event_pred #protocol_invariants_nsl) all_events))
 let all_events_has_all_events () =
   assert_norm(List.Tot.no_repeats_p (List.Tot.map fst (all_events)));
-  mk_event_pred_correct all_events;
-  norm_spec [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP has_compiled_event_pred all_events);
+  mk_event_pred_correct #protocol_invariants_nsl all_events;
+  norm_spec [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP (has_compiled_event_pred #protocol_invariants_nsl) all_events);
   let dumb_lemma (x:prop) (y:prop): Lemma (requires x /\ x == y) (ensures y) = () in
-  dumb_lemma (for_allP has_compiled_event_pred all_events) (norm [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP has_compiled_event_pred all_events))
+  dumb_lemma (for_allP (has_compiled_event_pred #protocol_invariants_nsl) all_events) (norm [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP (has_compiled_event_pred #protocol_invariants_nsl) all_events))
 
+// As an example, below `#protocol_invariants_nsl` is omitted and instantiated using F*'s typeclass resolution algorithm
 val protocol_invariants_nsl_has_nsl_event_invariant: squash (has_event_pred event_predicate_nsl)
 let protocol_invariants_nsl_has_nsl_event_invariant = all_events_has_all_events ()
 
@@ -314,8 +320,8 @@ let prepare_msg4 tr global_sess_id bob sess_id msg_id =
           // because we know the label of n_b (which is (join (principal_label alice) (principal_label bob))).
           // It is useful in the "modulo corruption" part of the proof.
           introduce (~((join (principal_label alice) (principal_label bob)) `can_flow tr` public)) ==> event_triggered tr alice (Initiate2 alice bob n_a n_b) with _. (
-            assert(exists alice' n_a'. get_label n_b `can_flow tr` (principal_label alice') /\ event_triggered tr alice' (Initiate2 alice' bob n_a' n_b));
-            eliminate exists alice' n_a'. get_label n_b `can_flow tr` (principal_label alice') /\ event_triggered tr alice' (Initiate2 alice' bob n_a' n_b)
+            assert(exists alice' n_a'. get_label tr n_b `can_flow tr` (principal_label alice') /\ event_triggered tr alice' (Initiate2 alice' bob n_a' n_b));
+            eliminate exists alice' n_a'. get_label tr n_b `can_flow tr` (principal_label alice') /\ event_triggered tr alice' (Initiate2 alice' bob n_a' n_b)
             returns _
             with _. (
               event_respond1_injective tr alice alice' bob n_a n_a' n_b

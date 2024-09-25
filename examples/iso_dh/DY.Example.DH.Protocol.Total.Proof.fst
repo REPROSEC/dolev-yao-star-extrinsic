@@ -38,7 +38,7 @@ let dh_crypto_preds = {
   sign_pred = {
     pred = (fun tr vk sig_msg ->
       get_signkey_usage vk == SigKey "DH.SigningKey" empty /\
-      (exists prin. get_signkey_label vk = principal_label prin /\ (
+      (exists prin. get_signkey_label tr vk == principal_label prin /\ (
         match parse sig_message sig_msg with
         | Some (SigMsg2 sig_msg2) -> (
           exists y. sig_msg2.gy == (dh_pk y) /\ event_triggered tr prin (Respond1 sig_msg2.alice prin sig_msg2.gx sig_msg2.gy y)
@@ -87,7 +87,7 @@ let compute_message1_proof tr alice bob x =
   // It just shows what we need to show to prove the lemma.
   let msgb = compute_message1 alice x in 
   assert(bytes_invariant tr msgb);
-  assert(get_label msgb `can_flow tr` public);
+  assert(get_label tr msgb `can_flow tr` public);
   assert(is_publishable tr msgb);
   ()
 
@@ -115,7 +115,7 @@ let decode_message1_proof tr msg1_bytes =
       // The following code is not needed for the proof.
       // It just shows what we need to show to prove the lemma.
       assert(bytes_invariant tr msg1.gx);
-      assert(get_label msg1.gx `can_flow tr` public);
+      assert(get_label tr msg1.gx `can_flow tr` public);
       ()
     )
     | None -> ()
@@ -165,7 +165,7 @@ let compute_message2_proof tr alice bob gx y sk_b n_sig =
   assert(is_publishable tr (compute_message2 alice bob gx gy sk_b n_sig));
   ()
 
-#push-options "--ifuel 1 --z3rlimit 10"
+#push-options "--ifuel 1 --z3rlimit 20"
 val decode_and_verify_message2_proof:
   tr:trace ->
   msg2_bytes:bytes ->
@@ -182,7 +182,7 @@ val decode_and_verify_message2_proof:
     | Some res -> (
       let sig_msg = SigMsg2 {alice; gx=(dh_pk x); gy=res.gy} in
       is_publishable tr res.gy /\
-      (is_corrupt tr (principal_state_label alice alice_si) \/ is_corrupt tr (principal_label bob) \/
+      (is_corrupt tr (principal_label bob) \/
       (exists y. event_triggered tr bob (Respond1 alice bob (dh_pk x) res.gy y)))
     )
     | None -> True
@@ -199,7 +199,7 @@ let decode_and_verify_message2_proof tr msg2_bytes alice alice_si bob x pk_b =
       // It just shows what we need to show to prove the lemma.
       assert(is_publishable tr res.gy);
       
-      assert(is_corrupt tr (principal_label alice) \/
+      assert(
         is_corrupt tr (principal_label bob) \/
         (exists y. res.gy == dh_pk y /\ event_triggered tr bob (Respond1 alice bob gx gy y))
       );
@@ -236,7 +236,7 @@ let compute_message3_proof tr alice bob gx gy x sk_a n_sig =
 
   // The following code is not needed for the proof.
   // It just shows what we need to show to prove the lemma. 
-  assert(get_label sg `can_flow tr` public);
+  assert(get_label tr sg `can_flow tr` public);
   assert(bytes_invariant tr sg);
   assert(is_publishable tr sg);
 
@@ -266,7 +266,7 @@ val decode_and_verify_message3_proof:
     match decode_and_verify_message3 msg3_bytes bob gx gy y pk_a with
     | Some res -> (
       let sig_msg = SigMsg3 {bob; gx; gy} in
-      (is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_state_label bob bob_si) \/
+      (is_corrupt tr (principal_label alice) \/
       (exists x. gx == dh_pk x /\ event_triggered tr alice (Initiate2 alice bob gx gy (dh x gy))))
     )
     | None -> True
