@@ -73,7 +73,7 @@ let get_trace tr =
 
 /// guard function for the option monad.
 
-val guard: b:bool -> option (u:unit{b})
+val guard: b:bool -> option (squash b)
 let guard b =
   if b
   then Some ()
@@ -81,7 +81,7 @@ let guard b =
 
 /// guard function for the traceful + option monad
 
-val guard_tr : (b:bool) -> traceful (option (u:unit{b}))
+val guard_tr : (b:bool) -> traceful (option (squash b))
 let guard_tr b =
   return (guard b)
 
