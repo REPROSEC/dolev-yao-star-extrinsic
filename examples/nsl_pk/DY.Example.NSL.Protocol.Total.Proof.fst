@@ -23,7 +23,7 @@ let crypto_predicates_nsl = {
 
   pkenc_pred = {
     pred = (fun tr sk_usage msg ->
-      (exists prin. sk_usage == public_key_type_to_usage (LongTermPkEncKey "NSL.PublicKey") prin /\ (
+      (exists prin. sk_usage == long_term_key_type_to_usage (LongTermPkEncKey "NSL.PublicKey") prin /\ (
         match parse message msg with
         | Some (Msg1 msg1) -> (
           let (alice, bob) = (msg1.alice, prin) in

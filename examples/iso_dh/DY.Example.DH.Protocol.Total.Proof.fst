@@ -37,7 +37,7 @@ let dh_crypto_preds = {
 
   sign_pred = {
     pred = (fun tr sk_usage sig_msg ->
-      (exists prin. sk_usage == public_key_type_to_usage (LongTermSigKey "DH.SigningKey") prin /\ (
+      (exists prin. sk_usage == long_term_key_type_to_usage (LongTermSigKey "DH.SigningKey") prin /\ (
         match parse sig_message sig_msg with
         | Some (SigMsg2 sig_msg2) -> (
           exists y. sig_msg2.gy == (dh_pk y) /\ event_triggered tr prin (Respond1 sig_msg2.alice prin sig_msg2.gx sig_msg2.gy y)
