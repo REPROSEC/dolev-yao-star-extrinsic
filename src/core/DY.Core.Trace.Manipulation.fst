@@ -208,14 +208,14 @@ let recv_msg_invariant #invs i tr =
 
 (*** Corruption ***)
 
-/// Corrupt a session of a principal.
+/// Corrupt a state set at a given timestamp
 
 [@@ "opaque_to_smt"]
 val corrupt: timestamp -> traceful unit
 let corrupt time =
   add_event (Corrupt time)
 
-/// Corrupting a principal always preserve the trace invariant.
+/// Corrupting a state always preserve the trace invariant.
 
 val corrupt_invariant:
   {|protocol_invariants|} ->
