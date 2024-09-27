@@ -7,7 +7,6 @@ open DY.Lib.Comparse.Parsers
 open DY.Lib.State.Tagged
 open DY.Lib.State.Typed
 open DY.Lib.State.Map
-open DY.Lib.State.PKI
 
 #set-options "--fuel 1 --ifuel 1"
 
@@ -16,6 +15,14 @@ open DY.Lib.State.PKI
 /// and obtained back with `get_private_key`.
 
 (*** Private keys types & invariants ***)
+
+[@@ with_bytes bytes]
+type public_key_type =
+  | LongTermPkEncKey: [@@@ with_parser #bytes ps_string] usage:string -> public_key_type
+  | LongTermSigKey: [@@@ with_parser #bytes ps_string] usage:string -> public_key_type
+
+%splice [ps_public_key_type] (gen_parser (`public_key_type))
+%splice [ps_public_key_type_is_well_formed] (gen_is_well_formed_lemma (`public_key_type))
 
 [@@ with_bytes bytes]
 type private_key_key = {
@@ -39,6 +46,14 @@ instance map_types_private_keys: map_types private_key_key private_key_value = {
   ps_value_t = ps_private_key_value;
 }
 
+val public_key_type_to_usage:
+  public_key_type ->
+  usage
+let public_key_type_to_usage sk_type =
+  match sk_type with
+  | LongTermPkEncKey usg -> PkKey usg empty
+  | LongTermSigKey usg -> SigKey usg empty
+
 val is_private_key_for:
   {|crypto_invariants|} -> trace ->
   bytes -> public_key_type -> principal -> prop
@@ -49,6 +64,18 @@ let is_private_key_for #cinvs tr sk sk_type who =
   )
   | LongTermSigKey usg -> (
     is_signature_key (public_key_type_to_usage sk_type) (principal_label who) tr sk
+  )
+
+val is_public_key_for:
+  {|crypto_invariants|} -> trace ->
+  bytes -> public_key_type -> principal -> prop
+let is_public_key_for #cinvs tr pk pk_type who =
+  match pk_type with
+  | LongTermPkEncKey usg -> (
+    is_encryption_key (public_key_type_to_usage pk_type) (principal_label who) tr pk
+  )
+  | LongTermSigKey usg -> (
+    is_verification_key (public_key_type_to_usage pk_type) (principal_label who) tr pk
   )
 
 // The `#_` at the end is a workaround for FStarLang/FStar#3286

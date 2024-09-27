@@ -116,11 +116,11 @@ let rec usage_to_string u =
 /// in DY.Lib and DY.Core. This causes
 /// conflicts with the bytes_to_string function.
 
-val public_key_type_to_string: DY.Lib.State.PKI.public_key_type -> string
+val public_key_type_to_string: DY.Lib.State.PrivateKeys.public_key_type -> string
 let public_key_type_to_string t =
   match t with
-  | DY.Lib.State.PKI.LongTermPkEncKey u -> "LongTermPkEncKey " ^ u
-  | DY.Lib.State.PKI.LongTermSigKey u -> "LongTermSigKey " ^ u
+  | DY.Lib.State.PrivateKeys.LongTermPkEncKey u -> "LongTermPkEncKey " ^ u
+  | DY.Lib.State.PrivateKeys.LongTermSigKey u -> "LongTermSigKey " ^ u
 
 // The `#_` at the end is a workaround for FStarLang/FStar#3286
 val private_keys_types_to_string: (list (map_elem DY.Lib.State.PrivateKeys.private_key_key DY.Lib.State.PrivateKeys.private_key_value #_)) -> string
