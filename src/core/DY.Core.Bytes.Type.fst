@@ -87,8 +87,6 @@ type usage =
   | PkNonce: usage
   | AeadKey: tag:string -> data:bytes -> usage
   | DhKey: tag:string -> data:bytes -> usage
-  | KdfExtractSaltKey: tag:string -> data:bytes -> usage
-  | KdfExtractIkmKey: tag:string -> data:bytes -> usage
   | KdfExpandKey: tag:string -> data:bytes -> usage
   | KemKey: usg:usage -> usage
   | KemNonce: usg:usage -> usage

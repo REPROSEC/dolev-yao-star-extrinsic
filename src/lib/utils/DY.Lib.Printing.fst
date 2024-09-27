@@ -94,12 +94,6 @@ let rec usage_to_string u =
   | DhKey tag data ->
     Printf.sprintf "{\"Type\": \"DhKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}"
       tag (bytes_to_string data)
-  | KdfExtractSaltKey tag data ->
-    Printf.sprintf "{\"Type\": \"KdfExtractSaltKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}" 
-      tag (bytes_to_string data)
-  | KdfExtractIkmKey tag data ->
-    Printf.sprintf "{\"Type\": \"KdfExtractIkmKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}" 
-      tag (bytes_to_string data)
   | KdfExpandKey tag data ->
     Printf.sprintf "{\"Type\": \"KdfExpandKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}" 
       tag (bytes_to_string data)
