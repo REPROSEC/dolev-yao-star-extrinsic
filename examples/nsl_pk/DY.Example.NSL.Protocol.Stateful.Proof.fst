@@ -170,7 +170,7 @@ let send_msg1_proof tr global_sess_id alice sess_id =
     match get_public_key alice global_sess_id.pki (PkEnc "NSL.PublicKey") bob tr with
     | (None, tr) -> ()
     | (Some pk_b, tr) -> (
-      let (nonce, tr) = mk_rand PkNonce (long_term_decryption_key_label alice) 32 tr in
+      let (nonce, tr) = mk_rand PkNonce (long_term_key_label alice) 32 tr in
       compute_message1_proof tr alice bob pk_b n_a nonce
     )
   )
@@ -211,7 +211,7 @@ let send_msg2_proof tr global_sess_id bob sess_id =
     match get_public_key bob global_sess_id.pki (PkEnc "NSL.PublicKey") alice tr with
     | (None, tr) -> ()
     | (Some pk_a, tr) -> (
-      let (nonce, tr) = mk_rand PkNonce (long_term_decryption_key_label bob) 32 tr in
+      let (nonce, tr) = mk_rand PkNonce (long_term_key_label bob) 32 tr in
       compute_message2_proof tr bob {n_a; alice;} pk_a n_b nonce
     )
   )
@@ -256,7 +256,7 @@ let send_msg3_proof tr global_sess_id alice sess_id =
     match get_public_key alice global_sess_id.pki (PkEnc "NSL.PublicKey") bob tr with
     | (None, tr) -> ()
     | (Some pk_b, tr) -> (
-      let (nonce, tr) = mk_rand PkNonce (long_term_decryption_key_label alice) 32 tr in
+      let (nonce, tr) = mk_rand PkNonce (long_term_key_label alice) 32 tr in
       compute_message3_proof tr alice bob pk_b n_b nonce
     )
   )

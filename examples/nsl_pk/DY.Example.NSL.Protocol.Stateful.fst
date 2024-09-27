@@ -53,12 +53,6 @@ instance event_nsl_event: event nsl_event = {
 
 (*** Labels used to generate randomness ***)
 
-val long_term_decryption_key_label:
-  principal ->
-  label
-let long_term_decryption_key_label prin =
-  principal_tag_label prin "DY.Lib.State.PrivateKeys"
-
 val nsl_nonce_label:
   principal ->
   label
@@ -86,7 +80,7 @@ let send_msg1 global_sess_id alice sess_id =
   match st with
   | InitiatorSentMsg1 bob n_a -> (
     let*? pk_b = get_public_key alice global_sess_id.pki (PkEnc "NSL.PublicKey") bob in
-    let* nonce = mk_rand PkNonce (long_term_decryption_key_label alice) 32 in
+    let* nonce = mk_rand PkNonce (long_term_key_label alice) 32 in
     let msg = compute_message1 alice bob pk_b n_a nonce in
     let* msg_id = send_msg msg in
     return (Some msg_id)
@@ -110,7 +104,7 @@ let send_msg2 global_sess_id bob sess_id =
   match st with
   | ResponderSentMsg2 alice n_a n_b -> (
     let*? pk_a = get_public_key bob global_sess_id.pki (PkEnc "NSL.PublicKey") alice in
-    let* nonce = mk_rand PkNonce (long_term_decryption_key_label bob) 32 in
+    let* nonce = mk_rand PkNonce (long_term_key_label bob) 32 in
     let msg = compute_message2 bob {n_a; alice;} pk_a n_b nonce in
     let* msg_id = send_msg msg in
     return (Some msg_id)
@@ -137,7 +131,7 @@ let send_msg3 global_sess_id alice sess_id =
   match st with
   | InitiatorSentMsg3 bob n_a n_b -> (
     let*? pk_b = get_public_key alice global_sess_id.pki (PkEnc "NSL.PublicKey") bob in
-    let* nonce = mk_rand PkNonce (long_term_decryption_key_label alice) 32 in
+    let* nonce = mk_rand PkNonce (long_term_key_label alice) 32 in
     let msg = compute_message3 alice bob pk_b n_b nonce in
     let* msg_id = send_msg msg in
     return (Some msg_id)

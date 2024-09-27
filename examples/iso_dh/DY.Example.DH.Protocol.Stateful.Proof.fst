@@ -40,7 +40,7 @@ let dh_session_pred: local_state_predicate dh_session = {
       is_knowable_by (ephemeral_dh_key_label alice sess_id) tr k /\
       (exists x. gx == dh_pk x /\ k == dh x gy /\ is_secret (ephemeral_dh_key_label alice sess_id) tr x) /\
       event_triggered tr alice (Initiate2 alice bob gx gy k) /\
-      (is_corrupt tr (long_term_signature_key_label bob) \/ is_corrupt tr (ephemeral_dh_key_label alice sess_id) \/
+      (is_corrupt tr (long_term_key_label bob) \/ is_corrupt tr (ephemeral_dh_key_label alice sess_id) \/
       (exists y. k == dh y gx /\ is_dh_shared_key tr alice bob k /\ 
         event_triggered tr bob (Respond1 alice bob gx gy y)))
     )
@@ -50,7 +50,7 @@ let dh_session_pred: local_state_predicate dh_session = {
       is_knowable_by (ephemeral_dh_key_label bob sess_id) tr k /\
       (exists y. gy == dh_pk y /\ k == dh y gx /\ is_secret (ephemeral_dh_key_label bob sess_id) tr y) /\
       event_triggered tr bob (Respond2 alice bob gx gy k) /\
-      (is_corrupt tr (long_term_signature_key_label alice) \/ is_corrupt tr (ephemeral_dh_key_label bob sess_id) \/
+      (is_corrupt tr (long_term_key_label alice) \/ is_corrupt tr (ephemeral_dh_key_label bob sess_id) \/
         (is_dh_shared_key tr alice bob k /\ 
         event_triggered tr alice (Initiate2 alice bob gx gy k)))
     )
@@ -75,11 +75,11 @@ let dh_event_pred: event_predicate dh_event =
       is_publishable tr gx /\ is_publishable tr gy /\
       (exists x sess_id. is_secret (ephemeral_dh_key_label alice sess_id) tr x /\
       gx = dh_pk x /\ k == dh x gy) /\
-      (is_corrupt tr (long_term_signature_key_label bob) \/
+      (is_corrupt tr (long_term_key_label bob) \/
         (exists y. k == dh y gx /\ is_dh_shared_key tr alice bob k /\ event_triggered tr bob (Respond1 alice bob gx gy y)))
     )
     | Respond2 alice bob gx gy k -> (
-      is_corrupt tr (long_term_signature_key_label alice) \/
+      is_corrupt tr (long_term_key_label alice) \/
       (is_dh_shared_key tr alice bob k /\
         event_triggered tr alice (Initiate2 alice bob gx gy k))
     )
@@ -214,7 +214,7 @@ let send_msg2_proof tr global_sess_id bob bob_si =
   | (Some (ResponderSentMsg2 alice gx gy y), tr) -> (
     match get_private_key bob global_sess_id.private_keys (Sign "DH.SigningKey") tr with
     | (Some sk_b, tr) -> (
-      let (n_sig, tr) = mk_rand SigNonce (long_term_signature_key_label bob) 32 tr in
+      let (n_sig, tr) = mk_rand SigNonce (long_term_key_label bob) 32 tr in
       compute_message2_proof tr alice bob gx y sk_b n_sig
     )
     | (None, tr) -> ()
@@ -257,7 +257,7 @@ let prepare_msg3_proof tr global_sess_id alice alice_si bob msg_id =
           assert(get_usage k = AeadKey "DH.aead_key" empty);
           assert(exists si. is_knowable_by (ephemeral_dh_key_label alice si) tr k);
 
-          let bob_not_corrupt = (~(is_corrupt tr (long_term_signature_key_label bob))) in
+          let bob_not_corrupt = (~(is_corrupt tr (long_term_key_label bob))) in
           let dh_key_and_event_respond1 = (exists y. k == dh y res.gx /\ is_dh_shared_key tr alice bob k /\ event_triggered tr bob (Respond1 alice bob res.gx res.gy y)) in
           introduce bob_not_corrupt ==> dh_key_and_event_respond1
           with _. (
@@ -303,7 +303,7 @@ let send_msg3_proof tr global_sess_id alice alice_si bob =
   | (Some (InitiatorSendMsg3 bob gx gy k), tr') -> (
     match get_private_key alice global_sess_id.private_keys (Sign "DH.SigningKey") tr' with
     | (Some sk_a, tr') -> (
-      let (n_sig, tr') = mk_rand SigNonce (long_term_signature_key_label alice) 32 tr' in
+      let (n_sig, tr') = mk_rand SigNonce (long_term_key_label alice) 32 tr' in
 
       // The following code is not needed for the proof.
       // It just shows what we need to show to prove the lemma.
@@ -350,11 +350,11 @@ let verify_msg3_proof tr global_sess_id alice bob msg_id bob_si =
             // On a high level we need to show now that this event was triggered
             // for our concrete k.
             assert(exists x. gx == dh_pk x /\ event_triggered tr alice (Initiate2 alice bob gx gy (dh x gy)) \/ 
-              is_corrupt tr (long_term_signature_key_label alice)  \/ is_corrupt tr (ephemeral_dh_key_label bob bob_si));
+              is_corrupt tr (long_term_key_label alice)  \/ is_corrupt tr (ephemeral_dh_key_label bob bob_si));
 
             // Proof strategy: We want to work without the corruption case
             // so we introduce this implication.
-            let alice_not_corrupt = ~(is_corrupt tr (long_term_signature_key_label alice)) in
+            let alice_not_corrupt = ~(is_corrupt tr (long_term_key_label alice)) in
             let event_initiate2 = event_triggered tr alice (Initiate2 alice bob gx gy res.k) in
             introduce alice_not_corrupt ==> event_initiate2
             with _. (
@@ -371,10 +371,10 @@ let verify_msg3_proof tr global_sess_id alice bob msg_id bob_si =
               )
             );
 
-            assert(is_corrupt tr (long_term_signature_key_label alice) \/
+            assert(is_corrupt tr (long_term_key_label alice) \/
               (exists si. get_label tr res.k == join (ephemeral_dh_key_label alice si) (ephemeral_dh_key_label bob bob_si)));
             assert(get_usage res.k == AeadKey "DH.aead_key" empty);
-            assert(is_corrupt tr (long_term_signature_key_label alice) \/
+            assert(is_corrupt tr (long_term_key_label alice) \/
               (is_dh_shared_key tr alice bob res.k /\ event_triggered tr alice (Initiate2 alice bob gx gy res.k)));
             ()
           )

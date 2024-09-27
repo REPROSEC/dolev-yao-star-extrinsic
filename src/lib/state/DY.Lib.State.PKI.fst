@@ -7,6 +7,7 @@ open DY.Lib.Comparse.Parsers
 open DY.Lib.State.Tagged
 open DY.Lib.State.Typed
 open DY.Lib.State.Map
+open DY.Lib.State.PrivateKeys // long_term_key_label
 
 #set-options "--fuel 1 --ifuel 1"
 
@@ -60,10 +61,10 @@ val is_public_key_for:
 let is_public_key_for #cinvs tr pk pk_type who =
   match pk_type with
   | PkEnc usg -> (
-    is_encryption_key (PkKey usg empty) (principal_tag_label who "DY.Lib.State.PrivateKeys") tr pk
+    is_encryption_key (PkKey usg empty) (long_term_key_label who) tr pk
   )
   | Verify usg -> (
-    is_verification_key (SigKey usg empty) (principal_tag_label who "DY.Lib.State.PrivateKeys") tr pk
+    is_verification_key (SigKey usg empty) (long_term_key_label who) tr pk
   )
 
 // The `#_` at the end is a workaround for FStarLang/FStar#3286

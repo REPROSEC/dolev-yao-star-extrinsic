@@ -50,18 +50,11 @@ type dh_global_sess_ids = {
 
 (*** Labels used to generate randomness ***)
 
-val long_term_signature_key_label:
-  principal ->
-  label
-let long_term_signature_key_label prin =
-  principal_tag_label prin "DY.Lib.State.PrivateKeys"
-
 val ephemeral_dh_key_label:
   principal -> state_id ->
   label
 let ephemeral_dh_key_label prin sess_id =
   principal_tagged_state_label prin sess_id "DH.Session"
-
 
 (*** Stateful code ***)
 
@@ -109,7 +102,7 @@ let send_msg2 global_sess_id bob bob_si =
   match session_state with
   | ResponderSentMsg2 alice gx gy y -> (
     let*? sk_b = get_private_key bob global_sess_id.private_keys (Sign "DH.SigningKey") in
-    let* n_sig = mk_rand SigNonce (long_term_signature_key_label bob) 32 in
+    let* n_sig = mk_rand SigNonce (long_term_key_label bob) 32 in
     let msg = compute_message2 alice bob gx gy sk_b n_sig in
     let* msg_id = send_msg msg in
     return (Some msg_id)
@@ -140,7 +133,7 @@ let send_msg3 global_sess_id alice bob alice_si =
   match session_state with
   | InitiatorSendMsg3 bob gx gy x -> (
     let*? sk_a = get_private_key alice global_sess_id.private_keys (Sign "DH.SigningKey") in
-    let* n_sig = mk_rand SigNonce (long_term_signature_key_label alice) 32 in
+    let* n_sig = mk_rand SigNonce (long_term_key_label alice) 32 in
     let msg = compute_message3 alice bob gx gy sk_a n_sig in
     let* msg_id = send_msg msg in
     return (Some msg_id)
