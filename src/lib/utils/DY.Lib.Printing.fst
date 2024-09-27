@@ -31,7 +31,7 @@ let rec bytes_to_string b =
   match b with
   | Literal s -> uint_list_to_string (FStar.Seq.seq_to_list s)
   
-  | Rand usage len time -> Printf.sprintf "Nonce #%d" time
+  | Rand len time -> Printf.sprintf "Nonce #%d" time
   
   | Concat (Literal s) right -> (
       Printf.sprintf "%s%s" 

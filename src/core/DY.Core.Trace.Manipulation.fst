@@ -250,7 +250,7 @@ val mk_rand: usg:usage -> lab:label -> len:nat{len <> 0} -> traceful bytes
 let mk_rand usg lab len =
   let* time = get_time in
   add_event (RandGen usg lab len);*
-  return (Rand usg len time)
+  return (Rand len time)
 
 /// Generating a random bytestrings always preserve the trace invariant.
 

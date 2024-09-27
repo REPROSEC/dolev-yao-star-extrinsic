@@ -61,7 +61,7 @@ let rec length b =
   match b with
   | Literal buf ->
     Seq.length buf
-  | Rand usg len time ->
+  | Rand len time ->
     len
   | Concat left right ->
     length left + length right
@@ -106,7 +106,7 @@ let rec bytes_well_formed tr b =
   match b with
   | Literal buf ->
     True
-  | Rand usg len time ->
+  | Rand len time ->
     time < DY.Core.Trace.Base.length tr /\
     RandGen? (get_event_at tr time)
   | Concat left right ->
@@ -171,7 +171,7 @@ let rec bytes_well_formed_later tr1 tr2 b =
   );
   match b with
   | Literal buf -> ()
-  | Rand usg len time -> (
+  | Rand len time -> (
     assert(event_at tr1 time (get_event_at tr1 time))
   )
   | Concat left right -> ()
@@ -336,49 +336,85 @@ let default_crypto_usages = {
 
 #push-options "--ifuel 2"
 [@@"opaque_to_smt"]
-val get_usage: {|crypto_usages|} -> b:bytes -> usage
-let rec get_usage #cusages b =
+val get_usage: {|crypto_usages|} -> trace -> bytes -> usage
+let rec get_usage #cusages tr b =
   match b with
-  | Rand usg len time ->
-    usg
+  | Rand len time ->
+    if time < DY.Core.Trace.Base.length tr then (
+      match get_event_at tr time with
+      | RandGen usg _ _ -> usg
+      | _ -> NoUsage // garbage
+    ) else (
+      NoUsage // garbage
+    )
   | Dh sk1 (DhPub sk2) -> (
-    match get_usage sk1, get_usage sk2 with
+    match get_usage tr sk1, get_usage tr sk2 with
     | DhKey _ _, DhKey _ _ ->
-      dh_usage.known_peer_usage (get_usage sk1) (get_usage sk2)
+      dh_usage.known_peer_usage (get_usage tr sk1) (get_usage tr sk2)
     | DhKey _ _, _ ->
-      dh_usage.unknown_peer_usage (get_usage sk1)
+      dh_usage.unknown_peer_usage (get_usage tr sk1)
     | _, DhKey _ _ ->
-      dh_usage.unknown_peer_usage (get_usage sk2)
+      dh_usage.unknown_peer_usage (get_usage tr sk2)
     | _, _ ->
       NoUsage
   )
   | Dh sk pk -> (
-    match get_usage sk with
-    | DhKey _ _ -> dh_usage.unknown_peer_usage (get_usage sk)
+    match get_usage tr sk with
+    | DhKey _ _ -> dh_usage.unknown_peer_usage (get_usage tr sk)
     | _ -> NoUsage
   )
   | KdfExtract salt ikm -> (
-    let salt_usage = get_usage salt in
-    let ikm_usage = get_usage ikm in
+    let salt_usage = get_usage tr salt in
+    let ikm_usage = get_usage tr ikm in
     if KdfExtractSaltKey? salt_usage || KdfExtractIkmKey? ikm_usage then
       kdf_extract_usage.get_usage salt_usage ikm_usage salt ikm
     else
       NoUsage
   )
   | KdfExpand prk info len -> (
-    let prk_usage = get_usage prk in
+    let prk_usage = get_usage tr prk in
     if KdfExpandKey? prk_usage then
       kdf_expand_usage.get_usage prk_usage info
     else
       NoUsage
   )
   | KemSecretShared nonce -> (
-    match get_usage nonce with
+    match get_usage tr nonce with
     | KemNonce usg -> usg
     | _ -> NoUsage
   )
   | _ -> NoUsage
 #pop-options
+
+val get_usage_later:
+  {|crypto_usages|} ->
+  tr1:trace -> tr2:trace ->
+  b:bytes ->
+  Lemma
+  (requires
+    bytes_well_formed tr1 b /\
+    tr1 <$ tr2
+  )
+  (ensures get_usage tr1 b == get_usage tr2 b)
+let rec get_usage_later #cusgs tr1 tr2 b =
+  normalize_term_spec bytes_well_formed;
+  normalize_term_spec get_usage;
+  match b with
+  | Rand len time ->
+    assert(event_at tr1 time (get_event_at tr1 time))
+  | Dh sk1 (DhPub sk2) ->
+    get_usage_later tr1 tr2 sk1;
+    get_usage_later tr1 tr2 sk2
+  | Dh sk pk ->
+    get_usage_later tr1 tr2 sk
+  | KdfExtract salt ikm ->
+    get_usage_later tr1 tr2 salt;
+    get_usage_later tr1 tr2 ikm
+  | KdfExpand prk info len ->
+    get_usage_later tr1 tr2 prk
+  | KemSecretShared nonce ->
+    get_usage_later tr1 tr2 nonce
+  | _ -> ()
 
 /// Obtain the label of a given bytestring.
 
@@ -389,7 +425,7 @@ let rec get_label #cusages tr b =
   match b with
   | Literal buf ->
     public
-  | Rand usg len time ->
+  | Rand len time ->
     if time < DY.Core.Trace.Base.length tr then (
       match get_event_at tr time with
       | RandGen _ lab _ -> lab
@@ -418,14 +454,14 @@ let rec get_label #cusages tr b =
   | Dh sk pk ->
     public
   | KdfExtract salt ikm ->
-    let salt_usage = get_usage salt in
-    let ikm_usage = get_usage ikm in
+    let salt_usage = get_usage tr salt in
+    let ikm_usage = get_usage tr ikm in
     if KdfExtractSaltKey? salt_usage || KdfExtractIkmKey? ikm_usage then
       kdf_extract_usage.get_label salt_usage ikm_usage (get_label tr salt) (get_label tr ikm) salt ikm
     else
       meet (get_label tr salt) (get_label tr ikm)
   | KdfExpand prk info len -> (
-    let prk_usage = get_usage prk in
+    let prk_usage = get_usage tr prk in
     if KdfExpandKey? prk_usage then
       kdf_expand_usage.get_label prk_usage (get_label tr prk) info
     else
@@ -455,7 +491,7 @@ let rec get_label_later #cusgs tr1 tr2 b =
   normalize_term_spec get_label;
   match b with
   | Literal buf -> ()
-  | Rand usg len time ->
+  | Rand len time ->
     assert(event_at tr1 time (get_event_at tr1 time))
   | Concat left right ->
     get_label_later tr1 tr2 left;
@@ -475,9 +511,12 @@ let rec get_label_later #cusgs tr1 tr2 b =
   | Dh sk pk -> ()
   | KdfExtract salt ikm ->
     get_label_later tr1 tr2 salt;
-    get_label_later tr1 tr2 ikm
+    get_label_later tr1 tr2 ikm;
+    get_usage_later tr1 tr2 salt;
+    get_usage_later tr1 tr2 ikm
   | KdfExpand prk info len ->
-    get_label_later tr1 tr2 prk
+    get_label_later tr1 tr2 prk;
+    get_usage_later tr1 tr2 prk
   | KemPub sk -> ()
   | KemEncap pk nonce -> ()
   | KemSecretShared nonce ->
@@ -503,7 +542,7 @@ val has_usage:
   trace -> bytes -> usage ->
   prop
 let has_usage #cusgs tr msg usg =
-  get_usage msg == usg \/
+  get_usage tr msg == usg \/
   (get_label tr msg) `can_flow tr` public
 
 val has_usage_later:
@@ -519,7 +558,8 @@ val has_usage_later:
   (ensures msg `has_usage tr2` usg)
   [SMTPat (msg `has_usage tr1` usg); SMTPat (tr1 <$ tr2)]
 let has_usage_later #cusgs tr1 tr2 msg usg =
-  reveal_opaque (`%has_usage) has_usage
+  reveal_opaque (`%has_usage) has_usage;
+  get_usage_later tr1 tr2 msg
 
 val has_usage_inj:
   {|crypto_usages|} ->
@@ -867,9 +907,9 @@ let rec bytes_invariant #cinvs tr b =
   match b with
   | Literal buf ->
     True
-  | Rand usage len time ->
+  | Rand len time ->
     // Random bytes correspond to an event
-    (exists lab. event_at tr time (RandGen usage lab len))
+    (exists usage lab. event_at tr time (RandGen usage lab len))
   | Concat left right ->
     bytes_invariant tr left /\
     bytes_invariant tr right
@@ -1088,7 +1128,7 @@ let rec bytes_invariant_later #cinvs tr1 tr2 msg =
   normalize_term_spec bytes_invariant;
   match msg with
   | Literal buf -> ()
-  | Rand usage len time -> ()
+  | Rand len time -> ()
   | Concat left right ->
     bytes_invariant_later tr1 tr2 left;
     bytes_invariant_later tr1 tr2 right
@@ -2540,8 +2580,8 @@ let kdf_extract_preserves_publishability tr salt ikm =
   reveal_opaque (`%kdf_extract) (kdf_extract);
   normalize_term_spec bytes_invariant;
   normalize_term_spec get_label;
-  let salt_usage = get_usage salt in
-  let ikm_usage = get_usage ikm in
+  let salt_usage = get_usage tr salt in
+  let ikm_usage = get_usage tr ikm in
   if KdfExtractSaltKey? salt_usage || KdfExtractIkmKey? ikm_usage then
     kdf_extract_usage.get_label_lemma tr salt_usage ikm_usage (get_label tr salt) (get_label tr ikm) salt ikm
   else ()
@@ -2562,7 +2602,7 @@ let kdf_expand_preserves_publishability tr prk info len =
   reveal_opaque (`%kdf_expand) (kdf_expand);
   normalize_term_spec bytes_invariant;
   normalize_term_spec get_label;
-  let prk_usage = get_usage prk in
+  let prk_usage = get_usage tr prk in
   if KdfExpandKey? prk_usage then
     kdf_expand_usage.get_label_lemma tr prk_usage (get_label tr prk) info
   else ()
@@ -2756,8 +2796,8 @@ let has_usage_kdf_expand tr prk prk_usage info len =
   reveal_opaque (`%has_usage) (has_usage);
   normalize_term_spec get_usage;
   normalize_term_spec get_label;
-  if KdfExpandKey? (get_usage prk) then
-    kdf_expand_usage.get_label_lemma tr (get_usage prk) (get_label tr prk) info
+  if KdfExpandKey? (get_usage tr prk) then
+    kdf_expand_usage.get_label_lemma tr (get_usage tr prk) (get_label tr prk) info
   else ()
 
 /// User lemma (kdf_expand label)
@@ -2781,8 +2821,8 @@ let get_label_kdf_expand tr prk prk_usage info len =
   reveal_opaque (`%has_usage) (has_usage);
   kdf_expand_usage.get_label_lemma tr prk_usage (get_label tr prk) info;
   normalize_term_spec get_label;
-  if KdfExpandKey? (get_usage prk) then
-    kdf_expand_usage.get_label_lemma tr (get_usage prk) (get_label tr prk) info
+  if KdfExpandKey? (get_usage tr prk) then
+    kdf_expand_usage.get_label_lemma tr (get_usage tr prk) (get_label tr prk) info
   else ()
 
 /// User lemma (kdf_expand label can flow)
@@ -2796,9 +2836,9 @@ val get_label_kdf_expand_can_flow:
 let get_label_kdf_expand_can_flow tr prk info len =
   reveal_opaque (`%kdf_expand) (kdf_expand);
   normalize_term_spec get_label;
-  match get_usage prk with
+  match get_usage tr prk with
   | KdfExpandKey _ _ ->
-    kdf_expand_usage.get_label_lemma tr (get_usage prk) (get_label tr prk) info
+    kdf_expand_usage.get_label_lemma tr (get_usage tr prk) (get_label tr prk) info
   | _ -> ()
 
 (*** KEM ***)
