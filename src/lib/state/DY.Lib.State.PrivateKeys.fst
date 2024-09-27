@@ -7,7 +7,6 @@ open DY.Lib.Comparse.Parsers
 open DY.Lib.State.Tagged
 open DY.Lib.State.Typed
 open DY.Lib.State.Map
-open DY.Lib.State.PKI
 
 #set-options "--fuel 1 --ifuel 1"
 
@@ -18,8 +17,16 @@ open DY.Lib.State.PKI
 (*** Private keys types & invariants ***)
 
 [@@ with_bytes bytes]
+type long_term_key_type =
+  | LongTermPkEncKey: [@@@ with_parser #bytes ps_string] usage:string -> long_term_key_type
+  | LongTermSigKey: [@@@ with_parser #bytes ps_string] usage:string -> long_term_key_type
+
+%splice [ps_long_term_key_type] (gen_parser (`long_term_key_type))
+%splice [ps_long_term_key_type_is_well_formed] (gen_is_well_formed_lemma (`long_term_key_type))
+
+[@@ with_bytes bytes]
 type private_key_key = {
-  ty:public_key_type;
+  ty:long_term_key_type;
 }
 
 %splice [ps_private_key_key] (gen_parser (`private_key_key))
@@ -39,16 +46,45 @@ instance map_types_private_keys: map_types private_key_key private_key_value = {
   ps_value_t = ps_private_key_value;
 }
 
+type long_term_key_usage_data = {
+  who: principal;
+}
+
+%splice [ps_long_term_key_usage_data] (gen_parser (`long_term_key_usage_data))
+
+instance parseable_serializeable_bytes_long_term_key_usage_data: parseable_serializeable bytes long_term_key_usage_data =
+  mk_parseable_serializeable ps_long_term_key_usage_data
+
+val long_term_key_type_to_usage:
+  long_term_key_type -> principal ->
+  usage
+let long_term_key_type_to_usage sk_type who =
+  match sk_type with
+  | LongTermPkEncKey usg -> PkKey usg (serialize _ {who})
+  | LongTermSigKey usg -> SigKey usg (serialize _ {who})
+
 val is_private_key_for:
   {|crypto_invariants|} -> trace ->
-  bytes -> public_key_type -> principal -> prop
+  bytes -> long_term_key_type -> principal -> prop
 let is_private_key_for #cinvs tr sk sk_type who =
   match sk_type with
   | LongTermPkEncKey usg -> (
-    is_decryption_key (public_key_type_to_usage sk_type who) (principal_label who) tr sk
+    is_decryption_key (long_term_key_type_to_usage sk_type who) (principal_label who) tr sk
   )
   | LongTermSigKey usg -> (
-    is_signature_key (public_key_type_to_usage sk_type who) (principal_label who) tr sk
+    is_signature_key (long_term_key_type_to_usage sk_type who) (principal_label who) tr sk
+  )
+
+val is_public_key_for:
+  {|crypto_invariants|} -> trace ->
+  bytes -> long_term_key_type -> principal -> prop
+let is_public_key_for #cinvs tr pk pk_type who =
+  match pk_type with
+  | LongTermPkEncKey usg -> (
+    is_encryption_key (long_term_key_type_to_usage pk_type who) (principal_label who) tr pk
+  )
+  | LongTermSigKey usg -> (
+    is_verification_key (long_term_key_type_to_usage pk_type who) (principal_label who) tr pk
   )
 
 // The `#_` at the end is a workaround for FStarLang/FStar#3286
@@ -75,19 +111,19 @@ val initialize_private_keys: prin:principal -> traceful state_id
 let initialize_private_keys = initialize_map private_key_key private_key_value #_ // another workaround for FStarLang/FStar#3286
 
 [@@ "opaque_to_smt"]
-val generate_private_key: principal -> state_id -> public_key_type -> traceful (option unit)
+val generate_private_key: principal -> state_id -> long_term_key_type -> traceful (option unit)
 let generate_private_key prin sess_id sk_type =
-  let* sk = mk_rand (public_key_type_to_usage sk_type prin) (principal_label prin) 64 in //TODO
+  let* sk = mk_rand (long_term_key_type_to_usage sk_type prin) (principal_label prin) 64 in //TODO
   add_key_value prin sess_id ({ty = sk_type}) ({private_key = sk;})
 
 [@@ "opaque_to_smt"]
-val get_private_key: principal -> state_id -> public_key_type -> traceful (option bytes)
+val get_private_key: principal -> state_id -> long_term_key_type -> traceful (option bytes)
 let get_private_key prin sess_id sk_type =
   let*? res = find_value prin sess_id ({ty = sk_type}) in
   return (Some res.private_key)
 
 [@@ "opaque_to_smt"]
-val compute_public_key: principal -> state_id -> public_key_type -> traceful (option bytes)
+val compute_public_key: principal -> state_id -> long_term_key_type -> traceful (option bytes)
 let compute_public_key prin sess_id sk_type =
   let*? res = find_value prin sess_id ({ty = sk_type}) in
   match sk_type with
@@ -116,7 +152,7 @@ let initialize_private_keys_invariant #invs prin tr =
 
 val generate_private_key_invariant:
   {|protocol_invariants|} ->
-  prin:principal -> sess_id:state_id -> sk_type:public_key_type -> tr:trace ->
+  prin:principal -> sess_id:state_id -> sk_type:long_term_key_type -> tr:trace ->
   Lemma
   (requires
     trace_invariant tr /\
@@ -134,7 +170,7 @@ let generate_private_key_invariant #invs prin sess_id sk_type tr =
 
 val get_private_key_invariant:
   {|protocol_invariants|} ->
-  prin:principal -> sess_id:state_id -> pk_type:public_key_type -> tr:trace ->
+  prin:principal -> sess_id:state_id -> pk_type:long_term_key_type -> tr:trace ->
   Lemma
   (requires
     trace_invariant tr /\
@@ -157,7 +193,7 @@ let get_private_key_invariant #invs prin sess_id pk_type tr =
 
 val compute_public_key_invariant:
   {|protocol_invariants|} ->
-  prin:principal -> sess_id:state_id -> pk_type:public_key_type -> tr:trace ->
+  prin:principal -> sess_id:state_id -> pk_type:long_term_key_type -> tr:trace ->
   Lemma
   (requires
     trace_invariant tr /\
