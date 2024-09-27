@@ -142,6 +142,61 @@ val get_state_invariant:
 let get_state_invariant #a #ls #invs spred prin sess_id tr =
   reveal_opaque (`%get_state) (get_state #a)
 
+
+/// Lookup the most recent state of a principal that satisfys some property.
+
+val lookup_state:
+  #a:Type -> {|local_state a|} ->
+  principal -> (a -> bool) -> traceful (option (a & state_id))
+let lookup_state #a #ls prin p =
+  let p_ b =
+    match parse a b with
+    | None -> false
+    | Some x -> p x in
+  let*? (content_bytes, sid) = lookup_tagged_state ls.tag prin p_ in
+  match parse a content_bytes with
+  | None -> return None
+  | Some content -> return (Some (content,sid))
+
+val lookup_state_invariant:
+  #a:Type -> {|local_state a|} ->
+  {|protocol_invariants|} ->
+  spred:local_state_predicate a ->
+  prin:principal -> p:(a -> bool) -> tr:trace ->
+  Lemma
+  (requires
+    trace_invariant tr /\
+    has_local_state_predicate spred
+  )
+  (ensures (
+    let (opt_content, tr_out) = lookup_state prin p tr in
+    tr == tr_out /\
+    (match opt_content with
+     | None -> True
+     | Some (content, sid) ->
+         spred.pred tr prin sid content
+         /\ p content
+         /\ state_was_set tr prin sid content
+    )
+  ))
+  [SMTPat (lookup_state #a prin p tr);
+   SMTPat (trace_invariant tr);
+   SMTPat (has_local_state_predicate spred)]
+let lookup_state_invariant #a #ls #invs spred prin p tr =
+  let (opt_content, tr_out) = lookup_state prin p tr in
+  match opt_content with
+  | None -> ()
+  | Some (content, sid) -> (
+      let p_ b =
+        match parse a b with
+        | None -> false
+        | Some x -> p x in
+      let (Some (l_cont, l_sid), _) = lookup_tagged_state ls.tag prin p_ tr in
+      serialize_parse_inv_lemma #bytes a l_cont;
+      reveal_opaque (`%state_was_set) (state_was_set #a)
+  )
+
+
 val state_was_set_implies_pred:
   #a:Type -> {|local_state a|} ->
   {|protocol_invariants|} -> tr:trace ->

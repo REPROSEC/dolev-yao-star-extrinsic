@@ -494,6 +494,125 @@ let get_state_state_invariant #invs prin sess_id tr =
   normalize_term_spec get_state;
   get_state_aux_state_invariant prin sess_id tr
 
+
+/// Lookup the most recent state of a principal satisfying some property.
+/// Returns the state and corresponding state id,
+/// or `None` if no such state exists.
+
+val lookup_state_aux: principal -> (bytes -> bool) -> trace -> option (bytes & state_id)
+let rec lookup_state_aux prin p tr =
+  match tr with
+  | Nil -> None
+  | Snoc rest (SetState prin' sid' cont') ->
+      if prin' = prin && p cont'
+      then Some (cont', sid')
+      else lookup_state_aux prin p rest
+  | Snoc rest _ -> lookup_state_aux prin p rest
+
+val lookup_state: principal -> (bytes -> bool) -> traceful (option (bytes & state_id))
+let lookup_state prin p =
+  let* tr = get_trace in
+  return (lookup_state_aux prin p tr)
+
+let last_event_exists (tr:trace):
+  Lemma
+    (requires Snoc? tr)
+    (ensures
+      (let Snoc _ ev = tr in
+       event_exists tr ev
+      )
+    )
+    [SMTPat (Snoc? tr)]
+  = let Snoc _ ev = tr in
+    assert(event_at tr (DY.Core.Trace.Base.length tr - 1) ev)
+
+/// If `lookup` returns some state,
+/// this state satisfies the property used in the lookup.
+
+val lookup_state_aux_state_was_set_and_prop:
+  prin:principal -> p:(bytes -> bool) -> tr:trace ->
+  Lemma
+  (ensures (
+    let opt_content = lookup_state_aux prin p tr in
+      match opt_content with
+      | None -> True
+      | Some (content, sid) ->
+               p content
+             /\ state_was_set tr prin sid content
+  ))
+let rec lookup_state_aux_state_was_set_and_prop prin p tr =
+  match tr with
+  | Nil -> ()
+  | Snoc tr_init _ ->
+         lookup_state_aux_state_was_set_and_prop prin p tr_init
+
+/// If `lookup` returns a state on a trace with `trace_invariant`,
+/// the returned state additionally satisfies the state predicate.
+
+val lookup_state_aux_state_invariant:
+  {|protocol_invariants|} ->
+  prin:principal -> p:(bytes -> bool) -> tr:trace ->
+  Lemma
+  (requires
+    trace_invariant tr
+  )
+  (ensures (
+    let opt_content = lookup_state_aux prin p tr in
+      match opt_content with
+      | None -> True
+      | Some (content, sid) ->
+               state_pred.pred tr prin sid content
+             /\ p content
+             /\ state_was_set tr prin sid content
+  ))
+let lookup_state_aux_state_invariant #invs prin p tr =
+  lookup_state_aux_state_was_set_and_prop prin p tr;
+  match lookup_state_aux prin p tr with
+  | None -> ()
+  | Some (content, sid) ->
+    state_was_set_implies_pred tr prin sid content
+
+/// lifting both properties from `_aux` to the `traceful` versions.
+
+val lookup_state_state_was_set_and_prop:
+  prin:principal -> p:(bytes -> bool) -> tr:trace ->
+  Lemma
+  (ensures (
+    let (opt_content, tr_out) = lookup_state prin p tr in
+    tr == tr_out /\
+    (match opt_content with
+     | None -> True
+     | Some (content, sid) ->
+              p content
+            /\ state_was_set tr prin sid content
+    )
+  ))
+let lookup_state_state_was_set_and_prop prin p tr =
+  lookup_state_aux_state_was_set_and_prop prin p tr
+
+
+val lookup_state_state_invariant:
+  {|invs:protocol_invariants|} ->
+  prin:principal -> p:(bytes -> bool) -> tr:trace ->
+  Lemma
+  (requires
+    trace_invariant tr
+  )
+  (ensures (
+    let (opt_content, tr_out) = lookup_state prin p tr in
+    tr == tr_out /\
+    (match opt_content with
+     | None -> True
+     | Some (content, sid) ->
+              state_pred.pred tr prin sid content
+            /\ p content
+            /\ state_was_set tr prin sid content
+    )
+  ))
+  [SMTPat (lookup_state prin p tr); SMTPat (trace_invariant #invs tr)]
+let lookup_state_state_invariant #invs prin p tr =
+  lookup_state_aux_state_invariant prin p tr
+
 (*** Event triggering ***)
 
 /// Trigger a protocol event.

@@ -221,6 +221,67 @@ let get_tagged_state_invariant #invs tag spred prin sess_id tr =
     let (Some full_content_bytes, tr) = get_state prin sess_id tr in
     local_eq_global_lemma split_local_bytes_state_predicate_params state_pred.pred tag spred (tr, prin, sess_id, full_content_bytes) tag (tr, prin, sess_id, content)
 
+/// Lookup the most recent tagged state for a principal that satisfys some property.
+/// The property given as argument is on the _content_ of the state.
+
+val lookup_tagged_state:
+ string -> principal -> (bytes -> bool) -> traceful (option (bytes & state_id))
+let lookup_tagged_state the_tag prin p =
+  let p_ b =
+    match parse tagged_state b with
+    | None -> false
+    | Some ({tag; content;}) -> tag = the_tag && p content in
+  let*? (full_content_bytes, sid) = lookup_state prin p_ in
+  match parse tagged_state full_content_bytes with
+    | None -> return None
+    | Some ({tag; content;}) ->
+        if (tag = the_tag)
+        then return (Some (content, sid))
+        else return None
+
+val lookup_tagged_state_invariant:
+  {|protocol_invariants|} ->
+  tag:string -> spred:local_bytes_state_predicate ->
+  prin:principal -> p:(bytes -> bool) -> tr:trace ->
+  Lemma
+  (requires
+    trace_invariant tr /\
+    has_local_bytes_state_predicate (tag, spred)
+  )
+  (ensures (
+    let (opt_content, tr_out) = lookup_tagged_state tag prin p tr in
+    tr == tr_out /\
+    (match opt_content with
+     | None -> True
+     | Some (content,sid) ->
+           spred.pred tr prin sid content
+         /\ p content
+         /\ tagged_state_was_set tr tag prin sid content
+    )
+  ))
+  [SMTPat (lookup_tagged_state tag prin p tr);
+   SMTPat (trace_invariant tr);
+   SMTPat (has_local_bytes_state_predicate (tag, spred))]
+let lookup_tagged_state_invariant #invs the_tag spred prin p tr =
+  reveal_opaque (`%has_local_bytes_state_predicate) (has_local_bytes_state_predicate);
+  let (opt_content, tr_out) = lookup_tagged_state the_tag prin p tr in
+  match opt_content with
+  | None -> ()
+  | Some (content,sid) -> (
+      let p_ b =
+        match parse tagged_state b with
+        | None -> false
+        | Some ({tag; content;}) -> tag = the_tag && p content in
+
+      let (Some (l_cont, l_sid), _) = lookup_state prin p_ tr in
+      serialize_parse_inv_lemma #bytes tagged_state l_cont;
+      lookup_state_state_invariant prin p_ tr;
+      reveal_opaque (`%tagged_state_was_set) (tagged_state_was_set);
+
+      let (Some (full_content_bytes, sid), tr) = lookup_state prin p_ tr in
+      local_eq_global_lemma split_local_bytes_state_predicate_params state_pred.pred the_tag spred (tr, prin, sid, full_content_bytes) the_tag (tr, prin, sid, content)
+     )
+
 (*** Theorem ***)
 
 val tagged_state_was_set_implies_pred:
