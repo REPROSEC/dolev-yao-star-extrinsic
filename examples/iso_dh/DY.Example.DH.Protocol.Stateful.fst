@@ -91,7 +91,7 @@ let send_msg2 global_sess_id bob bob_si =
   let*? session_state = get_state bob bob_si in
   guard_tr (ResponderSentMsg2? session_state);*?
   let ResponderSentMsg2 alice gx gy y = session_state in
-  let*? sk_b = get_private_key bob global_sess_id.private_keys (Sign "DH.SigningKey") in
+  let*? sk_b = get_private_key bob global_sess_id.private_keys (LongTermSigKey "DH.SigningKey") in
   let* n_sig = mk_rand SigNonce (principal_label bob) 32 in
   let msg = compute_message2 alice bob gx gy sk_b n_sig in
   let* msg_id = send_msg msg in
@@ -105,7 +105,7 @@ let prepare_msg3 global_sess_id alice alice_si bob msg_id =
   let*? session_state = get_state alice alice_si in
   guard_tr (InitiatorSentMsg1? session_state);*?
   let InitiatorSentMsg1 bob x = session_state in
-  let*? pk_b = get_public_key alice global_sess_id.pki (Verify "DH.SigningKey") bob in
+  let*? pk_b = get_public_key alice global_sess_id.pki (LongTermSigKey "DH.SigningKey") bob in
   let*? msg = recv_msg msg_id in
   let*? res:verify_msg2_result = return (decode_and_verify_message2 msg alice x pk_b) in
   trigger_event alice (Initiate2 alice bob res.gx res.gy res.k);*
@@ -118,7 +118,7 @@ let send_msg3 global_sess_id alice bob alice_si =
   let*? session_state = get_state alice alice_si in
   guard_tr (InitiatorSendMsg3? session_state);*?
   let InitiatorSendMsg3 bob gx gy x = session_state in
-  let*? sk_a = get_private_key alice global_sess_id.private_keys (Sign "DH.SigningKey") in
+  let*? sk_a = get_private_key alice global_sess_id.private_keys (LongTermSigKey "DH.SigningKey") in
   let* n_sig = mk_rand SigNonce (principal_label alice) 32 in
   let msg = compute_message3 alice bob gx gy sk_a n_sig in
   let* msg_id = send_msg msg in
@@ -130,7 +130,7 @@ let verify_msg3 global_sess_id alice bob msg_id bob_si =
   let*? session_state = get_state bob bob_si in
   guard_tr (ResponderSentMsg2? session_state);*?
   let ResponderSentMsg2 alice gx gy y = session_state in
-  let*? pk_a = get_public_key bob global_sess_id.pki (Verify "DH.SigningKey") alice in
+  let*? pk_a = get_public_key bob global_sess_id.pki (LongTermSigKey "DH.SigningKey") alice in
   let*? msg = recv_msg msg_id in
   let*? res:verify_msg3_result = return (decode_and_verify_message3 msg bob gx gy y pk_a) in
   trigger_event bob (Respond2 alice bob gx gy res.k);*
