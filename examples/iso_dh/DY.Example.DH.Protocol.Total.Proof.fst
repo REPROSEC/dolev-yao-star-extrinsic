@@ -248,7 +248,7 @@ let compute_message3_proof tr alice bob gx gy x sk_a n_sig =
   assert(is_publishable tr (serialize message msg));
   ()
 
-#push-options "--ifuel 1 --z3rlimit 10"
+#push-options "--ifuel 1 --z3rlimit 25"
 val decode_and_verify_message3_proof:
   tr:trace ->
   msg3_bytes:bytes ->
