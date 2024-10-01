@@ -236,7 +236,7 @@ let get_hpke_sk_label_hpke_pk #cu tr sk = ()
 /// It is a bit more complex than `DY.Core.Bytes.bytes_invariant_pk_enc`,
 /// the additional complexity is explained in the comments.
 
-#push-options "--ifuel 2"
+#push-options "--ifuel 2 --z3rlimit 25"
 val bytes_invariant_hpke_enc:
   {|crypto_invariants|} -> {|hpke_crypto_invariants|} ->
   tr:trace ->
