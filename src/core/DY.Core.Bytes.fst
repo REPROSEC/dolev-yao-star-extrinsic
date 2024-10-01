@@ -2173,6 +2173,7 @@ let dh_pk_preserves_publishability tr sk =
 
 /// Lemma for attacker knowledge theorem.
 
+#push-options "--z3rlimit 25"
 val dh_preserves_publishability:
   {|crypto_invariants|} -> tr:trace ->
   sk:bytes -> pk:bytes ->
@@ -2187,6 +2188,7 @@ let dh_preserves_publishability tr sk pk =
   reveal_opaque (`%dh) (dh);
   normalize_term_spec bytes_invariant;
   normalize_term_spec get_label
+#pop-options
 
 /// User lemma (dh_pk well-formedness)
 
@@ -2642,6 +2644,7 @@ let kem_pk_preserves_publishability #ci tr sk =
 
 /// Lemma for attacker knowledge theorem.
 
+#push-options "--z3rlimit 25"
 val kem_encap_preserves_publishability:
   {|crypto_invariants|} -> tr:trace ->
   pk:bytes -> nonce:bytes ->
@@ -2660,6 +2663,7 @@ let kem_encap_preserves_publishability #ci tr pk nonce =
   normalize_term_spec bytes_invariant;
   normalize_term_spec get_label;
   assert(is_publishable tr (KemSecretShared nonce))
+#pop-options
 
 /// Lemma for attacker knowledge theorem.
 
