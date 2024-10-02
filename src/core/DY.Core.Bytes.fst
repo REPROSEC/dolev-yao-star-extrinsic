@@ -528,11 +528,9 @@ let has_usage_publishable #cusgs tr msg usg =
 /// Although the public keys are public,
 /// these functions are useful to reason on the corresponding private key.
 
-// TODO the extract functions should be ghost?
-
 [@@"opaque_to_smt"]
 val extract_preserves_well_formedness:
-  (bytes -> option bytes) ->
+  (bytes -> GTot (option bytes)) ->
   bytes -> 
   prop
 let extract_preserves_well_formedness extract msg =
@@ -546,7 +544,7 @@ let extract_preserves_well_formedness extract msg =
 [@@"opaque_to_smt"]
 val mk_get_xxx_label:
   {|crypto_usages|} ->
-  (bytes -> option bytes) ->
+  (bytes -> GTot (option bytes)) ->
   trace -> bytes -> label
 let mk_get_xxx_label #cusgs extract tr pk =
   match extract pk with
@@ -555,7 +553,7 @@ let mk_get_xxx_label #cusgs extract tr pk =
 
 val mk_get_xxx_label_later:
   {|crypto_usages|} ->
-  extract:(bytes -> option bytes) ->
+  extract:(bytes -> GTot (option bytes)) ->
   tr1:trace -> tr2:trace ->
   msg:bytes ->
   Lemma
@@ -573,7 +571,7 @@ let mk_get_xxx_label_later #cusgs extract tr1 tr2 msg =
 [@@"opaque_to_smt"]
 val mk_has_xxx_usage:
   {|crypto_usages|} ->
-  (bytes -> option bytes) ->
+  (bytes -> GTot (option bytes)) ->
   trace -> bytes -> usage -> prop
 let mk_has_xxx_usage #cusgs extract tr pk usg =
   match extract pk with
@@ -582,7 +580,7 @@ let mk_has_xxx_usage #cusgs extract tr pk usg =
 
 val mk_has_xxx_usage_later:
   {|crypto_usages|} ->
-  extract:(bytes -> option bytes) ->
+  extract:(bytes -> GTot (option bytes)) ->
   tr1:trace -> tr2:trace ->
   msg:bytes -> usg:usage ->
   Lemma
@@ -600,7 +598,7 @@ let mk_has_xxx_usage_later #cusgs extract tr1 tr2 msg usg =
 
 val mk_has_xxx_usage_inj:
   {|crypto_usages|} ->
-  extract:(bytes -> option bytes) ->
+  extract:(bytes -> GTot (option bytes)) ->
   tr:trace -> msg:bytes ->
   usg1:usage -> usg2:usage ->
   Lemma
@@ -618,7 +616,7 @@ let mk_has_xxx_usage_inj #cusgs extract tr msg usg1 usg2 =
 
 val mk_has_xxx_usage_publishable:
   {|crypto_usages|} ->
-  extract:(bytes -> option bytes) ->
+  extract:(bytes -> GTot (option bytes)) ->
   tr:trace -> msg:bytes -> usg:usage ->
   Lemma
   (requires (mk_get_xxx_label extract tr msg) `can_flow tr` public)
@@ -633,7 +631,7 @@ let mk_has_xxx_usage_publishable #cusgs extract tr msg usg =
 /// Instantiation for public-key encryption
 
 [@@"opaque_to_smt"]
-val extract_sk: bytes -> option bytes
+val extract_sk: bytes -> GTot (option bytes)
 let extract_sk pk =
   match pk with
   | Pk sk -> Some sk
@@ -657,7 +655,7 @@ let has_sk_usage #cusgs = mk_has_xxx_usage extract_sk
 /// Instantiation for signatures
 
 [@@"opaque_to_smt"]
-val extract_signkey: bytes -> option bytes
+val extract_signkey: bytes -> GTot (option bytes)
 let extract_signkey vk =
   match vk with
   | Vk sk -> Some sk
@@ -681,7 +679,7 @@ let has_signkey_usage #cusgs = mk_has_xxx_usage extract_signkey
 /// Instantiation for Diffie-Hellman
 
 [@@"opaque_to_smt"]
-val extract_dh_sk: bytes -> option bytes
+val extract_dh_sk: bytes -> GTot (option bytes)
 let extract_dh_sk pk =
   match pk with
   | DhPub sk -> Some sk
@@ -705,7 +703,7 @@ let has_dh_usage #cusgs = mk_has_xxx_usage extract_dh_sk
 /// Instantiation for KEM
 
 [@@"opaque_to_smt"]
-val extract_kem_sk: bytes -> option bytes
+val extract_kem_sk: bytes -> GTot (option bytes)
 let extract_kem_sk pk =
   match pk with
   | KemPub sk -> Some sk
