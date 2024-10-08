@@ -144,6 +144,19 @@ let tagged_state_was_set tr tag prin sess_id content =
   let full_content_bytes = serialize tagged_state full_content in
   state_was_set tr prin sess_id full_content_bytes
 
+val tagged_state_was_set_grows:
+  tr1:trace -> tr2:trace ->
+  tag:string -> p:principal -> sid:state_id -> cont:bytes ->
+  Lemma
+  (requires
+     tr1 <$ tr2 /\ tagged_state_was_set tr1 tag p sid cont
+  )
+  (ensures
+    tagged_state_was_set tr2 tag p sid cont
+  )
+let tagged_state_was_set_grows tr1 tr2 tag p sid cont = 
+  reveal_opaque (`%tagged_state_was_set) tagged_state_was_set
+
 (*** API for tagged sessions ***)
 
 [@@ "opaque_to_smt"]
@@ -205,6 +218,7 @@ val get_tagged_state_invariant:
       | None -> True
       | Some content -> (
         spred.pred tr prin sess_id content
+        /\ tagged_state_was_set tr tag prin sess_id content
       )
     )
   ))
@@ -214,11 +228,14 @@ val get_tagged_state_invariant:
 let get_tagged_state_invariant #invs tag spred prin sess_id tr =
   reveal_opaque (`%has_local_bytes_state_predicate) (has_local_bytes_state_predicate);
   reveal_opaque (`%get_tagged_state) (get_tagged_state);
+  
   let (opt_content, tr_out) = get_tagged_state tag prin sess_id tr in
   match opt_content with
   | None -> ()
   | Some content ->
     let (Some full_content_bytes, tr) = get_state prin sess_id tr in
+    reveal_opaque (`%tagged_state_was_set) (tagged_state_was_set);
+    serialize_parse_inv_lemma #bytes tagged_state full_content_bytes;
     local_eq_global_lemma split_local_bytes_state_predicate_params state_pred.pred tag spred (tr, prin, sess_id, full_content_bytes) tag (tr, prin, sess_id, content)
 
 (*** Theorem ***)

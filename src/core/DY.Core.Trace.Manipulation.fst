@@ -43,18 +43,6 @@ let (let?) #a #b x f =
   | None -> None
   | Some x -> f x
 
-/// Bind operator for the trace + option monad.
-
-val (let*?): #a:Type -> #b:Type -> x:traceful (option a) -> f:(a -> traceful (option b)) -> traceful (option b)
-let (let*?) #a #b x f tr0 =
-  let (opt_x', tr) = x tr0 in
-  match opt_x' with
-  | None -> (None, tr)
-  | Some x' -> (
-    let (y, tr) = f x' tr in
-    (y, tr)
-  )
-
 /// return function for the trace monad.
 
 val return: #a:Type -> a -> traceful a
@@ -78,6 +66,24 @@ let guard b =
   if b
   then Some ()
   else None
+
+
+/// We often use the combination of the traceful and the option monad
+/// for functions working on the trace that may fail.
+
+type trace_option a = traceful (option a)
+
+/// Bind operator for the trace + option monad.
+
+val (let*?): #a:Type -> #b:Type -> x:traceful (option a) -> f:(a -> trace_option b) -> trace_option b
+let (let*?) #a #b x f tr0 =
+  let (opt_x', tr) = x tr0 in
+  match opt_x' with
+  | None -> (None, tr)
+  | Some x' -> (
+    let (y, tr) = f x' tr in
+    (y, tr)
+  )
 
 /// guard function for the traceful + option monad
 
@@ -322,6 +328,20 @@ let mk_rand_get_usage #invs usg lab len tr =
 
 (*** State ***)
 
+
+val state_was_set_grows:
+  tr1:trace -> tr2:trace ->
+  p:principal -> sid:state_id -> content:bytes ->
+  Lemma
+  (requires
+    tr1 <$ tr2
+    /\ state_was_set tr1 p sid content
+  )
+  (ensures
+    state_was_set tr2 p sid content
+  )
+let state_was_set_grows tr1 tr2 p sid content = ()
+
 /// Set the state of a principal at a given state identifier.
 
 [@@ "opaque_to_smt"]
@@ -447,22 +467,27 @@ val get_state_aux_state_invariant:
   (ensures (
     match get_state_aux prin sess_id tr with
     | None -> True
-    | Some content -> state_pred.pred tr prin sess_id content
+    | Some content -> (
+           state_pred.pred tr prin sess_id content
+           /\ state_was_set tr prin sess_id content
+           )
   ))
 let rec get_state_aux_state_invariant #invs prin sess_id tr =
   reveal_opaque (`%grows) (grows #label);
   norm_spec [zeta; delta_only [`%trace_invariant]] (trace_invariant);
   norm_spec [zeta; delta_only [`%prefix]] (prefix #label);
   match tr with
-  | Nil -> ()
+  | Nil -> assert(None = get_state_aux prin sess_id tr)
   | Snoc tr_init (SetState prin' sess_id' content) -> (
     if prin = prin' && sess_id = sess_id' then (
       state_pred.pred_later tr_init tr prin sess_id content
+      ; assert(event_exists tr (SetState prin' sess_id' content))
     ) else (
-      get_state_aux_state_invariant prin sess_id tr_init;
       match get_state_aux prin sess_id tr_init with
       | None -> ()
-      | Some content -> state_pred.pred_later tr_init tr prin sess_id content
+      | Some content ->
+             get_state_aux_state_invariant prin sess_id tr_init;
+             state_pred.pred_later tr_init tr prin sess_id content
     )
   )
   | Snoc tr_init _ ->
@@ -486,7 +511,9 @@ val get_state_state_invariant:
     tr == tr_out /\ (
       match opt_content with
       | None -> True
-      | Some content -> state_pred.pred tr prin sess_id content
+      | Some content -> 
+             state_pred.pred tr prin sess_id content
+           /\ state_was_set tr prin sess_id content
     )
   ))
   [SMTPat (get_state prin sess_id tr); SMTPat (trace_invariant tr)]
