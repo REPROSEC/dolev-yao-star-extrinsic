@@ -22,10 +22,9 @@ let state_predicate_nsl: local_state_predicate nsl_session = {
     match st with
     | InitiatorSentMsg1 bob n_a -> (
       let alice = prin in
-      is_secret (join (principal_label alice) (principal_label bob)) tr n_a /\
       is_knowable_by (join (principal_label alice) (principal_label bob)) tr n_a /\
-
       // event_triggered tr alice (Initiate1 alice bob n_a)
+      is_secret (join (principal_label alice) (principal_label bob)) tr n_a /\
       0 < DY.Core.Trace.Base.length tr /\
       //rand_generated_at tr (DY.Core.Trace.Base.length tr - 1) n_a
       rand_generated_before tr n_a
@@ -34,32 +33,22 @@ let state_predicate_nsl: local_state_predicate nsl_session = {
       let bob = prin in
       is_knowable_by (join (principal_label alice) (principal_label bob)) tr n_a /\
       is_knowable_by (join (principal_label alice) (principal_label bob)) tr n_b /\
-      is_secret (join (principal_label alice) (principal_label bob)) tr n_b /\
       // event_triggered tr bob (Respond1 alice bob n_a n_b)
+      is_secret (join (principal_label alice) (principal_label bob)) tr n_b /\
        0 < DY.Core.Trace.Base.length tr /\
       // rand_generated_at tr (DY.Core.Trace.Base.length tr - 1) n_b
       rand_generated_before tr n_b
-      /\
-      ( is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob)
-      \/
-        // event_triggered tr bob (Respond1 alice bob n_a n_b))
-        (
-        state_was_set_all_ids tr alice (InitiatorSentMsg1 bob n_a)
-        )
-        )
-
     )
     | InitiatorSentMsg3 bob n_a n_b  -> (
       let alice = prin in
       is_knowable_by (join (principal_label alice) (principal_label bob)) tr n_a /\
       is_knowable_by (join (principal_label alice) (principal_label bob)) tr n_b /\
       // event_triggered tr alice (Initiate2 alice bob n_a n_b)
+      state_was_set_all_ids tr alice (InitiatorSentMsg1 bob n_a) /\
       ( is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob)
       \/
         // event_triggered tr bob (Respond1 alice bob n_a n_b))
-        (
         state_was_set_all_ids #_ tr bob (ResponderSentMsg2 alice n_a n_b)
-        )
         )
     )
     | ResponderReceivedMsg3 alice n_a n_b -> (
@@ -67,6 +56,7 @@ let state_predicate_nsl: local_state_predicate nsl_session = {
       is_knowable_by (join (principal_label alice) (principal_label bob)) tr n_a /\
       is_knowable_by (join (principal_label alice) (principal_label bob)) tr n_b /\
       // event_triggered tr bob (Respond2 alice bob n_a n_b)
+      state_was_set_all_ids tr bob (ResponderSentMsg2 alice n_a n_b) /\
       (is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob) 
       \/
       //   event_triggered tr alice (Initiate2 alice bob n_a n_b))
@@ -78,38 +68,6 @@ let state_predicate_nsl: local_state_predicate nsl_session = {
   pred_knowable = (fun tr prin sess_id st -> ());
 }
 
-/// The (local) event predicate.
-
-// let event_predicate_nsl: event_predicate nsl_event =
-//   fun tr prin e ->
-//     match e with
-//     | Initiate1 alice bob n_a -> (
-//       prin == alice /\
-//       is_secret (join (principal_label alice) (principal_label bob)) tr n_a /\
-//       0 < DY.Core.Trace.Base.length tr /\
-//       rand_generated_at tr (DY.Core.Trace.Base.length tr - 1) n_a
-//     )
-//     | Respond1 alice bob n_a n_b -> (
-//       prin == bob /\
-//       is_secret (join (principal_label alice) (principal_label bob)) tr n_b /\
-//       0 < DY.Core.Trace.Base.length tr /\
-//       rand_generated_at tr (DY.Core.Trace.Base.length tr - 1) n_b
-//     )
-//     | Initiate2 alice bob n_a n_b -> (
-//       prin == alice /\
-//       event_triggered tr alice (Initiate1 alice bob n_a) /\ (
-//         is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob) \/
-//         event_triggered tr bob (Respond1 alice bob n_a n_b)
-//       )
-//     )
-//     | Respond2 alice bob n_a n_b -> (
-//       prin == bob /\
-//       event_triggered tr bob (Respond1 alice bob n_a n_b) /\ (
-//         is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob) \/
-//         event_triggered tr alice (Initiate2 alice bob n_a n_b)
-//       )
-//     )
-
 /// List of all local state predicates.
 
 let all_sessions = [
@@ -120,9 +78,7 @@ let all_sessions = [
 
 /// List of all local event predicates.
 
-let all_events = [
-  // (event_nsl_event.tag, compile_event_pred event_predicate_nsl)
-]
+let all_events = []
 
 /// Create the global trace invariants.
 
@@ -157,20 +113,6 @@ let protocol_invariants_nsl_has_private_keys_invariant = all_sessions_has_all_se
 // As an example, below `#protocol_invariants_nsl` is omitted and instantiated using F*'s typeclass resolution algorithm
 val protocol_invariants_nsl_has_nsl_session_invariant: squash (has_local_state_predicate state_predicate_nsl)
 let protocol_invariants_nsl_has_nsl_session_invariant = all_sessions_has_all_sessions ()
-
-/// Lemmas that the global event predicate contains all the local ones
-
-// val all_events_has_all_events: unit -> Lemma (norm [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP (has_compiled_event_pred #protocol_invariants_nsl) all_events))
-// let all_events_has_all_events () =
-//   assert_norm(List.Tot.no_repeats_p (List.Tot.map #string #_ fst (all_events)));
-//   mk_event_pred_correct #protocol_invariants_nsl all_events;
-//   norm_spec [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP (has_compiled_event_pred #protocol_invariants_nsl) all_events);
-//   let dumb_lemma (x:prop) (y:prop): Lemma (requires x /\ x == y) (ensures y) = () in
-//   dumb_lemma (for_allP (has_compiled_event_pred #protocol_invariants_nsl) all_events) (norm [delta_only [`%all_events; `%for_allP]; iota; zeta] (for_allP (has_compiled_event_pred #protocol_invariants_nsl) all_events))
-
-// // As an example, below `#protocol_invariants_nsl` is omitted and instantiated using F*'s typeclass resolution algorithm
-// val protocol_invariants_nsl_has_nsl_event_invariant: squash (has_event_pred event_predicate_nsl)
-// let protocol_invariants_nsl_has_nsl_event_invariant = all_events_has_all_events ()
 
 (*** Proofs ***)
 
@@ -207,7 +149,6 @@ let send_msg1_proof tr global_sess_id alice sess_id =
   )
   | _ -> ()
 
-//#push-options "--z3rlimit 50"
 val prepare_msg2_proof:
   tr:trace ->
   global_sess_id:nsl_global_sess_ids -> bob:principal -> msg_id:timestamp ->
@@ -224,16 +165,7 @@ let prepare_msg2_proof tr global_sess_id bob msg_id =
     match get_private_key bob global_sess_id.private_keys (PkDec "NSL.PublicKey") tr with
     | (None, tr) -> ()
     | (Some sk_b, tr) -> (
-      decode_message1_proof tr bob msg sk_b;
-      match decode_message1 bob msg sk_b with
-      | None -> ()
-      | Some msg1 ->
-      let (n_b, tr_rand) = mk_rand NoUsage (join (principal_label msg1.alice) (principal_label bob)) 32 tr in
-      let (sess_id, tr_new_sid) = new_session_id bob tr_rand in
-      // assume(state_predicate_nsl.pred tr bob sess_id (ResponderSentMsg2 msg.alice msg.n_a n_b))
-      assert(crypto_predicates_nsl.pkenc_pred.pred tr (pk sk_b) msg \/ is_publishable tr msg);
-      assume(is_publishable tr msg1.n_a ==> is_corrupt tr (principal_label msg1.alice) \/ is_corrupt tr (principal_label bob));
-    ()
+      decode_message1_proof tr bob msg sk_b
     )
   )
 
@@ -303,22 +235,22 @@ let send_msg3_proof tr global_sess_id alice sess_id =
   )
   | (_, tr) -> ()
 
-val event_respond1_injective:
-  tr:trace ->
-  alice:principal -> alice':principal -> bob:principal ->
-  n_a:bytes -> n_a':bytes -> n_b:bytes ->
-  Lemma
-  (requires
-    trace_invariant tr /\
-    // event_triggered tr bob (Respond1 alice bob n_a n_b) /\
-    // event_triggered tr bob (Respond1 alice' bob n_a' n_b)
-  true
-  )
-  (ensures
-    alice == alice' /\
-    n_a == n_a'
-  )
-let event_respond1_injective tr alice alice' bob n_a n_a' n_b = admit()
+// val event_respond1_injective:
+//   tr:trace ->
+//   alice:principal -> alice':principal -> bob:principal ->
+//   n_a:bytes -> n_a':bytes -> n_b:bytes ->
+//   Lemma
+//   (requires
+//     trace_invariant tr /\
+//     // event_triggered tr bob (Respond1 alice bob n_a n_b) /\
+//     // event_triggered tr bob (Respond1 alice' bob n_a' n_b)
+//   true
+//   )
+//   (ensures
+//     alice == alice' /\
+//     n_a == n_a'
+//   )
+// let event_respond1_injective tr alice alice' bob n_a n_a' n_b = admit()
 
 // #push-options "--z3rlimit 50"
 // val prepare_msg4:
