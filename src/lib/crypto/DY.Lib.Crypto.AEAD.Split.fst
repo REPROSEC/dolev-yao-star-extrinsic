@@ -5,46 +5,45 @@ open DY.Core
 open DY.Lib.Crypto.SplitPredicate
 
 let split_aead_predicate_params {|crypto_usages|}: split_crypto_predicate_parameters = {
-  key_t = key:bytes{AeadKey? (get_usage key)};
+  key_t = key_usage:usage{AeadKey? key_usage};
   data_t = (bytes & bytes & bytes);
-  get_usage = (fun key ->
-    let AeadKey tag _ = get_usage key in
+  get_usage = (fun key_usage ->
+    let AeadKey tag _ = key_usage in
     tag
   );
 
   local_pred_t = aead_crypto_predicate;
-  global_pred_t = trace -> key:bytes{AeadKey? (get_usage key)} -> nonce:bytes -> msg:bytes -> ad:bytes -> prop;
+  global_pred_t = trace -> key_usage:usage{AeadKey? key_usage} -> nonce:bytes -> msg:bytes -> ad:bytes -> prop;
 
-  apply_local_pred = (fun pred (tr, key, (nonce, msg, ad)) ->
-    pred.pred tr key nonce msg ad
+  apply_local_pred = (fun pred (tr, key_usage, (nonce, msg, ad)) ->
+    pred.pred tr key_usage nonce msg ad
   );
-  apply_global_pred = (fun pred (tr, key, (nonce, msg, ad)) ->
-    pred tr key nonce msg ad
+  apply_global_pred = (fun pred (tr, key_usage, (nonce, msg, ad)) ->
+    pred tr key_usage nonce msg ad
   );
-  mk_global_pred = (fun pred tr key nonce msg ad ->
-    pred (tr, key, (nonce, msg, ad))
+  mk_global_pred = (fun pred tr key_usage nonce msg ad ->
+    pred (tr, key_usage, (nonce, msg, ad))
   );
 
-  key_and_data_well_formed = (fun tr key (nonce, msg, ad) ->
-    bytes_well_formed tr key /\
+  key_and_data_well_formed = (fun tr key_usage (nonce, msg, ad) ->
     bytes_well_formed tr nonce /\
     bytes_well_formed tr msg /\
     bytes_well_formed tr ad
   );
 
   apply_mk_global_pred = (fun bare x -> ());
-  apply_local_pred_later = (fun lpred tr1 tr2 key (nonce, msg, ad) ->
-    lpred.pred_later tr1 tr2 key nonce msg ad
+  apply_local_pred_later = (fun lpred tr1 tr2 key_usage (nonce, msg, ad) ->
+    lpred.pred_later tr1 tr2 key_usage nonce msg ad
   );
 }
 
 val has_aead_predicate: {|crypto_invariants|} -> (string & aead_crypto_predicate) -> prop
 let has_aead_predicate #cinvs (tag, local_pred) =
-  forall (tr:trace) (key:bytes) (nonce:bytes) (msg:bytes) (ad:bytes).
-    {:pattern aead_pred.pred tr key nonce msg ad}
-    match get_usage key with
+  forall (tr:trace) (key_usage:usage) (nonce:bytes) (msg:bytes) (ad:bytes).
+    {:pattern aead_pred.pred tr key_usage nonce msg ad}
+    match key_usage with
     | AeadKey aead_tag _ ->
-        aead_tag = tag ==> aead_pred.pred tr key nonce msg ad == local_pred.pred tr key nonce msg ad
+        aead_tag = tag ==> aead_pred.pred tr key_usage nonce msg ad == local_pred.pred tr key_usage nonce msg ad
     | _ -> True
 
 val intro_has_aead_predicate:
@@ -54,15 +53,15 @@ val intro_has_aead_predicate:
   (ensures has_aead_predicate tagged_local_pred)
 let intro_has_aead_predicate #cinvs (tag, local_pred) =
   introduce
-    forall tr key nonce msg ad.
-      match get_usage key with
+    forall tr key_usage nonce msg ad.
+      match key_usage with
       | AeadKey aead_tag _ ->
-          aead_tag = tag ==> aead_pred.pred tr key nonce msg ad == local_pred.pred tr key nonce msg ad
+          aead_tag = tag ==> aead_pred.pred tr key_usage nonce msg ad == local_pred.pred tr key_usage nonce msg ad
       | _ -> True
   with (
-    match get_usage key with
+    match key_usage with
     | AeadKey aead_tag _ ->
-      has_local_crypto_predicate_elim split_aead_predicate_params aead_pred.pred tag local_pred tr key (nonce, msg, ad)
+      has_local_crypto_predicate_elim split_aead_predicate_params aead_pred.pred tag local_pred tr key_usage (nonce, msg, ad)
     | _ -> ()
   )
 
