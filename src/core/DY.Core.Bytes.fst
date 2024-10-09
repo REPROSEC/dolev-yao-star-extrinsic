@@ -910,7 +910,6 @@ let rec bytes_invariant #cinvs tr b =
       ) \/ (
         // Attacker case:
         // the attacker knows the message
-        // TODO explain why don't do the same for nonce & pk
         (get_label tr msg) `can_flow tr` public
       )
     )
@@ -940,8 +939,10 @@ let rec bytes_invariant #cinvs tr b =
         nonce `has_usage tr` SigNonce
       ) \/ (
         // Attacker case:
-        // the attacker knows the signature key
-        // TODO explain why not the rest
+        // the attacker knows the signature key.
+        // The message is not required to be known by the attacker:
+        // the EUF-CMA security assumption on signatures doesn't guarantee
+        // that in case of signature forgeries.
         (get_label tr sk) `can_flow tr` public
       )
     )
