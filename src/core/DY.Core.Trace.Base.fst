@@ -17,10 +17,6 @@ let rec length tr =
   | Nil -> 0
   | Snoc init last -> length init + 1
 
-/// a type macro for timestamps (indices on the trace)
-
-type timestamp = nat
-
 (*** Prefix and trace_ extension ***)
 
 /// Compute the prefix of a trace.
@@ -259,7 +255,9 @@ let state_was_set tr prin sess_id content =
 
 val was_corrupt: #label_t:Type -> trace_ label_t -> principal -> state_id -> prop
 let was_corrupt tr prin sess_id =
-  event_exists tr (Corrupt prin sess_id)
+  exists time content.
+    event_exists tr (Corrupt time) /\
+    event_at tr time (SetState prin sess_id content)
 
 /// Has a (custom, protocol-specific) event been triggered at some timestamp?
 
@@ -315,7 +313,7 @@ let fmap_trace_event #a #b f ev =
   match ev with
   | MsgSent msg -> MsgSent msg
   | RandGen usg lab len -> RandGen usg (f lab) len
-  | Corrupt prin sess_id -> Corrupt prin sess_id
+  | Corrupt time -> Corrupt time
   | SetState prin sess_id content -> SetState prin sess_id content
   | Event prin tag content -> Event prin tag content
 
@@ -392,4 +390,42 @@ let rec trace_forget_labels_later tr1 tr2 =
   ) else (
     let Snoc tr2_init tr2_last = tr2 in
     trace_forget_labels_later tr1 tr2_init
+  )
+
+val get_event_at_trace_forget_labels:
+  tr:trace -> i:timestamp{i < length tr} ->
+  Lemma (
+    length_trace_forget_labels tr;
+    get_event_at (trace_forget_labels tr) i == (fmap_trace_event (forget_label ()) (get_event_at tr i))
+  )
+let rec get_event_at_trace_forget_labels tr i =
+  length_trace_forget_labels tr;
+  if i+1 = length tr then ()
+  else (
+    let Snoc tr_init _ = tr in
+    get_event_at_trace_forget_labels tr_init i
+  )
+
+val event_at_trace_forget_labels:
+  tr:trace -> i:timestamp -> ev:trace_event ->
+  Lemma
+  (requires event_at tr i ev)
+  (ensures event_at (trace_forget_labels tr) i (fmap_trace_event (forget_label ()) ev))
+let event_at_trace_forget_labels tr i ev =
+  length_trace_forget_labels tr;
+  if i >= length tr then ()
+  else (
+    get_event_at_trace_forget_labels tr i
+  )
+
+val event_exists_trace_forget_labels:
+  tr:trace -> ev:trace_event ->
+  Lemma
+  (requires event_exists tr ev)
+  (ensures event_exists (trace_forget_labels tr) (fmap_trace_event (forget_label ()) ev))
+let event_exists_trace_forget_labels tr ev =
+  eliminate exists i. event_at tr i ev
+  returns event_exists (trace_forget_labels tr) (fmap_trace_event (forget_label ()) ev)
+  with _. (
+    event_at_trace_forget_labels tr i ev
   )

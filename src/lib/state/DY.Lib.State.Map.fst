@@ -3,6 +3,7 @@ module DY.Lib.State.Map
 open Comparse
 open DY.Core
 open DY.Lib.Comparse.Glue
+open DY.Lib.State.Tagged
 open DY.Lib.State.Typed
 
 #set-options "--fuel 0 --ifuel 0"
@@ -32,7 +33,10 @@ noeq type map_predicate {|crypto_invariants|} (key_t:eqtype) (value_t:Type0) {|m
   ;
   pred_knowable: tr:trace -> prin:principal -> sess_id:state_id -> key:key_t -> value:value_t -> Lemma
     (requires pred tr prin sess_id key value)
-    (ensures is_well_formed_prefix mt.ps_key_t (is_knowable_by (principal_state_label prin sess_id) tr) key /\ is_well_formed_prefix mt.ps_value_t (is_knowable_by (principal_state_label prin sess_id) tr) value)
+    (ensures
+      is_well_formed_prefix mt.ps_key_t (is_knowable_by (principal_tag_state_label prin (tag #key_t #value_t) sess_id) tr) key /\
+      is_well_formed_prefix mt.ps_value_t (is_knowable_by (principal_tag_state_label prin (tag #key_t #value_t) sess_id) tr) value
+    )
   ;
 }
 
@@ -104,13 +108,15 @@ let map_session_invariant #cinvs #key_t #value_t #mt mpred = {
     FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (mpred.pred_later tr1 tr2 prin sess_id))
   );
   pred_knowable = (fun tr prin sess_id content ->
-    let pre = (is_knowable_by (principal_state_label prin sess_id) tr) in
+    let pre1 = (is_knowable_by (principal_tag_state_label prin (tag #key_t #value_t) sess_id) tr) in
+    let pre2 = (is_knowable_by (principal_typed_state_content_label prin (tag #key_t #value_t) sess_id content) tr) in
     map_invariant_eq mpred tr prin sess_id content;
-    for_allP_eq (is_well_formed_prefix (ps_map_elem key_t value_t) pre) content.key_values;
-    introduce forall x. map_elem_invariant mpred tr prin sess_id x ==> is_well_formed_prefix (ps_map_elem key_t value_t) pre x
+    for_allP_eq (is_well_formed_prefix (ps_map_elem key_t value_t) pre2) content.key_values;
+    introduce forall x. map_elem_invariant mpred tr prin sess_id x ==> is_well_formed_prefix (ps_map_elem key_t value_t) pre2 x
     with (
       introduce _ ==> _ with _. (
-        mpred.pred_knowable tr prin sess_id x.key x.value
+        mpred.pred_knowable tr prin sess_id x.key x.value;
+        is_well_formed_prefix_weaken (ps_map_elem key_t value_t) pre1 pre2 x
       )
     )
   );

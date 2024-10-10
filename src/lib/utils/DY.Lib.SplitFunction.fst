@@ -280,6 +280,26 @@ val local_eq_global_lemma:
   (ensures params.apply_global_fun global_fun tagged_data == params.apply_local_fun local_fun raw_data)
 let local_eq_global_lemma params global_fun tag_set tagged_local_fun tagged_data tag raw_data = ()
 
+/// The tag set returned by `find_local_fun` contains the tag given as parameter.
+
+val find_local_fun_returns_belonging_tag_set:
+  params:split_function_parameters ->
+  tagged_local_funs:list (dtuple2 params.tag_set_t params.local_fun_t) ->
+  tag:params.tag_t ->
+  Lemma (
+    match find_local_fun params tagged_local_funs tag with
+    | None -> True
+    | Some (|tag_set, local_fun|) -> tag `params.tag_belong_to` tag_set
+  )
+let rec find_local_fun_returns_belonging_tag_set params tagged_local_funs tag =
+  match tagged_local_funs with
+  | [] -> ()
+  | (|h_tag_set, h_local_fun|)::t_tagged_local_funs -> (
+    if tag `params.tag_belong_to` h_tag_set then ()
+    else find_local_fun_returns_belonging_tag_set params t_tagged_local_funs tag
+  )
+
+
 /// In the common case where tag disjointness is unequality,
 /// the `no_repeats_p` predicate from F*'s standard library
 /// implies `for_all_pairsP unequal`.
