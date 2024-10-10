@@ -23,16 +23,16 @@ type tagged_state = {
 instance parseable_serializeable_bytes_tagged_state: parseable_serializeable bytes tagged_state = mk_parseable_serializeable (ps_tagged_state)
 
 val tagged_state_pred_label_pred:
-  (principal -> state_id -> string -> bytes -> prop) ->
+  (principal -> string -> state_id -> bytes -> prop) ->
   (principal -> state_id -> bytes -> prop)
 let tagged_state_pred_label_pred p prin sess_id full_content =
   match parse tagged_state full_content with
   | None -> False
   | Some {tag; content} ->
-    p prin sess_id tag content
+    p prin tag sess_id content
 
 val tagged_state_pred_label:
-  (principal -> state_id -> string -> bytes -> prop) ->
+  (principal -> string -> state_id -> bytes -> prop) ->
   label
 let tagged_state_pred_label p =
   state_pred_label (tagged_state_pred_label_pred p)
@@ -40,49 +40,49 @@ let tagged_state_pred_label p =
 // This lemma is useful to keep ifuel low
 // when reasoning on `tagged_state_pred_label`.
 val tagged_state_pred_label_pred_allow_inversion:
-  p1:(principal -> state_id -> string -> bytes -> prop) ->
+  p1:(principal -> string -> state_id -> bytes -> prop) ->
   p2:(principal -> state_id -> bytes -> prop) ->
   Lemma (
     inversion (option tagged_state) /\
     inversion tagged_state
   )
   [SMTPatOr [
-    [SMTPat (state_pred_label_pred_implies p2 (tagged_state_pred_label_pred p1))];
-    [SMTPat (state_pred_label_pred_implies (tagged_state_pred_label_pred p1) p2)];
+    [SMTPat (state_pred_label_can_flow p2 (tagged_state_pred_label_pred p1))];
+    [SMTPat (state_pred_label_can_flow (tagged_state_pred_label_pred p1) p2)];
   ]]
 let tagged_state_pred_label_pred_allow_inversion p1 p2 =
   allow_inversion (option tagged_state);
   allow_inversion (tagged_state)
 
-val principal_tagged_state_content_label_pred:
-  principal -> state_id -> string -> bytes ->
-  principal -> state_id -> string -> bytes -> prop
-let principal_tagged_state_content_label_pred prin1 sess_id1 tag1 content1 prin2 sess_id2 tag2 content2 =
+val principal_tag_state_content_label_pred:
+  principal -> string -> state_id -> bytes ->
+  principal -> string -> state_id -> bytes -> prop
+let principal_tag_state_content_label_pred prin1 sess_id1 tag1 content1 prin2 sess_id2 tag2 content2 =
   prin1 == prin2 /\
   sess_id1 == sess_id2 /\
   tag1 == tag2 /\
   content1 == content2
 
-val principal_tagged_state_content_label: principal -> state_id -> string -> bytes -> label
-let principal_tagged_state_content_label prin sess_id tag content =
-  tagged_state_pred_label (principal_tagged_state_content_label_pred prin sess_id tag content)
+val principal_tag_state_content_label: principal -> string -> state_id -> bytes -> label
+let principal_tag_state_content_label prin tag sess_id content =
+  tagged_state_pred_label (principal_tag_state_content_label_pred prin tag sess_id content)
 
-val principal_tagged_state_label_pred:
-  principal -> state_id -> string ->
-  principal -> state_id -> string -> bytes -> prop
-let principal_tagged_state_label_pred prin1 sess_id1 tag1 prin2 sess_id2 tag2 _ =
+val principal_tag_state_label_pred:
+  principal -> string ->state_id ->
+  principal -> string -> state_id -> bytes -> prop
+let principal_tag_state_label_pred prin1 tag1 sess_id1 prin2 tag2 sess_id2 _ =
   prin1 == prin2 /\
-  sess_id1 == sess_id2 /\
-  tag1 == tag2
+  tag1 == tag2 /\
+  sess_id1 == sess_id2
 
-val principal_tagged_state_label: principal -> state_id -> string -> label
-let principal_tagged_state_label prin sess_id tag =
-  tagged_state_pred_label (principal_tagged_state_label_pred prin sess_id tag)
+val principal_tag_state_label: principal -> string -> state_id -> label
+let principal_tag_state_label prin tag sess_id =
+  tagged_state_pred_label (principal_tag_state_label_pred prin tag sess_id)
 
 val principal_tag_label_pred:
   principal -> string ->
-  principal -> state_id -> string -> bytes -> prop
-let principal_tag_label_pred prin1 tag1 prin2 _ tag2 _ =
+  principal -> string -> state_id -> bytes -> prop
+let principal_tag_label_pred prin1 tag1 prin2 tag2 _ _ =
   prin1 == prin2 /\
   tag1 == tag2
 
@@ -104,7 +104,7 @@ type local_bytes_state_predicate {|crypto_invariants|} (tag:string) = {
     tr:trace -> prin:principal -> sess_id:state_id -> content:bytes ->
     Lemma
     (requires pred tr prin sess_id content)
-    (ensures is_knowable_by (principal_tagged_state_content_label prin sess_id tag content) tr content)
+    (ensures is_knowable_by (principal_tag_state_content_label prin tag sess_id content) tr content)
   ;
 }
 
@@ -178,7 +178,7 @@ let mk_global_local_bytes_state_predicate_knowable #cinvs tagged_local_preds tr 
       find_local_fun_returns_belonging_tag_set split_local_bytes_state_predicate_params tagged_local_preds tag;
       lpred.pred_knowable tr prin sess_id content;
       serialize_parse_inv_lemma tagged_state full_content;
-      serialize_wf_lemma tagged_state (is_knowable_by (principal_tagged_state_content_label prin sess_id tag content) tr) ({tag; content})
+      serialize_wf_lemma tagged_state (is_knowable_by (principal_tag_state_content_label prin tag sess_id content) tr) ({tag; content})
     )
     | None -> ()
   )

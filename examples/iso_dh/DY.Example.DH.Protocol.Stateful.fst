@@ -54,7 +54,7 @@ val ephemeral_dh_key_label:
   principal -> state_id ->
   label
 let ephemeral_dh_key_label prin sess_id =
-  principal_tagged_state_label prin sess_id "DH.Session"
+  principal_tag_state_label prin "DH.Session" sess_id
 
 (*** Stateful code ***)
 

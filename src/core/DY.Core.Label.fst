@@ -293,7 +293,11 @@ let join_flow_to_public_eq tr x1 x2 =
   reveal_opaque (`%join) (join);
   reveal_opaque (`%public) (public)
 
-/// TODO comment
+/// Generic label for states:
+/// `state_pred_label p` is corrupt when
+/// there exists a corrupt `SetState` event satisfying the predicate `p`.
+/// It can for example be used to depict any state of a principal
+/// (e.g. as done by `principal_label`)
 
 [@@"opaque_to_smt"]
 val state_pred_label:
@@ -309,18 +313,18 @@ let state_pred_label p = mk_label {
   is_corrupt_later = (fun tr1 tr2 -> ());
 }
 
-val state_pred_label_pred_implies:
+val state_pred_label_can_flow:
   (principal -> state_id -> bytes -> prop) ->
   (principal -> state_id -> bytes -> prop) ->
   prop
-let state_pred_label_pred_implies p1 p2 =
+let state_pred_label_can_flow p1 p2 =
   forall p s c. p2 p s c ==> p1 p s c
 
 val state_pred_label_can_flow_state_pred_label:
   tr:trace ->
   p1:(principal -> state_id -> bytes -> prop) -> p2:(principal -> state_id -> bytes -> prop) ->
   Lemma
-  (requires state_pred_label_pred_implies p1 p2)
+  (requires state_pred_label_can_flow p1 p2)
   (ensures state_pred_label p1 `can_flow tr` state_pred_label p2)
   [SMTPat (state_pred_label p1 `can_flow tr` state_pred_label p2)]
 let state_pred_label_can_flow_state_pred_label tr p1 p2 =
@@ -328,7 +332,7 @@ let state_pred_label_can_flow_state_pred_label tr p1 p2 =
   reveal_opaque (`%can_flow) (can_flow);
   reveal_opaque (`%state_pred_label) (state_pred_label)
 
-val is_corrupt_state_pred_label:
+val state_pred_label_can_flow_public:
   tr:trace ->
   p:(principal -> state_id -> bytes -> prop) ->
   time:timestamp -> prin:principal -> sess_id:state_id -> content:bytes ->
@@ -338,8 +342,8 @@ val is_corrupt_state_pred_label:
     event_at tr time (SetState prin sess_id content) /\
     p prin sess_id content
   ))
-  (ensures is_corrupt tr (state_pred_label p))
-let is_corrupt_state_pred_label tr p time prin sess_id content =
+  (ensures (state_pred_label p) `can_flow tr` public)
+let state_pred_label_can_flow_public tr p time prin sess_id content =
   reveal_opaque (`%is_corrupt) is_corrupt;
   reveal_opaque (`%state_pred_label) (state_pred_label);
   event_exists_trace_forget_labels tr (Corrupt time);
@@ -374,84 +378,3 @@ let principal_state_content_label_pred prin1 sess_id1 content1 prin2 sess_id2 co
 val principal_state_content_label: principal -> state_id -> bytes -> label
 let principal_state_content_label prin sess_id content =
   state_pred_label (principal_state_content_label_pred prin sess_id content)
-
-/// Injectivity properties of principal_label and principal_state_label.
-/// We prove it by expliciting an inverse on the left (`extract_pre_label`).
-/// This allows for an efficient SMT pattern,
-/// compared to the standard injectivity definition,
-/// whose SMT pattern would induce quadratic behavior.
-
-type pre_label =
-  | PreLabel_P: principal -> pre_label
-  | PreLabel_S: principal -> state_id -> pre_label
-
-val extract_pre_label_is_some:
-  label -> principal & state_id ->
-  prop
-let extract_pre_label_is_some l (prin, sess_id) =
-  l.is_corrupt (Snoc (Snoc Nil (SetState prin sess_id (Literal Seq.empty))) (Corrupt 0))
-
-[@@"opaque_to_smt"]
-val extract_pre_label: label -> GTot (option pre_label)
-let extract_pre_label l =
-  if FStar.StrongExcludedMiddle.strong_excluded_middle (exists x. extract_pre_label_is_some l x) then (
-    let (prin, sess_id) = FStar.IndefiniteDescription.indefinite_description_ghost _ (extract_pre_label_is_some l) in
-    if FStar.StrongExcludedMiddle.strong_excluded_middle (exists sess_id'. sess_id =!= sess_id' /\ extract_pre_label_is_some l (prin, sess_id')) then (
-      Some (PreLabel_P prin)
-    ) else (
-      Some (PreLabel_S prin sess_id)
-    )
-  ) else (
-    None
-  )
-
-#push-options "--ifuel 1 --fuel 2 --z3rlimit 25"
-val principal_label_injective:
-  p:principal ->
-  Lemma (extract_pre_label (principal_label p) == Some (PreLabel_P p))
-  [SMTPat (principal_label p)]
-let principal_label_injective p =
-  normalize_term_spec extract_pre_label;
-  normalize_term_spec principal_label;
-  let l = principal_label p in
-  let sess_id_0 = { the_id = 0} in
-  let tr_0: trace_ unit = (Snoc (Snoc Nil (SetState p sess_id_0 (Literal Seq.empty))) (Corrupt 0)) in
-  assert_norm(event_at tr_0 0 (SetState p sess_id_0 (Literal Seq.empty)));
-  assert_norm(event_at tr_0 1 (Corrupt 0));
-  assert(was_corrupt tr_0 p sess_id_0);
-  assert(extract_pre_label_is_some l (p, sess_id_0));
-  let sess_id_1 = { the_id = 1} in
-  let tr_1: trace_ unit = (Snoc (Snoc Nil (SetState p sess_id_1 (Literal Seq.empty))) (Corrupt 0)) in
-  assert_norm(event_at tr_1 0 (SetState p sess_id_1 (Literal Seq.empty)));
-  assert_norm(event_at tr_1 1 (Corrupt 0));
-  assert(was_corrupt tr_1 p sess_id_1);
-  assert(extract_pre_label_is_some l (p, sess_id_1));
-  ()
-#pop-options
-
-#push-options "--ifuel 1 --fuel 2 --z3rlimit 25"
-val principal_state_label_injective:
-  p:principal -> s:state_id ->
-  Lemma (extract_pre_label (principal_state_label p s) == Some (PreLabel_S p s))
-  [SMTPat (principal_state_label p s)]
-let principal_state_label_injective p s =
-  normalize_term_spec extract_pre_label;
-  normalize_term_spec principal_state_label;
-  let l = principal_state_label p s in
-  let tr: trace_ unit = (Snoc (Snoc Nil (SetState p s (Literal Seq.empty))) (Corrupt 0)) in
-  assert_norm(event_at tr 0 (SetState p s (Literal Seq.empty)));
-  assert_norm(event_at tr 1 (Corrupt 0));
-  assert(was_corrupt tr p s);
-  assert(extract_pre_label_is_some l (p, s))
-#pop-options
-
-/// A principal flows to a particular state of this principal.
-
-// TODO: do we need this lemma anymore?
-val principal_flow_to_principal_state:
-  tr:trace -> prin:principal -> sess_id:state_id ->
-  Lemma
-  (ensures (principal_label prin) `can_flow tr` (principal_state_label prin sess_id))
-  // removing the SMTPat to test that
-  //[SMTPat ((principal_label prin) `can_flow tr` (principal_state_label prin sess_id))]
-let principal_flow_to_principal_state tr prin sess_id = ()

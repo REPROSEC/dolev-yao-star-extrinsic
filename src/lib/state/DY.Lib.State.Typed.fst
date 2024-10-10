@@ -21,8 +21,8 @@ let mk_local_state_instance #a #format tag = {
 
 val typed_state_pred_label_pred:
   #a:Type0 -> {|parseable_serializeable bytes a|} ->
-  (principal -> state_id -> string -> a -> prop) ->
-  (principal -> state_id -> string -> bytes -> prop)
+  (principal -> string -> state_id -> a -> prop) ->
+  (principal -> string -> state_id -> bytes -> prop)
 let typed_state_pred_label_pred #a #ps_a p prin sess_id tag content =
   match parse a content with
   | None -> False
@@ -31,7 +31,7 @@ let typed_state_pred_label_pred #a #ps_a p prin sess_id tag content =
 
 val typed_state_pred_label:
   #a:Type0 -> {|parseable_serializeable bytes a|} ->
-  (principal -> state_id -> string -> a -> prop) ->
+  (principal -> string -> state_id -> a -> prop) ->
   label
 let typed_state_pred_label p =
   tagged_state_pred_label (typed_state_pred_label_pred p)
@@ -40,33 +40,33 @@ let typed_state_pred_label p =
 // when reasoning on `typed_state_pred_label`.
 val typed_state_pred_label_pred_allow_inversion:
   #a:Type0 -> {|parseable_serializeable bytes a|} ->
-  p1:(principal -> state_id -> string -> a -> prop) ->
+  p1:(principal -> string -> state_id -> a -> prop) ->
   p2:(principal -> state_id -> bytes -> prop) ->
   Lemma
   (inversion (option a))
   [SMTPatOr [
-    [SMTPat (state_pred_label_pred_implies p2 (tagged_state_pred_label_pred (typed_state_pred_label_pred p1)))];
-    [SMTPat (state_pred_label_pred_implies (tagged_state_pred_label_pred (typed_state_pred_label_pred p1)) p2)];
+    [SMTPat (state_pred_label_can_flow p2 (tagged_state_pred_label_pred (typed_state_pred_label_pred p1)))];
+    [SMTPat (state_pred_label_can_flow (tagged_state_pred_label_pred (typed_state_pred_label_pred p1)) p2)];
   ]]
 let typed_state_pred_label_pred_allow_inversion #a #ps_a p1 p2 =
   allow_inversion (option a)
 
 val principal_typed_state_content_label_pred:
   #a:Type0 -> {|parseable_serializeable bytes a|} ->
-  principal -> state_id -> string -> a ->
-  principal -> state_id -> string -> a -> prop
-let principal_typed_state_content_label_pred #a #ps_a prin1 sess_id1 tag1 content1 prin2 sess_id2 tag2 content2 =
+  principal -> string -> state_id -> a ->
+  principal -> string -> state_id -> a -> prop
+let principal_typed_state_content_label_pred #a #ps_a prin1 tag1 sess_id1 content1 prin2 tag2 sess_id2 content2 =
   prin1 == prin2 /\
-  sess_id1 == sess_id2 /\
   tag1 == tag2 /\
+  sess_id1 == sess_id2 /\
   content1 == content2
 
 val principal_typed_state_content_label:
   #a:Type0 -> {|parseable_serializeable bytes a|} ->
-  principal -> state_id -> string -> a ->
+  principal -> string -> state_id -> a ->
   label
-let principal_typed_state_content_label prin sess_id tag content =
-  typed_state_pred_label (principal_typed_state_content_label_pred prin sess_id tag content)
+let principal_typed_state_content_label prin tag sess_id content =
+  typed_state_pred_label (principal_typed_state_content_label_pred prin tag sess_id content)
 
 noeq
 type local_state_predicate {|crypto_invariants|} (a:Type) {|local_state a|} = {
@@ -82,7 +82,7 @@ type local_state_predicate {|crypto_invariants|} (a:Type) {|local_state a|} = {
     tr:trace -> prin:principal -> sess_id:state_id -> content:a ->
     Lemma
     (requires pred tr prin sess_id content)
-    (ensures is_well_formed _ (is_knowable_by (principal_typed_state_content_label prin sess_id (tag #a) content) tr) content)
+    (ensures is_well_formed _ (is_knowable_by (principal_typed_state_content_label prin (tag #a) sess_id content) tr) content)
   ;
 }
 
@@ -105,7 +105,7 @@ let local_state_predicate_to_local_bytes_state_predicate #cinvs #a #ps_a tspred 
       let Some content = parse a content_bytes in
       tspred.pred_knowable tr prin sess_id content;
       serialize_parse_inv_lemma a content_bytes;
-      serialize_wf_lemma a (is_knowable_by (principal_typed_state_content_label prin sess_id (tag #a) content) tr) content
+      serialize_wf_lemma a (is_knowable_by (principal_typed_state_content_label prin (tag #a) sess_id content) tr) content
     );
   }
 
