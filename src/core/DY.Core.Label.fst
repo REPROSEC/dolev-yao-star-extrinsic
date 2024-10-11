@@ -110,7 +110,7 @@ val is_corrupt_later:
   [SMTPat (is_corrupt tr1 l); SMTPat (tr1 <$ tr2)]
 let is_corrupt_later tr1 tr2 l =
   reveal_opaque (`%is_corrupt) (is_corrupt);
-  trace_forget_labels_later tr1 tr2;
+  fmap_trace_later (forget_label ()) tr1 tr2;
   label_is_corrupt_later l (trace_forget_labels tr1) (trace_forget_labels tr2)
 
 /// A label `l1` can flow to a label `l2` when `l2` will always be more secret than `l1` in the future,
@@ -136,7 +136,7 @@ let intro_label_equal l1 l2 pf =
     pf (fmap_trace (forget_label unknown_label) tr);
     // These two lines prove surjectivity of `trace_forget_labels`
     // by showing that fmap_trace (forget_label public) is a right-inverse
-    // (we could replace `public` with anything)
+    // (we could replace `unknown_label` with anything)
     fmap_trace_compose (forget_label unknown_label) (forget_label ()) (forget_label ()) tr;
     fmap_trace_identity (forget_label ()) tr;
     FStar.PropositionalExtensionality.apply (l1.is_corrupt tr) (l2.is_corrupt tr)

@@ -207,3 +207,32 @@ val event_triggered_at_implies_trace_event_at:
 let event_triggered_at_implies_trace_event_at #a #ev tr i prin e =
   reveal_opaque (`%event_triggered_at) (event_triggered_at #a);
   ()
+
+[@@ "opaque_to_smt"]
+val find_event_triggered_at_timestamp:
+  #a:Type -> {|event a|} ->
+  tr:trace ->
+  prin:principal -> content:a ->
+  Pure timestamp
+  (requires event_triggered tr prin content)
+  (ensures fun i ->
+    event_triggered_at tr i prin content /\
+    ~(event_triggered (prefix tr i) prin content)
+  )
+let find_event_triggered_at_timestamp #a #ev_a tr prin content =
+  reveal_opaque (`%event_triggered_at) (event_triggered_at #a);
+  DY.Core.find_event_triggered_at_timestamp tr prin ev_a.tag (serialize a content)
+
+val find_event_triggered_at_timestamp_later:
+  #a:Type -> {|event a|} ->
+  tr1:trace -> tr2:trace ->
+  prin:principal -> content:a ->
+  Lemma
+  (requires
+    event_triggered tr1 prin content /\
+    tr1 <$ tr2
+  )
+  (ensures find_event_triggered_at_timestamp tr1 prin content == find_event_triggered_at_timestamp tr2 prin content)
+let find_event_triggered_at_timestamp_later #a #ev_a tr1 tr2 prin content =
+  reveal_opaque (`%find_event_triggered_at_timestamp) (find_event_triggered_at_timestamp #a);
+  DY.Core.find_event_triggered_at_timestamp_later tr1 tr2 prin ev_a.tag (serialize a content)
