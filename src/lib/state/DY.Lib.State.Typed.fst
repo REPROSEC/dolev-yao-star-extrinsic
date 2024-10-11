@@ -75,6 +75,23 @@ val state_was_set:
 let state_was_set #a #ls tr prin sess_id content =
   tagged_state_was_set tr ls.tag prin sess_id (serialize _ content)
 
+val state_was_set_grows:
+  #a:Type -> {|lsa:local_state a|} ->
+  tr1:trace -> tr2:trace -> 
+  prin:principal -> sess_id:state_id -> content:a ->
+  Lemma
+  (requires tr1 <$ tr2
+    /\ state_was_set tr1 prin sess_id content
+  )
+  (ensures
+    state_was_set tr2 prin sess_id content
+  )
+  [SMTPat (state_was_set #a #lsa tr1 prin sess_id content); SMTPat (tr1 <$ tr2)]
+let state_was_set_grows #a #ls tr1 tr2 prin sess_id content  = 
+  reveal_opaque (`%state_was_set) (state_was_set #a);
+  tagged_state_was_set_grows tr1 tr2 ls.tag prin sess_id (serialize _ content)
+
+
 [@@ "opaque_to_smt"]
 val set_state:
   #a:Type -> {|local_state a|} ->
@@ -133,6 +150,7 @@ val get_state_invariant:
       | None -> True
       | Some content -> (
         spred.pred tr prin sess_id content
+        /\ state_was_set tr prin sess_id content
       )
     )
   ))
@@ -140,7 +158,15 @@ val get_state_invariant:
    SMTPat (trace_invariant tr);
    SMTPat (has_local_state_predicate spred)]
 let get_state_invariant #a #ls #invs spred prin sess_id tr =
-  reveal_opaque (`%get_state) (get_state #a)
+  reveal_opaque (`%get_state) (get_state #a);
+  reveal_opaque (`%state_was_set) (state_was_set #a);
+  let (opt_content, tr_out) = get_state #a prin sess_id tr in
+  match opt_content with
+  | None -> ()
+  | Some cont -> (
+        let (opt_tagged_cont, _) = get_tagged_state ls.tag prin sess_id tr in
+       serialize_parse_inv_lemma #bytes a (Some?.v opt_tagged_cont)
+  )
 
 
 /// Lookup the most recent state of a principal that satisfys some property.
@@ -157,6 +183,39 @@ let lookup_state #a #ls prin p =
   match parse a content_bytes with
   | None -> return None
   | Some content -> return (Some (content,sid))
+
+
+val lookup_state_pred:
+  #a:Type -> {|ls:local_state a|} ->
+  prin:principal -> p:(a -> bool) -> tr:trace ->
+  Lemma
+  (ensures (
+    let (opt_content, tr_out) = lookup_state prin p tr in
+    tr == tr_out /\
+    (match opt_content with
+     | None -> True
+     | Some (content, sid) ->
+          p content
+          /\ state_was_set tr prin sid content
+    )
+  ))
+  [SMTPat (lookup_state #a #ls prin p tr);
+   ]
+let lookup_state_pred #a #ls prin p tr =
+  let (opt_content, tr_out) = lookup_state prin p tr in
+  match opt_content with
+  | None -> ()
+  | Some (content, sid) -> (
+      let p_ b =
+        match parse a b with
+        | None -> false
+        | Some x -> p x in
+      let (Some (l_cont, l_sid), _) = lookup_tagged_state ls.tag prin p_ tr in
+     serialize_parse_inv_lemma #bytes a l_cont;
+     reveal_opaque (`%state_was_set) (state_was_set #a)
+  )
+
+
 
 val lookup_state_invariant:
   #a:Type -> {|local_state a|} ->
@@ -216,3 +275,5 @@ val state_was_set_implies_pred:
 let state_was_set_implies_pred #a #ls #invs tr spred prin sess_id content =
   parse_serialize_inv_lemma #bytes a content;
   reveal_opaque (`%state_was_set) (state_was_set #a)
+
+

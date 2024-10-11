@@ -241,6 +241,33 @@ let rec event_at_grows #label_t tr1 tr2 i e =
     event_at_grows tr1 tr2_init i e
   )
 
+val event_exists_grows:
+  #label_t:Type -> 
+  tr1:trace_ label_t -> tr2:trace_ label_t -> 
+  e:trace_event_ label_t ->
+  Lemma
+  (requires
+    tr1 <$ tr2 /\ event_exists tr1 e
+  )
+  (ensures
+    event_exists tr2 e
+  )
+let event_exists_grows tr1 tr2 e =  ()
+
+val last_entry_exists:
+  #label_t:Type ->
+  tr:trace_ label_t ->
+  Lemma
+    (requires Snoc? tr )
+    (ensures (
+       let Snoc _ last = tr in
+       event_exists tr last
+    ))
+    [SMTPat (Snoc? tr)]
+let last_entry_exists tr = 
+  let Snoc _ last = tr in
+  assert(event_at tr (length tr - 1) last)
+
 /// Shorthand predicates.
 
 /// Has a message been sent on the network?

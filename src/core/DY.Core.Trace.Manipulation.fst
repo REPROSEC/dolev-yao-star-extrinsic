@@ -322,6 +322,20 @@ let mk_rand_get_usage #invs usg lab len tr =
 
 (*** State ***)
 
+
+val state_was_set_grows:
+  tr1:trace -> tr2:trace ->
+  p:principal -> sid:state_id -> content:bytes ->
+  Lemma
+  (requires
+    tr1 <$ tr2
+    /\ state_was_set tr1 p sid content
+  )
+  (ensures
+    state_was_set tr2 p sid content
+  )
+let state_was_set_grows tr1 tr2 p sid content = ()
+
 /// Set the state of a principal at a given state identifier.
 
 [@@ "opaque_to_smt"]
@@ -447,7 +461,9 @@ val get_state_aux_state_invariant:
   (ensures (
     match get_state_aux prin sess_id tr with
     | None -> True
-    | Some content -> state_pred.pred tr prin sess_id content
+    | Some content -> 
+           state_pred.pred tr prin sess_id content
+           /\ state_was_set tr prin sess_id content
   ))
 let rec get_state_aux_state_invariant #invs prin sess_id tr =
   reveal_opaque (`%grows) (grows #label);
@@ -486,7 +502,9 @@ val get_state_state_invariant:
     tr == tr_out /\ (
       match opt_content with
       | None -> True
-      | Some content -> state_pred.pred tr prin sess_id content
+      | Some content -> 
+             state_pred.pred tr prin sess_id content
+             /\ state_was_set tr prin sess_id content
     )
   ))
   [SMTPat (get_state prin sess_id tr); SMTPat (trace_invariant tr)]
@@ -513,18 +531,6 @@ val lookup_state: principal -> (bytes -> bool) -> traceful (option (bytes & stat
 let lookup_state prin p =
   let* tr = get_trace in
   return (lookup_state_aux prin p tr)
-
-let last_event_exists (tr:trace):
-  Lemma
-    (requires Snoc? tr)
-    (ensures
-      (let Snoc _ ev = tr in
-       event_exists tr ev
-      )
-    )
-    [SMTPat (Snoc? tr)]
-  = let Snoc _ ev = tr in
-    assert(event_at tr (DY.Core.Trace.Base.length tr - 1) ev)
 
 /// If `lookup` returns some state,
 /// this state satisfies the property used in the lookup.
@@ -587,6 +593,7 @@ val lookup_state_state_was_set_and_prop:
             /\ state_was_set tr prin sid content
     )
   ))
+  [SMTPat (lookup_state prin p tr)]
 let lookup_state_state_was_set_and_prop prin p tr =
   lookup_state_aux_state_was_set_and_prop prin p tr
 
