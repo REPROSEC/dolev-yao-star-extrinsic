@@ -26,13 +26,11 @@ val initiator_authentication:
   alice:principal -> bob:principal -> n_a:bytes -> n_b:bytes ->
   Lemma
   (requires
-    // event_triggered_at tr i bob (Respond2 alice bob n_a n_b) /\
     state_was_set_some_id tr bob (ResponderReceivedMsg3 alice n_a n_b) /\
     trace_invariant tr
   )
   (ensures
     is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob) \/
-    // event_triggered (prefix tr i) alice (Initiate2 alice bob n_a n_b)
   state_was_set_some_id tr alice (InitiatorSentMsg1 bob n_a)
   )
 let initiator_authentication tr i alice bob n_a n_b = ()
@@ -46,13 +44,11 @@ val responder_authentication:
   alice:principal -> bob:principal -> n_a:bytes -> n_b:bytes ->
   Lemma
   (requires
-    // event_triggered_at tr i alice (Initiate2 alice bob n_a n_b) /\
     state_was_set_some_id tr alice (InitiatorSentMsg3 bob n_a n_b) /\
     trace_invariant tr
   )
   (ensures
     is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob) \/
-    // event_triggered (prefix tr i) bob (Respond1 alice bob n_a n_b)
     state_was_set_some_id tr bob (ResponderSentMsg2 alice n_a n_b)
   )
 let responder_authentication tr i alice bob n_a n_b = ()

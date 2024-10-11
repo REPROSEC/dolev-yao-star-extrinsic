@@ -46,13 +46,11 @@ let crypto_predicates_nsl = {
         match parse message msg with
         | Some (Msg1 msg1) -> (
           let (alice, bob) = (msg1.alice, prin) in
-          // event_triggered tr alice (Initiate1 alice bob msg1.n_a) /\
           state_was_set_some_id tr alice (InitiatorSentMsg1 bob msg1.n_a)/\
           get_label tr msg1.n_a == join (principal_label alice) (principal_label bob)
         )
         | Some (Msg2 msg2) -> (
           let (alice, bob) = (prin, msg2.bob) in
-          // event_triggered tr bob (Respond1 alice bob msg2.n_a msg2.n_b) /\
           state_was_set_some_id tr bob (ResponderSentMsg2 alice msg2.n_a msg2.n_b) /\
           get_label tr msg2.n_b == join (principal_label alice) (principal_label bob)
         )
@@ -60,7 +58,6 @@ let crypto_predicates_nsl = {
           let bob = prin in
           exists alice n_a.
             get_label tr msg3.n_b `can_flow tr` (principal_label alice) /\
-            // event_triggered tr alice (Initiate2 alice bob n_a msg3.n_b)
             state_was_set_some_id tr alice (InitiatorSentMsg3 bob n_a msg3.n_b)
         )
         | None -> False
@@ -97,7 +94,6 @@ val compute_message1_proof:
   Lemma
   (requires
     // From the stateful code
-    // event_triggered tr alice (Initiate1 alice bob n_a) /\
     state_was_set_some_id tr alice (InitiatorSentMsg1 bob n_a)/\
     // From random generation
     is_secret (join (principal_label alice) (principal_label bob)) tr n_a  /\
@@ -135,10 +131,10 @@ val decode_message1_proof:
     | None -> True
     | Some msg1 -> (
       is_knowable_by (join (principal_label msg1.alice) (principal_label bob)) tr msg1.n_a
-      // /\ (
-      //   is_publishable tr msg1.n_a
-      //   \/ state_was_set_some_id tr msg1.alice (InitiatorSentMsg1 bob msg1.n_a)
-      // )
+      /\ (
+        is_publishable tr msg1.n_a
+        \/ state_was_set_some_id tr msg1.alice (InitiatorSentMsg1 bob msg1.n_a)
+      )
     )
   ))
 let decode_message1_proof tr bob msg_cipher sk_b =
@@ -162,7 +158,6 @@ val compute_message2_proof:
   Lemma
   (requires
     // From the stateful code
-    // event_triggered tr bob (Respond1 msg1.alice bob msg1.n_a n_b) /\
     state_was_set_some_id tr bob (ResponderSentMsg2 msg1.alice msg1.n_a n_b) /\
     // From decode_message1_proof
     is_knowable_by (join (principal_label msg1.alice) (principal_label bob)) tr msg1.n_a /\
@@ -210,7 +205,6 @@ val decode_message2_proof:
       (is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob)) 
       \/ (
       is_secret (join (principal_label alice) (principal_label bob)) tr msg2.n_b /\
-        // event_triggered tr bob (Respond1 alice bob n_a msg2.n_b)
         state_was_set_some_id tr bob (ResponderSentMsg2 alice n_a msg2.n_b)
       )
       )
@@ -236,11 +230,9 @@ val compute_message3_proof:
   Lemma
   (requires
     // From the stateful code
-    //(exists n_a. event_triggered tr alice (Initiate2 alice bob n_a n_b)) /\
     (exists n_a. state_was_set_some_id tr alice (InitiatorSentMsg3 bob n_a n_b)) /\
     // From decode_message2_proof
      is_knowable_by (join (principal_label alice) (principal_label bob)) tr n_b /\
-  //is_secret (join (principal_label alice) (principal_label bob)) tr n_b /\
     // From the random generation
     is_secret (principal_label alice) tr nonce /\
     // From the random generation
@@ -252,15 +244,11 @@ val compute_message3_proof:
     is_publishable tr (compute_message3 alice bob pk_b n_b nonce)
   )
 let compute_message3_proof tr alice bob pk_b n_b nonce =
-  // assert(exists alice n_a. event_triggered tr alice (Initiate2 alice bob n_a n_b));
   let msg = Msg3 {n_b;} in
   serialize_wf_lemma message (is_knowable_by (principal_label alice) tr) msg;
   serialize_wf_lemma message (is_knowable_by (principal_label bob) tr) msg;
   let msg3: message3 = {n_b;} in
   assert(msg3.n_b == n_b)
-  //;assume((is_corrupt tr (principal_label alice) /\ is_corrupt tr (principal_label bob)))
-  ; assume(get_label tr n_b == join (principal_label alice) (principal_label bob))
-  // ; assume(bytes_invariant tr (compute_message3 alice bob pk_b n_b nonce))
 
 // If bob successfully decrypt the third message,
 // Then either alice or bob are corrupt, or alice triggered the Initiate2 event
@@ -319,7 +307,6 @@ val decode_message3__proof:
       (is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob)) \/ (
         (exists alice (n_a:bytes).
           get_label tr msg3.n_b `can_flow tr` (principal_label alice) /\
-          // event_triggered tr alice (Initiate2 alice bob n_a n_b))
           state_was_set_some_id tr alice (InitiatorSentMsg3 bob n_a msg3.n_b)
       ))
     )
@@ -331,7 +318,7 @@ let decode_message3__proof tr alice bob msg_cipher sk_b n_b =
     let Some msg = pk_dec sk_b msg_cipher in
     FStar.Classical.move_requires (parse_wf_lemma message (is_publishable tr)) msg;
     FStar.Classical.move_requires (parse_wf_lemma message (bytes_invariant tr)) msg
-    ; assume(is_publishable tr msg3.n_b ==> is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob))
-    // ; assume(get_label tr msg3.n_b == join (principal_label alice) (principal_label bob))
+     ; assume(is_publishable tr msg3.n_b ==> is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob))
+//    ; assume(msg3.n_b = n_b)
   )
 #pop-options
