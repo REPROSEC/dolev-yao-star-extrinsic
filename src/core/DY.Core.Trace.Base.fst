@@ -522,6 +522,31 @@ let rec get_event_at_fmap_trace #a #b f tr i =
     get_event_at_fmap_trace f tr_init i
   )
 
+val event_at_fmap_trace:
+  #a:Type -> #b:Type ->
+  f:(a -> b) -> tr:trace_ a -> i:timestamp -> ev:trace_event_ a ->
+  Lemma
+  (requires event_at tr i ev)
+  (ensures event_at (fmap_trace f tr) i (fmap_trace_event f ev))
+let event_at_fmap_trace #a #b f tr i ev =
+  if i >= length tr then ()
+  else (
+    get_event_at_fmap_trace f tr i
+  )
+
+val event_exists_fmap_trace:
+  #a:Type -> #b:Type ->
+  f:(a -> b) -> tr:trace_ a -> ev:trace_event_ a ->
+  Lemma
+  (requires event_exists tr ev)
+  (ensures event_exists (fmap_trace f tr) (fmap_trace_event f ev))
+let event_exists_fmap_trace #a #b f tr ev =
+  eliminate exists i. event_at tr i ev
+  returns event_exists (fmap_trace f tr) (fmap_trace_event f ev)
+  with _. (
+    event_at_fmap_trace f tr i ev
+  )
+
 val forget_label:
   #a:Type -> #b:Type ->
   b ->
