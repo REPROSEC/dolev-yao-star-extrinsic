@@ -133,12 +133,12 @@ let intro_label_equal l1 l2 pf =
   reveal_opaque (`%can_flow) can_flow;
   reveal_opaque (`%is_corrupt) is_corrupt;
   introduce forall tr. l1.is_corrupt tr == l2.is_corrupt tr with (
-    pf (fmap_trace (forget_label unknown_label) tr);
+    pf (fmap_trace (replace_label unknown_label) tr);
     // These two lines prove surjectivity of `trace_forget_labels`
     // by showing that fmap_trace (forget_label public) is a right-inverse
     // (we could replace `public` with anything)
-    fmap_trace_compose (forget_label unknown_label) (forget_label ()) (forget_label ()) tr;
-    fmap_trace_identity (forget_label ()) tr;
+    fmap_trace_compose (replace_label unknown_label) forget_label forget_label tr;
+    fmap_trace_identity forget_label tr;
     FStar.PropositionalExtensionality.apply (l1.is_corrupt tr) (l2.is_corrupt tr)
   );
   assert(l1.is_corrupt `FStar.FunctionalExtensionality.feq` l2.is_corrupt);
