@@ -94,13 +94,13 @@ noeq type split_function_parameters = {
   decode_tagged_data: tagged_data_t -> option (tag_t & raw_data_t);
 
   // Types for the local functions and the global function
-  local_fun_t: Type;
+  local_fun_t: tag_set_t -> Type;
   global_fun_t: Type;
 
   default_global_fun: global_fun_t;
 
   // Apply a local function to its input
-  apply_local_fun: local_fun_t -> raw_data_t -> output_t;
+  apply_local_fun: #tag_set:tag_set_t -> local_fun_t tag_set -> raw_data_t -> output_t;
   // Apply the global function to its input
   apply_global_fun: global_fun_t -> tagged_data_t -> output_t;
   // Create a global function
@@ -113,8 +113,8 @@ noeq type split_function_parameters = {
 /// Do a global function contain some given local function with some set of tags?
 /// This will be a crucial precondition for the correctness theorem `local_eq_global_lemma`.
 
-val has_local_fun: params:split_function_parameters -> params.global_fun_t -> (params.tag_set_t & params.local_fun_t) -> prop
-let has_local_fun params global_fun (tag_set, local_fun) =
+val has_local_fun: params:split_function_parameters -> params.global_fun_t -> (dtuple2 params.tag_set_t params.local_fun_t) -> prop
+let has_local_fun params global_fun (|tag_set, local_fun|) =
   forall tagged_data.
     match params.decode_tagged_data tagged_data with
     | Some (tag, raw_data) ->
@@ -125,10 +125,10 @@ let has_local_fun params global_fun (tag_set, local_fun) =
 
 val has_local_fun_elim:
   params:split_function_parameters ->
-  global_fun:params.global_fun_t -> tag_set:params.tag_set_t -> local_fun:params.local_fun_t ->
+  global_fun:params.global_fun_t -> tag_set:params.tag_set_t -> local_fun:params.local_fun_t tag_set ->
   tagged_data:params.tagged_data_t ->
   Lemma
-  (requires has_local_fun params global_fun (tag_set, local_fun))
+  (requires has_local_fun params global_fun (|tag_set, local_fun|))
   (ensures (
     match params.decode_tagged_data tagged_data with
     | Some (tag, raw_data) ->
@@ -141,23 +141,24 @@ let has_local_fun_elim params global_fun tag_set local_fun tagged_data = ()
 /// In practice, only one tag set may contain `tag` because tag sets are mutually disjoint
 /// (c.f. precondition of `mk_global_fun_correct`).
 /// In that case, this function returns the *unique* local function associated with a tag set containing `tag`.
-val find_local_fun: params:split_function_parameters -> list (params.tag_set_t & params.local_fun_t) -> params.tag_t -> option params.local_fun_t
+val find_local_fun: params:split_function_parameters -> l:list (dtuple2 params.tag_set_t params.local_fun_t) -> params.tag_t -> Tot (option (dtuple2 params.tag_set_t params.local_fun_t))
+(decreases List.Tot.length l)
 let rec find_local_fun params tagged_local_funs tag =
   match tagged_local_funs with
   | [] -> None
-  | (h_tag_set, h_local_fun)::t_tagged_local_funs -> (
+  | (|h_tag_set, h_local_fun|)::t_tagged_local_funs -> (
     if tag `params.tag_belong_to` h_tag_set then
-      Some h_local_fun
+      Some (|h_tag_set, h_local_fun|)
     else
       find_local_fun params t_tagged_local_funs tag
   )
 
-val mk_global_fun_aux: params:split_function_parameters -> list (params.tag_set_t & params.local_fun_t) -> params.tagged_data_t -> params.output_t
+val mk_global_fun_aux: params:split_function_parameters -> list (dtuple2 params.tag_set_t params.local_fun_t) -> params.tagged_data_t -> params.output_t
 let mk_global_fun_aux params tagged_local_funs tagged_data =
   match params.decode_tagged_data tagged_data with
   | Some (tag_set, raw_data) -> (
     match find_local_fun params tagged_local_funs tag_set with
-    | Some tagged_local_fun -> params.apply_local_fun tagged_local_fun raw_data
+    | Some (|_, tagged_local_fun|) -> params.apply_local_fun tagged_local_fun raw_data
     | None -> params.apply_global_fun params.default_global_fun tagged_data
   )
   | None -> params.apply_global_fun params.default_global_fun tagged_data
@@ -165,7 +166,7 @@ let mk_global_fun_aux params tagged_local_funs tagged_data =
 /// Given a list of tags and local functions, create the global function.
 
 [@@"opaque_to_smt"]
-val mk_global_fun: params:split_function_parameters -> list (params.tag_set_t & params.local_fun_t) -> params.global_fun_t
+val mk_global_fun: params:split_function_parameters -> list (dtuple2 params.tag_set_t params.local_fun_t) -> params.global_fun_t
 let mk_global_fun params tagged_local_funs =
   params.mk_global_fun (mk_global_fun_aux params tagged_local_funs)
 
@@ -189,37 +190,37 @@ let rec for_all_pairsP #a disj l =
   | h::t -> (for_allP (disj h) t) /\ for_all_pairsP disj t
 
 val mk_global_fun_correct_aux:
-  params:split_function_parameters -> tagged_local_funs:list (params.tag_set_t & params.local_fun_t) -> tag_set:params.tag_set_t -> local_fun:params.local_fun_t -> tag:params.tag_t ->
+  params:split_function_parameters -> tagged_local_funs:list (dtuple2 params.tag_set_t params.local_fun_t) -> tag_set:params.tag_set_t -> local_fun:params.local_fun_t tag_set -> tag:params.tag_t ->
   Lemma
   (requires
-    for_all_pairsP (params.is_disjoint) (List.Tot.map fst tagged_local_funs) /\
+    for_all_pairsP (params.is_disjoint) (List.Tot.map dfst tagged_local_funs) /\
     tag `params.tag_belong_to` tag_set /\
-    List.Tot.memP (tag_set, local_fun) tagged_local_funs
+    List.Tot.memP (|tag_set, local_fun|) tagged_local_funs
   )
-  (ensures find_local_fun params tagged_local_funs tag == Some local_fun)
-let rec mk_global_fun_correct_aux params tagged_local_funs tag_set tagged_local_fun tag =
+  (ensures find_local_fun params tagged_local_funs tag == Some (|tag_set, local_fun|))
+let rec mk_global_fun_correct_aux params tagged_local_funs tag_set local_fun tag =
   match tagged_local_funs with
   | [] -> ()
-  | (h_tag_set, h_tagged_local_fun)::t_tagged_local_funs -> (
+  | (|h_tag_set, h_tagged_local_fun|)::t_tagged_local_funs -> (
     if tag `params.tag_belong_to` h_tag_set then (
-      introduce (List.Tot.memP (tag_set, tagged_local_fun) t_tagged_local_funs) ==> False with _. (
-        for_allP_eq (params.is_disjoint h_tag_set) (List.Tot.map fst t_tagged_local_funs);
-        memP_map fst t_tagged_local_funs (tag_set, tagged_local_fun);
+      introduce (List.Tot.memP (|tag_set, local_fun|) t_tagged_local_funs) ==> False with _. (
+        for_allP_eq (params.is_disjoint h_tag_set) (List.Tot.map dfst t_tagged_local_funs);
+        memP_map dfst t_tagged_local_funs (|tag_set, local_fun|);
         params.cant_belong_to_disjoint_sets tag h_tag_set tag_set
       )
     ) else (
-      mk_global_fun_correct_aux params t_tagged_local_funs tag_set tagged_local_fun tag
+      mk_global_fun_correct_aux params t_tagged_local_funs tag_set local_fun tag
     )
   )
 
 val mk_global_fun_correct:
-  params:split_function_parameters -> tagged_local_funs:list (params.tag_set_t & params.local_fun_t) -> tag_set:params.tag_set_t -> local_fun:params.local_fun_t ->
+  params:split_function_parameters -> tagged_local_funs:list (dtuple2 params.tag_set_t params.local_fun_t) -> tag_set:params.tag_set_t -> local_fun:params.local_fun_t tag_set ->
   Lemma
   (requires
-    for_all_pairsP (params.is_disjoint) (List.Tot.map fst tagged_local_funs) /\
-    List.Tot.memP (tag_set, local_fun) tagged_local_funs
+    for_all_pairsP (params.is_disjoint) (List.Tot.map dfst tagged_local_funs) /\
+    List.Tot.memP (|tag_set, local_fun|) tagged_local_funs
   )
-  (ensures has_local_fun params (mk_global_fun params tagged_local_funs) (tag_set, local_fun))
+  (ensures has_local_fun params (mk_global_fun params tagged_local_funs) (|tag_set, local_fun|))
 let mk_global_fun_correct params tagged_local_funs tag_set local_fun =
   reveal_opaque (`%mk_global_fun) (mk_global_fun);
   introduce
@@ -245,14 +246,14 @@ let mk_global_fun_correct params tagged_local_funs tag_set local_fun =
 /// (e.g. the function keep the same output when the trace grows.)
 
 val mk_global_fun_eq:
-  params:split_function_parameters -> tagged_local_funs:list (params.tag_set_t & params.local_fun_t) ->
+  params:split_function_parameters -> tagged_local_funs:list (dtuple2 params.tag_set_t params.local_fun_t) ->
   tagged_data:params.tagged_data_t ->
   Lemma (
     params.apply_global_fun (mk_global_fun params tagged_local_funs) tagged_data == (
       match params.decode_tagged_data tagged_data with
       | Some (tag, raw_data) -> (
         match find_local_fun params tagged_local_funs tag with
-        | Some tagged_local_fun -> params.apply_local_fun tagged_local_fun raw_data
+        | Some (|_, tagged_local_fun|) -> params.apply_local_fun tagged_local_fun raw_data
         | None -> params.apply_global_fun params.default_global_fun tagged_data
       )
       | None -> params.apply_global_fun params.default_global_fun tagged_data
@@ -268,13 +269,13 @@ let mk_global_fun_eq params tagged_local_funs tagged_data =
 
 val local_eq_global_lemma:
   params:split_function_parameters ->
-  global_fun:params.global_fun_t -> tag_set:params.tag_set_t -> local_fun:params.local_fun_t ->
+  global_fun:params.global_fun_t -> tag_set:params.tag_set_t -> local_fun:params.local_fun_t tag_set ->
   tagged_data:params.tagged_data_t -> tag:params.tag_t -> raw_data:params.raw_data_t ->
   Lemma
   (requires
     params.decode_tagged_data tagged_data == Some (tag, raw_data) /\
     tag `params.tag_belong_to` tag_set /\
-    has_local_fun params global_fun (tag_set, local_fun)
+    has_local_fun params global_fun (|tag_set, local_fun|)
   )
   (ensures params.apply_global_fun global_fun tagged_data == params.apply_local_fun local_fun raw_data)
 let local_eq_global_lemma params global_fun tag_set tagged_local_fun tagged_data tag raw_data = ()
@@ -322,7 +323,7 @@ let singleton_split_function_parameters (a:eqtype): split_function_parameters = 
   output_t = unit;
   decode_tagged_data = (fun x -> None);
 
-  local_fun_t = unit;
+  local_fun_t = (fun _ -> unit);
   global_fun_t = unit;
 
   default_global_fun = ();
@@ -332,3 +333,48 @@ let singleton_split_function_parameters (a:eqtype): split_function_parameters = 
   mk_global_fun = (fun bare -> ());
   apply_mk_global_fun = (fun bare x -> ());
 }
+
+/// When the `local_fun_t` doesn't depend on a `tag_set_t`,
+/// the following functions and lemmas are handy.
+
+val mk_dependent_type:
+  #tag_set_t:Type -> Type u#a ->
+  tag_set_t -> Type u#a
+let mk_dependent_type #tag_set_t local_fun_t _ = local_fun_t
+
+val mk_dependent_tagged_local_fun:
+  #tag_set_t:Type -> #local_fun_t:Type ->
+  tag_set_t & local_fun_t ->
+  dtuple2 tag_set_t (mk_dependent_type local_fun_t)
+let mk_dependent_tagged_local_fun #tag_set_t #local_fun_t (tag_set, local_fun) =
+  (|tag_set, local_fun|)
+
+val mk_dependent_tagged_local_funs:
+  #tag_set_t:Type -> #local_fun_t:Type ->
+  list (tag_set_t & local_fun_t) ->
+  list (dtuple2 tag_set_t (mk_dependent_type local_fun_t))
+let mk_dependent_tagged_local_funs #tag_set_t #local_fun_t l =
+  List.Tot.map mk_dependent_tagged_local_fun l
+
+val map_dfst_mk_dependent_tagged_local_funs:
+  #tag_set_t:Type -> #local_fun_t:Type ->
+  tagged_local_funs:list (tag_set_t & local_fun_t) ->
+  Lemma (List.Tot.map fst tagged_local_funs == List.Tot.map dfst (mk_dependent_tagged_local_funs tagged_local_funs))
+let rec map_dfst_mk_dependent_tagged_local_funs #tag_set_t #local_fun_t l =
+  match l with
+  | [] -> ()
+  | (x,y)::t -> map_dfst_mk_dependent_tagged_local_funs t
+
+val memP_mk_dependent_tagged_local_funs:
+  #tag_set_t:Type -> #local_fun_t:Type ->
+  tagged_local_funs:list (tag_set_t & local_fun_t) ->
+  tag_set:tag_set_t -> local_fun:local_fun_t ->
+  Lemma (
+    List.Tot.Base.memP (tag_set, local_fun) tagged_local_funs ==>
+    List.Tot.Base.memP (|tag_set, local_fun|) (mk_dependent_tagged_local_funs tagged_local_funs)
+  )
+let rec memP_mk_dependent_tagged_local_funs #tag_set_t #local_fun_t l tag_set local_fun =
+  match l with
+  | [] -> ()
+  | (x,y)::t ->
+    memP_mk_dependent_tagged_local_funs t tag_set local_fun
