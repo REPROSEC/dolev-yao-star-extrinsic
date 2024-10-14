@@ -360,6 +360,10 @@ val find_event_triggered_at_timestamp_later:
     tr1 <$ tr2
   )
   (ensures find_event_triggered_at_timestamp tr1 prin tag content == find_event_triggered_at_timestamp tr2 prin tag content)
+  [SMTPat (find_event_triggered_at_timestamp tr1 prin tag content);
+   SMTPat (find_event_triggered_at_timestamp tr2 prin tag content);
+   SMTPat (tr1 <$ tr2)
+  ]
 let rec find_event_triggered_at_timestamp_later #label_t tr1 tr2 prin tag content =
   if length tr1 = length tr2 then ()
   else (

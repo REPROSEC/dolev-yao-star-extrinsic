@@ -235,6 +235,10 @@ val find_event_triggered_at_timestamp_later:
     tr1 <$ tr2
   )
   (ensures find_event_triggered_at_timestamp tr1 prin content == find_event_triggered_at_timestamp tr2 prin content)
+  [SMTPat (find_event_triggered_at_timestamp tr1 prin content);
+   SMTPat (find_event_triggered_at_timestamp tr2 prin content);
+   SMTPat (tr1 <$ tr2)
+  ]
 let find_event_triggered_at_timestamp_later #a #ev_a tr1 tr2 prin content =
   reveal_opaque (`%find_event_triggered_at_timestamp) (find_event_triggered_at_timestamp #a);
   DY.Core.find_event_triggered_at_timestamp_later tr1 tr2 prin ev_a.tag (serialize a content)
