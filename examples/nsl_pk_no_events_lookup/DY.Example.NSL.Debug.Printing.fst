@@ -57,16 +57,16 @@ let session_to_string sess_bytes =
 
 (*** Convert NSL Events to String ***)
 
-// val event_to_string: bytes -> option string
-// let event_to_string event_bytes =
-//   let? event = parse nsl_event event_bytes in
-//   match event with
-//   | Initiate1 a b n_a -> (
+val event_to_string: bytes -> option string
+let event_to_string event_bytes =
+  let? event = parse nsl_event event_bytes in
+  match event with
+//  | Initiate1 a b n_a -> (
 //     Some (Printf.sprintf "[principal1=%s, principal2=(%s), n_b=(%s)]" a b (bytes_to_string n_a))
 //   )
-//   | Respond1 a b n_a n_b -> (
-//     Some (Printf.sprintf "[principal1=%s, principal2=(%s), n_a=(%s), n_b=(%s)]" a b (bytes_to_string n_a) (bytes_to_string n_b))
-//   )
+  | Respond1 a b n_a n_b -> (
+    Some (Printf.sprintf "Respond1 [principal1=%s, principal2=(%s), n_a=(%s), n_b=(%s)]" a b (bytes_to_string n_a) (bytes_to_string n_b))
+  )
 //   | Initiate2 a b n_a n_b -> (
 //     Some (Printf.sprintf "[principal1=%s, principal2=(%s), n_a=(%s), n_b=(%s)]" a b (bytes_to_string n_a) (bytes_to_string n_b))
 //   )
@@ -82,5 +82,4 @@ let get_nsl_trace_to_string_printers priv_key_alice priv_key_bob =
   trace_to_string_printers_builder 
     (message_to_string priv_key_alice priv_key_bob)
     [(local_state_nsl_session.tag, session_to_string)]
-    []
-    //[(event_nsl_event.tag, event_to_string)]
+    [(event_nsl_event.tag, event_to_string)]

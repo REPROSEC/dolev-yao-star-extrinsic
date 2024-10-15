@@ -290,11 +290,9 @@ let decode_message3_proof tr alice bob msg_cipher sk_b n_b =
 #push-options "--ifuel 1 --fuel 0 --z3rlimit 25"
 val decode_message3__proof:
   tr:trace ->
-  alice:principal -> bob:principal -> msg_cipher:bytes -> sk_b:bytes -> n_b:bytes ->
+  alice:principal -> bob:principal -> msg_cipher:bytes -> sk_b:bytes ->
   Lemma
   (requires
-    // From the NSL state invariant
-    get_label tr n_b == join (principal_label alice) (principal_label bob) /\
     // From the PrivateKeys invariant
     is_decryption_key (PkKey "NSL.PublicKey" empty) (principal_label bob) tr sk_b /\
     // From the network
@@ -304,21 +302,20 @@ val decode_message3__proof:
     match decode_message3_ msg_cipher sk_b with
     | None -> True
     | Some msg3 -> (
-      (is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob)) \/ (
+      (is_publishable tr msg3.n_b)
+      \/ (
         (exists alice (n_a:bytes).
           get_label tr msg3.n_b `can_flow tr` (principal_label alice) /\
           state_was_set_some_id tr alice (InitiatorSentMsg3 bob n_a msg3.n_b)
       ))
     )
   ))
-let decode_message3__proof tr alice bob msg_cipher sk_b n_b =
+let decode_message3__proof tr alice bob msg_cipher sk_b =
   match decode_message3_ msg_cipher sk_b with
   | None -> ()
   | Some msg3 -> (
     let Some msg = pk_dec sk_b msg_cipher in
     FStar.Classical.move_requires (parse_wf_lemma message (is_publishable tr)) msg;
     FStar.Classical.move_requires (parse_wf_lemma message (bytes_invariant tr)) msg
-     ; assume(is_publishable tr msg3.n_b ==> is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob))
-//    ; assume(msg3.n_b = n_b)
   )
 #pop-options

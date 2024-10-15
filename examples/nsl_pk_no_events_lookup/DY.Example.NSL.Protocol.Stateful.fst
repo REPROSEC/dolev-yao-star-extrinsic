@@ -32,6 +32,24 @@ instance local_state_nsl_session: local_state nsl_session = {
 }
 
 
+(*** Event type ***)
+
+/// Type for the NSL protocol events.
+/// They will be used to write authentication security properties.
+
+[@@ with_bytes bytes]
+type nsl_event =
+  | Respond1: a:principal -> b:principal -> n_a:bytes -> n_b:bytes -> nsl_event
+
+%splice [ps_nsl_event] (gen_parser (`nsl_event))
+%splice [ps_nsl_event_is_well_formed] (gen_is_well_formed_lemma (`nsl_event))
+
+instance event_nsl_event: event nsl_event = {
+  tag = "NSL.Event";
+  format = mk_parseable_serializeable ps_nsl_event;
+}
+
+
 (*** Stateful code ***)
 
 type nsl_global_sess_ids = {
@@ -79,6 +97,7 @@ let prepare_msg2 global_sess_id bob msg_id =
   let*? sk_b = get_private_key bob global_sess_id.private_keys (PkDec "NSL.PublicKey") in
   let*? msg1: message1 = return (decode_message1 bob msg sk_b) in
   let* n_b = mk_rand NoUsage (join (principal_label msg1.alice) (principal_label bob)) 32 in
+  trigger_event bob (Respond1 msg1.alice bob msg1.n_a n_b);*
   let* sess_id = new_session_id bob in
   set_state bob sess_id (ResponderSentMsg2 msg1.alice msg1.n_a n_b <: nsl_session);*
   return (Some sess_id)
@@ -100,16 +119,19 @@ let send_msg2_ global_sess_id bob msg_id =
   let*? msg = recv_msg msg_id in
   let*? sk_b = get_private_key bob global_sess_id.private_keys (PkDec "NSL.PublicKey") in
   let*? msg1: message1 = return (decode_message1 bob msg sk_b) in
+
+  let alice = msg1.alice in
+  let n_a = msg1.n_a in
+  let* n_b = mk_rand NoUsage (join (principal_label alice) (principal_label bob)) 32 in
+  trigger_event bob (Respond1 alice bob n_a n_b);*
   
-  let* n_b = mk_rand NoUsage (join (principal_label msg1.alice) (principal_label bob)) 32 in
-  
-  let st = ResponderSentMsg2 msg1.alice msg1.n_a n_b in
+  let st = ResponderSentMsg2 alice n_a n_b in
   let* sess_id = new_session_id bob in
   set_state bob sess_id st;*
   
   let*? pk_a = get_public_key bob global_sess_id.pki (PkEnc "NSL.PublicKey") msg1.alice in
   let* nonce = mk_rand PkNonce (principal_label bob) 32 in
-  let msg2 = compute_message2 bob {n_a = msg1.n_a; alice = msg1.alice;} pk_a n_b nonce in
+  let msg2 = compute_message2 bob {n_a; alice;} pk_a n_b nonce in
   let* msg_id = send_msg msg2 in
 
   
