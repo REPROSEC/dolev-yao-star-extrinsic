@@ -46,19 +46,19 @@ let crypto_predicates_nsl = {
         match parse message msg with
         | Some (Msg1 msg1) -> (
           let (alice, bob) = (msg1.alice, prin) in
-          state_was_set_some_id tr alice (InitiatorSentMsg1 bob msg1.n_a)/\
+          state_was_set_some_id tr alice (InitiatorSendingMsg1 bob msg1.n_a)/\
           get_label tr msg1.n_a == join (principal_label alice) (principal_label bob)
         )
         | Some (Msg2 msg2) -> (
           let (alice, bob) = (prin, msg2.bob) in
-          state_was_set_some_id tr bob (ResponderSentMsg2 alice msg2.n_a msg2.n_b) /\
+          state_was_set_some_id tr bob (ResponderSendingMsg2 alice msg2.n_a msg2.n_b) /\
           get_label tr msg2.n_b == join (principal_label alice) (principal_label bob)
         )
         | Some (Msg3 msg3) -> (
           let bob = prin in
           exists alice n_a.
             get_label tr msg3.n_b `can_flow tr` (principal_label alice) /\
-            state_was_set_some_id tr alice (InitiatorSentMsg3 bob n_a msg3.n_b)
+            state_was_set_some_id tr alice (InitiatorSendingMsg3 bob n_a msg3.n_b)
         )
         | None -> False
       ))
@@ -94,7 +94,7 @@ val compute_message1_proof:
   Lemma
   (requires
     // From the stateful code
-    state_was_set_some_id tr alice (InitiatorSentMsg1 bob n_a)/\
+    state_was_set_some_id tr alice (InitiatorSendingMsg1 bob n_a)/\
     // From random generation
     is_secret (join (principal_label alice) (principal_label bob)) tr n_a  /\
     // From random generation
@@ -133,7 +133,7 @@ val decode_message1_proof:
       is_knowable_by (join (principal_label msg1.alice) (principal_label bob)) tr msg1.n_a
       /\ (
         is_publishable tr msg1.n_a
-        \/ state_was_set_some_id tr msg1.alice (InitiatorSentMsg1 bob msg1.n_a)
+        \/ state_was_set_some_id tr msg1.alice (InitiatorSendingMsg1 bob msg1.n_a)
       )
     )
   ))
@@ -158,7 +158,7 @@ val compute_message2_proof:
   Lemma
   (requires
     // From the stateful code
-    state_was_set_some_id tr bob (ResponderSentMsg2 msg1.alice msg1.n_a n_b) /\
+    state_was_set_some_id tr bob (ResponderSendingMsg2 msg1.alice msg1.n_a n_b) /\
     // From decode_message1_proof
     is_knowable_by (join (principal_label msg1.alice) (principal_label bob)) tr msg1.n_a /\
     // From the random generation
@@ -181,7 +181,7 @@ let compute_message2_proof tr bob msg1 pk_a n_b nonce =
 // If alice successfully decrypt the second message,
 // then n_b is knownable both by alice (in the message) and bob (the principal)
 // (for the same reasons with decode_message1)
-// Furthermore, either alice or bob are corrupt, or bob triggered the Respond1 event
+// Furthermore, either alice or bob are corrupt, or bob triggered the Responding event
 // (proved with the encryption predicate)
 #push-options "--ifuel 1 --fuel 0 --z3rlimit 25"
 val decode_message2_proof:
@@ -205,7 +205,7 @@ val decode_message2_proof:
       (is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob)) 
       \/ (
       is_secret (join (principal_label alice) (principal_label bob)) tr msg2.n_b /\
-        state_was_set_some_id tr bob (ResponderSentMsg2 alice n_a msg2.n_b)
+        state_was_set_some_id tr bob (ResponderSendingMsg2 alice n_a msg2.n_b)
       )
       )
     )
@@ -230,7 +230,7 @@ val compute_message3_proof:
   Lemma
   (requires
     // From the stateful code
-    (exists n_a. state_was_set_some_id tr alice (InitiatorSentMsg3 bob n_a n_b)) /\
+    (exists n_a. state_was_set_some_id tr alice (InitiatorSendingMsg3 bob n_a n_b)) /\
     // From decode_message2_proof
      is_knowable_by (join (principal_label alice) (principal_label bob)) tr n_b /\
     // From the random generation
@@ -273,7 +273,7 @@ val decode_message3_proof:
       (is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob)) \/ (
         (exists alice n_a.
            get_label tr msg3.n_b `can_flow tr` (principal_label alice) /\
-           state_was_set_some_id tr alice (InitiatorSentMsg3 bob n_a n_b)
+           state_was_set_some_id tr alice (InitiatorSendingMsg3 bob n_a n_b)
       ))
     )
   ))
@@ -306,7 +306,7 @@ val decode_message3__proof:
       \/ (
         (exists alice (n_a:bytes).
           get_label tr msg3.n_b `can_flow tr` (principal_label alice) /\
-          state_was_set_some_id tr alice (InitiatorSentMsg3 bob n_a msg3.n_b)
+          state_was_set_some_id tr alice (InitiatorSendingMsg3 bob n_a msg3.n_b)
       ))
     )
   ))

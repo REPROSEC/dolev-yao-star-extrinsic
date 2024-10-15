@@ -31,7 +31,7 @@ val initiator_authentication:
   )
   (ensures
     is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob) \/
-  state_was_set_some_id tr alice (InitiatorSentMsg1 bob n_a)
+  state_was_set_some_id tr alice (InitiatorSendingMsg1 bob n_a)
   )
 let initiator_authentication tr i alice bob n_a n_b = ()
 
@@ -44,12 +44,12 @@ val responder_authentication:
   alice:principal -> bob:principal -> n_a:bytes -> n_b:bytes ->
   Lemma
   (requires
-    state_was_set_some_id tr alice (InitiatorSentMsg3 bob n_a n_b) /\
+    state_was_set_some_id tr alice (InitiatorSendingMsg3 bob n_a n_b) /\
     trace_invariant tr
   )
   (ensures
     is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob) \/
-    state_was_set_some_id tr bob (ResponderSentMsg2 alice n_a n_b)
+    state_was_set_some_id tr bob (ResponderSendingMsg2 alice n_a n_b)
   )
 let responder_authentication tr i alice bob n_a n_b = ()
 
@@ -62,8 +62,8 @@ val n_a_secrecy:
   (requires
     attacker_knows tr n_a /\
     trace_invariant tr /\ (
-      (exists sess_id. state_was_set tr alice sess_id (InitiatorSentMsg1 bob n_a)) \/
-      (exists sess_id n_b. state_was_set tr alice sess_id (InitiatorSentMsg3 bob n_a n_b)) \/
+      (exists sess_id. state_was_set tr alice sess_id (InitiatorSendingMsg1 bob n_a)) \/
+      (exists sess_id n_b. state_was_set tr alice sess_id (InitiatorSendingMsg3 bob n_a n_b)) \/
       (exists sess_id n_b. state_was_set tr bob sess_id (ResponderReceivedMsg3 alice n_a n_b))
     )
   )
@@ -80,9 +80,9 @@ val n_b_secrecy:
   (requires
     attacker_knows tr n_b /\
     trace_invariant tr /\ (
-      (exists sess_id n_a. state_was_set tr bob sess_id (ResponderSentMsg2 alice n_a n_b)) \/
+      (exists sess_id n_a. state_was_set tr bob sess_id (ResponderSendingMsg2 alice n_a n_b)) \/
       (exists sess_id n_a. state_was_set tr bob sess_id (ResponderReceivedMsg3 alice n_a n_b)) \/
-      (exists sess_id n_a. state_was_set tr alice sess_id (InitiatorSentMsg3 bob n_a n_b))
+      (exists sess_id n_a. state_was_set tr alice sess_id (InitiatorSendingMsg3 bob n_a n_b))
     )
   )
   (ensures is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob))

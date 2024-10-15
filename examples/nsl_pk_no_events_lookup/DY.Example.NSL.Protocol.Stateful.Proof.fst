@@ -20,42 +20,42 @@ open DY.Example.NSL.Protocol.Stateful
 let state_predicate_nsl: local_state_predicate nsl_session = {
   pred = (fun tr prin sess_id st ->
     match st with
-    | InitiatorSentMsg1 bob n_a -> (
+    | InitiatorSendingMsg1 bob n_a -> (
       let alice = prin in
       is_knowable_by (join (principal_label alice) (principal_label bob)) tr n_a /\
       is_secret (join (principal_label alice) (principal_label bob)) tr n_a /\
       0 < DY.Core.Trace.Base.length tr /\
       rand_generated_before tr n_a
     )
-    | ResponderSentMsg2 alice n_a n_b -> (
+    | ResponderSendingMsg2 alice n_a n_b -> (
       let bob = prin in
       is_knowable_by (join (principal_label alice) (principal_label bob)) tr n_a /\
       is_knowable_by (join (principal_label alice) (principal_label bob)) tr n_b /\
       
-      event_triggered tr bob (Respond1 alice bob n_a n_b)
+      event_triggered tr bob (Responding alice bob n_a n_b)
       // is_secret (join (principal_label alice) (principal_label bob)) tr n_b /\
       //  0 < DY.Core.Trace.Base.length tr /\
       // rand_generated_before tr n_b
     )
-    | InitiatorSentMsg3 bob n_a n_b  -> (
+    | InitiatorSendingMsg3 bob n_a n_b  -> (
       let alice = prin in
       is_knowable_by (join (principal_label alice) (principal_label bob)) tr n_a /\
        is_knowable_by (join (principal_label alice) (principal_label bob)) tr n_b /\
       
-      state_was_set_some_id tr alice (InitiatorSentMsg1 bob n_a) /\
+      state_was_set_some_id tr alice (InitiatorSendingMsg1 bob n_a) /\
       ( is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob)
       \/ (
-        state_was_set_some_id #_ tr bob (ResponderSentMsg2 alice n_a n_b)
+        state_was_set_some_id #_ tr bob (ResponderSendingMsg2 alice n_a n_b)
         ))
     )
     | ResponderReceivedMsg3 alice n_a n_b -> (
       let bob = prin in
       is_knowable_by (join (principal_label alice) (principal_label bob)) tr n_a /\
       is_knowable_by (join (principal_label alice) (principal_label bob)) tr n_b /\
-      state_was_set_some_id tr bob (ResponderSentMsg2 alice n_a n_b) /\
+      state_was_set_some_id tr bob (ResponderSendingMsg2 alice n_a n_b) /\
       (is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob) 
       \/
-      state_was_set_some_id #_ tr alice (InitiatorSentMsg3 bob n_a n_b)
+      state_was_set_some_id #_ tr alice (InitiatorSendingMsg3 bob n_a n_b)
     )
     )
   );
@@ -76,7 +76,7 @@ let all_sessions = [
 let event_predicate_nsl: event_predicate nsl_event =
   fun tr prin e ->
     match e with    
-    | Respond1 alice bob n_a n_b -> (
+    | Responding alice bob n_a n_b -> (
       prin == bob /\
       is_secret (join (principal_label alice) (principal_label bob)) tr n_b /\
       0 < DY.Core.Trace.Base.length tr /\
@@ -163,7 +163,7 @@ val send_msg1_proof:
   ))
 let send_msg1_proof tr global_sess_id alice sess_id =
   match get_state alice sess_id tr with
-  | (Some (InitiatorSentMsg1 bob n_a), tr) -> (
+  | (Some (InitiatorSendingMsg1 bob n_a), tr) -> (
     match get_public_key alice global_sess_id.pki (PkEnc "NSL.PublicKey") bob tr with
     | (None, tr) -> ()
     | (Some pk_b, tr) -> (
@@ -186,7 +186,7 @@ let send_msg1__proof tr global_sess_id alice bob =
   let (n_a, tr) = mk_rand NoUsage (join (principal_label alice) (principal_label bob)) 32 tr in
   
   let (sess_id, _) = new_session_id alice tr in
-  let st = InitiatorSentMsg1 bob n_a in
+  let st = InitiatorSendingMsg1 bob n_a in
   let (_ , tr_state) = set_state alice sess_id st tr in
 
   match get_public_key alice global_sess_id.pki (PkEnc "NSL.PublicKey") bob tr_state with
@@ -230,7 +230,7 @@ val send_msg2_proof:
   ))
 let send_msg2_proof tr global_sess_id bob sess_id =
   match get_state bob sess_id tr with
-  | (Some (ResponderSentMsg2 alice n_a n_b), tr) -> (
+  | (Some (ResponderSendingMsg2 alice n_a n_b), tr) -> (
     match get_public_key bob global_sess_id.pki (PkEnc "NSL.PublicKey") alice tr with
     | (None, tr) -> ()
     | (Some pk_a, tr) -> (
@@ -263,8 +263,8 @@ let send_msg2__proof tr global_sess_id bob msg_id =
       let alice = msg1.alice in
       let n_a = msg1.n_a in
     let (n_b, tr) = mk_rand NoUsage (join (principal_label msg1.alice) (principal_label bob)) 32 tr in
-    let (_, tr) = trigger_event bob (Respond1 alice bob n_a n_b) tr in
-    let st = ResponderSentMsg2 msg1.alice msg1.n_a n_b in
+    let (_, tr) = trigger_event bob (Responding alice bob n_a n_b) tr in
+    let st = ResponderSendingMsg2 msg1.alice msg1.n_a n_b in
     let (sess_id, _) = new_session_id bob tr in
     let (_, tr_st) = set_state bob sess_id st tr in
     match get_public_key bob global_sess_id.pki (PkEnc "NSL.PublicKey") alice tr_st with
@@ -293,7 +293,7 @@ let prepare_msg3_proof tr global_sess_id alice sess_id msg_id =
     | (None, tr) -> ()
     | (Some sk_a, tr) -> (
       match get_state alice sess_id tr with
-      | (Some (InitiatorSentMsg1 bob n_a), tr) -> (
+      | (Some (InitiatorSendingMsg1 bob n_a), tr) -> (
                 decode_message2_proof tr alice bob msg sk_a n_a
       )
       | (_, tr) -> ()
@@ -320,9 +320,9 @@ let prepare_msg3__proof tr global_sess_id alice msg_id =
         | None -> ()
         | Some msg2 ->
         let p = (fun (s:nsl_session) -> 
-    (InitiatorSentMsg1? s) && 
-    (InitiatorSentMsg1?.n_a s = msg2.n_a) && 
-    (InitiatorSentMsg1?.b s = msg2.bob))  in
+    (InitiatorSendingMsg1? s) && 
+    (InitiatorSendingMsg1?.n_a s = msg2.n_a) && 
+    (InitiatorSendingMsg1?.b s = msg2.bob))  in
         match lookup_state alice p tr with
         | (None , _) -> ()
         | (Some (st, sid) , _ ) ->
@@ -343,7 +343,7 @@ val send_msg3_proof:
   ))
 let send_msg3_proof tr global_sess_id alice sess_id =
   match get_state alice sess_id tr with
-  | (Some (InitiatorSentMsg3 bob n_a n_b), tr) -> (
+  | (Some (InitiatorSendingMsg3 bob n_a n_b), tr) -> (
     match get_public_key alice global_sess_id.pki (PkEnc "NSL.PublicKey") bob tr with
     | (None, tr) -> ()
     | (Some pk_b, tr) -> (
@@ -375,16 +375,16 @@ let send_msg3__proof tr global_sess_id alice msg_id =
         | None -> ()
         | Some msg2 -> (
         let p = (fun (s:nsl_session) -> 
-    (InitiatorSentMsg1? s) && 
-    (InitiatorSentMsg1?.n_a s = msg2.n_a) && 
-    (InitiatorSentMsg1?.b s = msg2.bob))  in
+    (InitiatorSendingMsg1? s) && 
+    (InitiatorSendingMsg1?.n_a s = msg2.n_a) && 
+    (InitiatorSendingMsg1?.b s = msg2.bob))  in
         match lookup_state alice p tr with
         | (None , _) -> ()
         | (Some (st, sid) , _ ) -> (
                 decode_message2_proof tr alice msg2.bob msg sk_a msg2.n_a;
         let n_b = msg2.n_b in
-        let InitiatorSentMsg1 bob n_a = st in
-        let new_st = InitiatorSentMsg3 bob n_a n_b in
+        let InitiatorSendingMsg1 bob n_a = st in
+        let new_st = InitiatorSendingMsg3 bob n_a n_b in
         let (_, tr_state) = set_state alice sid new_st tr in
     match get_public_key alice global_sess_id.pki (PkEnc "NSL.PublicKey") bob tr_state with
     | (None, tr) -> ()
@@ -403,8 +403,8 @@ val event_respond1_injective:
   Lemma
   (requires
     trace_invariant tr /\
-    event_triggered tr bob (Respond1 alice bob n_a n_b) /\
-    event_triggered tr bob (Respond1 alice' bob n_a' n_b)
+    event_triggered tr bob (Responding alice bob n_a n_b) /\
+    event_triggered tr bob (Responding alice' bob n_a' n_b)
   )
   (ensures
     alice == alice' /\
@@ -432,24 +432,24 @@ let receive_msg3_proof tr global_sess_id bob sess_id msg_id =
         | None -> ()
         | Some msg3 -> (
             let p = (fun (s:nsl_session) -> 
-    (ResponderSentMsg2? s) && 
-    (ResponderSentMsg2?.n_b s = msg3.n_b)) in
+    (ResponderSendingMsg2? s) && 
+    (ResponderSendingMsg2?.n_b s = msg3.n_b)) in
            match lookup_state bob p tr with
            | (None, _ ) -> ()
            | (Some (st, id), _) ->  (
-           let ResponderSentMsg2 alice n_a n_b = st in
-            assert(event_triggered tr bob (Respond1 alice bob n_a n_b));
+           let ResponderSendingMsg2 alice n_a n_b = st in
+            assert(event_triggered tr bob (Responding alice bob n_a n_b));
              
             assert(is_publishable tr n_b ==> is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob));
             introduce ~(is_publishable tr n_b) ==> 
-            state_was_set_some_id tr alice (InitiatorSentMsg3 bob n_a n_b)
+            state_was_set_some_id tr alice (InitiatorSendingMsg3 bob n_a n_b)
             with _. (
               decode_message3__proof tr alice bob msg sk_b;
               eliminate exists alice' n_a'. get_label tr n_b `can_flow tr` (principal_label alice') /\ 
-              state_was_set_some_id tr alice' (InitiatorSentMsg3 bob n_a' n_b)
+              state_was_set_some_id tr alice' (InitiatorSendingMsg3 bob n_a' n_b)
               returns _
               with _. (
-                assert(event_triggered tr bob (Respond1 alice' bob n_a' n_b));
+                assert(event_triggered tr bob (Responding alice' bob n_a' n_b));
                 event_respond1_injective tr alice alice' bob n_a n_a' n_b
               
               )
