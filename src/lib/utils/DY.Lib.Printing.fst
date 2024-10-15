@@ -116,11 +116,11 @@ let rec usage_to_string u =
 /// in DY.Lib and DY.Core. This causes
 /// conflicts with the bytes_to_string function.
 
-val private_key_type_to_string: DY.Lib.State.PrivateKeys.private_key_type -> string
-let private_key_type_to_string t =
+val long_term_key_type_to_string: DY.Lib.State.PrivateKeys.long_term_key_type -> string
+let long_term_key_type_to_string t =
   match t with
-  | DY.Lib.State.PrivateKeys.PkDec u -> "PkDec " ^ u
-  | DY.Lib.State.PrivateKeys.Sign u -> "Sign " ^ u
+  | DY.Lib.State.PrivateKeys.LongTermPkEncKey u -> "LongTermPkEncKey " ^ u
+  | DY.Lib.State.PrivateKeys.LongTermSigKey u -> "LongTermSigKey " ^ u
 
 // The `#_` at the end is a workaround for FStarLang/FStar#3286
 val private_keys_types_to_string: (list (map_elem DY.Lib.State.PrivateKeys.private_key_key DY.Lib.State.PrivateKeys.private_key_value #_)) -> string
@@ -129,14 +129,8 @@ let rec private_keys_types_to_string m =
   | [] -> ""
   | hd :: tl -> (
     (private_keys_types_to_string tl) ^ 
-    Printf.sprintf "%s = (%s)," (private_key_type_to_string hd.key.ty) (bytes_to_string hd.value.private_key)
+    Printf.sprintf "%s = (%s)," (long_term_key_type_to_string hd.key.ty) (bytes_to_string hd.value.private_key)
   )
-
-val public_key_type_to_string: DY.Lib.State.PKI.public_key_type -> string
-let public_key_type_to_string t =
-  match t with
-  | DY.Lib.State.PKI.PkEnc u -> "PkEnc " ^ u
-  | DY.Lib.State.PKI.Verify u -> "Verify " ^ u
 
 // The `#_` at the end is a workaround for FStarLang/FStar#3286
 val pki_types_to_string: (list (map_elem DY.Lib.State.PKI.pki_key DY.Lib.State.PKI.pki_value #_)) -> string
@@ -145,7 +139,7 @@ let rec pki_types_to_string m =
   | [] -> ""
   | hd :: tl -> (
     (pki_types_to_string tl) ^ 
-    Printf.sprintf "%s [%s] = (%s)," (public_key_type_to_string hd.key.ty) hd.key.who (bytes_to_string hd.value.public_key)
+    Printf.sprintf "%s [%s] = (%s)," (long_term_key_type_to_string hd.key.ty) hd.key.who (bytes_to_string hd.value.public_key)
   )
 
 val default_private_keys_state_to_string: bytes -> option string
