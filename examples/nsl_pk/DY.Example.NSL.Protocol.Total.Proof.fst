@@ -22,8 +22,8 @@ let crypto_predicates_nsl = {
   default_crypto_predicates with
 
   pkenc_pred = {
-    pred = (fun tr pk msg ->
-      (exists prin. get_sk_usage pk == long_term_key_type_to_usage (LongTermPkEncKey "NSL.PublicKey") prin /\ (
+    pred = (fun tr sk_usage msg ->
+      (exists prin. sk_usage == long_term_key_type_to_usage (LongTermPkEncKey "NSL.PublicKey") prin /\ (
         match parse message msg with
         | Some (Msg1 msg1) -> (
           let (alice, bob) = (msg1.alice, prin) in
@@ -70,7 +70,7 @@ val compute_message1_proof:
     // From random generation
     is_secret (principal_label alice) tr nonce /\
     // From random generation
-    PkNonce? (get_usage nonce) /\
+    nonce `has_usage tr` PkNonce /\
     // From PKI invariants
     is_public_key_for tr pk_b (LongTermPkEncKey "NSL.PublicKey") bob
   )
@@ -126,7 +126,7 @@ val compute_message2_proof:
     // From the random generation
     is_secret (principal_label bob) tr nonce /\
     // From the random generation
-    PkNonce? (get_usage nonce) /\
+    nonce `has_usage tr` PkNonce /\
     // From the PKI
     is_public_key_for tr pk_a (LongTermPkEncKey "NSL.PublicKey") msg1.alice
   )
@@ -189,7 +189,7 @@ val compute_message3_proof:
     // From the random generation
     is_secret (principal_label alice) tr nonce /\
     // From the random generation
-    PkNonce? (get_usage nonce) /\
+    nonce `has_usage tr` PkNonce /\
     // From the PKI
     is_public_key_for tr pk_b (LongTermPkEncKey "NSL.PublicKey") bob
   )

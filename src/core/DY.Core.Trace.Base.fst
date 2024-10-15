@@ -289,8 +289,8 @@ let event_triggered_grows tr1 tr2 prin tag content = ()
 val rand_generated_at: trace -> timestamp -> bytes -> prop
 let rand_generated_at tr i b =
   match b with
-  | Rand usg len time ->
-    time == i /\ (exists lab. event_at tr i (RandGen usg lab len))
+  | Rand len time ->
+    time == i /\ (exists usg lab. event_at tr i (RandGen usg lab len))
   | _ -> False
 
 (*** Forgetting labels ***)

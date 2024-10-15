@@ -12,6 +12,7 @@ open DY.Lib.SplitFunction
 
 noeq
 type split_crypto_predicate_parameters = {
+  // TODO should be renamed in `key_usage_t`?
   key_t: Type;
   data_t: Type;
   get_usage: key_t -> string;

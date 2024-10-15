@@ -31,7 +31,7 @@ let rec bytes_to_string b =
   match b with
   | Literal s -> uint_list_to_string (FStar.Seq.seq_to_list s)
   
-  | Rand usage len time -> Printf.sprintf "Nonce #%d" time
+  | Rand len time -> Printf.sprintf "Nonce #%d" time
   
   | Concat (Literal s) right -> (
       Printf.sprintf "%s%s" 
@@ -93,12 +93,6 @@ let rec usage_to_string u =
       tag (bytes_to_string data)
   | DhKey tag data ->
     Printf.sprintf "{\"Type\": \"DhKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}"
-      tag (bytes_to_string data)
-  | KdfExtractSaltKey tag data ->
-    Printf.sprintf "{\"Type\": \"KdfExtractSaltKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}" 
-      tag (bytes_to_string data)
-  | KdfExtractIkmKey tag data ->
-    Printf.sprintf "{\"Type\": \"KdfExtractIkmKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}" 
       tag (bytes_to_string data)
   | KdfExpandKey tag data ->
     Printf.sprintf "{\"Type\": \"KdfExpandKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}" 
