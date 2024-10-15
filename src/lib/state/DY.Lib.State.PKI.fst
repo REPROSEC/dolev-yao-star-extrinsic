@@ -7,6 +7,7 @@ open DY.Lib.Comparse.Parsers
 open DY.Lib.State.Tagged
 open DY.Lib.State.Typed
 open DY.Lib.State.Map
+open DY.Lib.State.PrivateKeys
 
 #set-options "--fuel 1 --ifuel 1"
 
@@ -24,16 +25,8 @@ open DY.Lib.State.Map
 (*** PKI types & invariants ***)
 
 [@@ with_bytes bytes]
-type public_key_type =
-  | PkEnc: [@@@ with_parser #bytes ps_string] usage:string -> public_key_type
-  | Verify: [@@@ with_parser #bytes ps_string] usage:string -> public_key_type
-
-%splice [ps_public_key_type] (gen_parser (`public_key_type))
-%splice [ps_public_key_type_is_well_formed] (gen_is_well_formed_lemma (`public_key_type))
-
-[@@ with_bytes bytes]
 type pki_key = {
-  ty:public_key_type;
+  ty:long_term_key_type;
   who:principal;
 }
 
@@ -54,22 +47,10 @@ instance map_types_pki: map_types pki_key pki_value = {
   ps_value_t = ps_pki_value;
 }
 
-val is_public_key_for:
-  {|crypto_invariants|} -> trace ->
-  bytes -> public_key_type -> principal -> prop
-let is_public_key_for #cinvs tr pk pk_type who =
-  match pk_type with
-  | PkEnc usg -> (
-    is_encryption_key (PkKey usg empty) (principal_label who) tr pk
-  )
-  | Verify usg -> (
-    is_verification_key (SigKey usg empty) (principal_label who) tr pk
-  )
-
 // The `#_` at the end is a workaround for FStarLang/FStar#3286
 val pki_pred: {|crypto_invariants|} -> map_predicate pki_key pki_value #_
 let pki_pred #cinvs = {
-  pred = (fun tr prin sess_id key value ->
+  pred = (fun tr prin sess_id (key: pki_key) value ->
     is_public_key_for tr value.public_key key.ty key.who
   );
   pred_later = (fun tr1 tr2 prin sess_id key value -> ());
@@ -90,12 +71,12 @@ val initialize_pki: prin:principal -> traceful state_id
 let initialize_pki = initialize_map pki_key pki_value #_ // another workaround for FStarLang/FStar#3286
 
 [@@ "opaque_to_smt"]
-val install_public_key: principal -> state_id -> public_key_type -> principal -> bytes -> traceful (option unit)
+val install_public_key: principal -> state_id -> long_term_key_type -> principal -> bytes -> traceful (option unit)
 let install_public_key prin sess_id pk_type who pk =
   add_key_value prin sess_id ({ty = pk_type; who;}) ({public_key = pk;})
 
 [@@ "opaque_to_smt"]
-val get_public_key: principal -> state_id -> public_key_type -> principal -> traceful (option bytes)
+val get_public_key: principal -> state_id -> long_term_key_type -> principal -> traceful (option bytes)
 let get_public_key prin sess_id pk_type who =
   let*? res = find_value prin sess_id ({ty = pk_type; who;}) in
   return (Some res.public_key)
@@ -120,7 +101,7 @@ let initialize_pki_invariant #invs prin tr =
 
 val install_public_key_invariant:
   {|protocol_invariants|} ->
-  prin:principal -> sess_id:state_id -> pk_type:public_key_type -> who:principal -> pk:bytes -> tr:trace ->
+  prin:principal -> sess_id:state_id -> pk_type:long_term_key_type -> who:principal -> pk:bytes -> tr:trace ->
   Lemma
   (requires
     is_public_key_for tr pk pk_type who /\
@@ -139,7 +120,7 @@ let install_public_key_invariant #invs prin sess_id pk_type who pk tr =
 
 val get_public_key_invariant:
   {|protocol_invariants|} ->
-  prin:principal -> sess_id:state_id -> pk_type:public_key_type -> who:principal -> tr:trace ->
+  prin:principal -> sess_id:state_id -> pk_type:long_term_key_type -> who:principal -> tr:trace ->
   Lemma
   (requires
     trace_invariant tr /\
