@@ -312,18 +312,18 @@ let state_pred_label p = mk_label {
   is_corrupt_later = (fun tr1 tr2 -> ());
 }
 
-val state_pred_label_can_flow:
+val state_pred_label_pred_can_flow:
   (principal -> state_id -> bytes -> prop) ->
   (principal -> state_id -> bytes -> prop) ->
   prop
-let state_pred_label_can_flow p1 p2 =
+let state_pred_label_pred_can_flow p1 p2 =
   forall p s c. p2 p s c ==> p1 p s c
 
 val state_pred_label_can_flow_state_pred_label:
   tr:trace ->
   p1:(principal -> state_id -> bytes -> prop) -> p2:(principal -> state_id -> bytes -> prop) ->
   Lemma
-  (requires state_pred_label_can_flow p1 p2)
+  (requires state_pred_label_pred_can_flow p1 p2)
   (ensures state_pred_label p1 `can_flow tr` state_pred_label p2)
   [SMTPat (state_pred_label p1 `can_flow tr` state_pred_label p2)]
 let state_pred_label_can_flow_state_pred_label tr p1 p2 =
@@ -363,7 +363,8 @@ val principal_state_label_pred:
   principal -> state_id ->
   principal -> state_id -> bytes -> prop
 let principal_state_label_pred prin1 sess_id1 prin2 sess_id2 _ =
-  prin1 == prin2 /\ sess_id1 == sess_id2
+  prin1 == prin2 /\
+  sess_id1 == sess_id2
 
 val principal_state_label: principal -> state_id -> label
 let principal_state_label prin sess_id =
@@ -373,7 +374,9 @@ val principal_state_content_label_pred:
   principal -> state_id -> bytes ->
   principal -> state_id -> bytes -> prop
 let principal_state_content_label_pred prin1 sess_id1 content1 prin2 sess_id2 content2 =
-  prin1 == prin2 /\ sess_id1 == sess_id2 /\ content1 == content2
+  prin1 == prin2 /\
+  sess_id1 == sess_id2 /\
+  content1 == content2
 
 val principal_state_content_label: principal -> state_id -> bytes -> label
 let principal_state_content_label prin sess_id content =

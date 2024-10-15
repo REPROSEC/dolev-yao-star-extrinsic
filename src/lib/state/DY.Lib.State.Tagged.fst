@@ -47,8 +47,8 @@ val tagged_state_pred_label_pred_allow_inversion:
     inversion tagged_state
   )
   [SMTPatOr [
-    [SMTPat (state_pred_label_can_flow p2 (tagged_state_pred_label_pred p1))];
-    [SMTPat (state_pred_label_can_flow (tagged_state_pred_label_pred p1) p2)];
+    [SMTPat (state_pred_label_pred_can_flow p2 (tagged_state_pred_label_pred p1))];
+    [SMTPat (state_pred_label_pred_can_flow (tagged_state_pred_label_pred p1) p2)];
   ]]
 let tagged_state_pred_label_pred_allow_inversion p1 p2 =
   allow_inversion (option tagged_state);
