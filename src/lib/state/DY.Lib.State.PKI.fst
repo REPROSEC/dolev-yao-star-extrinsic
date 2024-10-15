@@ -50,7 +50,7 @@ instance map_types_pki: map_types pki_key pki_value = {
 // The `#_` at the end is a workaround for FStarLang/FStar#3286
 val pki_pred: {|crypto_invariants|} -> map_predicate pki_key pki_value #_
 let pki_pred #cinvs = {
-  pred = (fun tr prin sess_id key value ->
+  pred = (fun tr prin sess_id (key: pki_key) value ->
     is_public_key_for tr value.public_key key.ty key.who
   );
   pred_later = (fun tr1 tr2 prin sess_id key value -> ());
