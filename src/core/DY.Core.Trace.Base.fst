@@ -538,6 +538,18 @@ let event_at_fmap_trace #a #b f tr i ev =
     get_event_at_fmap_trace f tr i
   )
 
+val event_at_fmap_trace_eq:
+  #a:Type -> #b:Type ->
+  f:(a -> b) -> tr:trace_ a -> i:timestamp -> ev:trace_event_ a ->
+  Lemma
+  (requires ~(RandGen? ev))
+  (ensures event_at tr i ev <==> event_at (fmap_trace f tr) i (fmap_trace_event f ev))
+let event_at_fmap_trace_eq #a #b f tr i ev =
+  if i >= length tr then ()
+  else (
+    get_event_at_fmap_trace f tr i
+  )
+
 val event_exists_fmap_trace:
   #a:Type -> #b:Type ->
   f:(a -> b) -> tr:trace_ a -> ev:trace_event_ a ->
@@ -549,6 +561,17 @@ let event_exists_fmap_trace #a #b f tr ev =
   returns event_exists (fmap_trace f tr) (fmap_trace_event f ev)
   with _. (
     event_at_fmap_trace f tr i ev
+  )
+
+val event_exists_fmap_trace_eq:
+  #a:Type -> #b:Type ->
+  f:(a -> b) -> tr:trace_ a -> ev:trace_event_ a ->
+  Lemma
+  (requires ~(RandGen? ev))
+  (ensures event_exists tr ev <==> event_exists (fmap_trace f tr) (fmap_trace_event f ev))
+let event_exists_fmap_trace_eq #a #b f tr ev =
+  introduce forall i. event_at tr i ev <==> event_at (fmap_trace f tr) i (fmap_trace_event f ev) with (
+    event_at_fmap_trace_eq f tr i ev
   )
 
 val replace_label:
@@ -567,3 +590,4 @@ val trace_forget_labels:
   trace_ unit
 let trace_forget_labels tr =
   fmap_trace forget_label tr
+
