@@ -198,68 +198,6 @@ let principal_state_label prin sess_id = mk_label {
   is_corrupt_later = (fun tr1 tr2 -> ());
 }
 
-/// Injectivity properties of principal_label and principal_state_label.
-/// We prove it by expliciting an inverse on the left (`extract_pre_label`).
-/// This allows for an efficient SMT pattern,
-/// compared to the standard injectivity definition,
-/// whose SMT pattern would induce quadratic behavior.
-
-type pre_label =
-  | PreLabel_P: principal -> pre_label
-  | PreLabel_S: principal -> state_id -> pre_label
-
-val extract_pre_label_is_some:
-  label -> principal & state_id ->
-  prop
-let extract_pre_label_is_some l (prin, sess_id) =
-  l.is_corrupt (Snoc Nil (Corrupt prin sess_id))
-
-[@@"opaque_to_smt"]
-val extract_pre_label: label -> GTot (option pre_label)
-let extract_pre_label l =
-  if FStar.StrongExcludedMiddle.strong_excluded_middle (exists x. extract_pre_label_is_some l x) then (
-    let (prin, sess_id) = FStar.IndefiniteDescription.indefinite_description_ghost _ (extract_pre_label_is_some l) in
-    if FStar.StrongExcludedMiddle.strong_excluded_middle (exists sess_id'. sess_id =!= sess_id' /\ l.is_corrupt (Snoc Nil (Corrupt prin sess_id'))) then (
-      Some (PreLabel_P prin)
-    ) else (
-      Some (PreLabel_S prin sess_id)
-    )
-  ) else (
-    None
-  )
-
-#push-options "--ifuel 1 --fuel 1"
-val principal_label_injective:
-  p:principal ->
-  Lemma (extract_pre_label (principal_label p) == Some (PreLabel_P p))
-  [SMTPat (principal_label p)]
-let principal_label_injective p =
-  normalize_term_spec extract_pre_label;
-  normalize_term_spec principal_label;
-  let l = principal_label p in
-  let sess_id_0 = { the_id = 0} in
-  let tr_0: trace_ unit = (Snoc Nil (Corrupt p sess_id_0)) in
-  assert_norm(event_at tr_0 0 (Corrupt p sess_id_0));
-  let sess_id_1 = { the_id = 1} in
-  let tr_1: trace_ unit = (Snoc Nil (Corrupt p sess_id_1)) in
-  assert_norm(event_at tr_1 0 (Corrupt p sess_id_1));
-  assert(extract_pre_label_is_some l (p, sess_id_0))
-#pop-options
-
-#push-options "--ifuel 1 --fuel 1"
-val principal_state_label_injective:
-  p:principal -> s:state_id ->
-  Lemma (extract_pre_label (principal_state_label p s) == Some (PreLabel_S p s))
-  [SMTPat (principal_state_label p s)]
-let principal_state_label_injective p s =
-  normalize_term_spec extract_pre_label;
-  normalize_term_spec principal_state_label;
-  let l = principal_state_label p s in
-  let tr: trace_ unit = (Snoc Nil (Corrupt p s)) in
-  assert_norm(event_at tr 0 (Corrupt p s));
-  assert(extract_pre_label_is_some l (p, s))
-#pop-options
-
 /// `can_flow tr` is reflexive.
 
 val can_flow_reflexive:
