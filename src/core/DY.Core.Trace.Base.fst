@@ -329,17 +329,22 @@ let rec fmap_trace f tr =
   | Snoc init last ->
     Snoc (fmap_trace f init) (fmap_trace_event f last)
 
-val forget_label:
+val replace_label:
   #a:Type -> #b:Type ->
   b ->
   a -> b
-let forget_label #a #b x _ = x
+let replace_label #a #b x _ = x
+
+val forget_label:
+  #a:Type ->
+  a -> unit
+let forget_label #a = replace_label ()
 
 val trace_forget_labels:
   trace ->
   trace_ unit
 let trace_forget_labels tr =
-  fmap_trace (forget_label ()) tr
+  fmap_trace forget_label tr
 
 val fmap_trace_identity:
   #a:Type ->
