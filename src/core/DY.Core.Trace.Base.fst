@@ -551,14 +551,19 @@ let event_exists_fmap_trace #a #b f tr ev =
     event_at_fmap_trace f tr i ev
   )
 
-val forget_label:
+val replace_label:
   #a:Type -> #b:Type ->
   b ->
   a -> b
-let forget_label #a #b x _ = x
+let replace_label #a #b x _ = x
+
+val forget_label:
+  #a:Type ->
+  a -> unit
+let forget_label #a = replace_label ()
 
 val trace_forget_labels:
   trace ->
   trace_ unit
 let trace_forget_labels tr =
-  fmap_trace (forget_label ()) tr
+  fmap_trace forget_label tr
