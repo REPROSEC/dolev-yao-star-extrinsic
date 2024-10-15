@@ -21,25 +21,25 @@ let state_predicate_nsl: local_state_predicate nsl_session = {
     match st with
     | InitiatorSentMsg1 bob n_a -> (
       let alice = prin in
-      is_knowable_by (join (principal_label alice) (principal_label bob)) tr n_a /\
+      is_knowable_by (join (nsl_nonce_label alice) (nsl_nonce_label bob)) tr n_a /\
       event_triggered tr alice (Initiate1 alice bob n_a)
     )
     | ResponderSentMsg2 alice n_a n_b -> (
       let bob = prin in
-      is_knowable_by (join (principal_label alice) (principal_label bob)) tr n_a /\
-      is_knowable_by (join (principal_label alice) (principal_label bob)) tr n_b /\
+      is_knowable_by (join (nsl_nonce_label alice) (nsl_nonce_label bob)) tr n_a /\
+      is_knowable_by (join (nsl_nonce_label alice) (nsl_nonce_label bob)) tr n_b /\
       event_triggered tr bob (Respond1 alice bob n_a n_b)
     )
     | InitiatorSentMsg3 bob n_a n_b  -> (
       let alice = prin in
-      is_knowable_by (join (principal_label alice) (principal_label bob)) tr n_a /\
-      is_knowable_by (join (principal_label alice) (principal_label bob)) tr n_b /\
+      is_knowable_by (join (nsl_nonce_label alice) (nsl_nonce_label bob)) tr n_a /\
+      is_knowable_by (join (nsl_nonce_label alice) (nsl_nonce_label bob)) tr n_b /\
       event_triggered tr alice (Initiate2 alice bob n_a n_b)
     )
     | ResponderReceivedMsg3 alice n_a n_b -> (
       let bob = prin in
-      is_knowable_by (join (principal_label alice) (principal_label bob)) tr n_a /\
-      is_knowable_by (join (principal_label alice) (principal_label bob)) tr n_b /\
+      is_knowable_by (join (nsl_nonce_label alice) (nsl_nonce_label bob)) tr n_a /\
+      is_knowable_by (join (nsl_nonce_label alice) (nsl_nonce_label bob)) tr n_b /\
       event_triggered tr bob (Respond2 alice bob n_a n_b)
     )
   );
@@ -54,27 +54,27 @@ let event_predicate_nsl: event_predicate nsl_event =
     match e with
     | Initiate1 alice bob n_a -> (
       prin == alice /\
-      is_secret (join (principal_label alice) (principal_label bob)) tr n_a /\
+      is_secret (join (nsl_nonce_label alice) (nsl_nonce_label bob)) tr n_a /\
       0 < DY.Core.Trace.Base.length tr /\
       rand_generated_at tr (DY.Core.Trace.Base.length tr - 1) n_a
     )
     | Respond1 alice bob n_a n_b -> (
       prin == bob /\
-      is_secret (join (principal_label alice) (principal_label bob)) tr n_b /\
+      is_secret (join (nsl_nonce_label alice) (nsl_nonce_label bob)) tr n_b /\
       0 < DY.Core.Trace.Base.length tr /\
       rand_generated_at tr (DY.Core.Trace.Base.length tr - 1) n_b
     )
     | Initiate2 alice bob n_a n_b -> (
       prin == alice /\
       event_triggered tr alice (Initiate1 alice bob n_a) /\ (
-        is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob) \/
+        is_corrupt tr (nsl_nonce_label alice) \/ is_corrupt tr (nsl_nonce_label bob) \/
         event_triggered tr bob (Respond1 alice bob n_a n_b)
       )
     )
     | Respond2 alice bob n_a n_b -> (
       prin == bob /\
       event_triggered tr bob (Respond1 alice bob n_a n_b) /\ (
-        is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob) \/
+        is_corrupt tr (nsl_nonce_label alice) \/ is_corrupt tr (nsl_nonce_label bob) \/
         event_triggered tr alice (Initiate2 alice bob n_a n_b)
       )
     )
@@ -84,7 +84,7 @@ let event_predicate_nsl: event_predicate nsl_event =
 let all_sessions = [
   pki_tag_and_invariant;
   private_keys_tag_and_invariant;
-  (local_state_nsl_session.tag, local_state_predicate_to_local_bytes_state_predicate state_predicate_nsl);
+  (|local_state_nsl_session.tag, local_state_predicate_to_local_bytes_state_predicate state_predicate_nsl|);
 ]
 
 /// List of all local event predicates.
@@ -113,7 +113,7 @@ instance protocol_invariants_nsl: protocol_invariants = {
 
 val all_sessions_has_all_sessions: unit -> Lemma (norm [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP (has_local_bytes_state_predicate #protocol_invariants_nsl) all_sessions))
 let all_sessions_has_all_sessions () =
-  assert_norm(List.Tot.no_repeats_p (List.Tot.map fst (all_sessions)));
+  assert_norm(List.Tot.no_repeats_p (List.Tot.map dfst (all_sessions)));
   mk_state_pred_correct #protocol_invariants_nsl all_sessions;
   norm_spec [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP (has_local_bytes_state_predicate #protocol_invariants_nsl) all_sessions)
 
@@ -170,7 +170,7 @@ let send_msg1_proof tr global_sess_id alice sess_id =
     match get_public_key alice global_sess_id.pki (LongTermPkEncKey "NSL.PublicKey") bob tr with
     | (None, tr) -> ()
     | (Some pk_b, tr) -> (
-      let (nonce, tr) = mk_rand PkNonce (principal_label alice) 32 tr in
+      let (nonce, tr) = mk_rand PkNonce (long_term_key_label alice) 32 tr in
       compute_message1_proof tr alice bob pk_b n_a nonce
     )
   )
@@ -211,7 +211,7 @@ let send_msg2_proof tr global_sess_id bob sess_id =
     match get_public_key bob global_sess_id.pki (LongTermPkEncKey "NSL.PublicKey") alice tr with
     | (None, tr) -> ()
     | (Some pk_a, tr) -> (
-      let (nonce, tr) = mk_rand PkNonce (principal_label bob) 32 tr in
+      let (nonce, tr) = mk_rand PkNonce (long_term_key_label bob) 32 tr in
       compute_message2_proof tr bob {n_a; alice;} pk_a n_b nonce
     )
   )
@@ -256,7 +256,7 @@ let send_msg3_proof tr global_sess_id alice sess_id =
     match get_public_key alice global_sess_id.pki (LongTermPkEncKey "NSL.PublicKey") bob tr with
     | (None, tr) -> ()
     | (Some pk_b, tr) -> (
-      let (nonce, tr) = mk_rand PkNonce (principal_label alice) 32 tr in
+      let (nonce, tr) = mk_rand PkNonce (long_term_key_label alice) 32 tr in
       compute_message3_proof tr alice bob pk_b n_b nonce
     )
   )
@@ -304,7 +304,7 @@ let prepare_msg4 tr global_sess_id bob sess_id msg_id =
         | Some msg3 -> (
           // From the decode_message3 proof, we get the following fact:
           // exists alice' n_a'.
-          //   get_label n_b `can_flow tr` (principal_label alice') /\
+          //   get_label n_b `can_flow tr` (nsl_nonce_label alice') /\
           //   event_triggered tr alice' nsl_event_tag (serialize nsl_event (Initiate2 alice' bob n_a' n_b))
           // We want to obtain the same fact, with the actual n_a (not the one from the exists, n_a'),
           // and the actual alice!
@@ -317,11 +317,11 @@ let prepare_msg4 tr global_sess_id bob sess_id msg_id =
           // principal_corrupt tr alice' \/ principal_corrupt tr bob
           // then
           // principal_corrupt tr alice \/ principal_corrupt tr bob
-          // because we know the label of n_b (which is (join (principal_label alice) (principal_label bob))).
+          // because we know the label of n_b (which is (join (nsl_nonce_label alice) (nsl_nonce_label bob))).
           // It is useful in the "modulo corruption" part of the proof.
-          introduce (~((join (principal_label alice) (principal_label bob)) `can_flow tr` public)) ==> event_triggered tr alice (Initiate2 alice bob n_a n_b) with _. (
-            assert(exists alice' n_a'. get_label tr n_b `can_flow tr` (principal_label alice') /\ event_triggered tr alice' (Initiate2 alice' bob n_a' n_b));
-            eliminate exists alice' n_a'. get_label tr n_b `can_flow tr` (principal_label alice') /\ event_triggered tr alice' (Initiate2 alice' bob n_a' n_b)
+          introduce (~((join (nsl_nonce_label alice) (nsl_nonce_label bob)) `can_flow tr` public)) ==> event_triggered tr alice (Initiate2 alice bob n_a n_b) with _. (
+            assert(exists alice' n_a'. get_label tr n_b `can_flow tr` (nsl_nonce_label alice') /\ event_triggered tr alice' (Initiate2 alice' bob n_a' n_b));
+            eliminate exists alice' n_a'. get_label tr n_b `can_flow tr` (nsl_nonce_label alice') /\ event_triggered tr alice' (Initiate2 alice' bob n_a' n_b)
             returns _
             with _. (
               event_respond1_injective tr alice alice' bob n_a n_a' n_b

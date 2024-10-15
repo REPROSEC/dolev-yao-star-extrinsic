@@ -210,7 +210,7 @@ let trace_event_to_string printers tr_event i =
     Printf.sprintf "{\"TraceID\": %d, \"Type\": \"Nonce\", \"Usage\": %s}\n" 
     i (usage_to_string usg)
   )
-  | Corrupt prin sess_id -> ""
+  | Corrupt time -> ""
   | SetState prin sess_id full_content -> (
     let content_str = state_to_string printers.state_to_string full_content in
     Printf.sprintf "{\"TraceID\": %d, \"Type\": \"Session\", \"SessionID\": %d, \"Principal\": \"%s\", \"Content\": \"%s\"}\n"

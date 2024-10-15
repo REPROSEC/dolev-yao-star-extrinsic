@@ -130,7 +130,7 @@ val compute_message2_proof:
     is_publishable tr gx /\
     bytes_invariant tr y /\
     is_private_key_for tr sk_b (LongTermSigKey "DH.SigningKey") bob /\
-    is_secret (principal_label bob) tr n_sig /\
+    is_secret (long_term_key_label bob) tr n_sig /\
     SigNonce? (get_usage n_sig)
   )
   (ensures
@@ -173,7 +173,7 @@ val decode_and_verify_message2_proof:
   Lemma
   (requires
     is_publishable tr msg2_bytes /\
-    is_secret (principal_state_label alice alice_si) tr x /\
+    is_secret (ephemeral_dh_key_label alice alice_si) tr x /\
     is_public_key_for tr pk_b (LongTermSigKey "DH.SigningKey") bob
   )
   (ensures (
@@ -181,7 +181,7 @@ val decode_and_verify_message2_proof:
     | Some res -> (
       let sig_msg = SigMsg2 {alice; gx=(dh_pk x); gy=res.gy} in
       is_publishable tr res.gy /\
-      (is_corrupt tr (principal_label bob) \/
+      (is_corrupt tr (long_term_key_label bob) \/
       (exists y. event_triggered tr bob (Respond1 alice bob (dh_pk x) res.gy y)))
     )
     | None -> True
@@ -199,7 +199,7 @@ let decode_and_verify_message2_proof tr msg2_bytes alice alice_si bob x pk_b =
       assert(is_publishable tr res.gy);
       
       assert(
-        is_corrupt tr (principal_label bob) \/
+        is_corrupt tr (long_term_key_label bob) \/
         (exists y. res.gy == dh_pk y /\ event_triggered tr bob (Respond1 alice bob gx gy y))
       );
       ()
@@ -218,7 +218,7 @@ val compute_message3_proof:
     is_publishable tr gx /\ is_publishable tr gy /\
     gx = dh_pk x /\
     is_private_key_for tr sk_a (LongTermSigKey "DH.SigningKey") alice /\
-    is_secret (principal_label alice) tr n_sig /\
+    is_secret (long_term_key_label alice) tr n_sig /\
     SigNonce? (get_usage n_sig)
   )
   (ensures
@@ -257,7 +257,7 @@ val decode_and_verify_message3_proof:
   (requires
     is_publishable tr msg3_bytes /\
     is_publishable tr gx /\
-    is_secret (principal_state_label bob bob_si) tr y /\
+    is_secret (ephemeral_dh_key_label bob bob_si) tr y /\
     is_public_key_for tr pk_a (LongTermSigKey "DH.SigningKey") alice
   )
   (ensures (
@@ -265,7 +265,7 @@ val decode_and_verify_message3_proof:
     match decode_and_verify_message3 msg3_bytes bob gx gy y pk_a with
     | Some res -> (
       let sig_msg = SigMsg3 {bob; gx; gy} in
-      (is_corrupt tr (principal_label alice) \/
+      (is_corrupt tr (long_term_key_label alice) \/
       (exists x. gx == dh_pk x /\ event_triggered tr alice (Initiate2 alice bob gx gy (dh x gy))))
     )
     | None -> True

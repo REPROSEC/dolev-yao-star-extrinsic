@@ -36,8 +36,7 @@ let rec attacker_knows_aux step tr msg =
     // - states that the attacker has corrupt
     (
       exists prin sess_id.
-        is_corrupt tr (principal_state_label prin sess_id) /\
-        state_was_set tr prin sess_id msg
+        was_corrupt tr prin sess_id msg
     ) \/
     // - public literals
     (
@@ -196,13 +195,17 @@ val corrupted_state_is_publishable:
   tr:trace -> prin:principal -> sess_id:state_id -> content:bytes ->
   Lemma
   (requires
-    is_corrupt tr (principal_state_label prin sess_id) /\
-    state_was_set tr prin sess_id content /\
+    was_corrupt tr prin sess_id content /\
     trace_invariant tr
   )
   (ensures is_publishable tr content)
 let corrupted_state_is_publishable #invs tr prin sess_id content =
-  state_is_knowable_by tr prin sess_id content
+  eliminate exists time. event_exists tr (Corrupt time) /\ event_at tr time (SetState prin sess_id content)
+  returns is_publishable tr content
+  with _. (
+    state_is_knowable_by tr prin sess_id content;
+    state_pred_label_can_flow_public tr (principal_state_content_label_pred prin sess_id content)
+  )
 
 #push-options "--z3rlimit 25"
 val attacker_only_knows_publishable_values_aux:
