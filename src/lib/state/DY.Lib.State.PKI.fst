@@ -7,7 +7,7 @@ open DY.Lib.Comparse.Parsers
 open DY.Lib.State.Tagged
 open DY.Lib.State.Typed
 open DY.Lib.State.Map
-open DY.Lib.State.PrivateKeys
+open DY.Lib.State.PrivateKeys // is_public_key_for
 
 #set-options "--fuel 1 --ifuel 1"
 
@@ -61,8 +61,8 @@ val has_pki_invariant: {|protocol_invariants|} -> prop
 let has_pki_invariant #invs =
   has_map_session_invariant pki_pred
 
-val pki_tag_and_invariant: {|crypto_invariants|} -> string & local_bytes_state_predicate
-let pki_tag_and_invariant #ci = (map_types_pki.tag, local_state_predicate_to_local_bytes_state_predicate (map_session_invariant pki_pred))
+val pki_tag_and_invariant: {|crypto_invariants|} -> dtuple2 string local_bytes_state_predicate
+let pki_tag_and_invariant #ci = (|map_types_pki.tag, local_state_predicate_to_local_bytes_state_predicate (map_session_invariant pki_pred)|)
 
 (*** PKI API ***)
 

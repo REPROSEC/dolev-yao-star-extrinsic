@@ -19,10 +19,6 @@ let rec length tr =
   | Nil -> 0
   | Snoc init last -> length init + 1
 
-/// a type macro for timestamps (indices on the trace)
-
-type timestamp = nat
-
 (*** Prefix and trace_ extension ***)
 
 /// Compute the prefix of a trace.
@@ -280,12 +276,14 @@ let state_was_set #label_t tr prin sess_id content =
 
 /// Has a principal been corrupt?
 
-val was_corrupt:
+val state_was_corrupt:
   #label_t:Type ->
-  trace_ label_t -> principal -> state_id ->
+  trace_ label_t -> principal -> state_id -> bytes ->
   prop
-let was_corrupt #label_t tr prin sess_id =
-  event_exists tr (Corrupt prin sess_id)
+let state_was_corrupt tr prin sess_id content =
+  exists time.
+    event_exists tr (Corrupt time) /\
+    event_at tr time (SetState prin sess_id content)
 
 /// Has a (custom, protocol-specific) event been triggered at some timestamp?
 
@@ -419,7 +417,7 @@ let fmap_trace_event #a #b f ev =
   match ev with
   | MsgSent msg -> MsgSent msg
   | RandGen usg lab len -> RandGen usg (f lab) len
-  | Corrupt prin sess_id -> Corrupt prin sess_id
+  | Corrupt time -> Corrupt time
   | SetState prin sess_id content -> SetState prin sess_id content
   | Event prin tag content -> Event prin tag content
 

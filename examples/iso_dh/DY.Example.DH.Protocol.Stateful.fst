@@ -48,6 +48,14 @@ type dh_global_sess_ids = {
   private_keys: state_id;
 }
 
+(*** Labels used to generate randomness ***)
+
+val ephemeral_dh_key_label:
+  principal -> state_id ->
+  label
+let ephemeral_dh_key_label prin sess_id =
+  principal_tag_state_label prin "DH.Session" sess_id
+
 (*** Stateful code ***)
 
 // Alice prepares message 1
@@ -59,7 +67,7 @@ type dh_global_sess_ids = {
 val prepare_msg1: principal -> principal -> traceful state_id
 let prepare_msg1 alice bob =
   let* alice_si = new_session_id alice in
-  let* x = mk_rand (DhKey "DH.dh_key" empty) (principal_state_label alice alice_si) 32 in
+  let* x = mk_rand (DhKey "DH.dh_key" empty) (ephemeral_dh_key_label alice alice_si) 32 in
   trigger_event alice (Initiate1 alice bob x);*
   set_state alice alice_si (InitiatorSentMsg1 bob x <: dh_session);*
   return alice_si
@@ -80,7 +88,7 @@ let prepare_msg2 alice bob msg_id =
   let*? msg = recv_msg msg_id in
   let*? msg1: message1 = return (decode_message1 msg) in
   let* bob_si = new_session_id bob in
-  let* y = mk_rand (DhKey "DH.dh_key" empty) (principal_state_label bob bob_si) 32 in
+  let* y = mk_rand (DhKey "DH.dh_key" empty) (ephemeral_dh_key_label bob bob_si) 32 in
   trigger_event bob (Respond1 alice bob msg1.gx (dh_pk y) y);*
   set_state bob bob_si (ResponderSentMsg2 alice msg1.gx (dh_pk y) y <: dh_session);*
   return (Some bob_si)
@@ -92,7 +100,7 @@ let send_msg2 global_sess_id bob bob_si =
   guard_tr (ResponderSentMsg2? session_state);*?
   let ResponderSentMsg2 alice gx gy y = session_state in
   let*? sk_b = get_private_key bob global_sess_id.private_keys (LongTermSigKey "DH.SigningKey") in
-  let* n_sig = mk_rand SigNonce (principal_label bob) 32 in
+  let* n_sig = mk_rand SigNonce (long_term_key_label bob) 32 in
   let msg = compute_message2 alice bob gx gy sk_b n_sig in
   let* msg_id = send_msg msg in
   return (Some msg_id)
@@ -119,7 +127,7 @@ let send_msg3 global_sess_id alice bob alice_si =
   guard_tr (InitiatorSendMsg3? session_state);*?
   let InitiatorSendMsg3 bob gx gy x = session_state in
   let*? sk_a = get_private_key alice global_sess_id.private_keys (LongTermSigKey "DH.SigningKey") in
-  let* n_sig = mk_rand SigNonce (principal_label alice) 32 in
+  let* n_sig = mk_rand SigNonce (long_term_key_label alice) 32 in
   let msg = compute_message3 alice bob gx gy sk_a n_sig in
   let* msg_id = send_msg msg in
   return (Some msg_id)
