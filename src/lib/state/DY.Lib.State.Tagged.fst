@@ -41,6 +41,16 @@ val tagged_state_pred_label:
 let tagged_state_pred_label p =
   state_pred_label (compile_tagged_state_pred_label_input p)
 
+val tagged_state_was_corrupt:
+  trace ->
+  principal -> string -> state_id -> bytes ->
+  prop
+let tagged_state_was_corrupt tr prin tag sid content =
+  DY.Core.state_was_corrupt tr prin sid (serialize tagged_state {
+    tag;
+    content = content;
+  })
+
 // This lemma is useful to keep ifuel low
 // when reasoning on `tagged_state_pred_label`.
 val tagged_state_pred_label_input_allow_inversion:
@@ -57,6 +67,21 @@ val tagged_state_pred_label_input_allow_inversion:
 let tagged_state_pred_label_input_allow_inversion p1 p2 =
   allow_inversion (option tagged_state);
   allow_inversion (tagged_state)
+
+val tagged_state_pred_label_can_flow_public:
+  tr:trace ->
+  p:tagged_state_pred_label_input ->
+  Lemma (
+    tagged_state_pred_label p `can_flow tr` public
+    <==> (
+      exists prin tag sid content.
+        tagged_state_was_corrupt tr prin tag sid content /\
+        p prin tag sid content
+    )
+  )
+let tagged_state_pred_label_can_flow_public tr p =
+  FStar.Classical.forall_intro (FStar.Classical.move_requires (serialize_parse_inv_lemma #bytes tagged_state));
+  state_pred_label_can_flow_public tr (compile_tagged_state_pred_label_input p)
 
 val principal_tag_state_content_label_input:
   principal -> string -> state_id -> bytes ->

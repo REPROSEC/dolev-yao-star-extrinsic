@@ -310,7 +310,7 @@ val state_pred_label:
 let state_pred_label p = mk_label {
   is_corrupt = (fun tr ->
     exists prin sess_id content.
-      was_corrupt tr prin sess_id content /\
+      state_was_corrupt tr prin sess_id content /\
       p prin sess_id content
   );
   is_corrupt_later = (fun tr1 tr2 -> ());
@@ -342,11 +342,10 @@ val state_pred_label_can_flow_public:
     (state_pred_label p) `can_flow tr` public
     <==> (
       exists prin sess_id content.
-        was_corrupt tr prin sess_id content /\
+        state_was_corrupt tr prin sess_id content /\
         p prin sess_id content
     )
   )
-  [SMTPat ((state_pred_label p) `can_flow tr` public)]
 let state_pred_label_can_flow_public tr p =
   reveal_opaque (`%is_corrupt) is_corrupt;
   reveal_opaque (`%state_pred_label) (state_pred_label);

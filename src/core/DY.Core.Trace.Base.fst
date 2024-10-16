@@ -276,11 +276,11 @@ let state_was_set #label_t tr prin sess_id content =
 
 /// Has a principal been corrupt?
 
-val was_corrupt:
+val state_was_corrupt:
   #label_t:Type ->
   trace_ label_t -> principal -> state_id -> bytes ->
   prop
-let was_corrupt tr prin sess_id content =
+let state_was_corrupt tr prin sess_id content =
   exists time.
     event_exists tr (Corrupt time) /\
     event_at tr time (SetState prin sess_id content)

@@ -42,16 +42,13 @@ val typed_state_pred_label:
 let typed_state_pred_label p =
   tagged_state_pred_label (compile_typed_state_pred_label_input p)
 
-val was_corrupt:
+val state_was_corrupt:
   #a:Type0 -> {|parseable_serializeable bytes a|} ->
   trace ->
   principal -> string -> state_id -> a ->
   prop
-let was_corrupt #a #ps tr prin tag sid content =
-  DY.Core.was_corrupt tr prin sid (serialize tagged_state {
-    tag;
-    content = serialize a content;
-  })
+let state_was_corrupt #a #ps tr prin tag sid content =
+  tagged_state_was_corrupt tr prin tag sid (serialize a content)
 
 // This lemma is useful to keep ifuel low
 // when reasoning on `typed_state_pred_label`.
@@ -76,14 +73,14 @@ val typed_state_pred_label_can_flow_public:
     typed_state_pred_label p `can_flow tr` public
     <==> (
       exists prin tag sid content.
-        was_corrupt tr prin tag sid content /\
+        state_was_corrupt tr prin tag sid content /\
         p prin tag sid content
     )
   )
   [SMTPat (typed_state_pred_label p `can_flow tr` public)]
 let typed_state_pred_label_can_flow_public #a #ps tr p =
   FStar.Classical.forall_intro (FStar.Classical.move_requires (serialize_parse_inv_lemma #bytes a));
-  FStar.Classical.forall_intro (FStar.Classical.move_requires (serialize_parse_inv_lemma #bytes tagged_state))
+  tagged_state_pred_label_can_flow_public tr (compile_typed_state_pred_label_input p)
 
 val principal_typed_state_content_label_input:
   #a:Type0 -> {|parseable_serializeable bytes a|} ->
