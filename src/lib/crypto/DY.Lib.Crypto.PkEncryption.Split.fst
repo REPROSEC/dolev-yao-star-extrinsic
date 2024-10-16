@@ -5,7 +5,7 @@ open DY.Core
 open DY.Lib.Crypto.SplitPredicate
 
 let split_pkenc_predicate_params {|crypto_usages|}: split_crypto_predicate_parameters = {
-  key_t = sk_usage:usage{PkKey? sk_usage};
+  key_usage_t = sk_usage:usage{PkKey? sk_usage};
   data_t = bytes;
   get_usage = (fun sk_usage ->
     let PkKey tag _ = sk_usage in

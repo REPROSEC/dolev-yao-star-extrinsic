@@ -12,26 +12,25 @@ open DY.Lib.SplitFunction
 
 noeq
 type split_crypto_predicate_parameters = {
-  // TODO should be renamed in `key_usage_t`?
-  key_t: Type;
+  key_usage_t: Type;
   data_t: Type;
-  get_usage: key_t -> string;
+  get_usage: key_usage_t -> string;
 
   local_pred_t: Type;
   global_pred_t: Type;
 
-  apply_local_pred: local_pred_t -> (trace & key_t & data_t) -> prop;
-  apply_global_pred: global_pred_t -> (trace & key_t & data_t) -> prop;
-  mk_global_pred: ((trace & key_t & data_t) -> prop) -> global_pred_t;
+  apply_local_pred: local_pred_t -> (trace & key_usage_t & data_t) -> prop;
+  apply_global_pred: global_pred_t -> (trace & key_usage_t & data_t) -> prop;
+  mk_global_pred: ((trace & key_usage_t & data_t) -> prop) -> global_pred_t;
 
-  key_and_data_well_formed: trace -> key_t -> data_t -> prop;
+  key_and_data_well_formed: trace -> key_usage_t -> data_t -> prop;
 
-  apply_mk_global_pred: bare:((trace & key_t & data_t) -> prop) -> x:(trace & key_t & data_t) -> Lemma
+  apply_mk_global_pred: bare:((trace & key_usage_t & data_t) -> prop) -> x:(trace & key_usage_t & data_t) -> Lemma
     (apply_global_pred (mk_global_pred bare) x == bare x);
   apply_local_pred_later:
     lpred: local_pred_t ->
     tr1:trace -> tr2:trace ->
-    key:key_t -> data:data_t ->
+    key:key_usage_t -> data:data_t ->
     Lemma
     (requires
       apply_local_pred lpred (tr1, key, data) /\
@@ -47,8 +46,8 @@ let always_false #a x = False
 let split_crypto_predicate_parameters_to_split_function_parameters (params:split_crypto_predicate_parameters): split_function_parameters = {
   singleton_split_function_parameters string with
 
-  tagged_data_t = (trace & params.key_t & params.data_t);
-  raw_data_t = (trace & params.key_t & params.data_t);
+  tagged_data_t = (trace & params.key_usage_t & params.data_t);
+  raw_data_t = (trace & params.key_usage_t & params.data_t);
   output_t = prop;
 
   decode_tagged_data = (fun (tr, key, data) ->
@@ -77,7 +76,7 @@ let has_local_crypto_predicate params global_pred (tag, local_pred) =
 val has_local_crypto_predicate_elim:
   params:split_crypto_predicate_parameters ->
   global_pred:params.global_pred_t -> tag:string -> local_pred:params.local_pred_t ->
-  tr:trace -> key:params.key_t -> data:params.data_t ->
+  tr:trace -> key:params.key_usage_t -> data:params.data_t ->
   Lemma
   (requires has_local_crypto_predicate params global_pred (tag, local_pred))
   (ensures
@@ -97,7 +96,7 @@ val mk_global_crypto_predicate_later:
   params:split_crypto_predicate_parameters ->
   tagged_local_preds:list (string & params.local_pred_t) ->
   tr1:trace -> tr2:trace ->
-  key:params.key_t -> data:params.data_t ->
+  key:params.key_usage_t -> data:params.data_t ->
   Lemma
   (requires
     params.apply_global_pred (mk_global_crypto_predicate params tagged_local_preds) (tr1, key, data) /\

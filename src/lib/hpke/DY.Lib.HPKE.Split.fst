@@ -6,7 +6,7 @@ open DY.Lib.Crypto.SplitPredicate
 open DY.Lib.HPKE.Lemmas
 
 let split_hpke_predicate_params {|crypto_usages|}: split_crypto_predicate_parameters = {
-  key_t = (string & bytes);
+  key_usage_t = (string & bytes);
   data_t = bytes & bytes & bytes;
   get_usage = (fun (usage_tag, usage_data) ->
     usage_tag

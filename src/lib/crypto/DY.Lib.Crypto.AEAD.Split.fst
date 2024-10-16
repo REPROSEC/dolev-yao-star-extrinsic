@@ -5,7 +5,7 @@ open DY.Core
 open DY.Lib.Crypto.SplitPredicate
 
 let split_aead_predicate_params {|crypto_usages|}: split_crypto_predicate_parameters = {
-  key_t = key_usage:usage{AeadKey? key_usage};
+  key_usage_t = key_usage:usage{AeadKey? key_usage};
   data_t = (bytes & bytes & bytes);
   get_usage = (fun key_usage ->
     let AeadKey tag _ = key_usage in
