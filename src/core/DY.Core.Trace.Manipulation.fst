@@ -320,6 +320,21 @@ let mk_rand_has_usage #invs usg lab len tr =
   normalize_term_spec mk_rand;
   normalize_term_spec has_usage
 
+// Stronger version of the lemma above, if needed
+val mk_rand_get_usage:
+  {|protocol_invariants|} ->
+  usg:usage -> lab:label -> len:nat{len <> 0} -> tr:trace ->
+  Lemma
+  (ensures (
+    let (b, tr_out) = mk_rand usg lab len tr in
+    get_usage tr_out b == usg
+  ))
+  [SMTPat (mk_rand usg lab len tr); SMTPat (trace_invariant tr)]
+let mk_rand_get_usage #invs usg lab len tr =
+  reveal_opaque (`%mk_rand) (mk_rand);
+  normalize_term_spec get_usage
+
+
 (*** State ***)
 
 /// Set the state of a principal at a given state identifier.
