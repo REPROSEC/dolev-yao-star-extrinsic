@@ -25,7 +25,7 @@ let split_aead_predicate_params {|crypto_usages|}: split_crypto_predicate_parame
     pred (tr, key_usage, (nonce, msg, ad))
   );
 
-  key_and_data_well_formed = (fun tr key_usage (nonce, msg, ad) ->
+  data_well_formed = (fun tr (nonce, msg, ad) ->
     bytes_well_formed tr nonce /\
     bytes_well_formed tr msg /\
     bytes_well_formed tr ad
@@ -73,7 +73,7 @@ val mk_aead_predicate:
   aead_crypto_predicate
 let mk_aead_predicate #cusgs l = {
   pred = mk_global_crypto_predicate split_aead_predicate_params l;
-  pred_later = (fun tr1 tr2 key nonce msg ad -> mk_global_crypto_predicate_later split_aead_predicate_params l tr1 tr2 key (nonce, msg, ad));
+  pred_later = (fun tr1 tr2 key_usg nonce msg ad -> mk_global_crypto_predicate_later split_aead_predicate_params l tr1 tr2 key_usg (nonce, msg, ad));
 }
 
 val mk_aead_predicate_correct:

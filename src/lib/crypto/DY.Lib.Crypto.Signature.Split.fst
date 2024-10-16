@@ -25,7 +25,7 @@ let split_sign_predicate_params {|crypto_usages|}: split_crypto_predicate_parame
     pred (tr, sk_usage, msg)
   );
 
-  key_and_data_well_formed = (fun tr sk_usage msg ->
+  data_well_formed = (fun tr msg ->
     bytes_well_formed tr msg
   );
 
