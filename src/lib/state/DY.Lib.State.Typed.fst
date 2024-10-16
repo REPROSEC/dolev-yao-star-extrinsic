@@ -19,11 +19,17 @@ let mk_local_state_instance #a #format tag = {
   format;
 }
 
-val typed_state_pred_label_pred:
+val typed_state_pred_label_input:
+  a:Type0 ->
+  Type u#1
+let typed_state_pred_label_input a =
+  principal -> string -> state_id -> a -> prop
+
+val compile_typed_state_pred_label_input:
   #a:Type0 -> {|parseable_serializeable bytes a|} ->
-  (principal -> string -> state_id -> a -> prop) ->
-  (principal -> string -> state_id -> bytes -> prop)
-let typed_state_pred_label_pred #a #ps_a p prin sess_id tag content =
+  typed_state_pred_label_input a ->
+  tagged_state_pred_label_input
+let compile_typed_state_pred_label_input #a #ps_a p prin sess_id tag content =
   match parse a content with
   | None -> False
   | Some parsed_content ->
@@ -31,10 +37,10 @@ let typed_state_pred_label_pred #a #ps_a p prin sess_id tag content =
 
 val typed_state_pred_label:
   #a:Type0 -> {|parseable_serializeable bytes a|} ->
-  (principal -> string -> state_id -> a -> prop) ->
+  typed_state_pred_label_input a ->
   label
 let typed_state_pred_label p =
-  tagged_state_pred_label (typed_state_pred_label_pred p)
+  tagged_state_pred_label (compile_typed_state_pred_label_input p)
 
 val was_corrupt:
   #a:Type0 -> {|parseable_serializeable bytes a|} ->
@@ -49,23 +55,23 @@ let was_corrupt #a #ps tr prin tag sid content =
 
 // This lemma is useful to keep ifuel low
 // when reasoning on `typed_state_pred_label`.
-val typed_state_pred_label_pred_allow_inversion:
+val typed_state_pred_label_input_allow_inversion:
   #a:Type0 -> {|parseable_serializeable bytes a|} ->
-  p1:(principal -> string -> state_id -> a -> prop) ->
-  p2:(principal -> state_id -> bytes -> prop) ->
+  p1:typed_state_pred_label_input a ->
+  p2:state_pred_label_input ->
   Lemma
   (inversion (option a))
   [SMTPatOr [
-    [SMTPat (state_pred_label_pred_can_flow p2 (tagged_state_pred_label_pred (typed_state_pred_label_pred p1)))];
-    [SMTPat (state_pred_label_pred_can_flow (tagged_state_pred_label_pred (typed_state_pred_label_pred p1)) p2)];
+    [SMTPat (state_pred_label_input_can_flow p2 (compile_tagged_state_pred_label_input (compile_typed_state_pred_label_input p1)))];
+    [SMTPat (state_pred_label_input_can_flow (compile_tagged_state_pred_label_input (compile_typed_state_pred_label_input p1)) p2)];
   ]]
-let typed_state_pred_label_pred_allow_inversion #a #ps_a p1 p2 =
+let typed_state_pred_label_input_allow_inversion #a #ps_a p1 p2 =
   allow_inversion (option a)
 
 val typed_state_pred_label_can_flow_public:
   #a:Type0 -> {|parseable_serializeable bytes a|} ->
   tr:trace ->
-  p:(principal -> string -> state_id -> a -> prop) ->
+  p:typed_state_pred_label_input a ->
   Lemma (
     typed_state_pred_label p `can_flow tr` public
     <==> (
@@ -79,22 +85,23 @@ let typed_state_pred_label_can_flow_public #a #ps tr p =
   FStar.Classical.forall_intro (FStar.Classical.move_requires (serialize_parse_inv_lemma #bytes a));
   FStar.Classical.forall_intro (FStar.Classical.move_requires (serialize_parse_inv_lemma #bytes tagged_state))
 
-val principal_typed_state_content_label_pred:
+val principal_typed_state_content_label_input:
   #a:Type0 -> {|parseable_serializeable bytes a|} ->
   principal -> string -> state_id -> a ->
-  principal -> string -> state_id -> a -> prop
-let principal_typed_state_content_label_pred #a #ps_a prin1 tag1 sess_id1 content1 prin2 tag2 sess_id2 content2 =
-  prin1 == prin2 /\
-  tag1 == tag2 /\
-  sess_id1 == sess_id2 /\
-  content1 == content2
+  typed_state_pred_label_input a
+let principal_typed_state_content_label_input #a #ps_a prin1 tag1 sess_id1 content1 =
+  fun prin2 tag2 sess_id2 content2 ->
+    prin1 == prin2 /\
+    tag1 == tag2 /\
+    sess_id1 == sess_id2 /\
+    content1 == content2
 
 val principal_typed_state_content_label:
   #a:Type0 -> {|parseable_serializeable bytes a|} ->
   principal -> string -> state_id -> a ->
   label
 let principal_typed_state_content_label prin tag sess_id content =
-  typed_state_pred_label (principal_typed_state_content_label_pred prin tag sess_id content)
+  typed_state_pred_label (principal_typed_state_content_label_input prin tag sess_id content)
 
 noeq
 type local_state_predicate {|crypto_invariants|} (a:Type) {|local_state a|} = {

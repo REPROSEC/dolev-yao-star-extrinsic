@@ -299,9 +299,13 @@ let join_flow_to_public_eq tr x1 x2 =
 /// It can for example be used to depict any state of a principal
 /// (e.g. as done by `principal_label`)
 
+val state_pred_label_input: Type u#1
+let state_pred_label_input =
+  principal -> state_id -> bytes -> prop
+
 [@@"opaque_to_smt"]
 val state_pred_label:
-  (principal -> state_id -> bytes -> prop) ->
+  state_pred_label_input ->
   label
 let state_pred_label p = mk_label {
   is_corrupt = (fun tr ->
@@ -312,18 +316,18 @@ let state_pred_label p = mk_label {
   is_corrupt_later = (fun tr1 tr2 -> ());
 }
 
-val state_pred_label_pred_can_flow:
-  (principal -> state_id -> bytes -> prop) ->
-  (principal -> state_id -> bytes -> prop) ->
+val state_pred_label_input_can_flow:
+  state_pred_label_input ->
+  state_pred_label_input ->
   prop
-let state_pred_label_pred_can_flow p1 p2 =
+let state_pred_label_input_can_flow p1 p2 =
   forall p s c. p2 p s c ==> p1 p s c
 
 val state_pred_label_can_flow_state_pred_label:
   tr:trace ->
-  p1:(principal -> state_id -> bytes -> prop) -> p2:(principal -> state_id -> bytes -> prop) ->
+  p1:state_pred_label_input -> p2:state_pred_label_input ->
   Lemma
-  (requires state_pred_label_pred_can_flow p1 p2)
+  (requires state_pred_label_input_can_flow p1 p2)
   (ensures state_pred_label p1 `can_flow tr` state_pred_label p2)
   [SMTPat (state_pred_label p1 `can_flow tr` state_pred_label p2)]
 let state_pred_label_can_flow_state_pred_label tr p1 p2 =
@@ -333,7 +337,7 @@ let state_pred_label_can_flow_state_pred_label tr p1 p2 =
 
 val state_pred_label_can_flow_public:
   tr:trace ->
-  p:(principal -> state_id -> bytes -> prop) ->
+  p:state_pred_label_input ->
   Lemma (
     (state_pred_label p) `can_flow tr` public
     <==> (
@@ -349,35 +353,38 @@ let state_pred_label_can_flow_public tr p =
   FStar.Classical.forall_intro (FStar.Classical.move_requires (event_exists_fmap_trace_eq forget_label tr));
   FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (event_at_fmap_trace_eq forget_label tr))
 
-val principal_label_pred:
+val principal_label_input:
   principal ->
-  principal -> state_id -> bytes -> prop
-let principal_label_pred prin1 prin2 _ _ =
-  prin1 == prin2
+  state_pred_label_input
+let principal_label_input prin1 =
+  fun prin2 _ _ ->
+    prin1 == prin2
 
 val principal_label: principal -> label
 let principal_label prin =
-  state_pred_label (principal_label_pred prin)
+  state_pred_label (principal_label_input prin)
 
-val principal_state_label_pred:
+val principal_state_label_input:
   principal -> state_id ->
-  principal -> state_id -> bytes -> prop
-let principal_state_label_pred prin1 sess_id1 prin2 sess_id2 _ =
-  prin1 == prin2 /\
-  sess_id1 == sess_id2
+  state_pred_label_input
+let principal_state_label_input prin1 sess_id1 =
+  fun prin2 sess_id2 _ ->
+    prin1 == prin2 /\
+    sess_id1 == sess_id2
 
 val principal_state_label: principal -> state_id -> label
 let principal_state_label prin sess_id =
-  state_pred_label (principal_state_label_pred prin sess_id)
+  state_pred_label (principal_state_label_input prin sess_id)
 
-val principal_state_content_label_pred:
+val principal_state_content_label_input:
   principal -> state_id -> bytes ->
-  principal -> state_id -> bytes -> prop
-let principal_state_content_label_pred prin1 sess_id1 content1 prin2 sess_id2 content2 =
-  prin1 == prin2 /\
-  sess_id1 == sess_id2 /\
-  content1 == content2
+  state_pred_label_input
+let principal_state_content_label_input prin1 sess_id1 content1 =
+  fun prin2 sess_id2 content2 ->
+    prin1 == prin2 /\
+    sess_id1 == sess_id2 /\
+    content1 == content2
 
 val principal_state_content_label: principal -> state_id -> bytes -> label
 let principal_state_content_label prin sess_id content =
-  state_pred_label (principal_state_content_label_pred prin sess_id content)
+  state_pred_label (principal_state_content_label_input prin sess_id content)

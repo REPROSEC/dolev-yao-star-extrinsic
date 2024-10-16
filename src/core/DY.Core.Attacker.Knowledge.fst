@@ -200,12 +200,7 @@ val corrupted_state_is_publishable:
   )
   (ensures is_publishable tr content)
 let corrupted_state_is_publishable #invs tr prin sess_id content =
-  eliminate exists time. event_exists tr (Corrupt time) /\ event_at tr time (SetState prin sess_id content)
-  returns is_publishable tr content
-  with _. (
-    state_is_knowable_by tr prin sess_id content;
-    state_pred_label_can_flow_public tr (principal_state_content_label_pred prin sess_id content)
-  )
+  state_is_knowable_by tr prin sess_id content
 
 #push-options "--z3rlimit 25"
 val attacker_only_knows_publishable_values_aux:

@@ -22,73 +22,80 @@ type tagged_state = {
 
 instance parseable_serializeable_bytes_tagged_state: parseable_serializeable bytes tagged_state = mk_parseable_serializeable (ps_tagged_state)
 
-val tagged_state_pred_label_pred:
-  (principal -> string -> state_id -> bytes -> prop) ->
-  (principal -> state_id -> bytes -> prop)
-let tagged_state_pred_label_pred p prin sess_id full_content =
+val tagged_state_pred_label_input: Type u#1
+let tagged_state_pred_label_input =
+  principal -> string -> state_id -> bytes -> prop
+
+val compile_tagged_state_pred_label_input:
+  tagged_state_pred_label_input ->
+  state_pred_label_input
+let compile_tagged_state_pred_label_input p prin sess_id full_content =
   match parse tagged_state full_content with
   | None -> False
   | Some {tag; content} ->
     p prin tag sess_id content
 
 val tagged_state_pred_label:
-  (principal -> string -> state_id -> bytes -> prop) ->
+  tagged_state_pred_label_input ->
   label
 let tagged_state_pred_label p =
-  state_pred_label (tagged_state_pred_label_pred p)
+  state_pred_label (compile_tagged_state_pred_label_input p)
 
 // This lemma is useful to keep ifuel low
 // when reasoning on `tagged_state_pred_label`.
-val tagged_state_pred_label_pred_allow_inversion:
-  p1:(principal -> string -> state_id -> bytes -> prop) ->
-  p2:(principal -> state_id -> bytes -> prop) ->
+val tagged_state_pred_label_input_allow_inversion:
+  p1:tagged_state_pred_label_input ->
+  p2:state_pred_label_input ->
   Lemma (
     inversion (option tagged_state) /\
     inversion tagged_state
   )
   [SMTPatOr [
-    [SMTPat (state_pred_label_pred_can_flow p2 (tagged_state_pred_label_pred p1))];
-    [SMTPat (state_pred_label_pred_can_flow (tagged_state_pred_label_pred p1) p2)];
+    [SMTPat (state_pred_label_input_can_flow p2 (compile_tagged_state_pred_label_input p1))];
+    [SMTPat (state_pred_label_input_can_flow (compile_tagged_state_pred_label_input p1) p2)];
   ]]
-let tagged_state_pred_label_pred_allow_inversion p1 p2 =
+let tagged_state_pred_label_input_allow_inversion p1 p2 =
   allow_inversion (option tagged_state);
   allow_inversion (tagged_state)
 
-val principal_tag_state_content_label_pred:
+val principal_tag_state_content_label_input:
   principal -> string -> state_id -> bytes ->
-  principal -> string -> state_id -> bytes -> prop
-let principal_tag_state_content_label_pred prin1 sess_id1 tag1 content1 prin2 sess_id2 tag2 content2 =
-  prin1 == prin2 /\
-  sess_id1 == sess_id2 /\
-  tag1 == tag2 /\
-  content1 == content2
+  tagged_state_pred_label_input
+let principal_tag_state_content_label_input prin1 sess_id1 tag1 content1 =
+  fun prin2 sess_id2 tag2 content2 ->
+    prin1 == prin2 /\
+    sess_id1 == sess_id2 /\
+    tag1 == tag2 /\
+    content1 == content2
 
 val principal_tag_state_content_label: principal -> string -> state_id -> bytes -> label
 let principal_tag_state_content_label prin tag sess_id content =
-  tagged_state_pred_label (principal_tag_state_content_label_pred prin tag sess_id content)
+  tagged_state_pred_label (principal_tag_state_content_label_input prin tag sess_id content)
 
-val principal_tag_state_label_pred:
-  principal -> string ->state_id ->
-  principal -> string -> state_id -> bytes -> prop
-let principal_tag_state_label_pred prin1 tag1 sess_id1 prin2 tag2 sess_id2 _ =
-  prin1 == prin2 /\
-  tag1 == tag2 /\
-  sess_id1 == sess_id2
+val principal_tag_state_label_input:
+  principal -> string -> state_id ->
+  tagged_state_pred_label_input
+let principal_tag_state_label_input prin1 tag1 sess_id1 =
+  fun prin2 tag2 sess_id2 _ ->
+    prin1 == prin2 /\
+    tag1 == tag2 /\
+    sess_id1 == sess_id2
 
 val principal_tag_state_label: principal -> string -> state_id -> label
 let principal_tag_state_label prin tag sess_id =
-  tagged_state_pred_label (principal_tag_state_label_pred prin tag sess_id)
+  tagged_state_pred_label (principal_tag_state_label_input prin tag sess_id)
 
-val principal_tag_label_pred:
+val principal_tag_label_input:
   principal -> string ->
-  principal -> string -> state_id -> bytes -> prop
-let principal_tag_label_pred prin1 tag1 prin2 tag2 _ _ =
-  prin1 == prin2 /\
-  tag1 == tag2
+  tagged_state_pred_label_input
+let principal_tag_label_input prin1 tag1 =
+  fun prin2 tag2 _ _ ->
+    prin1 == prin2 /\
+    tag1 == tag2
 
 val principal_tag_label: principal -> string -> label
 let principal_tag_label prin tag =
-  tagged_state_pred_label (principal_tag_label_pred prin tag)
+  tagged_state_pred_label (principal_tag_label_input prin tag)
 
 noeq
 type local_bytes_state_predicate {|crypto_invariants|} (tag:string) = {
