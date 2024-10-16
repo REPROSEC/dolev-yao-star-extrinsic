@@ -30,11 +30,12 @@ val initiator_authentication:
     trace_invariant tr
   )
   (ensures
-    is_corrupt (prefix tr i) (nsl_nonce_label alice) \/
-    is_corrupt (prefix tr i) (nsl_nonce_label bob) \/
+    is_corrupt (prefix tr i) (principal_label alice) \/
+    is_corrupt (prefix tr i) (principal_label bob) \/
     event_triggered (prefix tr i) alice (Initiate2 alice bob n_a n_b)
   )
-let initiator_authentication tr i alice bob n_a n_b = ()
+let initiator_authentication tr i alice bob n_a n_b =
+  flow_to_public_eq (prefix tr i) (nsl_nonce_label alice bob)
 
 /// If Alice thinks she talks with Bob,
 /// then Bob thinks he talk to Alice (with the same nonces),
@@ -49,11 +50,12 @@ val responder_authentication:
     trace_invariant tr
   )
   (ensures
-    is_corrupt (prefix tr i) (nsl_nonce_label alice) \/
-    is_corrupt (prefix tr i) (nsl_nonce_label bob) \/
+    is_corrupt (prefix tr i) (principal_label alice) \/
+    is_corrupt (prefix tr i) (principal_label bob) \/
     event_triggered (prefix tr i) bob (Respond1 alice bob n_a n_b)
   )
-let responder_authentication tr i alice bob n_a n_b = ()
+let responder_authentication tr i alice bob n_a n_b =
+  flow_to_public_eq (prefix tr i) (nsl_nonce_label alice bob)
 
 /// The nonce n_a is unknown to the attacker,
 /// unless the attacker corrupted Alice or Bob.
@@ -69,8 +71,9 @@ val n_a_secrecy:
       (exists sess_id n_b. state_was_set tr bob sess_id (ResponderReceivedMsg3 alice n_a n_b))
     )
   )
-  (ensures is_corrupt tr (nsl_nonce_label alice) \/ is_corrupt tr (nsl_nonce_label bob))
+  (ensures is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob))
 let n_a_secrecy tr alice bob n_a =
+  flow_to_public_eq tr (nsl_nonce_label alice bob);
   attacker_only_knows_publishable_values tr n_a
 
 /// The nonce n_b is unknown to the attacker,
@@ -87,6 +90,7 @@ val n_b_secrecy:
       (exists sess_id n_a. state_was_set tr alice sess_id (InitiatorSentMsg3 bob n_a n_b))
     )
   )
-  (ensures is_corrupt tr (nsl_nonce_label alice) \/ is_corrupt tr (nsl_nonce_label bob))
+  (ensures is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob))
 let n_b_secrecy tr alice bob n_b =
+  flow_to_public_eq tr (nsl_nonce_label alice bob);
   attacker_only_knows_publishable_values tr n_b

@@ -21,25 +21,25 @@ let state_predicate_nsl: local_state_predicate nsl_session = {
     match st with
     | InitiatorSentMsg1 bob n_a -> (
       let alice = prin in
-      is_knowable_by (join (nsl_nonce_label alice) (nsl_nonce_label bob)) tr n_a /\
+      is_knowable_by (nsl_nonce_label alice bob) tr n_a /\
       event_triggered tr alice (Initiate1 alice bob n_a)
     )
     | ResponderSentMsg2 alice n_a n_b -> (
       let bob = prin in
-      is_knowable_by (join (nsl_nonce_label alice) (nsl_nonce_label bob)) tr n_a /\
-      is_knowable_by (join (nsl_nonce_label alice) (nsl_nonce_label bob)) tr n_b /\
+      is_knowable_by (nsl_nonce_label alice bob) tr n_a /\
+      is_knowable_by (nsl_nonce_label alice bob) tr n_b /\
       event_triggered tr bob (Respond1 alice bob n_a n_b)
     )
     | InitiatorSentMsg3 bob n_a n_b  -> (
       let alice = prin in
-      is_knowable_by (join (nsl_nonce_label alice) (nsl_nonce_label bob)) tr n_a /\
-      is_knowable_by (join (nsl_nonce_label alice) (nsl_nonce_label bob)) tr n_b /\
+      is_knowable_by (nsl_nonce_label alice bob) tr n_a /\
+      is_knowable_by (nsl_nonce_label alice bob) tr n_b /\
       event_triggered tr alice (Initiate2 alice bob n_a n_b)
     )
     | ResponderReceivedMsg3 alice n_a n_b -> (
       let bob = prin in
-      is_knowable_by (join (nsl_nonce_label alice) (nsl_nonce_label bob)) tr n_a /\
-      is_knowable_by (join (nsl_nonce_label alice) (nsl_nonce_label bob)) tr n_b /\
+      is_knowable_by (nsl_nonce_label alice bob) tr n_a /\
+      is_knowable_by (nsl_nonce_label alice bob) tr n_b /\
       event_triggered tr bob (Respond2 alice bob n_a n_b)
     )
   );
@@ -54,27 +54,27 @@ let event_predicate_nsl: event_predicate nsl_event =
     match e with
     | Initiate1 alice bob n_a -> (
       prin == alice /\
-      is_secret (join (nsl_nonce_label alice) (nsl_nonce_label bob)) tr n_a /\
+      is_secret (nsl_nonce_label alice bob) tr n_a /\
       0 < DY.Core.Trace.Base.length tr /\
       rand_generated_at tr (DY.Core.Trace.Base.length tr - 1) n_a
     )
     | Respond1 alice bob n_a n_b -> (
       prin == bob /\
-      is_secret (join (nsl_nonce_label alice) (nsl_nonce_label bob)) tr n_b /\
+      is_secret (nsl_nonce_label alice bob) tr n_b /\
       0 < DY.Core.Trace.Base.length tr /\
       rand_generated_at tr (DY.Core.Trace.Base.length tr - 1) n_b
     )
     | Initiate2 alice bob n_a n_b -> (
       prin == alice /\
       event_triggered tr alice (Initiate1 alice bob n_a) /\ (
-        is_corrupt tr (nsl_nonce_label alice) \/ is_corrupt tr (nsl_nonce_label bob) \/
+        is_corrupt tr (nsl_nonce_label alice bob) \/
         event_triggered tr bob (Respond1 alice bob n_a n_b)
       )
     )
     | Respond2 alice bob n_a n_b -> (
       prin == bob /\
       event_triggered tr bob (Respond1 alice bob n_a n_b) /\ (
-        is_corrupt tr (nsl_nonce_label alice) \/ is_corrupt tr (nsl_nonce_label bob) \/
+        is_corrupt tr (nsl_nonce_label alice bob) \/
         event_triggered tr alice (Initiate2 alice bob n_a n_b)
       )
     )
@@ -304,7 +304,7 @@ let prepare_msg4 tr global_sess_id bob sess_id msg_id =
         | Some msg3 -> (
           // From the decode_message3 proof, we get the following fact:
           // exists alice' n_a'.
-          //   get_label n_b `can_flow tr` (nsl_nonce_label alice') /\
+          //   get_label n_b `can_flow tr` (nsl_nonce_label alice' bob) /\
           //   event_triggered tr alice' nsl_event_tag (serialize nsl_event (Initiate2 alice' bob n_a' n_b))
           // We want to obtain the same fact, with the actual n_a (not the one from the exists, n_a'),
           // and the actual alice!
@@ -317,11 +317,11 @@ let prepare_msg4 tr global_sess_id bob sess_id msg_id =
           // principal_corrupt tr alice' \/ principal_corrupt tr bob
           // then
           // principal_corrupt tr alice \/ principal_corrupt tr bob
-          // because we know the label of n_b (which is (join (nsl_nonce_label alice) (nsl_nonce_label bob))).
+          // because we know the label of n_b (which is (nsl_nonce_label alice bob)).
           // It is useful in the "modulo corruption" part of the proof.
-          introduce (~((join (nsl_nonce_label alice) (nsl_nonce_label bob)) `can_flow tr` public)) ==> event_triggered tr alice (Initiate2 alice bob n_a n_b) with _. (
-            assert(exists alice' n_a'. get_label tr n_b `can_flow tr` (nsl_nonce_label alice') /\ event_triggered tr alice' (Initiate2 alice' bob n_a' n_b));
-            eliminate exists alice' n_a'. get_label tr n_b `can_flow tr` (nsl_nonce_label alice') /\ event_triggered tr alice' (Initiate2 alice' bob n_a' n_b)
+          introduce (~((nsl_nonce_label alice bob) `can_flow tr` public)) ==> event_triggered tr alice (Initiate2 alice bob n_a n_b) with _. (
+            assert(exists alice' n_a'. get_label tr n_b `can_flow tr` (nsl_nonce_label alice' bob) /\ event_triggered tr alice' (Initiate2 alice' bob n_a' n_b));
+            eliminate exists alice' n_a'. get_label tr n_b `can_flow tr` (nsl_nonce_label alice' bob) /\ event_triggered tr alice' (Initiate2 alice' bob n_a' n_b)
             returns _
             with _. (
               event_respond1_injective tr alice alice' bob n_a n_a' n_b
