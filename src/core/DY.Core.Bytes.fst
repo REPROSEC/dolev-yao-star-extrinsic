@@ -1927,7 +1927,7 @@ val bytes_invariant_pk_dec:
           PkKey? sk_usg /\
           pkenc_pred.pred tr sk_usg plaintext
         ) \/ (
-          is_publishable tr plaintext
+          (get_label tr plaintext) `can_flow tr` public
         )
       )
   ))
