@@ -1910,11 +1910,12 @@ let get_label_pk_enc #cusages tr pk nonce msg =
 #push-options "--z3rlimit 25"
 val bytes_invariant_pk_dec:
   {|crypto_invariants|} -> tr:trace ->
-  sk:bytes -> msg:bytes ->
+  sk:bytes -> sk_usg:usage -> msg:bytes ->
   Lemma
   (requires
     bytes_invariant tr sk /\
-    bytes_invariant tr msg
+    bytes_invariant tr msg /\
+    sk `has_usage tr` sk_usg
   )
   (ensures (
     match pk_dec sk msg with
@@ -1923,17 +1924,18 @@ val bytes_invariant_pk_dec:
       is_knowable_by (get_label tr sk) tr plaintext /\
       (
         (
-          forall sk_usg.
-          sk `has_usage tr` sk_usg /\
-          PkKey? sk_usg ==>
+          PkKey? sk_usg /\
           pkenc_pred.pred tr sk_usg plaintext
         ) \/ (
           is_publishable tr plaintext
         )
       )
   ))
-  [SMTPat (pk_dec sk msg); SMTPat (bytes_invariant tr msg)]
-let bytes_invariant_pk_dec #cinvs tr sk msg =
+  [SMTPat (pk_dec sk msg);
+   SMTPat (bytes_invariant tr msg);
+   SMTPat (sk `has_usage tr` sk_usg)
+  ]
+let bytes_invariant_pk_dec #cinvs tr sk sk_usg msg =
   normalize_term_spec pk_dec;
   normalize_term_spec pk;
   normalize_term_spec get_sk_label;
@@ -2139,26 +2141,28 @@ let get_label_sign #cusages tr sk nonce msg =
 
 val bytes_invariant_verify:
   {|crypto_invariants|} -> tr:trace ->
-  vk:bytes -> msg:bytes -> signature:bytes ->
+  vk:bytes -> sk_usg:usage -> msg:bytes -> signature:bytes ->
   Lemma
   (requires
     bytes_invariant tr vk /\
     bytes_invariant tr msg /\
     bytes_invariant tr signature /\
+    vk `has_signkey_usage tr` sk_usg /\
     verify vk msg signature
   )
   (ensures
     (
-      forall sk_usg.
-      vk `has_signkey_usage tr` sk_usg /\
       SigKey? sk_usg ==>
       sign_pred.pred tr sk_usg msg
     ) \/ (
       (get_signkey_label tr vk) `can_flow tr` public
     )
   )
-  [SMTPat (verify vk msg signature); SMTPat (bytes_invariant tr signature)]
-let bytes_invariant_verify #cinvs tr vkey msg signature =
+  [SMTPat (verify vk msg signature);
+   SMTPat (bytes_invariant tr signature);
+   SMTPat (vk `has_signkey_usage tr` sk_usg)
+  ]
+let bytes_invariant_verify #cinvs tr vkey sk_usg msg signature =
   normalize_term_spec verify;
   normalize_term_spec get_signkey_label;
   normalize_term_spec bytes_invariant;
