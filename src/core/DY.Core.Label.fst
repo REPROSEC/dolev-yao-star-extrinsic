@@ -1,6 +1,7 @@
 module DY.Core.Label
 
 open DY.Core.Label.Type
+open DY.Core.Bytes.Type
 open DY.Core.Trace.Type
 open DY.Core.Trace.Base
 
@@ -184,20 +185,6 @@ let join l1 l2 = mk_label {
   );
 }
 
-[@@"opaque_to_smt"]
-val principal_label: principal -> label
-let principal_label prin = mk_label {
-  is_corrupt = (fun tr -> exists sess_id. was_corrupt tr prin sess_id);
-  is_corrupt_later = (fun tr1 tr2 -> ());
-}
-
-[@@"opaque_to_smt"]
-val principal_state_label: principal -> state_id -> label
-let principal_state_label prin sess_id = mk_label {
-  is_corrupt = (fun tr -> was_corrupt tr prin sess_id);
-  is_corrupt_later = (fun tr1 tr2 -> ());
-}
-
 /// `can_flow tr` is reflexive.
 
 val can_flow_reflexive:
@@ -291,19 +278,6 @@ let flow_to_public_eq tr prin =
   reveal_opaque (`%can_flow) (can_flow);
   reveal_opaque (`%public) (public)
 
-/// A principal flows to a particular state of this principal.
-
-val principal_flow_to_principal_state:
-  tr:trace -> prin:principal -> sess_id:state_id ->
-  Lemma
-  (ensures (principal_label prin) `can_flow tr` (principal_state_label prin sess_id))
-  [SMTPat ((principal_label prin) `can_flow tr` (principal_state_label prin sess_id))]
-let principal_flow_to_principal_state tr prin sess_id =
-  reveal_opaque (`%is_corrupt) is_corrupt;
-  reveal_opaque (`%can_flow) can_flow;
-  reveal_opaque (`%principal_label) principal_label;
-  reveal_opaque (`%principal_state_label) principal_state_label
-
 /// A `join` flows to `public` iff. one of its operands flows to `public`.
 /// This is a property specific to labels,
 /// that is not implied by the standard lattice properties.
@@ -318,3 +292,98 @@ let join_flow_to_public_eq tr x1 x2 =
   reveal_opaque (`%can_flow) (can_flow);
   reveal_opaque (`%join) (join);
   reveal_opaque (`%public) (public)
+
+/// Generic label for states:
+/// `state_pred_label p` is corrupt when
+/// there exists a corrupt `SetState` event satisfying the predicate `p`.
+/// It can for example be used to depict any state of a principal
+/// (e.g. as done by `principal_label`)
+
+val state_pred_label_input: Type u#1
+let state_pred_label_input =
+  principal -> state_id -> bytes -> prop
+
+[@@"opaque_to_smt"]
+val state_pred_label:
+  state_pred_label_input ->
+  label
+let state_pred_label p = mk_label {
+  is_corrupt = (fun tr ->
+    exists prin sess_id content.
+      state_was_corrupt tr prin sess_id content /\
+      p prin sess_id content
+  );
+  is_corrupt_later = (fun tr1 tr2 -> ());
+}
+
+val state_pred_label_input_can_flow:
+  state_pred_label_input ->
+  state_pred_label_input ->
+  prop
+let state_pred_label_input_can_flow p1 p2 =
+  forall p s c. p2 p s c ==> p1 p s c
+
+val state_pred_label_can_flow_state_pred_label:
+  tr:trace ->
+  p1:state_pred_label_input -> p2:state_pred_label_input ->
+  Lemma
+  (requires state_pred_label_input_can_flow p1 p2)
+  (ensures state_pred_label p1 `can_flow tr` state_pred_label p2)
+  [SMTPat (state_pred_label p1 `can_flow tr` state_pred_label p2)]
+let state_pred_label_can_flow_state_pred_label tr p1 p2 =
+  reveal_opaque (`%is_corrupt) is_corrupt;
+  reveal_opaque (`%can_flow) (can_flow);
+  reveal_opaque (`%state_pred_label) (state_pred_label)
+
+val state_pred_label_can_flow_public:
+  tr:trace ->
+  p:state_pred_label_input ->
+  Lemma (
+    (state_pred_label p) `can_flow tr` public
+    <==> (
+      exists prin sess_id content.
+        state_was_corrupt tr prin sess_id content /\
+        p prin sess_id content
+    )
+  )
+let state_pred_label_can_flow_public tr p =
+  reveal_opaque (`%is_corrupt) is_corrupt;
+  reveal_opaque (`%state_pred_label) (state_pred_label);
+  FStar.Classical.forall_intro (FStar.Classical.move_requires (event_exists_fmap_trace_eq forget_label tr));
+  FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (event_at_fmap_trace_eq forget_label tr))
+
+val principal_label_input:
+  principal ->
+  state_pred_label_input
+let principal_label_input prin1 =
+  fun prin2 _ _ ->
+    prin1 == prin2
+
+val principal_label: principal -> label
+let principal_label prin =
+  state_pred_label (principal_label_input prin)
+
+val principal_state_label_input:
+  principal -> state_id ->
+  state_pred_label_input
+let principal_state_label_input prin1 sess_id1 =
+  fun prin2 sess_id2 _ ->
+    prin1 == prin2 /\
+    sess_id1 == sess_id2
+
+val principal_state_label: principal -> state_id -> label
+let principal_state_label prin sess_id =
+  state_pred_label (principal_state_label_input prin sess_id)
+
+val principal_state_content_label_input:
+  principal -> state_id -> bytes ->
+  state_pred_label_input
+let principal_state_content_label_input prin1 sess_id1 content1 =
+  fun prin2 sess_id2 content2 ->
+    prin1 == prin2 /\
+    sess_id1 == sess_id2 /\
+    content1 == content2
+
+val principal_state_content_label: principal -> state_id -> bytes -> label
+let principal_state_content_label prin sess_id content =
+  state_pred_label (principal_state_content_label_input prin sess_id content)

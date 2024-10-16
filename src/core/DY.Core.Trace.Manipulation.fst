@@ -216,29 +216,29 @@ let recv_msg_invariant #invs i tr =
 
 (*** Corruption ***)
 
-/// Corrupt a session of a principal.
+/// Corrupt a state set at a given timestamp
 
 [@@ "opaque_to_smt"]
-val corrupt: principal -> state_id -> traceful unit
-let corrupt prin sess_id =
-  add_event (Corrupt prin sess_id)
+val corrupt: timestamp -> traceful unit
+let corrupt time =
+  add_event (Corrupt time)
 
-/// Corrupting a principal always preserve the trace invariant.
+/// Corrupting a state always preserve the trace invariant.
 
 val corrupt_invariant:
   {|protocol_invariants|} ->
-  prin:principal -> sess_id:state_id -> tr:trace ->
+  time:timestamp -> tr:trace ->
   Lemma
   (requires
     trace_invariant tr
   )
   (ensures (
-    let ((), tr_out) = corrupt prin sess_id tr in
+    let ((), tr_out) = corrupt time tr in
     trace_invariant tr_out
   ))
-  [SMTPat (corrupt prin sess_id tr); SMTPat (trace_invariant tr)]
-let corrupt_invariant #invs prin sess_id tr =
-  add_event_invariant (Corrupt prin sess_id) tr;
+  [SMTPat (corrupt time tr); SMTPat (trace_invariant tr)]
+let corrupt_invariant #invs time tr =
+  add_event_invariant (Corrupt time) tr;
   normalize_term_spec corrupt
 
 (*** Random number generation ***)

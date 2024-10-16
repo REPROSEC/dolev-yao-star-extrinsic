@@ -15,7 +15,7 @@ open DY.Example.DH.Protocol.Stateful
 
 val is_dh_shared_key: trace -> principal -> principal -> bytes -> prop
 let is_dh_shared_key tr alice bob k = exists si sj.
-  get_label tr k == join (principal_state_label alice si) (principal_state_label bob sj) /\ 
+  get_label tr k == join (ephemeral_dh_key_label alice si) (ephemeral_dh_key_label bob sj) /\
   k `has_usage tr` AeadKey "DH.aead_key" empty
 
 let dh_session_pred: local_state_predicate dh_session = {
@@ -23,34 +23,35 @@ let dh_session_pred: local_state_predicate dh_session = {
     match st with
     | InitiatorSentMsg1 bob x -> (
       let alice = prin in
-      is_secret (principal_state_label alice sess_id) tr x /\
+      is_secret (ephemeral_dh_key_label alice sess_id) tr x /\
       x `has_usage tr` DhKey "DH.dh_key" empty /\
       event_triggered tr alice (Initiate1 alice bob x)
     )
     | ResponderSentMsg2 alice gx gy y -> (
       let bob = prin in
       is_publishable tr gx /\ is_publishable tr gy /\
-      is_secret (principal_state_label bob sess_id) tr y /\ y  `has_usage tr` DhKey "DH.dh_key" empty /\
+      is_secret (ephemeral_dh_key_label bob sess_id) tr y /\
+      y  `has_usage tr` DhKey "DH.dh_key" empty /\
       gy == dh_pk y /\
       event_triggered tr bob (Respond1 alice bob gx gy y)
     )
     | InitiatorSendMsg3 bob gx gy k -> (
       let alice = prin in
       is_publishable tr gx /\ is_publishable tr gy /\
-      is_knowable_by (principal_state_label alice sess_id) tr k /\
-      (exists x. gx == dh_pk x /\ k == dh x gy /\ is_secret (principal_state_label alice sess_id) tr x) /\
+      is_knowable_by (ephemeral_dh_key_label alice sess_id) tr k /\
+      (exists x. gx == dh_pk x /\ k == dh x gy /\ is_secret (ephemeral_dh_key_label alice sess_id) tr x) /\
       event_triggered tr alice (Initiate2 alice bob gx gy k) /\
-      (is_corrupt tr (principal_label bob) \/ is_corrupt tr (principal_state_label alice sess_id) \/
+      (is_corrupt tr (long_term_key_label bob) \/ is_corrupt tr (ephemeral_dh_key_label alice sess_id) \/
       (exists y. k == dh y gx /\ is_dh_shared_key tr alice bob k /\ 
         event_triggered tr bob (Respond1 alice bob gx gy y)))
     )
     | ResponderReceivedMsg3 alice gx gy k -> (
       let bob = prin in
       is_publishable tr gx /\ is_publishable tr gy /\
-      is_knowable_by (principal_state_label bob sess_id) tr k /\
-      (exists y. gy == dh_pk y /\ k == dh y gx /\ is_secret (principal_state_label bob sess_id) tr y) /\
+      is_knowable_by (ephemeral_dh_key_label bob sess_id) tr k /\
+      (exists y. gy == dh_pk y /\ k == dh y gx /\ is_secret (ephemeral_dh_key_label bob sess_id) tr y) /\
       event_triggered tr bob (Respond2 alice bob gx gy k) /\
-      (is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_state_label bob sess_id) \/
+      (is_corrupt tr (long_term_key_label alice) \/ is_corrupt tr (ephemeral_dh_key_label bob sess_id) \/
         (is_dh_shared_key tr alice bob k /\ 
         event_triggered tr alice (Initiate2 alice bob gx gy k)))
     )
@@ -67,19 +68,19 @@ let dh_event_pred: event_predicate dh_event =
     | Initiate1 alice bob x -> True
     | Respond1 alice bob gx gy y -> (
       is_publishable tr gx /\ is_publishable tr gy /\
-      (exists sess_id. is_secret (principal_state_label bob sess_id) tr y) /\
+      (exists sess_id. is_secret (ephemeral_dh_key_label bob sess_id) tr y) /\
       y `has_usage tr` DhKey "DH.dh_key" empty /\
       gy = dh_pk y
     )
     | Initiate2 alice bob gx gy k -> (
       is_publishable tr gx /\ is_publishable tr gy /\
-      (exists x sess_id. is_secret (principal_state_label alice sess_id) tr x /\
+      (exists x sess_id. is_secret (ephemeral_dh_key_label alice sess_id) tr x /\
       gx = dh_pk x /\ k == dh x gy) /\
-      (is_corrupt tr (principal_label bob) \/
+      (is_corrupt tr (long_term_key_label bob) \/
         (exists y. k == dh y gx /\ is_dh_shared_key tr alice bob k /\ event_triggered tr bob (Respond1 alice bob gx gy y)))
     )
     | Respond2 alice bob gx gy k -> (
-      is_corrupt tr (principal_label alice) \/
+      is_corrupt tr (long_term_key_label alice) \/
       (is_dh_shared_key tr alice bob k /\
         event_triggered tr alice (Initiate2 alice bob gx gy k))
     )
@@ -89,7 +90,7 @@ let dh_event_pred: event_predicate dh_event =
 let all_sessions = [
   pki_tag_and_invariant;
   private_keys_tag_and_invariant;
-  (local_state_dh_session.tag, local_state_predicate_to_local_bytes_state_predicate dh_session_pred);
+  (|local_state_dh_session.tag, local_state_predicate_to_local_bytes_state_predicate dh_session_pred|);
 ]
 
 /// List of all local event predicates.
@@ -118,7 +119,7 @@ instance dh_protocol_invs: protocol_invariants = {
 
 val all_sessions_has_all_sessions: unit -> Lemma (norm [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP (has_local_bytes_state_predicate #dh_protocol_invs) all_sessions))
 let all_sessions_has_all_sessions () =
-  assert_norm(List.Tot.no_repeats_p (List.Tot.map fst (all_sessions)));
+  assert_norm(List.Tot.no_repeats_p (List.Tot.map dfst (all_sessions)));
   mk_state_pred_correct #dh_protocol_invs all_sessions;
   norm_spec [delta_only [`%all_sessions; `%for_allP]; iota; zeta] (for_allP (has_local_bytes_state_predicate #dh_protocol_invs) all_sessions)
 
@@ -214,7 +215,7 @@ let send_msg2_proof tr global_sess_id bob bob_si =
   | (Some (ResponderSentMsg2 alice gx gy y), tr) -> (
     match get_private_key bob global_sess_id.private_keys (LongTermSigKey "DH.SigningKey") tr with
     | (Some sk_b, tr) -> (
-      let (n_sig, tr) = mk_rand SigNonce (principal_label bob) 32 tr in
+      let (n_sig, tr) = mk_rand SigNonce (long_term_key_label bob) 32 tr in
       compute_message2_proof tr alice bob gx y sk_b n_sig
     )
     | (None, tr) -> ()
@@ -246,18 +247,18 @@ let prepare_msg3_proof tr global_sess_id alice alice_si bob msg_id =
           
           let k = dh x res.gy in
 
-          assert((exists x. res.gx == dh_pk x /\ k == dh x res.gy /\ is_secret (principal_state_label alice alice_si) tr x));
+          assert((exists x. res.gx == dh_pk x /\ k == dh x res.gy /\ is_secret (ephemeral_dh_key_label alice alice_si) tr x));
 
           assert(is_publishable tr res.gx);
           assert(is_publishable tr res.gy);
-          assert(is_knowable_by (principal_state_label alice alice_si) tr k);
+          assert(is_knowable_by (ephemeral_dh_key_label alice alice_si) tr k);
 
-          assert((exists x sess_id. is_secret (principal_state_label alice sess_id) tr x /\
+          assert((exists x sess_id. is_secret (ephemeral_dh_key_label alice sess_id) tr x /\
             res.gx = dh_pk x));
           assert(k `has_usage tr` AeadKey "DH.aead_key" empty);
-          assert(exists si. is_knowable_by (principal_state_label alice si) tr k);
+          assert(exists si. is_knowable_by (ephemeral_dh_key_label alice si) tr k);
 
-          let bob_not_corrupt = (~(is_corrupt tr (principal_label bob))) in
+          let bob_not_corrupt = (~(is_corrupt tr (long_term_key_label bob))) in
           let dh_key_and_event_respond1 = (exists y. k == dh y res.gx /\ is_dh_shared_key tr alice bob k /\ event_triggered tr bob (Respond1 alice bob res.gx res.gy y)) in
           introduce bob_not_corrupt ==> dh_key_and_event_respond1
           with _. (
@@ -273,7 +274,7 @@ let prepare_msg3_proof tr global_sess_id alice alice_si bob msg_id =
               assert(dh y res.gx == dh x res.gy);
               assert(k == k');
               
-              assert(exists si sj. get_label tr k == join (principal_state_label alice si) (principal_state_label bob sj));
+              assert(exists si sj. get_label tr k == join (ephemeral_dh_key_label alice si) (ephemeral_dh_key_label bob sj));
 
               assert(dh_key_and_event_respond1);
               ()
@@ -303,7 +304,7 @@ let send_msg3_proof tr global_sess_id alice alice_si bob =
   | (Some (InitiatorSendMsg3 bob gx gy k), tr') -> (
     match get_private_key alice global_sess_id.private_keys (LongTermSigKey "DH.SigningKey") tr' with
     | (Some sk_a, tr') -> (
-      let (n_sig, tr') = mk_rand SigNonce (principal_label alice) 32 tr' in
+      let (n_sig, tr') = mk_rand SigNonce (long_term_key_label alice) 32 tr' in
 
       // The following code is not needed for the proof.
       // It just shows what we need to show to prove the lemma.
@@ -342,7 +343,7 @@ let verify_msg3_proof tr global_sess_id alice bob msg_id bob_si =
           
           match decode_and_verify_message3 msg_bytes bob gx gy y pk_a with
           | Some res -> (
-            assert(exists y. gy == dh_pk y /\ res.k == dh y gx /\ is_secret (principal_state_label bob bob_si) tr y);
+            assert(exists y. gy == dh_pk y /\ res.k == dh y gx /\ is_secret (ephemeral_dh_key_label bob bob_si) tr y);
 
             assert(event_triggered tr bob (Respond1 alice bob gx gy y));
             // The decode_message3_proof gives us that there exists a k' such that 
@@ -350,11 +351,11 @@ let verify_msg3_proof tr global_sess_id alice bob msg_id bob_si =
             // On a high level we need to show now that this event was triggered
             // for our concrete k.
             assert(exists x. gx == dh_pk x /\ event_triggered tr alice (Initiate2 alice bob gx gy (dh x gy)) \/ 
-              is_corrupt tr (principal_label alice)  \/ is_corrupt tr (principal_state_label bob bob_si));
+              is_corrupt tr (long_term_key_label alice)  \/ is_corrupt tr (ephemeral_dh_key_label bob bob_si));
 
             // Proof strategy: We want to work without the corruption case
             // so we introduce this implication.
-            let alice_not_corrupt = ~(is_corrupt tr (principal_label alice)) in
+            let alice_not_corrupt = ~(is_corrupt tr (long_term_key_label alice)) in
             let event_initiate2 = event_triggered tr alice (Initiate2 alice bob gx gy res.k) in
             introduce alice_not_corrupt ==> event_initiate2
             with _. (
@@ -371,10 +372,10 @@ let verify_msg3_proof tr global_sess_id alice bob msg_id bob_si =
               )
             );
 
-            assert(is_corrupt tr (principal_label alice) \/
-              (exists si. get_label tr res.k == join (principal_state_label alice si) (principal_state_label bob bob_si)));
+            assert(is_corrupt tr (long_term_key_label alice) \/
+              (exists si. get_label tr res.k == join (ephemeral_dh_key_label alice si) (ephemeral_dh_key_label bob bob_si)));
             assert(res.k `has_usage tr` AeadKey "DH.aead_key" empty);
-            assert(is_corrupt tr (principal_label alice) \/
+            assert(is_corrupt tr (long_term_key_label alice) \/
               (is_dh_shared_key tr alice bob res.k /\ event_triggered tr alice (Initiate2 alice bob gx gy res.k)));
             ()
           )
