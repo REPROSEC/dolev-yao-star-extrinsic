@@ -12,31 +12,31 @@ open DY.Lib.SplitFunction
 
 noeq
 type split_crypto_predicate_parameters = {
-  key_t: Type;
+  key_usage_t: Type;
   data_t: Type;
-  get_usage: key_t -> string;
+  get_usage: key_usage_t -> string;
 
   local_pred_t: Type;
   global_pred_t: Type;
 
-  apply_local_pred: local_pred_t -> (trace & key_t & data_t) -> prop;
-  apply_global_pred: global_pred_t -> (trace & key_t & data_t) -> prop;
-  mk_global_pred: ((trace & key_t & data_t) -> prop) -> global_pred_t;
+  apply_local_pred: local_pred_t -> (trace & key_usage_t & data_t) -> prop;
+  apply_global_pred: global_pred_t -> (trace & key_usage_t & data_t) -> prop;
+  mk_global_pred: ((trace & key_usage_t & data_t) -> prop) -> global_pred_t;
 
-  key_and_data_well_formed: trace -> key_t -> data_t -> prop;
+  data_well_formed: trace -> data_t -> prop;
 
-  apply_mk_global_pred: bare:((trace & key_t & data_t) -> prop) -> x:(trace & key_t & data_t) -> Lemma
+  apply_mk_global_pred: bare:((trace & key_usage_t & data_t) -> prop) -> x:(trace & key_usage_t & data_t) -> Lemma
     (apply_global_pred (mk_global_pred bare) x == bare x);
   apply_local_pred_later:
     lpred: local_pred_t ->
     tr1:trace -> tr2:trace ->
-    key:key_t -> data:data_t ->
+    key_usg:key_usage_t -> data:data_t ->
     Lemma
     (requires
-      apply_local_pred lpred (tr1, key, data) /\
-      key_and_data_well_formed tr1 key data /\
+      apply_local_pred lpred (tr1, key_usg, data) /\
+      data_well_formed tr1 data /\
       tr1 <$ tr2)
-    (ensures apply_local_pred lpred (tr2, key, data))
+    (ensures apply_local_pred lpred (tr2, key_usg, data))
   ;
 }
 
@@ -46,13 +46,13 @@ let always_false #a x = False
 let split_crypto_predicate_parameters_to_split_function_parameters (params:split_crypto_predicate_parameters): split_function_parameters = {
   singleton_split_function_parameters string with
 
-  tagged_data_t = (trace & params.key_t & params.data_t);
-  raw_data_t = (trace & params.key_t & params.data_t);
+  tagged_data_t = (trace & params.key_usage_t & params.data_t);
+  raw_data_t = (trace & params.key_usage_t & params.data_t);
   output_t = prop;
 
-  decode_tagged_data = (fun (tr, key, data) ->
-    let tag = params.get_usage key in
-    Some (tag, (tr, key, data))
+  decode_tagged_data = (fun (tr, key_usg, data) ->
+    let tag = params.get_usage key_usg in
+    Some (tag, (tr, key_usg, data))
   );
 
   local_fun_t = mk_dependent_type params.local_pred_t;
@@ -76,14 +76,14 @@ let has_local_crypto_predicate params global_pred (tag, local_pred) =
 val has_local_crypto_predicate_elim:
   params:split_crypto_predicate_parameters ->
   global_pred:params.global_pred_t -> tag:string -> local_pred:params.local_pred_t ->
-  tr:trace -> key:params.key_t -> data:params.data_t ->
+  tr:trace -> key_usg:params.key_usage_t -> data:params.data_t ->
   Lemma
   (requires has_local_crypto_predicate params global_pred (tag, local_pred))
   (ensures
-    params.get_usage key == tag ==> (params.apply_global_pred global_pred (tr, key, data) == params.apply_local_pred local_pred (tr, key, data))
+    params.get_usage key_usg == tag ==> (params.apply_global_pred global_pred (tr, key_usg, data) == params.apply_local_pred local_pred (tr, key_usg, data))
   )
-let has_local_crypto_predicate_elim params global_pred tag local_pred tr key data =
-  has_local_fun_elim (split_crypto_predicate_parameters_to_split_function_parameters params) global_pred tag local_pred (tr, key, data)
+let has_local_crypto_predicate_elim params global_pred tag local_pred tr key_usg data =
+  has_local_fun_elim (split_crypto_predicate_parameters_to_split_function_parameters params) global_pred tag local_pred (tr, key_usg, data)
 
 val mk_global_crypto_predicate:
   params:split_crypto_predicate_parameters ->
@@ -96,21 +96,21 @@ val mk_global_crypto_predicate_later:
   params:split_crypto_predicate_parameters ->
   tagged_local_preds:list (string & params.local_pred_t) ->
   tr1:trace -> tr2:trace ->
-  key:params.key_t -> data:params.data_t ->
+  key_usg:params.key_usage_t -> data:params.data_t ->
   Lemma
   (requires
-    params.apply_global_pred (mk_global_crypto_predicate params tagged_local_preds) (tr1, key, data) /\
-    params.key_and_data_well_formed tr1 key data /\
+    params.apply_global_pred (mk_global_crypto_predicate params tagged_local_preds) (tr1, key_usg, data) /\
+    params.data_well_formed tr1 data /\
     tr1 <$ tr2
   )
-  (ensures params.apply_global_pred (mk_global_crypto_predicate params tagged_local_preds) (tr2, key, data))
-let mk_global_crypto_predicate_later params tagged_local_preds tr1 tr2 key data =
+  (ensures params.apply_global_pred (mk_global_crypto_predicate params tagged_local_preds) (tr2, key_usg, data))
+let mk_global_crypto_predicate_later params tagged_local_preds tr1 tr2 key_usg data =
   let fparams = split_crypto_predicate_parameters_to_split_function_parameters params in
-  params.apply_mk_global_pred always_false (tr1, key, data);
-  mk_global_fun_eq fparams (mk_dependent_tagged_local_funs tagged_local_preds) (tr1, key, data);
-  mk_global_fun_eq fparams (mk_dependent_tagged_local_funs tagged_local_preds) (tr2, key, data);
-  introduce forall tag_set lpred. fparams.apply_local_fun lpred (tr1, key, data) ==> fparams.apply_local_fun #tag_set lpred (tr2, key, data) with (
-    introduce _ ==> _ with _. params.apply_local_pred_later lpred tr1 tr2 key data
+  params.apply_mk_global_pred always_false (tr1, key_usg, data);
+  mk_global_fun_eq fparams (mk_dependent_tagged_local_funs tagged_local_preds) (tr1, key_usg, data);
+  mk_global_fun_eq fparams (mk_dependent_tagged_local_funs tagged_local_preds) (tr2, key_usg, data);
+  introduce forall tag_set lpred. fparams.apply_local_fun lpred (tr1, key_usg, data) ==> fparams.apply_local_fun #tag_set lpred (tr2, key_usg, data) with (
+    introduce _ ==> _ with _. params.apply_local_pred_later lpred tr1 tr2 key_usg data
   )
 
 val mk_global_crypto_predicate_correct:

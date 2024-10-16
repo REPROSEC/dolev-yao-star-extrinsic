@@ -5,44 +5,43 @@ open DY.Core
 open DY.Lib.Crypto.SplitPredicate
 
 let split_pkenc_predicate_params {|crypto_usages|}: split_crypto_predicate_parameters = {
-  key_t = pk:bytes{PkKey? (get_sk_usage pk)};
+  key_usage_t = sk_usage:usage{PkKey? sk_usage};
   data_t = bytes;
-  get_usage = (fun pk ->
-    let PkKey tag _ = get_sk_usage pk in
+  get_usage = (fun sk_usage ->
+    let PkKey tag _ = sk_usage in
     tag
   );
 
   local_pred_t = pkenc_crypto_predicate;
-  global_pred_t = tr:trace -> pk:bytes{PkKey? (get_sk_usage pk)} -> msg:bytes -> prop;
+  global_pred_t = tr:trace -> sk_usage:usage{PkKey? sk_usage} -> msg:bytes -> prop;
 
-  apply_local_pred = (fun pred (tr, pk, msg) ->
-    pred.pred tr pk msg
+  apply_local_pred = (fun pred (tr, sk_usage, msg) ->
+    pred.pred tr sk_usage msg
   );
-  apply_global_pred = (fun pred (tr, pk, msg) ->
-    pred tr pk msg
+  apply_global_pred = (fun pred (tr, sk_usage, msg) ->
+    pred tr sk_usage msg
   );
-  mk_global_pred = (fun pred tr pk msg ->
-    pred (tr, pk, msg)
+  mk_global_pred = (fun pred tr sk_usage msg ->
+    pred (tr, sk_usage, msg)
   );
 
-  key_and_data_well_formed = (fun tr pk msg ->
-    bytes_well_formed tr pk /\
+  data_well_formed = (fun tr msg ->
     bytes_well_formed tr msg
   );
 
   apply_mk_global_pred = (fun bare x -> ());
-  apply_local_pred_later = (fun lpred tr1 tr2 pk msg ->
-    lpred.pred_later tr1 tr2 pk msg
+  apply_local_pred_later = (fun lpred tr1 tr2 sk_usage msg ->
+    lpred.pred_later tr1 tr2 sk_usage msg
   );
 }
 
 val has_pkenc_predicate: {|crypto_invariants|} -> (string & pkenc_crypto_predicate) -> prop
 let has_pkenc_predicate #cinvs (tag, local_pred) =
-  forall (tr:trace) (pk:bytes) (msg:bytes).
-    {:pattern pkenc_pred.pred tr pk msg}
-    match get_sk_usage pk with
+  forall (tr:trace) (sk_usage:usage) (msg:bytes).
+    {:pattern pkenc_pred.pred tr sk_usage msg}
+    match sk_usage with
     | PkKey pkenc_tag _ ->
-        pkenc_tag = tag ==> pkenc_pred.pred tr pk msg == local_pred.pred tr pk msg
+        pkenc_tag = tag ==> pkenc_pred.pred tr sk_usage msg == local_pred.pred tr sk_usage msg
     | _ -> True
 
 val intro_has_pkenc_predicate:
@@ -52,15 +51,15 @@ val intro_has_pkenc_predicate:
   (ensures has_pkenc_predicate tagged_local_pred)
 let intro_has_pkenc_predicate #cinvs (tag, local_pred) =
   introduce
-    forall tr pk msg.
-      match get_sk_usage pk with
+    forall tr sk_usage msg.
+      match sk_usage with
       | PkKey pkenc_tag _ ->
-          pkenc_tag = tag ==> pkenc_pred.pred tr pk msg == local_pred.pred tr pk msg
+          pkenc_tag = tag ==> pkenc_pred.pred tr sk_usage msg == local_pred.pred tr sk_usage msg
       | _ -> True
   with (
-    match get_sk_usage pk with
+    match sk_usage with
     | PkKey pkenc_tag _ ->
-      has_local_crypto_predicate_elim split_pkenc_predicate_params pkenc_pred.pred tag local_pred tr pk msg
+      has_local_crypto_predicate_elim split_pkenc_predicate_params pkenc_pred.pred tag local_pred tr sk_usage msg
     | _ -> ()
   )
 

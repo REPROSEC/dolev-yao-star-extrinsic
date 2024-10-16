@@ -36,8 +36,8 @@ let dh_crypto_preds = {
   default_crypto_predicates with
 
   sign_pred = {
-    pred = (fun tr vk sig_msg ->
-      (exists prin. get_signkey_usage vk == long_term_key_type_to_usage (LongTermSigKey "DH.SigningKey") prin /\ (
+    pred = (fun tr sk_usage sig_msg ->
+      (exists prin. sk_usage == long_term_key_type_to_usage (LongTermSigKey "DH.SigningKey") prin /\ (
         match parse sig_message sig_msg with
         | Some (SigMsg2 sig_msg2) -> (
           exists y. sig_msg2.gy == (dh_pk y) /\ event_triggered tr prin (Respond1 sig_msg2.alice prin sig_msg2.gx sig_msg2.gy y)
@@ -66,8 +66,7 @@ val compute_message1_proof:
   Lemma
     (requires
       event_triggered tr alice (Initiate1 alice bob x) /\
-      bytes_invariant tr x /\
-      DhKey? (get_usage x)
+      bytes_invariant tr x
     )
     (ensures 
       is_publishable tr (compute_message1 alice x)
@@ -131,7 +130,7 @@ val compute_message2_proof:
     bytes_invariant tr y /\
     is_private_key_for tr sk_b (LongTermSigKey "DH.SigningKey") bob /\
     is_secret (long_term_key_label bob) tr n_sig /\
-    SigNonce? (get_usage n_sig)
+    n_sig `has_usage tr` SigNonce
   )
   (ensures
     is_publishable tr (compute_message2 alice bob gx (dh_pk y) sk_b n_sig)
@@ -219,7 +218,7 @@ val compute_message3_proof:
     gx = dh_pk x /\
     is_private_key_for tr sk_a (LongTermSigKey "DH.SigningKey") alice /\
     is_secret (long_term_key_label alice) tr n_sig /\
-    SigNonce? (get_usage n_sig)
+    n_sig `has_usage tr` SigNonce
   )
   (ensures
     is_publishable tr (compute_message3 alice bob (dh_pk x) gy sk_a n_sig)

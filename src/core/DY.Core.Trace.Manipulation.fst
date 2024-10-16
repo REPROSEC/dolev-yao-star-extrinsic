@@ -250,7 +250,7 @@ val mk_rand: usg:usage -> lab:label -> len:nat{len <> 0} -> traceful bytes
 let mk_rand usg lab len =
   let* time = get_time in
   add_event (RandGen usg lab len);*
-  return (Rand usg len time)
+  return (Rand len time)
 
 /// Generating a random bytestrings always preserve the trace invariant.
 
@@ -307,18 +307,33 @@ let mk_rand_get_label #invs usg lab len tr =
 
 /// Usage of random bytestrings.
 
+val mk_rand_has_usage:
+  {|protocol_invariants|} ->
+  usg:usage -> lab:label -> len:nat{len <> 0} -> tr:trace ->
+  Lemma
+  (ensures (
+    let (b, tr_out) = mk_rand usg lab len tr in
+    b `has_usage tr_out` usg
+  ))
+  [SMTPat (mk_rand usg lab len tr); SMTPat (trace_invariant tr)]
+let mk_rand_has_usage #invs usg lab len tr =
+  normalize_term_spec mk_rand;
+  normalize_term_spec has_usage
+
+// Stronger version of the lemma above, if needed
 val mk_rand_get_usage:
   {|protocol_invariants|} ->
   usg:usage -> lab:label -> len:nat{len <> 0} -> tr:trace ->
   Lemma
   (ensures (
     let (b, tr_out) = mk_rand usg lab len tr in
-    get_usage b == usg
+    get_usage tr_out b == usg
   ))
   [SMTPat (mk_rand usg lab len tr); SMTPat (trace_invariant tr)]
 let mk_rand_get_usage #invs usg lab len tr =
-  normalize_term_spec mk_rand;
+  reveal_opaque (`%mk_rand) (mk_rand);
   normalize_term_spec get_usage
+
 
 (*** State ***)
 

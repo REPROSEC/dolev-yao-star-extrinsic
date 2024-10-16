@@ -391,8 +391,8 @@ val rand_generated_at:
   prop
 let rand_generated_at #label_t tr i b =
   match b with
-  | Rand usg len time ->
-    time == i /\ (exists lab. event_at tr i (RandGen usg lab len))
+  | Rand len time ->
+    time == i /\ (exists usg lab. event_at tr i (RandGen usg lab len))
   | _ -> False
 
 (*** Forgetting labels ***)
