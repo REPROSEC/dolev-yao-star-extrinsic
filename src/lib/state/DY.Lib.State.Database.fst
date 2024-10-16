@@ -3,6 +3,7 @@ module DY.Lib.State.Database
 open Comparse
 open DY.Core
 open DY.Lib.Comparse.Glue
+open DY.Lib.Comparse.Parsers
 open DY.Lib.State.Typed
 
 #set-options "--fuel 0 --ifuel 0"
@@ -76,10 +77,6 @@ noeq type db_predicate {|crypto_invariants|} (row_t:Type0) {|db_t:db_types row_t
   // No knowable lemma needed for the overall database, because it holds by construction.
 }
 
-/// TODO give actual instances
-let ps_state_id : parser_serializer bytes state_id = admit()
-let ps_string : parser_serializer bytes string = admit()
-
 instance parseable_serializeable_bytes_db_row (row_t:Type0) {|db_t:db_types row_t|} : parseable_serializeable bytes row_t = mk_parseable_serializeable (db_t.ps_row_t)
 
 instance local_state_db_entry (row_t:Type0) {|db_t:db_types row_t|}: local_state row_t = {
@@ -140,19 +137,6 @@ let get_row_by_pointer #row_t #db_t tr prin row_state_id =
   let (row_opt, _) = get_state #row_t prin row_state_id tr in
   Some?.v row_opt
 
-#push-options "--fuel 1 --ifuel 1"
-val list_coerceP :
-  #a:Type0 ->
-  pred:(a -> prop) ->
-  l:list a{for_allP pred l} ->
-  list (x:a{pred x})
-let rec list_coerceP #a pred l =
-  for_allP_eq pred l;
-  match l with
-  | [] -> []
-  | h::t -> h::(list_coerceP pred t)
-#pop-options
-
 val db_session_invariant:
   {|crypto_invariants|} ->
   #row_t:Type0 -> {|db_types row_t|} ->
@@ -162,7 +146,8 @@ let db_session_invariant #cinvs #row_t #db_t db_pred = {
   pred = (fun tr prin sess_id db ->
     for_allP (is_pointer_to_row #row_t tr prin) db.rows /\
     (
-      let tmp : list (sid:state_id{is_pointer_to_row #row_t tr prin sid}) = list_coerceP (is_pointer_to_row #row_t tr prin) db.rows in
+      let tmp = for_allP_eq (is_pointer_to_row #row_t tr prin) db.rows;
+        List.Tot.list_ref #state_id #(is_pointer_to_row #row_t tr prin) db.rows in
       let rows = List.Tot.map (get_row_by_pointer #row_t tr prin) tmp in
       db_pred.db_global_pred tr prin sess_id rows
     )
@@ -198,7 +183,8 @@ val db_invariant_empty :
    (db_session_invariant db_pred).pred tr prin sess_id empty_db
   ))
 let db_invariant_empty #cinvs #row_t #db_t db_pred tr prin sess_id =
-  let tmp = list_coerceP (is_pointer_to_row #row_t tr prin) [] in
+  let tmp = List.Tot.list_ref #state_id #(is_pointer_to_row #row_t tr prin) [] in
+//  let tmp = list_coerceP (is_pointer_to_row #row_t tr prin) [] in
   ()
 #pop-options
 
