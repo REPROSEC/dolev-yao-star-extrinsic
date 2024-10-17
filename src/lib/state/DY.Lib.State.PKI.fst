@@ -47,8 +47,7 @@ instance map_types_pki: map_types pki_key pki_value = {
   ps_value_t = ps_pki_value;
 }
 
-// The `#_` at the end is a workaround for FStarLang/FStar#3286
-val pki_pred: {|crypto_invariants|} -> map_predicate pki_key pki_value #_
+val pki_pred: {|crypto_invariants|} -> map_predicate pki_key pki_value
 let pki_pred #cinvs = {
   pred = (fun tr prin sess_id (key: pki_key) value ->
     is_public_key_for tr value.public_key key.ty key.who
@@ -68,7 +67,7 @@ let pki_tag_and_invariant #ci = (|map_types_pki.tag, local_state_predicate_to_lo
 
 [@@ "opaque_to_smt"]
 val initialize_pki: prin:principal -> traceful state_id
-let initialize_pki = initialize_map pki_key pki_value #_ // another workaround for FStarLang/FStar#3286
+let initialize_pki = initialize_map pki_key pki_value
 
 [@@ "opaque_to_smt"]
 val install_public_key: principal -> state_id -> long_term_key_type -> principal -> bytes -> traceful (option unit)
