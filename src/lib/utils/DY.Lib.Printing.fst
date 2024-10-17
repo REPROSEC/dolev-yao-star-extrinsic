@@ -116,8 +116,7 @@ let long_term_key_type_to_string t =
   | DY.Lib.State.PrivateKeys.LongTermPkEncKey u -> "LongTermPkEncKey " ^ u
   | DY.Lib.State.PrivateKeys.LongTermSigKey u -> "LongTermSigKey " ^ u
 
-// The `#_` at the end is a workaround for FStarLang/FStar#3286
-val private_keys_types_to_string: (list (map_elem DY.Lib.State.PrivateKeys.private_key_key DY.Lib.State.PrivateKeys.private_key_value #_)) -> string
+val private_keys_types_to_string: (list (map_elem DY.Lib.State.PrivateKeys.private_key_key DY.Lib.State.PrivateKeys.private_key_value)) -> string
 let rec private_keys_types_to_string m =
   match m with
   | [] -> ""
@@ -126,8 +125,7 @@ let rec private_keys_types_to_string m =
     Printf.sprintf "%s = (%s)," (long_term_key_type_to_string hd.key.ty) (bytes_to_string hd.value.private_key)
   )
 
-// The `#_` at the end is a workaround for FStarLang/FStar#3286
-val pki_types_to_string: (list (map_elem DY.Lib.State.PKI.pki_key DY.Lib.State.PKI.pki_value #_)) -> string
+val pki_types_to_string: (list (map_elem DY.Lib.State.PKI.pki_key DY.Lib.State.PKI.pki_value)) -> string
 let rec pki_types_to_string m =
   match m with
   | [] -> ""
@@ -138,14 +136,12 @@ let rec pki_types_to_string m =
 
 val default_private_keys_state_to_string: bytes -> option string
 let default_private_keys_state_to_string content_bytes =
-  // another workaround for FStarLang/FStar#3286
-  let? state = parse (map DY.Lib.State.PrivateKeys.private_key_key DY.Lib.State.PrivateKeys.private_key_value #_) content_bytes in
+  let? state = parse (map DY.Lib.State.PrivateKeys.private_key_key DY.Lib.State.PrivateKeys.private_key_value) content_bytes in
   Some (Printf.sprintf "[%s]" (private_keys_types_to_string state.key_values))
 
 val default_pki_state_to_string: bytes -> option string
 let default_pki_state_to_string content_bytes =
-  // another workaround for FStarLang/FStar#3286
-  let? state = parse (map DY.Lib.State.PKI.pki_key DY.Lib.State.PKI.pki_value #_) content_bytes in
+  let? state = parse (map DY.Lib.State.PKI.pki_key DY.Lib.State.PKI.pki_value) content_bytes in
   Some (Printf.sprintf "[%s]" (pki_types_to_string state.key_values))
 
 /// Searches for a printer with the correct tag

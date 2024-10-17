@@ -174,18 +174,6 @@ val attacker_knows: trace -> bytes -> prop
 let attacker_knows tr msg =
   exists step. attacker_knows_aux step tr msg
 
-val move_requires_4
-      (#a #b #c #d: Type)
-      (#p #q: (a -> b -> c -> d -> Type))
-      ($_: (x: a -> y: b -> z: c -> w: d -> Lemma (requires (p x y z w)) (ensures (q x y z w))))
-      (x: a)
-      (y: b)
-      (z: c)
-      (w: d)
-    : Lemma (p x y z w ==> q x y z w)
-let move_requires_4 #a #b #c #d #p #q pf x y z w =
-  introduce p x y z w ==> q x y z w with _. pf x y z w
-
 /// Lemma for the base case of the attacker knowledge theorem:
 /// bytestrings that the attacker obtained by corruption
 /// are publishable.
@@ -223,8 +211,8 @@ let rec attacker_only_knows_publishable_values_aux #invs step tr msg =
     FStar.Classical.forall_intro   (FStar.Classical.move_requires   (attacker_only_knows_publishable_values_aux (step-1) tr));
     FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (concat_preserves_publishability tr));
     FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (split_preserves_publishability tr));
-    FStar.Classical.forall_intro_4 (                move_requires_4 (aead_enc_preserves_publishability tr));
-    FStar.Classical.forall_intro_4 (                move_requires_4 (aead_dec_preserves_publishability tr));
+    FStar.Classical.forall_intro_4 (FStar.Classical.move_requires_4 (aead_enc_preserves_publishability tr));
+    FStar.Classical.forall_intro_4 (FStar.Classical.move_requires_4 (aead_dec_preserves_publishability tr));
     FStar.Classical.forall_intro   (FStar.Classical.move_requires   (pk_preserves_publishability tr));
     FStar.Classical.forall_intro_3 (FStar.Classical.move_requires_3 (pk_enc_preserves_publishability tr));
     FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (pk_dec_preserves_publishability tr));
@@ -235,7 +223,7 @@ let rec attacker_only_knows_publishable_values_aux #invs step tr msg =
     FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (dh_preserves_publishability tr));
     FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (kdf_extract_preserves_publishability tr));
     FStar.Classical.forall_intro_3 (FStar.Classical.move_requires_3 (kdf_expand_preserves_publishability tr));
-    FStar.Classical.forall_intro_4 (                move_requires_4 (kdf_expand_shorter_preserves_publishability tr));
+    FStar.Classical.forall_intro_4 (FStar.Classical.move_requires_4 (kdf_expand_shorter_preserves_publishability tr));
     FStar.Classical.forall_intro   (FStar.Classical.move_requires   (kem_pk_preserves_publishability tr));
     FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (kem_encap_preserves_publishability tr));
     FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (kem_decap_preserves_publishability tr));
