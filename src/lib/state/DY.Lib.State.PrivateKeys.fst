@@ -91,9 +91,8 @@ let is_public_key_for #cinvs tr pk pk_type who =
     is_verification_key (long_term_key_type_to_usage pk_type who) (long_term_key_label who) tr pk
   )
 
-// The `#_` at the end is a workaround for FStarLang/FStar#3286
 #push-options "--z3rlimit 10"
-val private_keys_pred: {|crypto_invariants|} -> map_predicate private_key_key private_key_value #_
+val private_keys_pred: {|crypto_invariants|} -> map_predicate private_key_key private_key_value
 let private_keys_pred #cinvs = {
   pred = (fun tr prin sess_id key value ->
     is_private_key_for tr value.private_key key.ty prin
@@ -114,7 +113,7 @@ let private_keys_tag_and_invariant #ci = (|map_types_private_keys.tag, local_sta
 
 [@@ "opaque_to_smt"]
 val initialize_private_keys: prin:principal -> traceful state_id
-let initialize_private_keys = initialize_map private_key_key private_key_value #_ // another workaround for FStarLang/FStar#3286
+let initialize_private_keys = initialize_map private_key_key private_key_value
 
 [@@ "opaque_to_smt"]
 val generate_private_key: principal -> state_id -> long_term_key_type -> traceful (option unit)
