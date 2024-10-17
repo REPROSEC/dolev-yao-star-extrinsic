@@ -2422,8 +2422,7 @@ let get_label_dh tr sk pk =
   reveal_opaque (`%dh) (dh);
   normalize_term_spec get_dh_label;
   normalize_term_spec get_label;
-  join_commutes (get_label tr sk) (get_dh_label tr pk);
-  join_public (get_label tr sk)
+  join_commutes (get_label tr sk) (get_dh_label tr pk)
 
 /// User lemma (dh bytes usage with known peer)
 

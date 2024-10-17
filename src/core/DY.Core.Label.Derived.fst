@@ -14,11 +14,12 @@ let equivalent tr l1 l2 =
   l1 `can_flow tr` l2 /\
   l2 `can_flow tr` l1
 
+(*** Join flows to its operands ***)
+
 val join_flows_to_left:
   tr:trace ->
   l1:label -> l2:label ->
   Lemma ((l1 `join` l2) `can_flow tr` l1)
-  [SMTPat ((l1 `join` l2) `can_flow tr` l1)]
 let join_flows_to_left tr l1 l2 =
   join_eq tr l1 l2 (join l1 l2)
 
@@ -26,15 +27,37 @@ val join_flows_to_right:
   tr:trace ->
   l1:label -> l2:label ->
   Lemma ((l1 `join` l2) `can_flow tr` l2)
-  [SMTPat ((l1 `join` l2) `can_flow tr` l2)]
 let join_flows_to_right tr l1 l2 =
   join_eq tr l1 l2 (join l1 l2)
+
+(*** Join flows to its operand (with SMT patterns) ***)
+
+val join_flows_to_left_smtpat:
+  tr:trace ->
+  l1:label -> l2:label -> l:label ->
+  Lemma
+  (requires l1 `can_flow tr` l)
+  (ensures (l1 `join` l2) `can_flow tr` l)
+  [SMTPat ((l1 `join` l2) `can_flow tr` l)]
+let join_flows_to_left_smtpat tr l1 l2 l =
+  join_flows_to_left tr l1 l2
+
+val join_flows_to_right_smtpat:
+  tr:trace ->
+  l1:label -> l2:label -> l:label ->
+  Lemma
+  (requires l2 `can_flow tr` l)
+  (ensures (l1 `join` l2) `can_flow tr` l)
+  [SMTPat ((l1 `join` l2) `can_flow tr` l)]
+let join_flows_to_right_smtpat tr l1 l2 l =
+  join_flows_to_right tr l1 l2
+
+(*** Operands flow to their meet ***)
 
 val left_flows_to_meet:
   tr:trace ->
   l1:label -> l2:label ->
   Lemma (l1 `can_flow tr` (l1 `meet` l2))
-  [SMTPat (l1 `can_flow tr` (l1 `meet` l2))]
 let left_flows_to_meet tr l1 l2 =
   meet_eq tr (meet l1 l2) l1 l2
 
@@ -42,9 +65,30 @@ val right_flows_to_meet:
   tr:trace ->
   l1:label -> l2:label ->
   Lemma (l2 `can_flow tr` (l1 `meet` l2))
-  [SMTPat (l2 `can_flow tr` (l1 `meet` l2))]
 let right_flows_to_meet tr l1 l2 =
   meet_eq tr (meet l1 l2) l1 l2
+
+(*** Operands flow to their meet (with SMT patterns) ***)
+
+val left_flows_to_meet_smtpat:
+  tr:trace ->
+  l:label -> l1:label -> l2:label ->
+  Lemma
+  (requires l `can_flow tr` l1)
+  (ensures l `can_flow tr` (l1 `meet` l2))
+  [SMTPat (l `can_flow tr` (l1 `meet` l2))]
+let left_flows_to_meet_smtpat tr l l1 l2 =
+  left_flows_to_meet tr l1 l2
+
+val right_flows_to_meet_smtpat:
+  tr:trace ->
+  l:label -> l1:label -> l2:label ->
+  Lemma
+  (requires l `can_flow tr` l2)
+  (ensures l `can_flow tr` (l1 `meet` l2))
+  [SMTPat (l `can_flow tr` (l1 `meet` l2))]
+let right_flows_to_meet_smtpat tr l l1 l2 =
+  right_flows_to_meet tr l1 l2
 
 (*** Equational theory for join ***)
 
@@ -67,24 +111,32 @@ val join_commutes:
 let join_commutes l1 l2 =
   intro_label_equal (l1 `join` l2) (l2 `join` l1) (fun tr -> ())
 
-val join_public:
+val join_label_public:
   l:label ->
-  Lemma (
-    (l `join` public) == public /\
-    (public `join` l) == public
-  )
-let join_public l =
-  intro_label_equal (l `join` public) public (fun tr -> ());
+  Lemma ((l `join` public) == public)
+  [SMTPat (l `join` public)]
+let join_label_public l =
+  intro_label_equal (l `join` public) public (fun tr -> ())
+
+val join_public_label:
+  l:label ->
+  Lemma ((public `join` l) == public)
+  [SMTPat (public `join` l)]
+let join_public_label l =
   intro_label_equal (public `join` l) public (fun tr -> ())
 
-val join_secret:
+val join_label_secret:
   l:label ->
-  Lemma (
-    (l `join` secret) == l /\
-    (secret `join` l) == l
-  )
-let join_secret l =
-  intro_label_equal (l `join` secret) l (fun tr -> ());
+  Lemma ((l `join` secret) == l)
+  [SMTPat (l `join` secret)]
+let join_label_secret l =
+  intro_label_equal (l `join` secret) l (fun tr -> ())
+
+val join_secret_label:
+  l:label ->
+  Lemma ((secret `join` l) == l)
+  [SMTPat (secret `join` l)]
+let join_secret_label l =
   intro_label_equal (secret `join` l) l (fun tr -> ())
 
 (*** Equational theory for meet ***)
@@ -109,37 +161,30 @@ val meet_commutes:
 let meet_commutes tr l1 l2 =
   intro_label_equal (l1 `meet` l2) (l2 `meet` l1) (fun tr -> ())
 
-val meet_public:
+val meet_label_public:
   l:label ->
-  Lemma (
-    (l `meet` public) == l /\
-    (public `meet` l) == l
-  )
-let meet_public l =
-  intro_label_equal (l `meet` public) l (fun tr -> ());
+  Lemma ((l `meet` public) == l)
+  [SMTPat (l `meet` public)]
+let meet_label_public l =
+  intro_label_equal (l `meet` public) l (fun tr -> ())
+
+val meet_public_label:
+  l:label ->
+  Lemma ((public `meet` l) == l)
+  [SMTPat (public `meet` l)]
+let meet_public_label l =
   intro_label_equal (public `meet` l) l (fun tr -> ())
 
-val meet_secret:
+val meet_label_secret:
   l:label ->
-  Lemma (
-    (l `meet` secret) == secret /\
-    (secret `meet` l) == secret
-  )
-let meet_secret l =
-  intro_label_equal (l `meet` secret) secret (fun tr -> ());
+  Lemma ((l `meet` secret) == secret)
+  [SMTPat (l `meet` secret)]
+let meet_label_secret l =
+  intro_label_equal (l `meet` secret) secret (fun tr -> ())
+
+val meet_secret_label:
+  l:label ->
+  Lemma ((secret `meet` l) == secret)
+  [SMTPat (secret `meet` l)]
+let meet_secret_label l =
   intro_label_equal (secret `meet` l) secret (fun tr -> ())
-
-(*** Can flow and corruption ***)
-
-val can_flow_propagates_is_corrupt:
-  tr:trace -> l1:label -> l2:label ->
-  Lemma
-  (requires
-    is_corrupt tr l2 /\
-    l1 `can_flow tr` l2
-  )
-  (ensures is_corrupt tr l1)
-  [SMTPat (is_corrupt tr l2); SMTPat (l1 `can_flow tr` l2)]
-let can_flow_propagates_is_corrupt tr l1 l2 =
-  flow_to_public_eq tr l1;
-  flow_to_public_eq tr l2

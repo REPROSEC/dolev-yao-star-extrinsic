@@ -248,7 +248,7 @@ val meet_eq:
   tr:trace -> x:label -> y1:label -> y2:label ->
   Lemma
   (ensures meet y1 y2 `can_flow tr` x <==> (y1 `can_flow tr` x /\ y2 `can_flow tr` x))
-  [SMTPat (meet y1 y2 `can_flow tr` x)] //Not sure about this
+  [SMTPat (meet y1 y2 `can_flow tr` x)]
 let meet_eq tr x y1 y2 =
   reveal_opaque (`%is_corrupt) (is_corrupt);
   reveal_opaque (`%can_flow) (can_flow);
@@ -260,7 +260,7 @@ val join_eq:
   tr:trace -> x1:label -> x2:label -> y:label ->
   Lemma
   (ensures y `can_flow tr` join x1 x2 <==> (y `can_flow tr` x1 /\ y `can_flow tr` x2))
-  [SMTPat (y `can_flow tr` join x1 x2)] //Not sure about this
+  [SMTPat (y `can_flow tr` join x1 x2)]
 let join_eq tr x1 x2 y =
   reveal_opaque (`%is_corrupt) (is_corrupt);
   reveal_opaque (`%can_flow) (can_flow);
@@ -272,7 +272,7 @@ val flow_to_public_eq:
   tr:trace -> l:label ->
   Lemma
   (ensures l `can_flow tr` public <==> is_corrupt tr l)
-  [SMTPat (l `can_flow tr` public)] //Not sure about this
+  [SMTPat (is_corrupt tr l)]
 let flow_to_public_eq tr prin =
   reveal_opaque (`%is_corrupt) (is_corrupt);
   reveal_opaque (`%can_flow) (can_flow);
@@ -286,8 +286,10 @@ val join_flow_to_public_eq:
   tr:trace -> x1:label -> x2:label ->
   Lemma
   (ensures (join x1 x2) `can_flow tr` public <==> x1 `can_flow tr` public \/ x2 `can_flow tr` public)
-  [SMTPat ((join x1 x2) `can_flow tr` public)] //Not sure about this
+  [SMTPat ((join x1 x2) `can_flow tr` public)]
 let join_flow_to_public_eq tr x1 x2 =
+  flow_to_public_eq tr x1;
+  flow_to_public_eq tr x2;
   reveal_opaque (`%is_corrupt) is_corrupt;
   reveal_opaque (`%can_flow) (can_flow);
   reveal_opaque (`%join) (join);
@@ -347,6 +349,7 @@ val state_pred_label_can_flow_public:
     )
   )
 let state_pred_label_can_flow_public tr p =
+  flow_to_public_eq tr (state_pred_label p);
   reveal_opaque (`%is_corrupt) is_corrupt;
   reveal_opaque (`%state_pred_label) (state_pred_label);
   FStar.Classical.forall_intro (FStar.Classical.move_requires (event_exists_fmap_trace_eq forget_label tr));
