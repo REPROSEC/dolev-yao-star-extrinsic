@@ -77,8 +77,6 @@ val compute_message1_proof:
   (ensures is_publishable tr (compute_message1 alice bob pk_b n_a nonce))
 let compute_message1_proof tr alice bob pk_b n_a nonce =
   let msg = Msg1 {n_a; alice;} in
-  assert(nsl_nonce_label alice bob `can_flow tr` (principal_label alice));
-  assert(nsl_nonce_label alice bob `can_flow tr` (principal_label bob));
   serialize_wf_lemma message (is_knowable_by (long_term_key_label alice) tr) msg;
   serialize_wf_lemma message (is_knowable_by (long_term_key_label bob) tr) msg
 
