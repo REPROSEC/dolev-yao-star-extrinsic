@@ -115,6 +115,15 @@ let add_event e tr =
   norm_spec [zeta; delta_only [`%prefix]] (prefix #label);
   ((), Snoc tr e)
 
+val add_event_event_exists:
+  e:trace_event -> tr:trace ->
+  Lemma
+  (ensures (
+    let ((), tr_out) = add_event e tr in
+    event_exists tr_out e
+  ))
+let add_event_event_exists e tr = ()
+
 /// Adding a trace event preserves the trace invariant
 /// when the trace event satisfy the invariant.
 
@@ -128,8 +137,7 @@ val add_event_invariant:
   )
   (ensures (
     let ((), tr_out) = add_event e tr in
-    trace_invariant tr_out /\
-    event_exists tr_out e
+    trace_invariant tr_out
   ))
 let add_event_invariant #invs e tr =
   norm_spec [zeta; delta_only [`%trace_invariant]] (trace_invariant)
@@ -152,6 +160,18 @@ let send_msg msg =
   add_event (MsgSent msg);*
   return time
 
+val send_msg_msg_event:
+  msg:bytes -> tr:trace ->
+  Lemma
+  (ensures (
+    let (i, tr_out) = send_msg msg tr in
+    event_at tr_out i (MsgSent msg)
+  ))
+ [SMTPat (send_msg msg tr);]
+let send_msg_msg_event msg tr =
+ reveal_opaque (`%send_msg) (send_msg)
+
+
 /// Sending a message on the network preserves the trace invariant
 /// when the message is publishable.
 
@@ -165,8 +185,7 @@ val send_msg_invariant:
   )
   (ensures (
     let (i, tr_out) = send_msg msg tr in
-    trace_invariant tr_out /\
-    event_at tr_out i (MsgSent msg)
+    trace_invariant tr_out
   ))
   [SMTPat (send_msg msg tr); SMTPat (trace_invariant tr)]
 let send_msg_invariant #invs msg tr =
@@ -186,6 +205,17 @@ let recv_msg i =
   else
     return None
 
+
+val recv_msg_same_trace:
+  i:timestamp -> tr:trace ->
+  Lemma
+  (ensures (
+    let (opt_msg, tr_out) = recv_msg i tr in
+    tr_out == tr))
+  [SMTPat (recv_msg i tr);]
+let recv_msg_same_trace i tr =
+  reveal_opaque (`%recv_msg) recv_msg
+
 /// When the trace invariant holds,
 /// received messages are publishable.
 
@@ -196,11 +226,9 @@ val recv_msg_invariant:
   (requires trace_invariant tr)
   (ensures (
     let (opt_msg, tr_out) = recv_msg i tr in
-    tr_out == tr /\ (
       match opt_msg with
       | None -> True
       | Some msg -> is_publishable tr msg
-    )
   ))
   [SMTPat (recv_msg i tr);
    SMTPat (trace_invariant tr)
@@ -252,9 +280,22 @@ let mk_rand usg lab len =
   add_event (RandGen usg lab len);*
   return (Rand len time)
 
+
+val mk_rand_rand_gen_at_end:
+  usg:usage -> lab:label -> len:nat{len <> 0} -> tr:trace ->
+  Lemma
+  (ensures (
+    let (b, tr_out) = mk_rand usg lab len tr in
+    1 <= DY.Core.Trace.Base.length tr_out /\
+    rand_generated_at tr_out (DY.Core.Trace.Base.length tr_out - 1) b
+  ))
+  [SMTPat (mk_rand usg lab len tr);]
+let mk_rand_rand_gen_at_end usg lab len tr =
+  reveal_opaque (`%mk_rand) (mk_rand)
+
+
 /// Generating a random bytestrings always preserve the trace invariant.
 
-#push-options "--z3rlimit 25"
 val mk_rand_trace_invariant:
   {|protocol_invariants|} ->
   usg:usage -> lab:label -> len:nat{len <> 0} -> tr:trace ->
@@ -262,15 +303,12 @@ val mk_rand_trace_invariant:
   (requires trace_invariant tr)
   (ensures (
     let (b, tr_out) = mk_rand usg lab len tr in
-    trace_invariant tr_out /\
-    1 <= DY.Core.Trace.Base.length tr_out /\
-    rand_generated_at tr_out (DY.Core.Trace.Base.length tr_out - 1) b
+    trace_invariant tr_out
   ))
   [SMTPat (mk_rand usg lab len tr); SMTPat (trace_invariant tr)]
 let mk_rand_trace_invariant #invs usg lab len tr =
   add_event_invariant (RandGen usg lab len) tr;
   reveal_opaque (`%mk_rand) (mk_rand)
-#pop-options
 
 /// Random bytestrings satisfy the bytes invariant.
 
@@ -418,7 +456,7 @@ let get_state prin sess_id =
 
 /// Obtaining a new state identifier do not change the trace.
 
-val new_session_id_invariant:
+val new_session_id_same_trace:
   prin:principal -> tr:trace ->
   Lemma
   (ensures (
@@ -426,13 +464,25 @@ val new_session_id_invariant:
     tr == tr_out
   ))
   [SMTPat (new_session_id prin tr)]
-let new_session_id_invariant prin tr =
+let new_session_id_same_trace prin tr =
   normalize_term_spec new_session_id
+
+
+val set_state_state_was_set:
+  prin:principal -> sess_id:state_id -> content:bytes -> tr:trace ->
+  Lemma
+  (ensures (
+    let ((), tr_out) = set_state prin sess_id content tr in
+    state_was_set tr_out prin sess_id content
+  ))
+  [SMTPat (set_state prin sess_id content tr);]
+let set_state_state_was_set prin sess_id content tr =
+  normalize_term_spec set_state
+
 
 /// Storing a state preserves the trace invariant
 /// when the state satisfy the state predicate.
 
-#push-options "--z3rlimit 15"
 val set_state_invariant:
   {|protocol_invariants|} ->
   prin:principal -> sess_id:state_id -> content:bytes -> tr:trace ->
@@ -443,14 +493,12 @@ val set_state_invariant:
   )
   (ensures (
     let ((), tr_out) = set_state prin sess_id content tr in
-    trace_invariant tr_out /\
-    state_was_set tr_out prin sess_id content
+    trace_invariant tr_out
   ))
   [SMTPat (set_state prin sess_id content tr); SMTPat (trace_invariant tr)]
 let set_state_invariant #invs prin sess_id content tr =
   add_event_invariant (SetState prin sess_id content) tr;
   normalize_term_spec set_state
-#pop-options
 
 val get_state_aux_state_invariant:
   {|protocol_invariants|} ->
@@ -486,6 +534,18 @@ let rec get_state_aux_state_invariant #invs prin sess_id tr =
     | None -> ()
     | Some content -> state_pred.pred_later tr_init tr prin sess_id content
 
+
+val get_state_same_trace:
+  prin:principal -> sess_id:state_id -> tr:trace ->
+  Lemma
+  (ensures (
+    let (opt_content, tr_out) = get_state prin sess_id tr in
+    tr == tr_out
+    ))
+  [SMTPat (get_state prin sess_id tr);]
+let get_state_same_trace prin sess_id tr =
+  reveal_opaque (`%get_state) get_state
+
 /// When the trace invariant holds,
 /// retrieved states satisfy the state predicate.
 
@@ -498,11 +558,9 @@ val get_state_state_invariant:
   )
   (ensures (
     let (opt_content, tr_out) = get_state prin sess_id tr in
-    tr == tr_out /\ (
       match opt_content with
       | None -> True
       | Some content -> state_pred.pred tr prin sess_id content
-    )
   ))
   [SMTPat (get_state prin sess_id tr); SMTPat (trace_invariant tr)]
 let get_state_state_invariant #invs prin sess_id tr =
@@ -518,6 +576,17 @@ val trigger_event: principal -> string -> bytes -> traceful unit
 let trigger_event prin tag content =
   add_event (Event prin tag content)
 
+val trigger_event_event_triggered:
+  prin:principal -> tag:string -> content:bytes -> tr:trace ->
+  Lemma
+  (ensures (
+    let ((), tr_out) = trigger_event prin tag content tr in
+    event_triggered tr_out prin tag content
+  ))
+  [SMTPat (trigger_event prin tag content tr);]
+let trigger_event_event_triggered prin tag content tr =
+  reveal_opaque (`%trigger_event) trigger_event
+
 /// Triggering a protocol event preserves the trace invariant
 /// when the protocol event satisfy the event predicate.
 
@@ -531,8 +600,7 @@ val trigger_event_trace_invariant:
   )
   (ensures (
     let ((), tr_out) = trigger_event prin tag content tr in
-    trace_invariant tr_out /\
-    event_triggered tr_out prin tag content
+    trace_invariant tr_out
   ))
   [SMTPat (trigger_event prin tag content tr); SMTPat (trace_invariant tr)]
 let trigger_event_trace_invariant #invs prin tag content tr =

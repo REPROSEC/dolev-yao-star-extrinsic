@@ -173,6 +173,20 @@ let get_state #a #ls prin sess_id =
   | None -> return None
   | Some content -> return (Some content)
 
+
+val set_state_state_was_set:
+  #a:Type -> {|ls:local_state a|} ->
+  prin:principal -> sess_id:state_id -> content:a -> tr:trace ->
+  Lemma
+  (ensures (
+    let ((), tr_out) = set_state prin sess_id content tr in
+    state_was_set tr_out prin sess_id content
+  ))
+  [SMTPat (set_state #a #ls prin sess_id content tr);]
+let set_state_state_was_set #a #ls  prin sess_id content tr =
+  reveal_opaque (`%set_state) (set_state #a);
+  reveal_opaque (`%state_was_set) (state_was_set #a #ls)
+
 val set_state_invariant:
   #a:Type -> {|local_state a|} ->
   {|protocol_invariants|} ->
@@ -186,16 +200,28 @@ val set_state_invariant:
   )
   (ensures (
     let ((), tr_out) = set_state prin sess_id content tr in
-    trace_invariant tr_out /\
-    state_was_set tr_out prin sess_id content
+    trace_invariant tr_out
   ))
   [SMTPat (set_state prin sess_id content tr);
    SMTPat (trace_invariant tr);
    SMTPat (has_local_state_predicate spred)]
 let set_state_invariant #a #ls #invs spred prin sess_id content tr =
   reveal_opaque (`%set_state) (set_state #a);
-  reveal_opaque (`%state_was_set) (state_was_set #a);
   parse_serialize_inv_lemma #bytes a content
+
+
+val get_state_same_trace:
+  #a:Type -> {|ls:local_state a|} ->
+  prin:principal -> sess_id:state_id -> tr:trace ->
+  Lemma
+  (ensures (
+    let (opt_content, tr_out) = get_state #a prin sess_id tr in
+    tr == tr_out
+    ))
+  [SMTPat (get_state #a #ls prin sess_id tr);]
+let get_state_same_trace #a #ls prin sess_id tr =
+  reveal_opaque (`%get_state) (get_state #a #ls)
+
 
 val get_state_invariant:
   #a:Type -> {|local_state a|} ->
@@ -209,12 +235,10 @@ val get_state_invariant:
   )
   (ensures (
     let (opt_content, tr_out) = get_state prin sess_id tr in
-    tr == tr_out /\ (
       match opt_content with
       | None -> True
       | Some content -> (
         spred.pred tr prin sess_id content
-      )
     )
   ))
   [SMTPat (get_state #a prin sess_id tr);

@@ -264,6 +264,19 @@ let get_tagged_state the_tag prin sess_id =
       if tag = the_tag then return (Some content)
       else return None
 
+val set_tagged_state_state_was_set:
+  tag:string -> 
+  prin:principal -> sess_id:state_id -> content:bytes -> tr:trace ->
+  Lemma
+  (ensures (
+    let ((), tr_out) = set_tagged_state tag prin sess_id content tr in
+    tagged_state_was_set tr_out tag prin sess_id content
+  ))
+  [SMTPat (set_tagged_state tag prin sess_id content tr);]
+let set_tagged_state_state_was_set tag prin sess_id content tr =
+  reveal_opaque (`%set_tagged_state) (set_tagged_state);
+  reveal_opaque (`%tagged_state_was_set) (tagged_state_was_set)
+
 val set_tagged_state_invariant:
   {|protocol_invariants|} ->
   tag:string -> spred:local_bytes_state_predicate tag ->
@@ -276,8 +289,7 @@ val set_tagged_state_invariant:
   )
   (ensures (
     let ((), tr_out) = set_tagged_state tag prin sess_id content tr in
-    trace_invariant tr_out /\
-    tagged_state_was_set tr_out tag prin sess_id content
+    trace_invariant tr_out
   ))
   [SMTPat (set_tagged_state tag prin sess_id content tr);
    SMTPat (trace_invariant tr);
@@ -285,10 +297,21 @@ val set_tagged_state_invariant:
 let set_tagged_state_invariant #invs tag spred prin sess_id content tr =
   reveal_opaque (`%has_local_bytes_state_predicate) (has_local_bytes_state_predicate);
   reveal_opaque (`%set_tagged_state) (set_tagged_state);
-  reveal_opaque (`%tagged_state_was_set) (tagged_state_was_set);
   let full_content = {tag; content;} in
-  parse_serialize_inv_lemma #bytes tagged_state full_content;
   local_eq_global_lemma split_local_bytes_state_predicate_params state_pred.pred tag spred (tr, prin, sess_id, serialize _ full_content) tag (tr, prin, sess_id, content)
+
+val get_tagged_state_same_trace:
+  tag:string -> 
+  prin:principal -> sess_id:state_id -> tr:trace ->
+  Lemma
+  (ensures (
+    let (opt_content, tr_out) = get_tagged_state tag prin sess_id tr in
+    tr == tr_out 
+    ))
+  [SMTPat (get_tagged_state tag prin sess_id tr);]
+let get_tagged_state_same_trace tag prin sess_id tr =
+  reveal_opaque (`%get_tagged_state) (get_tagged_state)
+
 
 val get_tagged_state_invariant:
   {|protocol_invariants|} ->
@@ -301,12 +324,10 @@ val get_tagged_state_invariant:
   )
   (ensures (
     let (opt_content, tr_out) = get_tagged_state tag prin sess_id tr in
-    tr == tr_out /\ (
       match opt_content with
       | None -> True
       | Some content -> (
         spred.pred tr prin sess_id content
-      )
     )
   ))
   [SMTPat (get_tagged_state tag prin sess_id tr);

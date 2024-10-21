@@ -117,6 +117,18 @@ val install_public_key_invariant:
 let install_public_key_invariant #invs prin sess_id pk_type who pk tr =
   reveal_opaque (`%install_public_key) (install_public_key)
 
+
+val get_public_key_same_trace:
+  prin:principal -> sess_id:state_id -> pk_type:long_term_key_type -> who:principal -> tr:trace ->
+  Lemma
+  (ensures (
+    let (opt_public_key, tr_out) = get_public_key prin sess_id pk_type who tr in
+    tr_out == tr
+    ))
+  [SMTPat (get_public_key prin sess_id pk_type who tr);]
+let get_public_key_same_trace prin sess_id pk_type who tr =
+  reveal_opaque (`%get_public_key) (get_public_key)
+
 val get_public_key_invariant:
   {|protocol_invariants|} ->
   prin:principal -> sess_id:state_id -> pk_type:long_term_key_type -> who:principal -> tr:trace ->
@@ -127,12 +139,10 @@ val get_public_key_invariant:
   )
   (ensures (
     let (opt_public_key, tr_out) = get_public_key prin sess_id pk_type who tr in
-    tr_out == tr /\ (
       match opt_public_key with
       | None -> True
       | Some public_key ->
         is_public_key_for tr public_key pk_type who
-    )
   ))
   [SMTPat (get_public_key prin sess_id pk_type who tr);
    SMTPat (has_pki_invariant);

@@ -137,6 +137,19 @@ val event_triggered:
 let event_triggered #a #ev tr prin e =
   exists i. event_triggered_at tr i prin e
 
+val trigger_event_event_triggered:
+  #a:Type -> {|ev:event a|} ->
+  prin:principal -> e:a -> tr:trace ->
+  Lemma
+  (ensures (
+    let ((), tr_out) = trigger_event prin e tr in
+    event_triggered tr_out prin e
+  ))
+  [SMTPat (trigger_event #a #ev prin e tr);]
+let trigger_event_event_triggered #a #ev prin e tr =
+  reveal_opaque (`%trigger_event) (trigger_event #a);
+  reveal_opaque (`%event_triggered_at) (event_triggered_at #a)
+
 val trigger_event_trace_invariant:
   {|protocol_invariants|} ->
   #a:Type -> {|ev:event a|} ->
@@ -150,8 +163,7 @@ val trigger_event_trace_invariant:
   )
   (ensures (
     let ((), tr_out) = trigger_event prin e tr in
-    trace_invariant tr_out /\
-    event_triggered tr_out prin e
+    trace_invariant tr_out
   ))
   [SMTPat (trigger_event prin e tr);
    SMTPat (has_event_pred epred);
@@ -159,8 +171,22 @@ val trigger_event_trace_invariant:
 let trigger_event_trace_invariant #invs #a #ev epred prin e tr =
   reveal_opaque (`%has_compiled_event_pred) (has_compiled_event_pred);
   reveal_opaque (`%trigger_event) (trigger_event #a);
-  reveal_opaque (`%event_triggered_at) (event_triggered_at #a);
   local_eq_global_lemma split_event_pred_params event_pred ev.tag (compile_event_pred epred) (tr, prin, ev.tag, serialize _ e) ev.tag (tr, prin, serialize _ e)
+
+
+val event_triggered_at_on_trace:
+  #a:Type -> {|ev:event a|} ->
+  tr:trace ->
+  i:timestamp -> prin:principal -> e:a ->
+  Lemma
+  (requires
+    event_triggered_at tr i prin e
+  )
+  (ensures i < DY.Core.Trace.Base.length tr)
+  [SMTPat (event_triggered_at #a #ev tr i prin e);
+  ]
+let event_triggered_at_on_trace #a #ev  tr i prin e =
+  reveal_opaque (`%event_triggered_at) (event_triggered_at #a)
 
 val event_triggered_at_implies_pred:
   {|protocol_invariants|} ->
@@ -173,7 +199,7 @@ val event_triggered_at_implies_pred:
     has_event_pred epred /\
     trace_invariant tr
   )
-  (ensures i <= DY.Core.Trace.Base.length tr /\ epred (prefix tr i) prin e)
+  (ensures epred (prefix tr i) prin e)
   [SMTPat (event_triggered_at tr i prin e);
    SMTPat (has_event_pred epred);
    SMTPat (trace_invariant tr);
@@ -200,11 +226,10 @@ val event_triggered_at_implies_trace_event_at:
   tr:trace -> i:timestamp -> prin:principal -> e:a  ->
   Lemma
   (requires event_triggered_at tr i prin e)
-  (ensures
-    i < DY.Core.Trace.Base.length tr /\
+  (ensures (
     get_event_at tr i == Event prin ev.tag (serialize a e) /\
     parse #bytes a (serialize a e) == Some e
-  )
+  ))
   [SMTPat (event_triggered_at tr i prin e)]
 let event_triggered_at_implies_trace_event_at #a #ev tr i prin e =
   reveal_opaque (`%event_triggered_at) (event_triggered_at #a);
