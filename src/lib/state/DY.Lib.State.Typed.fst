@@ -223,6 +223,27 @@ let get_state_same_trace #a #ls prin sess_id tr =
   reveal_opaque (`%get_state) (get_state #a #ls)
 
 
+val get_state_state_was_set:
+  #a:Type -> {|ls:local_state a|} ->
+  prin:principal -> sess_id:state_id -> tr:trace ->
+  Lemma
+  (ensures (
+    let (opt_content, tr_out) = get_state #a #ls prin sess_id tr in
+      match opt_content with
+      | None -> True
+      | Some content -> 
+             state_was_set tr prin sess_id content
+  ))
+  [SMTPat (get_state #a #ls prin sess_id tr)]
+let get_state_state_was_set #a #ls prin sess_id tr =
+  reveal_opaque (`%get_state) (get_state #a #ls);
+  reveal_opaque (`%state_was_set) (state_was_set #a #ls);
+  match get_state #a #ls prin sess_id tr with
+  | (None, _) -> ()
+  | (Some _, _) ->
+      let (Some cont, _) = get_tagged_state ls.tag prin sess_id tr in
+      serialize_parse_inv_lemma a cont
+  
 val get_state_invariant:
   #a:Type -> {|local_state a|} ->
   {|protocol_invariants|} ->

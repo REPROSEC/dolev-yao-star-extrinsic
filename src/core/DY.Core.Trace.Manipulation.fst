@@ -546,6 +546,44 @@ val get_state_same_trace:
 let get_state_same_trace prin sess_id tr =
   reveal_opaque (`%get_state) get_state
 
+
+val get_state_aux_state_was_set:
+  prin:principal -> sess_id:state_id -> tr:trace ->
+  Lemma
+  (ensures (
+    match get_state_aux prin sess_id tr with
+    | None -> True
+    | Some content -> 
+          state_was_set tr prin sess_id content
+  ))
+let rec get_state_aux_state_was_set prin sess_id tr =
+   match tr with
+  | Nil -> ()
+  | Snoc tr_init (SetState prin' sess_id' content) -> (
+    if prin = prin' && sess_id = sess_id' 
+    then ()
+    else get_state_aux_state_was_set prin sess_id tr_init
+  )
+  | Snoc tr_init _ ->
+         get_state_aux_state_was_set prin sess_id tr_init
+
+val get_state_state_was_set:
+  prin:principal -> sess_id:state_id -> tr:trace ->
+  Lemma
+  (ensures (
+    let (opt_content, tr_out) = get_state prin sess_id tr in
+    tr == tr_out /\ (
+      match opt_content with
+      | None -> True
+      | Some content -> 
+             state_was_set tr prin sess_id content
+    )
+  ))
+  [SMTPat (get_state prin sess_id tr)]
+let get_state_state_was_set prin sess_id tr =
+  reveal_opaque (`%get_state) get_state;
+  get_state_aux_state_was_set prin sess_id tr
+
 /// When the trace invariant holds,
 /// retrieved states satisfy the state predicate.
 
