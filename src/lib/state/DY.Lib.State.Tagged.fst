@@ -319,13 +319,10 @@ val get_tagged_state_state_was_set:
   Lemma
   (ensures (
     let (opt_content, tr_out) = get_tagged_state tag prin sess_id tr in
-    tr == tr_out /\ (
-      match opt_content with
-      | None -> True
-      | Some content -> (
-         tagged_state_was_set tr tag prin sess_id content
-      )
-    )
+    match opt_content with
+    | None -> True
+    | Some content ->
+           tagged_state_was_set tr tag prin sess_id content
   ))
   [SMTPat (get_tagged_state tag prin sess_id tr)]
 let get_tagged_state_state_was_set tag prin sess_id tr =
