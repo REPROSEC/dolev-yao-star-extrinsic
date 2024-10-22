@@ -501,41 +501,6 @@ let set_state_invariant #invs prin sess_id content tr =
   add_event_invariant (SetState prin sess_id content) tr;
   normalize_term_spec set_state
 
-val get_state_aux_state_invariant:
-  {|protocol_invariants|} ->
-  prin:principal -> sess_id:state_id -> tr:trace ->
-  Lemma
-  (requires
-    trace_invariant tr
-  )
-  (ensures (
-    match get_state_aux prin sess_id tr with
-    | None -> True
-    | Some content -> state_pred.pred tr prin sess_id content
-  ))
-let rec get_state_aux_state_invariant #invs prin sess_id tr =
-  reveal_opaque (`%grows) (grows #label);
-  norm_spec [zeta; delta_only [`%trace_invariant]] (trace_invariant);
-  norm_spec [zeta; delta_only [`%prefix]] (prefix #label);
-  match tr with
-  | Nil -> ()
-  | Snoc tr_init (SetState prin' sess_id' content) -> (
-    if prin = prin' && sess_id = sess_id' then (
-      state_pred.pred_later tr_init tr prin sess_id content
-    ) else (
-      get_state_aux_state_invariant prin sess_id tr_init;
-      match get_state_aux prin sess_id tr_init with
-      | None -> ()
-      | Some content -> state_pred.pred_later tr_init tr prin sess_id content
-    )
-  )
-  | Snoc tr_init _ ->
-    get_state_aux_state_invariant prin sess_id tr_init;
-    match get_state_aux prin sess_id tr_init with
-    | None -> ()
-    | Some content -> state_pred.pred_later tr_init tr prin sess_id content
-
-
 val get_state_same_trace:
   prin:principal -> sess_id:state_id -> tr:trace ->
   Lemma
@@ -555,7 +520,7 @@ val get_state_aux_state_was_set:
     match get_state_aux prin sess_id tr with
     | None -> True
     | Some content -> 
-          state_was_set tr prin sess_id content
+        state_was_set tr prin sess_id content
   ))
 let rec get_state_aux_state_was_set prin sess_id tr =
    match tr with
@@ -577,7 +542,7 @@ val get_state_state_was_set:
       match opt_content with
       | None -> True
       | Some content -> 
-             state_was_set tr prin sess_id content
+          state_was_set tr prin sess_id content
     )
   ))
   [SMTPat (get_state prin sess_id tr)]

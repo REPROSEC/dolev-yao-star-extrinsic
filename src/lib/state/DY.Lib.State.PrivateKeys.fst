@@ -195,9 +195,9 @@ val get_private_key_invariant:
   )
   (ensures (
     let (opt_private_key, tr_out) = get_private_key prin sess_id pk_type tr in
-      match opt_private_key with
-      | None -> True
-      | Some private_key ->
+    match opt_private_key with
+    | None -> True
+    | Some private_key ->
         is_private_key_for tr private_key pk_type prin
   ))
   [SMTPat (get_private_key prin sess_id pk_type tr);
@@ -229,9 +229,9 @@ val compute_public_key_invariant:
   )
   (ensures (
     let (opt_private_key, tr_out) = compute_public_key prin sess_id pk_type tr in
-      match opt_private_key with
-      | None -> True
-      | Some private_key ->
+    match opt_private_key with
+    | None -> True
+    | Some private_key ->
         is_public_key_for tr private_key pk_type prin
   ))
   [SMTPat (compute_public_key prin sess_id pk_type tr);

@@ -139,9 +139,9 @@ val get_public_key_invariant:
   )
   (ensures (
     let (opt_public_key, tr_out) = get_public_key prin sess_id pk_type who tr in
-      match opt_public_key with
-      | None -> True
-      | Some public_key ->
+    match opt_public_key with
+    | None -> True
+    | Some public_key ->
         is_public_key_for tr public_key pk_type who
   ))
   [SMTPat (get_public_key prin sess_id pk_type who tr);
