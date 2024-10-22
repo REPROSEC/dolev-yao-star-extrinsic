@@ -585,27 +585,6 @@ let get_state_state_was_set prin sess_id tr =
   reveal_opaque (`%get_state) get_state;
   get_state_aux_state_was_set prin sess_id tr
 
-/// When the trace invariant holds,
-/// retrieved states satisfy the state predicate.
-
-val get_state_state_invariant:
-  {|protocol_invariants|} ->
-  prin:principal -> sess_id:state_id -> tr:trace ->
-  Lemma
-  (requires
-    trace_invariant tr
-  )
-  (ensures (
-    let (opt_content, tr_out) = get_state prin sess_id tr in
-      match opt_content with
-      | None -> True
-      | Some content -> state_pred.pred tr prin sess_id content
-  ))
-  [SMTPat (get_state prin sess_id tr); SMTPat (trace_invariant tr)]
-let get_state_state_invariant #invs prin sess_id tr =
-  normalize_term_spec get_state;
-  get_state_aux_state_invariant prin sess_id tr
-
 (*** Event triggering ***)
 
 /// Trigger a protocol event.

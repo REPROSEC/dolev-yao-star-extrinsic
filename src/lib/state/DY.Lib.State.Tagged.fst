@@ -335,36 +335,6 @@ let get_tagged_state_state_was_set tag prin sess_id tr =
     serialize_parse_inv_lemma #bytes tagged_state full_cont_bytes    
   )
 
-val get_tagged_state_invariant:
-  {|protocol_invariants|} ->
-  tag:string -> spred:local_bytes_state_predicate tag ->
-  prin:principal -> sess_id:state_id -> tr:trace ->
-  Lemma
-  (requires
-    trace_invariant tr /\
-    has_local_bytes_state_predicate (|tag, spred|)
-  )
-  (ensures (
-    let (opt_content, tr_out) = get_tagged_state tag prin sess_id tr in
-      match opt_content with
-      | None -> True
-      | Some content -> (
-        spred.pred tr prin sess_id content
-    )
-  ))
-  [SMTPat (get_tagged_state tag prin sess_id tr);
-   SMTPat (trace_invariant tr);
-   SMTPat (has_local_bytes_state_predicate (|tag, spred|))]
-let get_tagged_state_invariant #invs tag spred prin sess_id tr =
-  reveal_opaque (`%has_local_bytes_state_predicate) (has_local_bytes_state_predicate);
-  reveal_opaque (`%get_tagged_state) (get_tagged_state);
-  let (opt_content, tr_out) = get_tagged_state tag prin sess_id tr in
-  match opt_content with
-  | None -> ()
-  | Some content ->
-    let (Some full_content_bytes, tr) = get_state prin sess_id tr in
-    local_eq_global_lemma split_local_bytes_state_predicate_params state_pred.pred tag spred (tr, prin, sess_id, full_content_bytes) tag (tr, prin, sess_id, content)
-
 (*** Theorem ***)
 
 val tagged_state_was_set_implies_pred:

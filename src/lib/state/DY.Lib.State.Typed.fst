@@ -243,30 +243,6 @@ let get_state_state_was_set #a #ls prin sess_id tr =
   | (Some _, _) ->
       let (Some cont, _) = get_tagged_state ls.tag prin sess_id tr in
       serialize_parse_inv_lemma a cont
-  
-val get_state_invariant:
-  #a:Type -> {|local_state a|} ->
-  {|protocol_invariants|} ->
-  spred:local_state_predicate a ->
-  prin:principal -> sess_id:state_id -> tr:trace ->
-  Lemma
-  (requires
-    trace_invariant tr /\
-    has_local_state_predicate spred
-  )
-  (ensures (
-    let (opt_content, tr_out) = get_state prin sess_id tr in
-      match opt_content with
-      | None -> True
-      | Some content -> (
-        spred.pred tr prin sess_id content
-    )
-  ))
-  [SMTPat (get_state #a prin sess_id tr);
-   SMTPat (trace_invariant tr);
-   SMTPat (has_local_state_predicate spred)]
-let get_state_invariant #a #ls #invs spred prin sess_id tr =
-  reveal_opaque (`%get_state) (get_state #a)
 
 val state_was_set_implies_pred:
   #a:Type -> {|local_state a|} ->
