@@ -246,7 +246,7 @@ val find_value_same_trace:
   (ensures (
     let (opt_value, tr_out) = find_value #_ #value_t prin sess_id key tr in
     tr_out == tr
-    ))
+  ))
   [SMTPat (find_value #key_t #value_t prin sess_id key tr)]
 let find_value_same_trace #key_t #value_t #mt prin sess_id key tr =
   reveal_opaque (`%find_value) (find_value #key_t #value_t)
