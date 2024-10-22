@@ -217,7 +217,7 @@ val get_state_same_trace:
   (ensures (
     let (opt_content, tr_out) = get_state #a prin sess_id tr in
     tr == tr_out
-    ))
+  ))
   [SMTPat (get_state #a #ls prin sess_id tr);]
 let get_state_same_trace #a #ls prin sess_id tr =
   reveal_opaque (`%get_state) (get_state #a #ls)
