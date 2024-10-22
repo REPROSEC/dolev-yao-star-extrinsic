@@ -213,7 +213,7 @@ val compute_public_key_same_trace:
   (ensures (
     let (opt_private_key, tr_out) = compute_public_key prin sess_id pk_type tr in
     tr_out == tr
-    ))
+  ))
   [SMTPat (compute_public_key prin sess_id pk_type tr);]
 let compute_public_key_same_trace prin sess_id pk_type tr =
   reveal_opaque (`%compute_public_key) (compute_public_key)
