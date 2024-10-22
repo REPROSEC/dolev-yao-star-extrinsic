@@ -173,6 +173,18 @@ val generate_private_key_invariant:
 let generate_private_key_invariant #invs prin sess_id sk_type tr =
   reveal_opaque (`%generate_private_key) (generate_private_key)
 
+val get_private_key_same_trace:
+  prin:principal -> sess_id:state_id -> pk_type:long_term_key_type -> tr:trace ->
+  Lemma
+  (ensures (
+    let (opt_private_key, tr_out) = get_private_key prin sess_id pk_type tr in
+    tr_out == tr
+  ))
+  [SMTPat (get_private_key prin sess_id pk_type tr);]
+let get_private_key_same_trace prin sess_id pk_type tr =
+  reveal_opaque (`%get_private_key) (get_private_key)
+
+
 val get_private_key_invariant:
   {|protocol_invariants|} ->
   prin:principal -> sess_id:state_id -> pk_type:long_term_key_type -> tr:trace ->
@@ -183,18 +195,29 @@ val get_private_key_invariant:
   )
   (ensures (
     let (opt_private_key, tr_out) = get_private_key prin sess_id pk_type tr in
-    tr_out == tr /\ (
-      match opt_private_key with
-      | None -> True
-      | Some private_key ->
+    match opt_private_key with
+    | None -> True
+    | Some private_key ->
         is_private_key_for tr private_key pk_type prin
-    )
   ))
   [SMTPat (get_private_key prin sess_id pk_type tr);
    SMTPat (has_private_keys_invariant);
    SMTPat (trace_invariant tr)]
 let get_private_key_invariant #invs prin sess_id pk_type tr =
   reveal_opaque (`%get_private_key) (get_private_key)
+
+
+val compute_public_key_same_trace:
+  prin:principal -> sess_id:state_id -> pk_type:long_term_key_type -> tr:trace ->
+  Lemma
+  (ensures (
+    let (opt_private_key, tr_out) = compute_public_key prin sess_id pk_type tr in
+    tr_out == tr
+  ))
+  [SMTPat (compute_public_key prin sess_id pk_type tr);]
+let compute_public_key_same_trace prin sess_id pk_type tr =
+  reveal_opaque (`%compute_public_key) (compute_public_key)
+
 
 val compute_public_key_invariant:
   {|protocol_invariants|} ->
@@ -206,12 +229,10 @@ val compute_public_key_invariant:
   )
   (ensures (
     let (opt_private_key, tr_out) = compute_public_key prin sess_id pk_type tr in
-    tr_out == tr /\ (
-      match opt_private_key with
-      | None -> True
-      | Some private_key ->
+    match opt_private_key with
+    | None -> True
+    | Some private_key ->
         is_public_key_for tr private_key pk_type prin
-    )
   ))
   [SMTPat (compute_public_key prin sess_id pk_type tr);
    SMTPat (has_private_keys_invariant);

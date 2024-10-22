@@ -254,6 +254,20 @@ val event_at_grows:
   [SMTPat (event_at tr1 i e); SMTPat (tr1 <$ tr2)]
 let event_at_grows #label_t tr1 tr2 i e = ()
 
+val last_entry_exists:
+  #label_t:Type ->
+  tr:trace_ label_t ->
+  Lemma
+    (requires Snoc? tr )
+    (ensures (
+       let Snoc _ last = tr in
+       event_exists tr last
+    ))
+    [SMTPat (Snoc? tr)]
+let last_entry_exists tr = 
+  let Snoc _ last = tr in
+  assert(event_at tr (DY.Core.Trace.Base.length tr - 1) last)
+
 /// Shorthand predicates.
 
 /// Has a message been sent on the network?

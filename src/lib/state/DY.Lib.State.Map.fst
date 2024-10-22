@@ -237,6 +237,20 @@ let add_key_value_invariant #invs #key_t #value_t #mt mpred prin sess_id key val
   reveal_opaque (`%add_key_value) (add_key_value #key_t #value_t)
 #pop-options
 
+val find_value_same_trace:
+  #key_t:eqtype -> #value_t:Type0 -> {|map_types key_t value_t|} ->
+  prin:principal -> sess_id:state_id ->
+  key:key_t ->
+  tr:trace ->
+  Lemma
+  (ensures (
+    let (opt_value, tr_out) = find_value #_ #value_t prin sess_id key tr in
+    tr_out == tr
+  ))
+  [SMTPat (find_value #key_t #value_t prin sess_id key tr)]
+let find_value_same_trace #key_t #value_t #mt prin sess_id key tr =
+  reveal_opaque (`%find_value) (find_value #key_t #value_t)
+
 val find_value_invariant:
   {|protocol_invariants|} ->
   #key_t:eqtype -> #value_t:Type0 -> {|map_types key_t value_t|} ->
@@ -251,13 +265,11 @@ val find_value_invariant:
   )
   (ensures (
     let (opt_value, tr_out) = find_value prin sess_id key tr in
-    tr_out == tr /\ (
       match opt_value with
       | None -> True
       | Some value -> (
         mpred.pred tr prin sess_id key value
       )
-    )
   ))
   [SMTPat (find_value #key_t #value_t prin sess_id key tr);
    SMTPat (has_map_session_invariant mpred);
