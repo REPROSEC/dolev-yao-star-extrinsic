@@ -124,7 +124,7 @@ val get_public_key_same_trace:
   (ensures (
     let (opt_public_key, tr_out) = get_public_key prin sess_id pk_type who tr in
     tr_out == tr
-    ))
+  ))
   [SMTPat (get_public_key prin sess_id pk_type who tr);]
 let get_public_key_same_trace prin sess_id pk_type who tr =
   reveal_opaque (`%get_public_key) (get_public_key)
