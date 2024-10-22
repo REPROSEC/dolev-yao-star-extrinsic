@@ -211,7 +211,8 @@ val recv_msg_same_trace:
   Lemma
   (ensures (
     let (opt_msg, tr_out) = recv_msg i tr in
-    tr_out == tr))
+    tr_out == tr
+  ))
   [SMTPat (recv_msg i tr);]
 let recv_msg_same_trace i tr =
   reveal_opaque (`%recv_msg) recv_msg
