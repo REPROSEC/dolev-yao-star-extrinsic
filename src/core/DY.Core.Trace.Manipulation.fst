@@ -538,12 +538,10 @@ val get_state_state_was_set:
   Lemma
   (ensures (
     let (opt_content, tr_out) = get_state prin sess_id tr in
-    tr == tr_out /\ (
-      match opt_content with
-      | None -> True
-      | Some content -> 
-          state_was_set tr prin sess_id content
-    )
+    match opt_content with
+    | None -> True
+    | Some content ->
+        state_was_set tr prin sess_id content
   ))
   [SMTPat (get_state prin sess_id tr)]
 let get_state_state_was_set prin sess_id tr =
