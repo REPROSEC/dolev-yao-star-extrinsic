@@ -307,7 +307,7 @@ val get_tagged_state_same_trace:
   (ensures (
     let (opt_content, tr_out) = get_tagged_state tag prin sess_id tr in
     tr == tr_out 
-    ))
+  ))
   [SMTPat (get_tagged_state tag prin sess_id tr);]
 let get_tagged_state_same_trace tag prin sess_id tr =
   reveal_opaque (`%get_tagged_state) (get_tagged_state)
@@ -326,8 +326,7 @@ val get_tagged_state_state_was_set:
          tagged_state_was_set tr tag prin sess_id content
       )
     )
-  )
-  )
+  ))
   [SMTPat (get_tagged_state tag prin sess_id tr)]
 let get_tagged_state_state_was_set tag prin sess_id tr =
   reveal_opaque (`%get_tagged_state) (get_tagged_state);
