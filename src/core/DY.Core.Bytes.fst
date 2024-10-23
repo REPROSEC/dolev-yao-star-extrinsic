@@ -1234,18 +1234,25 @@ let bytes_well_formed_literal_to_bytes tr lit =
   normalize_term_spec literal_to_bytes
 
 /// User lemma (bytes invariant).
-/// Coincidentally this is the same as the attacker knowledge lemma above,
-/// but with an SMT pattern.
 
 val bytes_invariant_literal_to_bytes:
   {|crypto_invariants|} -> tr:trace ->
   lit:FStar.Seq.seq FStar.UInt8.t ->
   Lemma
-  (ensures is_publishable tr (literal_to_bytes lit))
+  (ensures bytes_invariant tr (literal_to_bytes lit))
   [SMTPat (bytes_invariant tr (literal_to_bytes lit))]
 let bytes_invariant_literal_to_bytes #cinvs tr lit =
   normalize_term_spec literal_to_bytes;
-  normalize_term_spec bytes_invariant;
+  normalize_term_spec bytes_invariant
+
+val get_label_literal_to_bytes:
+  {|crypto_usages|} -> tr:trace ->
+  lit:FStar.Seq.seq FStar.UInt8.t ->
+  Lemma
+  (ensures get_label tr (literal_to_bytes lit) == public)
+  [SMTPat (get_label tr (literal_to_bytes lit))]
+let get_label_literal_to_bytes #cusgs tr lit =
+  normalize_term_spec literal_to_bytes;
   normalize_term_spec get_label
 
 (*** Concatenation ***)
