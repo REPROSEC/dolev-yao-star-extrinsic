@@ -6,7 +6,7 @@ include DY.Lib.Communication.API
 
 // Predicates that provide the guarantees
 // for the higher layer protocols
-include DY.Lib.Communication.API.Predicates
+include DY.Lib.Communication.API.Invariants
 
 // Proof that the API functions fulfill the
 // predicates
