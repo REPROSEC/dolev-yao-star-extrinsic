@@ -1,4 +1,4 @@
-module DY.Lib.Communication.API.Predicates
+module DY.Lib.Communication.API.Invariants
 
 open Comparse
 open DY.Core
@@ -12,22 +12,17 @@ open DY.Lib.Communication.API
 
 (*** PkEnc Predicates ***)
 
-#push-options "--ifuel 3 --fuel 0"
 val pkenc_crypto_predicates_communication_layer: cusages:crypto_usages -> pkenc_crypto_predicate cusages
 let pkenc_crypto_predicates_communication_layer cusages = {
   pred = (fun tr pk msg ->
     get_sk_usage pk == PkKey comm_layer_pkenc_tag empty /\
-      (match parse communication_message msg with
-      | Some (CM {sender; receiver; payload}) -> (
-        get_sk_label pk == principal_label receiver /\
-        (get_label payload) `can_flow tr` (join (principal_label sender) (principal_label receiver)) /\
-        event_triggered tr sender (CommConfSendMsg sender receiver payload)
-      )
-      | _ -> False)
-    );
+    (exists sender receiver.
+      get_sk_label pk == principal_label receiver /\
+      (get_label msg) `can_flow tr` (join (principal_label sender) (principal_label receiver)) /\
+      event_triggered tr sender (CommConfSendMsg sender receiver msg)
+    ));
   pred_later = (fun tr1 tr2 pk msg -> ());
 }
-#pop-options
 
 val pkenc_crypto_predicates_communication_layer_and_tag: 
   {|cusages:crypto_usages|} ->
@@ -37,18 +32,57 @@ let pkenc_crypto_predicates_communication_layer_and_tag #cusages =
 
 (*** Sign Predicates ***)
 
+(*val pk_enc_extract_msg: enc_msg:bytes -> option bytes
+let pk_enc_extract_msg enc_msg =
+  match enc_msg with
+  | DY.Core.Bytes.Type.PkEnc pk nonce msg -> Some msg
+  | _ -> None
+
+val pk_enc_extract_sk: enc_msg:bytes -> option bytes
+let pk_enc_extract_sk enc_msg =
+  match enc_msg with
+  | DY.Core.Bytes.Type.PkEnc pk nonce msg -> (
+    match pk with
+    | DY.Core.Bytes.Type.Pk sk -> Some sk
+    | _ -> None
+  )
+  | _ -> None*)
+
 #push-options "--ifuel 3 --fuel 0"
 val sign_crypto_predicates_communication_layer: cusages:crypto_usages -> sign_crypto_predicate cusages
 let sign_crypto_predicates_communication_layer cusages = {
   pred = (fun tr vk sig_msg ->
     get_signkey_usage vk == SigKey comm_layer_sign_tag empty /\
-    (match parse communication_message sig_msg with
-    | Some (CM {sender; receiver; payload}) -> (
+    (match parse signature_input sig_msg with
+    | Some (Plain {sender; receiver; payload}) -> (
       get_signkey_label vk == principal_label sender /\
       get_label payload `can_flow tr` public /\
       event_triggered tr sender (CommAuthSendMsg sender payload)
     )
-    | _ -> False)
+    | Some (Encrypted {sender; receiver; payload=enc_payload}) -> (      
+      get_signkey_label vk == principal_label sender /\
+      get_label enc_payload `can_flow tr` public /\
+      
+      (exists plain_msg nonce pk_receiver.
+        //pk_enc_extract_pk enc_payload == Some (DY.Core.Bytes.Type.Pk sk_receiver) /\
+        //Some plain_msg == decrypt_message sk_receiver enc_payload /\
+        //get_label sk_receiver == principal_label receiver /\
+        enc_payload == encrypt_message pk_receiver nonce plain_msg /\
+        event_triggered tr sender (CommConfSendMsg sender receiver plain_msg) /\
+        event_triggered tr sender (CommAuthSendMsg sender plain_msg) /\
+        event_triggered tr sender (CommConfAuthSendMsg sender receiver plain_msg) /\
+        get_label plain_msg `can_flow tr` (join (principal_label sender) (principal_label receiver))
+      )
+      (*match payload with
+      | DY.Core.Bytes.Type.PkEnc pk nonce msg -> (
+        get_sk_usage pk == PkKey comm_layer_pkenc_tag empty /\
+        get_sk_label pk == principal_label receiver /\
+        get_label msg `can_flow tr` (join (principal_label sender) (principal_label receiver)) /\
+        event_triggered tr sender (CommConfSendMsg sender receiver msg)
+      )
+      | _ -> False*)
+    )
+    | None -> False)
   );
   pred_later = (fun tr1 tr2 vk msg -> ());
 }
@@ -72,23 +106,19 @@ let has_communication_layer_invariants cinvs =
 noeq
 type comm_higher_layer_event_preds = {
   send_conf: sender:principal -> receiver:principal -> payload:bytes -> tr:trace -> prop;
-  // TODO do we need extensibility on the receiver side?
-  receive_conf: sender:principal -> receiver:principal -> payload:bytes -> tr:trace -> prop;
   send_auth: sender:principal -> payload:bytes -> tr:trace -> prop;
-  // TODO do we need extensibility on the receiver side?
-  receive_auth: sender:principal -> receiver:principal -> payload:bytes -> tr:trace -> prop;
+  send_conf_auth: sender:principal -> receiver:principal -> payload:bytes -> tr:trace -> prop;
 }
 
 val default_comm_higher_layer_event_preds: comm_higher_layer_event_preds
 let default_comm_higher_layer_event_preds = {
-  send_conf = (fun tr sender receiver payload -> True);
-  receive_conf = (fun tr sender receiver payload -> True);
-  send_auth = (fun tr sender payload -> True);
-  receive_auth = (fun tr sender receiver payload -> True);
+  send_conf = (fun sender receiver payload tr -> True);
+  send_auth = (fun sender payload tr -> True);
+  send_conf_auth = (fun sender receiver payload tr -> True);
 }
 
-val comm_higher_layer_event_preds_later: trace -> (trace -> prop) -> prop
-let comm_higher_layer_event_preds_later tr higher_layer_preds =
+val comm_layer_preds_later: trace -> (trace -> prop) -> prop
+let comm_layer_preds_later tr higher_layer_preds =
   forall tr'. tr <$ tr' ==> higher_layer_preds tr'
 
 #push-options "--ifuel 1 --fuel 0"
@@ -99,11 +129,11 @@ let event_predicate_communication_layer {|cinvs:crypto_invariants|} (higher_laye
       is_knowable_by (join (principal_label sender) (principal_label receiver)) tr payload /\
       higher_layer_preds.send_conf sender receiver payload tr
     )
-    | CommConfReceiveMsg sender receiver payload -> (
+    | CommConfReceiveMsg receiver payload -> (
+      exists sender.
       (
         event_triggered tr sender (CommConfSendMsg sender receiver payload) /\
-        is_knowable_by (join (principal_label sender) (principal_label receiver)) tr payload /\
-        higher_layer_preds.receive_conf sender receiver payload tr
+        is_knowable_by (join (principal_label sender) (principal_label receiver)) tr payload
       ) \/ (
         is_publishable tr payload
       )
@@ -115,9 +145,22 @@ let event_predicate_communication_layer {|cinvs:crypto_invariants|} (higher_laye
       is_publishable tr payload /\
       (
         (
-          event_triggered tr sender (CommAuthSendMsg sender payload) /\
-          higher_layer_preds.receive_auth sender receiver payload tr
+          event_triggered tr sender (CommAuthSendMsg sender payload)
         ) \/
+        is_corrupt tr (principal_label sender)
+      )
+    )
+    | CommConfAuthSendMsg sender receiver payload -> (
+      is_knowable_by (join (principal_label sender) (principal_label receiver)) tr payload /\
+      higher_layer_preds.send_conf_auth sender receiver payload tr
+    )
+    | CommConfAuthReceiveMsg sender receiver payload -> (
+      (
+        //event_triggered tr sender (CommConfSendMsg sender receiver payload) /\
+        //event_triggered tr sender (CommAuthSendMsg sender payload) /\
+        //is_knowable_by (join (principal_label sender) (principal_label receiver)) tr payload
+        event_triggered tr sender (CommConfAuthSendMsg sender receiver payload)
+      ) \/ (
         is_corrupt tr (principal_label sender)
       )
     ))
