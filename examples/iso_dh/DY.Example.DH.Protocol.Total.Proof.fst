@@ -31,14 +31,13 @@ instance dh_crypto_usages = {
 }
 
 #push-options "--ifuel 2 --fuel 0"
-val dh_crypto_preds: crypto_predicates dh_crypto_usages
+val dh_crypto_preds: crypto_predicates
 let dh_crypto_preds = {
-  default_crypto_predicates dh_crypto_usages with
+  default_crypto_predicates with
 
   sign_pred = {
-    pred = (fun tr vk sig_msg ->
-      get_signkey_usage vk == SigKey "DH.SigningKey" empty /\
-      (exists prin. get_signkey_label vk = principal_label prin /\ (
+    pred = (fun tr sk_usage sig_msg ->
+      (exists prin. sk_usage == long_term_key_type_to_usage (LongTermSigKey "DH.SigningKey") prin /\ (
         match parse sig_message sig_msg with
         | Some (SigMsg2 sig_msg2) -> (
           exists y. sig_msg2.gy == (dh_pk y) /\ event_triggered tr prin (Respond1 sig_msg2.alice prin sig_msg2.gx sig_msg2.gy y)
@@ -67,8 +66,7 @@ val compute_message1_proof:
   Lemma
     (requires
       event_triggered tr alice (Initiate1 alice bob x) /\
-      bytes_invariant tr x /\
-      DhKey? (get_usage x)
+      bytes_invariant tr x
     )
     (ensures 
       is_publishable tr (compute_message1 alice x)
@@ -87,7 +85,7 @@ let compute_message1_proof tr alice bob x =
   // It just shows what we need to show to prove the lemma.
   let msgb = compute_message1 alice x in 
   assert(bytes_invariant tr msgb);
-  assert(get_label msgb `can_flow tr` public);
+  assert(get_label tr msgb `can_flow tr` public);
   assert(is_publishable tr msgb);
   ()
 
@@ -115,7 +113,7 @@ let decode_message1_proof tr msg1_bytes =
       // The following code is not needed for the proof.
       // It just shows what we need to show to prove the lemma.
       assert(bytes_invariant tr msg1.gx);
-      assert(get_label msg1.gx `can_flow tr` public);
+      assert(get_label tr msg1.gx `can_flow tr` public);
       ()
     )
     | None -> ()
@@ -130,9 +128,9 @@ val compute_message2_proof:
     event_triggered tr bob (Respond1 alice bob gx (dh_pk y) y) /\
     is_publishable tr gx /\
     bytes_invariant tr y /\
-    is_signature_key (SigKey "DH.SigningKey" empty) (principal_label bob) tr sk_b /\
-    is_secret (principal_label bob) tr n_sig /\
-    SigNonce? (get_usage n_sig)
+    is_private_key_for tr sk_b (LongTermSigKey "DH.SigningKey") bob /\
+    is_secret (long_term_key_label bob) tr n_sig /\
+    n_sig `has_usage tr` SigNonce
   )
   (ensures
     is_publishable tr (compute_message2 alice bob gx (dh_pk y) sk_b n_sig)
@@ -165,7 +163,7 @@ let compute_message2_proof tr alice bob gx y sk_b n_sig =
   assert(is_publishable tr (compute_message2 alice bob gx gy sk_b n_sig));
   ()
 
-#push-options "--ifuel 1 --z3rlimit 10"
+#push-options "--ifuel 1 --z3rlimit 20"
 val decode_and_verify_message2_proof:
   tr:trace ->
   msg2_bytes:bytes ->
@@ -174,15 +172,15 @@ val decode_and_verify_message2_proof:
   Lemma
   (requires
     is_publishable tr msg2_bytes /\
-    is_secret (principal_state_label alice alice_si) tr x /\
-    is_verification_key (SigKey "DH.SigningKey" empty) (principal_label bob) tr pk_b
+    is_secret (ephemeral_dh_key_label alice alice_si) tr x /\
+    is_public_key_for tr pk_b (LongTermSigKey "DH.SigningKey") bob
   )
   (ensures (
     match decode_and_verify_message2 msg2_bytes alice x pk_b with
     | Some res -> (
       let sig_msg = SigMsg2 {alice; gx=(dh_pk x); gy=res.gy} in
       is_publishable tr res.gy /\
-      (is_corrupt tr (principal_state_label alice alice_si) \/ is_corrupt tr (principal_label bob) \/
+      (is_corrupt tr (long_term_key_label bob) \/
       (exists y. event_triggered tr bob (Respond1 alice bob (dh_pk x) res.gy y)))
     )
     | None -> True
@@ -199,8 +197,8 @@ let decode_and_verify_message2_proof tr msg2_bytes alice alice_si bob x pk_b =
       // It just shows what we need to show to prove the lemma.
       assert(is_publishable tr res.gy);
       
-      assert(is_corrupt tr (principal_label alice) \/
-        is_corrupt tr (principal_label bob) \/
+      assert(
+        is_corrupt tr (long_term_key_label bob) \/
         (exists y. res.gy == dh_pk y /\ event_triggered tr bob (Respond1 alice bob gx gy y))
       );
       ()
@@ -218,9 +216,9 @@ val compute_message3_proof:
     event_triggered tr alice (Initiate2 alice bob (dh_pk x) gy (dh x gy)) /\
     is_publishable tr gx /\ is_publishable tr gy /\
     gx = dh_pk x /\
-    is_signature_key (SigKey "DH.SigningKey" empty) (principal_label alice) tr sk_a /\
-    is_secret (principal_label alice) tr n_sig /\
-    SigNonce? (get_usage n_sig)
+    is_private_key_for tr sk_a (LongTermSigKey "DH.SigningKey") alice /\
+    is_secret (long_term_key_label alice) tr n_sig /\
+    n_sig `has_usage tr` SigNonce
   )
   (ensures
     is_publishable tr (compute_message3 alice bob (dh_pk x) gy sk_a n_sig)
@@ -236,7 +234,7 @@ let compute_message3_proof tr alice bob gx gy x sk_a n_sig =
 
   // The following code is not needed for the proof.
   // It just shows what we need to show to prove the lemma. 
-  assert(get_label sg `can_flow tr` public);
+  assert(get_label tr sg `can_flow tr` public);
   assert(bytes_invariant tr sg);
   assert(is_publishable tr sg);
 
@@ -248,7 +246,7 @@ let compute_message3_proof tr alice bob gx gy x sk_a n_sig =
   assert(is_publishable tr (serialize message msg));
   ()
 
-#push-options "--ifuel 1 --z3rlimit 10"
+#push-options "--ifuel 1 --z3rlimit 25"
 val decode_and_verify_message3_proof:
   tr:trace ->
   msg3_bytes:bytes ->
@@ -258,15 +256,15 @@ val decode_and_verify_message3_proof:
   (requires
     is_publishable tr msg3_bytes /\
     is_publishable tr gx /\
-    is_secret (principal_state_label bob bob_si) tr y /\
-    is_verification_key (SigKey "DH.SigningKey" empty) (principal_label alice) tr pk_a
+    is_secret (ephemeral_dh_key_label bob bob_si) tr y /\
+    is_public_key_for tr pk_a (LongTermSigKey "DH.SigningKey") alice
   )
   (ensures (
     let gy = dh_pk y in
     match decode_and_verify_message3 msg3_bytes bob gx gy y pk_a with
     | Some res -> (
       let sig_msg = SigMsg3 {bob; gx; gy} in
-      (is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_state_label bob bob_si) \/
+      (is_corrupt tr (long_term_key_label alice) \/
       (exists x. gx == dh_pk x /\ event_triggered tr alice (Initiate2 alice bob gx gy (dh x gy))))
     )
     | None -> True

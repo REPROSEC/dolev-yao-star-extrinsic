@@ -1,6 +1,7 @@
 module DY.Core.Trace.Invariant
 
 open DY.Core.Trace.Type
+open DY.Core.Trace.Base
 open DY.Core.Bytes.Type
 open DY.Core.Bytes
 open DY.Core.Label.Type
@@ -28,7 +29,7 @@ open DY.Core.Label
 /// to ensure that the every bytestring obtained by the attacker by corruption are publishable.
 
 noeq
-type state_predicate (cinvs:crypto_invariants) = {
+type state_predicate {|crypto_invariants|} = {
   pred: trace -> principal -> state_id -> bytes -> prop;
   // TODO: Do we want the later lemma?
   pred_later:
@@ -44,7 +45,7 @@ type state_predicate (cinvs:crypto_invariants) = {
     Lemma
     (requires pred tr prin sess_id content)
     (ensures
-      is_knowable_by (principal_state_label prin sess_id) tr content
+      is_knowable_by (principal_state_content_label prin sess_id content) tr content
     )
   ;
 }
@@ -52,8 +53,8 @@ type state_predicate (cinvs:crypto_invariants) = {
 /// The parameters of the trace invariant.
 
 noeq
-type trace_invariants (cinvs:crypto_invariants) = {
-  state_pred: state_predicate cinvs;
+type trace_invariants {|crypto_invariants|} = {
+  state_pred: state_predicate;
   event_pred: trace -> principal -> string -> bytes -> prop;
 }
 
@@ -66,15 +67,13 @@ type trace_invariants (cinvs:crypto_invariants) = {
 class protocol_invariants = {
   [@@@FStar.Tactics.Typeclasses.tcinstance]
   crypto_invs: crypto_invariants;
-  trace_invs: trace_invariants crypto_invs;
+  trace_invs: trace_invariants;
 }
 
 // `trace_invariants` cannot be a typeclass that is inherited by `protocol_invariants`,
 // hence we simulate inheritance like this.
 
-let state_pred {|invs:protocol_invariants|} = invs.trace_invs.state_pred.pred
-let state_pred_later {|invs:protocol_invariants|} = invs.trace_invs.state_pred.pred_later
-let state_pred_knowable {|invs:protocol_invariants|} = invs.trace_invs.state_pred.pred_knowable
+let state_pred {|invs:protocol_invariants|} = invs.trace_invs.state_pred
 let event_pred {|invs:protocol_invariants|} = invs.trace_invs.event_pred
 
 (*** Trace invariant definition ***)
@@ -128,8 +127,8 @@ val event_at_implies_trace_event_invariant:
   )
 let rec event_at_implies_trace_event_invariant #invs tr i event =
   norm_spec [zeta; delta_only [`%trace_invariant]] (trace_invariant);
-  norm_spec [zeta; delta_only [`%prefix]] (prefix);
-  if i+1 = DY.Core.Trace.Type.length tr then ()
+  norm_spec [zeta; delta_only [`%prefix]] (prefix #label);
+  if i+1 = DY.Core.Trace.Base.length tr then ()
   else (
     let Snoc tr_init _ = tr in
     event_at_implies_trace_event_invariant tr_init i event
@@ -165,7 +164,7 @@ val state_was_set_implies_pred:
     trace_invariant tr /\
     state_was_set tr prin sess_id content
   )
-  (ensures state_pred tr prin sess_id content)
+  (ensures state_pred.pred tr prin sess_id content)
   [SMTPat (state_was_set tr prin sess_id content);
    SMTPat (trace_invariant tr);
   ]
@@ -188,9 +187,9 @@ val state_is_knowable_by:
     trace_invariant tr /\
     state_was_set tr prin sess_id content
   )
-  (ensures is_knowable_by (principal_state_label prin sess_id) tr content)
+  (ensures is_knowable_by (principal_state_content_label prin sess_id content) tr content)
 let state_is_knowable_by #invs tr prin sess_id content =
-  state_pred_knowable tr prin sess_id content
+  state_pred.pred_knowable tr prin sess_id content
 
 /// Triggered protocol events satisfy the event predicate.
 

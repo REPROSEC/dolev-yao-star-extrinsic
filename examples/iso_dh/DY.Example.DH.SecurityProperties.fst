@@ -12,7 +12,7 @@ open DY.Example.DH.Protocol.Stateful.Proof
 
 (*** Authentication Properties ***)
 
-val initiator_authentication:
+val responder_authentication:
   tr:trace -> i:nat ->
   alice:principal -> bob:principal ->
   gx:bytes -> gy:bytes -> k:bytes ->
@@ -22,14 +22,13 @@ val initiator_authentication:
     event_triggered_at tr i alice (Initiate2 alice bob gx gy k)
   )
   (ensures 
-    (exists alice_si. is_corrupt tr (principal_state_label alice alice_si)) \/ 
-    is_corrupt tr (principal_label bob) \/
+    is_corrupt (prefix tr i) (long_term_key_label bob) \/
     (exists y. event_triggered (prefix tr i) bob (Respond1 alice bob gx gy y) /\
     k == dh y gx)
   )
-let initiator_authentication tr i alice bob gx gy k = ()
+let responder_authentication tr i alice bob gx gy k = ()
 
-val responder_authentication: 
+val initiator_authentication:
   tr:trace -> i:nat ->
   alice:principal -> bob:principal ->
   gx:bytes -> gy:bytes -> k:bytes ->
@@ -39,11 +38,10 @@ val responder_authentication:
     event_triggered_at tr i bob (Respond2 alice bob gx gy k)
   )
   (ensures 
-    is_corrupt tr (principal_label alice) \/ 
-    (exists bob_si. is_corrupt tr (principal_state_label bob bob_si)) \/
+    is_corrupt (prefix tr i) (long_term_key_label alice) \/
     event_triggered (prefix tr i) alice (Initiate2 alice bob gx gy k)
   )
-let responder_authentication tr i alice bob gx gy k = ()
+let initiator_authentication tr i alice bob gx gy k = ()
 
 (*** Forward Secrecy Properties ***)
 
@@ -56,7 +54,9 @@ val initiator_forward_secrecy:
     attacker_knows tr k
   )
   (ensures
-    is_corrupt tr (principal_label bob) \/ is_corrupt tr (principal_state_label alice alice_si)
+    is_corrupt tr (long_term_key_label bob) \/
+    (exists bob_si. is_corrupt tr (ephemeral_dh_key_label bob bob_si)) \/
+    is_corrupt tr (ephemeral_dh_key_label alice alice_si)
   )
 let initiator_forward_secrecy tr alice alice_si bob gx gy k =
   attacker_only_knows_publishable_values tr k;
@@ -65,12 +65,11 @@ let initiator_forward_secrecy tr alice alice_si bob gx gy k =
   // and Respond1 event invariant
   // (this assert is not needed and only there for pedagogical purposes)
   assert(
-    (exists x. gx == dh_pk x /\ k == dh x gy /\ is_secret (principal_state_label alice alice_si) tr x) /\
+    (exists x. gx == dh_pk x /\ k == dh x gy /\ is_secret (ephemeral_dh_key_label alice alice_si) tr x) /\
     (
-      is_corrupt tr (principal_label bob) \/
-      is_corrupt tr (principal_state_label alice alice_si) \/
+      is_corrupt tr (long_term_key_label bob) \/
       (exists y.
-        (exists bob_si. is_secret (principal_state_label bob bob_si) tr y) /\
+        (exists bob_si. is_secret (ephemeral_dh_key_label bob bob_si) tr y) /\
         gy = dh_pk y
       )
     )
@@ -79,21 +78,19 @@ let initiator_forward_secrecy tr alice alice_si bob gx gy k =
   // We can deduce from it the label of `k`, up to some corruption
   // (this assert is not needed and only there for pedagogical purposes)
   assert(
-    is_corrupt tr (principal_label bob) \/
-    is_corrupt tr (principal_state_label alice alice_si) \/
-    (exists bob_si. get_label k `equivalent tr` join (principal_state_label alice alice_si) (principal_state_label bob bob_si))
+    is_corrupt tr (long_term_key_label bob) \/
+    (exists bob_si. get_label tr k == join (ephemeral_dh_key_label alice alice_si) (ephemeral_dh_key_label bob bob_si))
   );
 
   // We deduce from the following this assertion,
   // that will trigger transitivity of `can_flow tr` from `join ...` to `get_label k` to `public`
   assert(
-    is_corrupt tr (principal_label bob) \/
-    is_corrupt tr (principal_state_label alice alice_si) \/
-    (exists bob_si. join (principal_state_label alice alice_si) (principal_state_label bob bob_si) `can_flow tr` public)
+    is_corrupt tr (long_term_key_label bob) \/
+    (exists bob_si. join (ephemeral_dh_key_label alice alice_si) (ephemeral_dh_key_label bob bob_si) `can_flow tr` public)
   );
 
   // This assert allows to deduce corruption of principal bob from corruption state bob_si of principal bob
-  assert(forall bob_si. principal_label bob `can_flow tr` principal_state_label bob bob_si);
+  assert(forall bob_si. principal_label bob `can_flow tr` ephemeral_dh_key_label bob bob_si);
 
   ()
 
@@ -106,7 +103,9 @@ val responder_forward_secrecy:
     attacker_knows tr k
   )
   (ensures
-    is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_state_label bob bob_si)
+    is_corrupt tr (long_term_key_label alice) \/
+    (exists alice_si. is_corrupt tr (ephemeral_dh_key_label alice alice_si)) \/
+    is_corrupt tr (ephemeral_dh_key_label bob bob_si)
   )
 let responder_forward_secrecy tr alice bob bob_si gx gy k = 
   attacker_only_knows_publishable_values tr k;
@@ -115,12 +114,11 @@ let responder_forward_secrecy tr alice bob bob_si gx gy k =
   // and Initiate2 event invariant
   // (this assert is not needed and only there for pedagogical purposes)
   assert(
-    (exists y. gy == dh_pk y /\ k == dh y gx /\ is_secret (principal_state_label bob bob_si) tr y) /\
+    (exists y. gy == dh_pk y /\ k == dh y gx /\ is_secret (ephemeral_dh_key_label bob bob_si) tr y) /\
     (
-      is_corrupt tr (principal_label alice) \/
-      is_corrupt tr (principal_state_label bob bob_si) \/
+      is_corrupt tr (long_term_key_label alice) \/
       (exists x.
-        (exists alice_si. is_secret (principal_state_label alice alice_si) tr x) /\
+        (exists alice_si. is_secret (ephemeral_dh_key_label alice alice_si) tr x) /\
         k == dh x gy
       )
     )
@@ -129,25 +127,23 @@ let responder_forward_secrecy tr alice bob bob_si gx gy k =
   // We can deduce from it the label of `k`, up to some corruption
   // (this assert is not needed and only there for pedagogical purposes)
   assert(
-    is_corrupt tr (principal_label alice) \/
-    is_corrupt tr (principal_state_label bob bob_si) \/
-    (exists alice_si. get_label k `equivalent tr` join (principal_state_label alice alice_si) (principal_state_label bob bob_si))
+    is_corrupt tr (long_term_key_label alice) \/
+    (exists alice_si. get_label tr k == join (ephemeral_dh_key_label alice alice_si) (ephemeral_dh_key_label bob bob_si))
   );
 
   // We deduce from the following this assertion,
   // that will trigger transitivity of `can_flow tr` from `join ...` to `get_label k` to `public`
   assert(
-    is_corrupt tr (principal_label alice) \/
-    is_corrupt tr (principal_state_label bob bob_si) \/
-    (exists alice_si. join (principal_state_label alice alice_si) (principal_state_label bob bob_si) `can_flow tr` public)
+    is_corrupt tr (long_term_key_label alice) \/
+    (exists alice_si. join (ephemeral_dh_key_label alice alice_si) (ephemeral_dh_key_label bob bob_si) `can_flow tr` public)
   );
 
   // This assert is needed for the proof
-  assert(exists alice_si. join (principal_state_label alice alice_si) (principal_state_label bob bob_si)
+  assert(exists alice_si. join (ephemeral_dh_key_label alice alice_si) (ephemeral_dh_key_label bob bob_si)
     `can_flow tr` public \/ 
-    is_corrupt tr (principal_label alice));
+    is_corrupt tr (long_term_key_label alice));
 
   // This assert allows to deduce corruption of principal alice from corruption state alice_si of principal alice
-  assert(forall alice_si. principal_label alice `can_flow tr` principal_state_label alice alice_si);
+  assert(forall alice_si. principal_label alice `can_flow tr` ephemeral_dh_key_label alice alice_si);
 
   ()

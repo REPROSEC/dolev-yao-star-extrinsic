@@ -15,19 +15,6 @@ open DY.Lib.State.Map
 
 (*** Print Functions for Basic DY* Types ***)
 
-val label_to_string: (l:label) -> string
-let rec label_to_string l =
-  match l with
-  | Secret -> "Secret"
-  | State pre_label -> (
-    match pre_label with
-    | P p -> Printf.sprintf "Principal %s" p
-    | S p s -> Printf.sprintf "Principal %s state %d" p s.the_id
-  ) 
-  | Meet l1 l2 -> Printf.sprintf "Meet [%s; %s]" (label_to_string l1) (label_to_string l2)
-  | Join l1 l2 -> Printf.sprintf "Join [%s; %s]" (label_to_string l1) (label_to_string l2)
-  | Public -> "Public"
-
 val uint_list_to_string: list FStar.UInt8.t -> string
 let rec uint_list_to_string seq =
   match seq with
@@ -44,7 +31,7 @@ let rec bytes_to_string b =
   match b with
   | Literal s -> uint_list_to_string (FStar.Seq.seq_to_list s)
   
-  | Rand usage label len time -> Printf.sprintf "Nonce #%d" time
+  | Rand len time -> Printf.sprintf "Nonce #%d" time
   
   | Concat (Literal s) right -> (
       Printf.sprintf "%s%s" 
@@ -107,12 +94,6 @@ let rec usage_to_string u =
   | DhKey tag data ->
     Printf.sprintf "{\"Type\": \"DhKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}"
       tag (bytes_to_string data)
-  | KdfExtractSaltKey tag data ->
-    Printf.sprintf "{\"Type\": \"KdfExtractSaltKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}" 
-      tag (bytes_to_string data)
-  | KdfExtractIkmKey tag data ->
-    Printf.sprintf "{\"Type\": \"KdfExtractIkmKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}" 
-      tag (bytes_to_string data)
   | KdfExpandKey tag data ->
     Printf.sprintf "{\"Type\": \"KdfExpandKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}" 
       tag (bytes_to_string data)
@@ -129,48 +110,38 @@ let rec usage_to_string u =
 /// in DY.Lib and DY.Core. This causes
 /// conflicts with the bytes_to_string function.
 
-val private_key_type_to_string: DY.Lib.State.PrivateKeys.private_key_type -> string
-let private_key_type_to_string t =
+val long_term_key_type_to_string: DY.Lib.State.PrivateKeys.long_term_key_type -> string
+let long_term_key_type_to_string t =
   match t with
-  | DY.Lib.State.PrivateKeys.PkDec u -> "PkDec " ^ u
-  | DY.Lib.State.PrivateKeys.Sign u -> "Sign " ^ u
+  | DY.Lib.State.PrivateKeys.LongTermPkEncKey u -> "LongTermPkEncKey " ^ u
+  | DY.Lib.State.PrivateKeys.LongTermSigKey u -> "LongTermSigKey " ^ u
 
-// The `#_` at the end is a workaround for FStarLang/FStar#3286
-val private_keys_types_to_string: (list (map_elem DY.Lib.State.PrivateKeys.private_key_key DY.Lib.State.PrivateKeys.private_key_value #_)) -> string
+val private_keys_types_to_string: (list (map_elem DY.Lib.State.PrivateKeys.private_key_key DY.Lib.State.PrivateKeys.private_key_value)) -> string
 let rec private_keys_types_to_string m =
   match m with
   | [] -> ""
   | hd :: tl -> (
     (private_keys_types_to_string tl) ^ 
-    Printf.sprintf "%s = (%s)," (private_key_type_to_string hd.key.ty) (bytes_to_string hd.value.private_key)
+    Printf.sprintf "%s = (%s)," (long_term_key_type_to_string hd.key.ty) (bytes_to_string hd.value.private_key)
   )
 
-val public_key_type_to_string: DY.Lib.State.PKI.public_key_type -> string
-let public_key_type_to_string t =
-  match t with
-  | DY.Lib.State.PKI.PkEnc u -> "PkEnc " ^ u
-  | DY.Lib.State.PKI.Verify u -> "Verify " ^ u
-
-// The `#_` at the end is a workaround for FStarLang/FStar#3286
-val pki_types_to_string: (list (map_elem DY.Lib.State.PKI.pki_key DY.Lib.State.PKI.pki_value #_)) -> string
+val pki_types_to_string: (list (map_elem DY.Lib.State.PKI.pki_key DY.Lib.State.PKI.pki_value)) -> string
 let rec pki_types_to_string m =
   match m with
   | [] -> ""
   | hd :: tl -> (
     (pki_types_to_string tl) ^ 
-    Printf.sprintf "%s [%s] = (%s)," (public_key_type_to_string hd.key.ty) hd.key.who (bytes_to_string hd.value.public_key)
+    Printf.sprintf "%s [%s] = (%s)," (long_term_key_type_to_string hd.key.ty) hd.key.who (bytes_to_string hd.value.public_key)
   )
 
 val default_private_keys_state_to_string: bytes -> option string
 let default_private_keys_state_to_string content_bytes =
-  // another workaround for FStarLang/FStar#3286
-  let? state = parse (map DY.Lib.State.PrivateKeys.private_key_key DY.Lib.State.PrivateKeys.private_key_value #_) content_bytes in
+  let? state = parse (map DY.Lib.State.PrivateKeys.private_key_key DY.Lib.State.PrivateKeys.private_key_value) content_bytes in
   Some (Printf.sprintf "[%s]" (private_keys_types_to_string state.key_values))
 
 val default_pki_state_to_string: bytes -> option string
 let default_pki_state_to_string content_bytes =
-  // another workaround for FStarLang/FStar#3286
-  let? state = parse (map DY.Lib.State.PKI.pki_key DY.Lib.State.PKI.pki_value #_) content_bytes in
+  let? state = parse (map DY.Lib.State.PKI.pki_key DY.Lib.State.PKI.pki_value) content_bytes in
   Some (Printf.sprintf "[%s]" (pki_types_to_string state.key_values))
 
 /// Searches for a printer with the correct tag
@@ -226,10 +197,10 @@ let trace_event_to_string printers tr_event i =
       i msg_str
   )
   | RandGen usg lab len -> (
-    Printf.sprintf "{\"TraceID\": %d, \"Type\": \"Nonce\", \"Usage\": %s, \"Label\": \"%s\"}\n" 
-    i (usage_to_string usg) (label_to_string lab)
+    Printf.sprintf "{\"TraceID\": %d, \"Type\": \"Nonce\", \"Usage\": %s}\n" 
+    i (usage_to_string usg)
   )
-  | Corrupt prin sess_id -> ""
+  | Corrupt time -> ""
   | SetState prin sess_id full_content -> (
     let content_str = state_to_string printers.state_to_string full_content in
     Printf.sprintf "{\"TraceID\": %d, \"Type\": \"Session\", \"SessionID\": %d, \"Principal\": \"%s\", \"Content\": \"%s\"}\n"
@@ -247,7 +218,7 @@ let trace_event_to_string printers tr_event i =
 
 val trace_to_string_helper:
   trace_to_string_printers ->
-  (tr:trace) -> (i:nat{i = DY.Core.Trace.Type.length tr}) ->
+  (tr:trace) -> (i:nat{i = DY.Core.Trace.Base.length tr}) ->
   string
 let rec trace_to_string_helper printers tr i =
   match tr with
@@ -270,7 +241,7 @@ let rec trace_to_string_helper printers tr i =
 
 val trace_to_string: trace_to_string_printers -> trace -> string
 let trace_to_string printers tr =
-  trace_to_string_helper printers tr (DY.Core.Trace.Type.length tr)
+  trace_to_string_helper printers tr (DY.Core.Trace.Base.length tr)
 
 
 (*** Helper Functions to Setup the Printer Functions Record ***)

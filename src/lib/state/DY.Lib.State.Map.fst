@@ -3,6 +3,7 @@ module DY.Lib.State.Map
 open Comparse
 open DY.Core
 open DY.Lib.Comparse.Glue
+open DY.Lib.State.Tagged
 open DY.Lib.State.Typed
 
 #set-options "--fuel 0 --ifuel 0"
@@ -32,7 +33,10 @@ noeq type map_predicate {|crypto_invariants|} (key_t:eqtype) (value_t:Type0) {|m
   ;
   pred_knowable: tr:trace -> prin:principal -> sess_id:state_id -> key:key_t -> value:value_t -> Lemma
     (requires pred tr prin sess_id key value)
-    (ensures is_well_formed_prefix mt.ps_key_t (is_knowable_by (principal_state_label prin sess_id) tr) key /\ is_well_formed_prefix mt.ps_value_t (is_knowable_by (principal_state_label prin sess_id) tr) value)
+    (ensures
+      is_well_formed_prefix mt.ps_key_t (is_knowable_by (principal_tag_state_label prin (tag #key_t #value_t) sess_id) tr) key /\
+      is_well_formed_prefix mt.ps_value_t (is_knowable_by (principal_tag_state_label prin (tag #key_t #value_t) sess_id) tr) value
+    )
   ;
 }
 
@@ -104,13 +108,15 @@ let map_session_invariant #cinvs #key_t #value_t #mt mpred = {
     FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (mpred.pred_later tr1 tr2 prin sess_id))
   );
   pred_knowable = (fun tr prin sess_id content ->
-    let pre = (is_knowable_by (principal_state_label prin sess_id) tr) in
+    let pre1 = (is_knowable_by (principal_tag_state_label prin (tag #key_t #value_t) sess_id) tr) in
+    let pre2 = (is_knowable_by (principal_typed_state_content_label prin (tag #key_t #value_t) sess_id content) tr) in
     map_invariant_eq mpred tr prin sess_id content;
-    for_allP_eq (is_well_formed_prefix (ps_map_elem key_t value_t) pre) content.key_values;
-    introduce forall x. map_elem_invariant mpred tr prin sess_id x ==> is_well_formed_prefix (ps_map_elem key_t value_t) pre x
+    for_allP_eq (is_well_formed_prefix (ps_map_elem key_t value_t) pre2) content.key_values;
+    introduce forall x. map_elem_invariant mpred tr prin sess_id x ==> is_well_formed_prefix (ps_map_elem key_t value_t) pre2 x
     with (
       introduce _ ==> _ with _. (
-        mpred.pred_knowable tr prin sess_id x.key x.value
+        mpred.pred_knowable tr prin sess_id x.key x.value;
+        is_well_formed_prefix_weaken (ps_map_elem key_t value_t) pre1 pre2 x
       )
     )
   );
@@ -118,9 +124,9 @@ let map_session_invariant #cinvs #key_t #value_t #mt mpred = {
 
 val has_map_session_invariant:
   #key_t:eqtype -> #value_t:Type0 -> {|map_types key_t value_t|} ->
-  protocol_invariants -> map_predicate key_t value_t -> prop
-let has_map_session_invariant #key_t #value_t #mt invs mpred =
-  has_local_state_predicate invs (map_session_invariant mpred)
+  {|protocol_invariants|} -> map_predicate key_t value_t -> prop
+let has_map_session_invariant #key_t #value_t #mt #invs mpred =
+  has_local_state_predicate (map_session_invariant mpred)
 
 (*** Map API ***)
 
@@ -183,7 +189,7 @@ let find_value #key_t #value_t #mt prin sess_id key =
 
 #push-options "--fuel 1"
 val initialize_map_invariant:
-  {|invs:protocol_invariants|} ->
+  {|protocol_invariants|} ->
   #key_t:eqtype -> #value_t:Type0 -> {|map_types key_t value_t|} ->
   mpred:map_predicate key_t value_t ->
   prin:principal ->
@@ -191,14 +197,14 @@ val initialize_map_invariant:
   Lemma
   (requires
     trace_invariant tr /\
-    has_map_session_invariant invs mpred
+    has_map_session_invariant mpred
   )
   (ensures (
     let (_, tr_out) = initialize_map key_t value_t prin tr in
     trace_invariant tr_out
   ))
   [SMTPat (initialize_map key_t value_t prin tr);
-   SMTPat (has_map_session_invariant invs mpred);
+   SMTPat (has_map_session_invariant mpred);
    SMTPat (trace_invariant tr)
   ]
 let initialize_map_invariant #invs #key_t #value_t #mt mpred prin tr =
@@ -207,7 +213,7 @@ let initialize_map_invariant #invs #key_t #value_t #mt mpred prin tr =
 
 #push-options "--fuel 1"
 val add_key_value_invariant:
-  {|invs:protocol_invariants|} ->
+  {|protocol_invariants|} ->
   #key_t:eqtype -> #value_t:Type0 -> {|map_types key_t value_t|} ->
   mpred:map_predicate key_t value_t ->
   prin:principal -> sess_id:state_id ->
@@ -217,22 +223,36 @@ val add_key_value_invariant:
   (requires
     mpred.pred tr prin sess_id key value /\
     trace_invariant tr /\
-    has_map_session_invariant invs mpred
+    has_map_session_invariant mpred
   )
   (ensures (
     let (_, tr_out) = add_key_value prin sess_id key value tr in
     trace_invariant tr_out
   ))
   [SMTPat (add_key_value prin sess_id key value tr);
-   SMTPat (has_map_session_invariant invs mpred);
+   SMTPat (has_map_session_invariant mpred);
    SMTPat (trace_invariant tr)
   ]
 let add_key_value_invariant #invs #key_t #value_t #mt mpred prin sess_id key value tr =
   reveal_opaque (`%add_key_value) (add_key_value #key_t #value_t)
 #pop-options
 
+val find_value_same_trace:
+  #key_t:eqtype -> #value_t:Type0 -> {|map_types key_t value_t|} ->
+  prin:principal -> sess_id:state_id ->
+  key:key_t ->
+  tr:trace ->
+  Lemma
+  (ensures (
+    let (opt_value, tr_out) = find_value #_ #value_t prin sess_id key tr in
+    tr_out == tr
+  ))
+  [SMTPat (find_value #key_t #value_t prin sess_id key tr)]
+let find_value_same_trace #key_t #value_t #mt prin sess_id key tr =
+  reveal_opaque (`%find_value) (find_value #key_t #value_t)
+
 val find_value_invariant:
-  {|invs:protocol_invariants|} ->
+  {|protocol_invariants|} ->
   #key_t:eqtype -> #value_t:Type0 -> {|map_types key_t value_t|} ->
   mpred:map_predicate key_t value_t ->
   prin:principal -> sess_id:state_id ->
@@ -241,20 +261,18 @@ val find_value_invariant:
   Lemma
   (requires
     trace_invariant tr /\
-    has_map_session_invariant invs mpred
+    has_map_session_invariant mpred
   )
   (ensures (
     let (opt_value, tr_out) = find_value prin sess_id key tr in
-    tr_out == tr /\ (
       match opt_value with
       | None -> True
       | Some value -> (
         mpred.pred tr prin sess_id key value
       )
-    )
   ))
   [SMTPat (find_value #key_t #value_t prin sess_id key tr);
-   SMTPat (has_map_session_invariant invs mpred);
+   SMTPat (has_map_session_invariant mpred);
    SMTPat (trace_invariant tr);
   ]
 let find_value_invariant #invs #key_t #value_t #mt mpred prin sess_id key tr =

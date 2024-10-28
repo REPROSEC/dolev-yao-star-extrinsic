@@ -3,6 +3,7 @@ module DY.Core.Attacker.Knowledge
 open DY.Core.Bytes.Type
 open DY.Core.Bytes
 open DY.Core.Trace.Type
+open DY.Core.Trace.Base
 open DY.Core.Trace.Invariant
 open DY.Core.Label.Type
 open DY.Core.Label
@@ -35,8 +36,7 @@ let rec attacker_knows_aux step tr msg =
     // - states that the attacker has corrupt
     (
       exists prin sess_id.
-        is_corrupt tr (principal_state_label prin sess_id) /\
-        state_was_set tr prin sess_id msg
+        state_was_corrupt tr prin sess_id msg
     ) \/
     // - public literals
     (
@@ -174,18 +174,6 @@ val attacker_knows: trace -> bytes -> prop
 let attacker_knows tr msg =
   exists step. attacker_knows_aux step tr msg
 
-val move_requires_4
-      (#a #b #c #d: Type)
-      (#p #q: (a -> b -> c -> d -> Type))
-      ($_: (x: a -> y: b -> z: c -> w: d -> Lemma (requires (p x y z w)) (ensures (q x y z w))))
-      (x: a)
-      (y: b)
-      (z: c)
-      (w: d)
-    : Lemma (p x y z w ==> q x y z w)
-let move_requires_4 #a #b #c #d #p #q pf x y z w =
-  introduce p x y z w ==> q x y z w with _. pf x y z w
-
 /// Lemma for the base case of the attacker knowledge theorem:
 /// bytestrings that the attacker obtained by corruption
 /// are publishable.
@@ -195,13 +183,13 @@ val corrupted_state_is_publishable:
   tr:trace -> prin:principal -> sess_id:state_id -> content:bytes ->
   Lemma
   (requires
-    is_corrupt tr (principal_state_label prin sess_id) /\
-    state_was_set tr prin sess_id content /\
+    state_was_corrupt tr prin sess_id content /\
     trace_invariant tr
   )
   (ensures is_publishable tr content)
 let corrupted_state_is_publishable #invs tr prin sess_id content =
-  state_is_knowable_by tr prin sess_id content
+  state_is_knowable_by tr prin sess_id content;
+  state_pred_label_can_flow_public tr (principal_state_content_label_input prin sess_id content)
 
 #push-options "--z3rlimit 25"
 val attacker_only_knows_publishable_values_aux:
@@ -223,8 +211,8 @@ let rec attacker_only_knows_publishable_values_aux #invs step tr msg =
     FStar.Classical.forall_intro   (FStar.Classical.move_requires   (attacker_only_knows_publishable_values_aux (step-1) tr));
     FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (concat_preserves_publishability tr));
     FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (split_preserves_publishability tr));
-    FStar.Classical.forall_intro_4 (                move_requires_4 (aead_enc_preserves_publishability tr));
-    FStar.Classical.forall_intro_4 (                move_requires_4 (aead_dec_preserves_publishability tr));
+    FStar.Classical.forall_intro_4 (FStar.Classical.move_requires_4 (aead_enc_preserves_publishability tr));
+    FStar.Classical.forall_intro_4 (FStar.Classical.move_requires_4 (aead_dec_preserves_publishability tr));
     FStar.Classical.forall_intro   (FStar.Classical.move_requires   (pk_preserves_publishability tr));
     FStar.Classical.forall_intro_3 (FStar.Classical.move_requires_3 (pk_enc_preserves_publishability tr));
     FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (pk_dec_preserves_publishability tr));
@@ -235,7 +223,7 @@ let rec attacker_only_knows_publishable_values_aux #invs step tr msg =
     FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (dh_preserves_publishability tr));
     FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (kdf_extract_preserves_publishability tr));
     FStar.Classical.forall_intro_3 (FStar.Classical.move_requires_3 (kdf_expand_preserves_publishability tr));
-    FStar.Classical.forall_intro_4 (                move_requires_4 (kdf_expand_shorter_preserves_publishability tr));
+    FStar.Classical.forall_intro_4 (FStar.Classical.move_requires_4 (kdf_expand_shorter_preserves_publishability tr));
     FStar.Classical.forall_intro   (FStar.Classical.move_requires   (kem_pk_preserves_publishability tr));
     FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (kem_encap_preserves_publishability tr));
     FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (kem_decap_preserves_publishability tr));

@@ -1,7 +1,11 @@
 module DY.Core.Label
 
 open DY.Core.Label.Type
+open DY.Core.Bytes.Type
 open DY.Core.Trace.Type
+open DY.Core.Trace.Base
+
+#set-options "--fuel 0 --ifuel 0"
 
 /// This module define the notion of corruption of a label (`is_corrupt`),
 /// and the flow relation between labels (`can_flow`),
@@ -34,38 +38,52 @@ open DY.Core.Trace.Type
 /// This notion of "less secret" is lifted to labels,
 /// using the flow relation (`can_flow`).
 
+/// The monotonicity property of labels,
+/// formulated the usual way.
 
-val get_principal: pre_label -> option principal
-let get_principal l =
-  match l with
-  | P p -> Some p
-  | S p _ -> Some p
+val label_is_corrupt_later:
+  l:label ->
+  tr1:trace_ unit -> tr2:trace_ unit ->
+  Lemma
+  (requires
+    l.is_corrupt tr1 /\
+    tr1 <$ tr2
+  )
+  (ensures l.is_corrupt tr2)
+let label_is_corrupt_later l tr1 tr2 =
+  grows_induction_principle l.is_corrupt (fun tr ev ->
+    l.is_corrupt_later;
+    reveal_opaque (`%is_monotonic) is_monotonic
+  ) tr1 tr2
 
-val get_session: pre_label -> option state_id
-let get_session l =
-  match l with
-  | P _ -> None
-  | S _ s -> Some s
+/// Helper type and function to create labels.
+/// This takes care of the restricted arrow type,
+/// and the weird formulation of monotonicity in `is_corrupt_later`.
 
-/// When is a pre-label less secret than another?
-/// This encodes the fact that `P p` is less secret than `S p s`.
+noeq
+type label_constructor = {
+  is_corrupt: trace_ unit -> prop;
+  is_corrupt_later:
+    tr1:trace_ unit -> tr2:trace_ unit ->
+    Lemma
+    (requires is_corrupt tr1 /\ tr1 <$ tr2)
+    (ensures is_corrupt tr2)
+  ;
+}
 
-val pre_can_flow:
-  pre_label -> pre_label ->
-  prop
-let pre_can_flow x y =
-  match x with
-  | P p -> Some p == get_principal y
-  | S p s -> Some p == get_principal y /\ Some s == get_session y
-
-/// A pre-label is corrupt when there exists a corresponding corruption event in the trace.
-
-[@@"opaque_to_smt"]
-val pre_is_corrupt: trace -> pre_label -> prop
-let pre_is_corrupt tr who =
-  exists prin sess_id.
-    who `pre_can_flow` (S prin sess_id) /\
-    was_corrupt tr prin sess_id
+#push-options "--fuel 1"
+val mk_label: label_constructor -> label
+let mk_label l = {
+  is_corrupt = FStar.FunctionalExtensionality.on _ l.is_corrupt;
+  is_corrupt_later = (
+    reveal_opaque (`%is_monotonic) is_monotonic;
+    reveal_opaque (`%grows) (grows #unit);
+    norm_spec [zeta; delta_only [`%prefix]] (prefix #unit);
+    assert(forall (tr:trace_ unit) ev. tr <$ (Snoc tr ev));
+    FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 l.is_corrupt_later)
+  );
+}
+#pop-options
 
 /// If the attacker knows a value with label `l`, then it must have done some corruptions in the trace.
 /// The corruption predicate express whether values with label `l` are still secure,
@@ -78,13 +96,8 @@ let pre_is_corrupt tr who =
 
 [@@"opaque_to_smt"]
 val is_corrupt: trace -> label -> prop
-let rec is_corrupt tr l =
-  match l with
-  | Secret -> False
-  | State s -> pre_is_corrupt tr s
-  | Meet l1 l2 -> is_corrupt tr l1 /\ is_corrupt tr l2
-  | Join l1 l2 -> is_corrupt tr l1 \/ is_corrupt tr l2
-  | Public -> True
+let is_corrupt tr l =
+  l.is_corrupt (trace_forget_labels tr)
 
 /// A key property of the corruption predicate is that it is monotone in the trace:
 /// if a label `l` is corrupt now (in the trace `t1`), it will stay corrupt in the future (in the trace `t2`).
@@ -96,17 +109,10 @@ val is_corrupt_later:
   (requires is_corrupt tr1 l /\ tr1 <$ tr2)
   (ensures is_corrupt tr2 l)
   [SMTPat (is_corrupt tr1 l); SMTPat (tr1 <$ tr2)]
-let rec is_corrupt_later tr1 tr2 l =
-  reveal_opaque (`%pre_is_corrupt) (pre_is_corrupt);
-  norm_spec [zeta; delta_only [`%is_corrupt]] (is_corrupt);
-  match l with
-  | Secret
-  | Public
-  | State _ -> ()
-  | Meet l1 l2
-  | Join l1 l2 ->
-    introduce is_corrupt tr1 l1 ==> is_corrupt tr2 l1 with _. is_corrupt_later tr1 tr2 l1;
-    introduce is_corrupt tr1 l2 ==> is_corrupt tr2 l2 with _. is_corrupt_later tr1 tr2 l2
+let is_corrupt_later tr1 tr2 l =
+  reveal_opaque (`%is_corrupt) (is_corrupt);
+  fmap_trace_later forget_label tr1 tr2;
+  label_is_corrupt_later l (trace_forget_labels tr1) (trace_forget_labels tr2)
 
 /// A label `l1` can flow to a label `l2` when `l2` will always be more secret than `l1` in the future,
 /// or more precisely, when in the future, a corruption of `l2` implies a corruption of `l1`.
@@ -117,67 +123,67 @@ let can_flow tr l1 l2 =
   forall tr_extended. tr <$ tr_extended ==>
     (is_corrupt tr_extended l2 ==> is_corrupt tr_extended l1)
 
+/// Extensionality theorems for labels
+
+val intro_label_equal:
+  l1:label -> l2:label ->
+  (tr:trace -> Lemma (l1 `can_flow tr` l2 /\ l2 `can_flow tr` l1)) ->
+  Lemma (l1 == l2)
+let intro_label_equal l1 l2 pf =
+  let open DY.Core.Label.Unknown in
+  reveal_opaque (`%can_flow) can_flow;
+  reveal_opaque (`%is_corrupt) is_corrupt;
+  introduce forall tr. l1.is_corrupt tr == l2.is_corrupt tr with (
+    pf (fmap_trace (replace_label unknown_label) tr);
+    // These two lines prove surjectivity of `trace_forget_labels`
+    // by showing that fmap_trace (forget_label public) is a right-inverse
+    // (we could replace `unknown_label` with anything)
+    fmap_trace_compose (replace_label unknown_label) forget_label forget_label tr;
+    fmap_trace_identity forget_label tr;
+    FStar.PropositionalExtensionality.apply (l1.is_corrupt tr) (l2.is_corrupt tr)
+  );
+  assert(l1.is_corrupt `FStar.FunctionalExtensionality.feq` l2.is_corrupt);
+  assert(l1.is_corrupt == l2.is_corrupt);
+  assert(l1.is_corrupt_later == l2.is_corrupt_later);
+  ()
+
+
 /// Functions to create labels.
 /// They are useful so that the label type can remain abstract to the user.
 
 [@@"opaque_to_smt"]
 val secret: label
-let secret =
-  Secret
+let secret = mk_label {
+  is_corrupt = (fun tr -> False);
+  is_corrupt_later = (fun tr1 tr2 -> ());
+}
 
 [@@"opaque_to_smt"]
 val public: label
-let public =
-  Public
+let public = mk_label {
+  is_corrupt = (fun tr -> True);
+  is_corrupt_later = (fun tr1 tr2 -> ());
+}
 
 [@@"opaque_to_smt"]
 val meet: label -> label -> label
-let meet l1 l2 =
-  Meet l1 l2
+let meet l1 l2 = mk_label {
+  is_corrupt = (fun tr -> l1.is_corrupt tr /\ l2.is_corrupt tr);
+  is_corrupt_later = (fun tr1 tr2 ->
+    label_is_corrupt_later l1 tr1 tr2;
+    label_is_corrupt_later l2 tr1 tr2
+  );
+}
 
 [@@"opaque_to_smt"]
 val join: label -> label -> label
-let join l1 l2 =
-  Join l1 l2
-
-[@@"opaque_to_smt"]
-val principal_label: principal -> label
-let principal_label prin =
-  State (P prin)
-
-[@@"opaque_to_smt"]
-val principal_state_label: principal -> state_id -> label
-let principal_state_label prin sess_id =
-  State (S prin sess_id)
-
-/// Injectivity properties of principal_label and principal_state_label.
-/// We prove it by expliciting an inverse on the left (`extract_pre_label`).
-/// This allows for an efficient SMT pattern,
-/// compared to the standard injectivity definition,
-/// whose SMT pattern would induce quadratic behavior.
-
-[@@"opaque_to_smt"]
-val extract_pre_label: label -> GTot (option pre_label)
-let extract_pre_label l =
-  match l with
-  | State s -> Some s
-  | _ -> None
-
-val principal_label_injective:
-  p:principal ->
-  Lemma (extract_pre_label (principal_label p) == Some (P p))
-  [SMTPat (principal_label p)]
-let principal_label_injective p =
-  normalize_term_spec extract_pre_label;
-  normalize_term_spec principal_label
-
-val principal_state_label_injective:
-  p:principal -> s:state_id ->
-  Lemma (extract_pre_label (principal_state_label p s) == Some (S p s))
-  [SMTPat (principal_state_label p s)]
-let principal_state_label_injective p s =
-  normalize_term_spec extract_pre_label;
-  normalize_term_spec principal_state_label
+let join l1 l2 = mk_label {
+  is_corrupt = (fun tr -> l1.is_corrupt tr \/ l2.is_corrupt tr);
+  is_corrupt_later = (fun tr1 tr2 ->
+    FStar.Classical.move_requires_3 label_is_corrupt_later l1 tr1 tr2;
+    FStar.Classical.move_requires_3 label_is_corrupt_later l2 tr1 tr2
+  );
+}
 
 /// `can_flow tr` is reflexive.
 
@@ -220,8 +226,9 @@ val secret_is_bottom:
   (ensures l `can_flow tr` secret)
   [SMTPat (l `can_flow tr` secret)]
 let secret_is_bottom tr l =
-  normalize_term_spec can_flow;
-  normalize_term_spec secret
+  reveal_opaque (`%can_flow) can_flow;
+  reveal_opaque (`%secret) secret;
+  reveal_opaque (`%is_corrupt) is_corrupt
 
 /// `secret` is the maximum of the label lattice.
 
@@ -231,8 +238,9 @@ val public_is_top:
   (ensures public `can_flow tr` l)
   [SMTPat (public `can_flow tr` l)]
 let public_is_top tr l =
-  normalize_term_spec can_flow;
-  normalize_term_spec public
+  reveal_opaque (`%can_flow) can_flow;
+  reveal_opaque (`%public) public;
+  reveal_opaque (`%is_corrupt) is_corrupt
 
 /// `meet` satisfy the lower bound property.
 
@@ -240,9 +248,9 @@ val meet_eq:
   tr:trace -> x:label -> y1:label -> y2:label ->
   Lemma
   (ensures meet y1 y2 `can_flow tr` x <==> (y1 `can_flow tr` x /\ y2 `can_flow tr` x))
-  [SMTPat (meet y1 y2 `can_flow tr` x)] //Not sure about this
+  [SMTPat (meet y1 y2 `can_flow tr` x)]
 let meet_eq tr x y1 y2 =
-  norm_spec [zeta; delta_only [`%is_corrupt]] (is_corrupt);
+  reveal_opaque (`%is_corrupt) (is_corrupt);
   reveal_opaque (`%can_flow) (can_flow);
   reveal_opaque (`%meet) (meet)
 
@@ -252,9 +260,9 @@ val join_eq:
   tr:trace -> x1:label -> x2:label -> y:label ->
   Lemma
   (ensures y `can_flow tr` join x1 x2 <==> (y `can_flow tr` x1 /\ y `can_flow tr` x2))
-  [SMTPat (y `can_flow tr` join x1 x2)] //Not sure about this
+  [SMTPat (y `can_flow tr` join x1 x2)]
 let join_eq tr x1 x2 y =
-  norm_spec [zeta; delta_only [`%is_corrupt]] (is_corrupt);
+  reveal_opaque (`%is_corrupt) (is_corrupt);
   reveal_opaque (`%can_flow) (can_flow);
   reveal_opaque (`%join) (join)
 
@@ -264,25 +272,11 @@ val flow_to_public_eq:
   tr:trace -> l:label ->
   Lemma
   (ensures l `can_flow tr` public <==> is_corrupt tr l)
-  [SMTPat (l `can_flow tr` public)] //Not sure about this
+  [SMTPat (is_corrupt tr l)]
 let flow_to_public_eq tr prin =
-  norm_spec [zeta; delta_only [`%is_corrupt]] (is_corrupt);
+  reveal_opaque (`%is_corrupt) (is_corrupt);
   reveal_opaque (`%can_flow) (can_flow);
   reveal_opaque (`%public) (public)
-
-/// A principal flows to a particular state of this principal.
-
-val principal_flow_to_principal_state:
-  tr:trace -> prin:principal -> sess_id:state_id ->
-  Lemma
-  (ensures (principal_label prin) `can_flow tr` (principal_state_label prin sess_id))
-  [SMTPat ((principal_label prin) `can_flow tr` (principal_state_label prin sess_id))]
-let principal_flow_to_principal_state tr prin sess_id =
-  reveal_opaque (`%pre_is_corrupt) (pre_is_corrupt);
-  norm_spec [zeta; delta_only [`%is_corrupt]] (is_corrupt);
-  normalize_term_spec can_flow;
-  normalize_term_spec principal_label;
-  normalize_term_spec principal_state_label
 
 /// A `join` flows to `public` iff. one of its operands flows to `public`.
 /// This is a property specific to labels,
@@ -292,9 +286,107 @@ val join_flow_to_public_eq:
   tr:trace -> x1:label -> x2:label ->
   Lemma
   (ensures (join x1 x2) `can_flow tr` public <==> x1 `can_flow tr` public \/ x2 `can_flow tr` public)
-  [SMTPat ((join x1 x2) `can_flow tr` public)] //Not sure about this
+  [SMTPat ((join x1 x2) `can_flow tr` public)]
 let join_flow_to_public_eq tr x1 x2 =
-  norm_spec [zeta; delta_only [`%is_corrupt]] (is_corrupt);
+  flow_to_public_eq tr x1;
+  flow_to_public_eq tr x2;
+  reveal_opaque (`%is_corrupt) is_corrupt;
   reveal_opaque (`%can_flow) (can_flow);
   reveal_opaque (`%join) (join);
   reveal_opaque (`%public) (public)
+
+/// Generic label for states:
+/// `state_pred_label p` is corrupt when
+/// there exists a corrupt `SetState` event satisfying the predicate `p`.
+/// It can for example be used to depict any state of a principal
+/// (e.g. as done by `principal_label`)
+
+val state_pred_label_input: Type u#1
+let state_pred_label_input =
+  principal -> state_id -> bytes -> prop
+
+[@@"opaque_to_smt"]
+val state_pred_label:
+  state_pred_label_input ->
+  label
+let state_pred_label p = mk_label {
+  is_corrupt = (fun tr ->
+    exists prin sess_id content.
+      state_was_corrupt tr prin sess_id content /\
+      p prin sess_id content
+  );
+  is_corrupt_later = (fun tr1 tr2 -> ());
+}
+
+val state_pred_label_input_can_flow:
+  state_pred_label_input ->
+  state_pred_label_input ->
+  prop
+let state_pred_label_input_can_flow p1 p2 =
+  forall p s c. p2 p s c ==> p1 p s c
+
+val state_pred_label_can_flow_state_pred_label:
+  tr:trace ->
+  p1:state_pred_label_input -> p2:state_pred_label_input ->
+  Lemma
+  (requires state_pred_label_input_can_flow p1 p2)
+  (ensures state_pred_label p1 `can_flow tr` state_pred_label p2)
+  [SMTPat (state_pred_label p1 `can_flow tr` state_pred_label p2)]
+let state_pred_label_can_flow_state_pred_label tr p1 p2 =
+  reveal_opaque (`%is_corrupt) is_corrupt;
+  reveal_opaque (`%can_flow) (can_flow);
+  reveal_opaque (`%state_pred_label) (state_pred_label)
+
+val state_pred_label_can_flow_public:
+  tr:trace ->
+  p:state_pred_label_input ->
+  Lemma (
+    (state_pred_label p) `can_flow tr` public
+    <==> (
+      exists prin sess_id content.
+        state_was_corrupt tr prin sess_id content /\
+        p prin sess_id content
+    )
+  )
+let state_pred_label_can_flow_public tr p =
+  flow_to_public_eq tr (state_pred_label p);
+  reveal_opaque (`%is_corrupt) is_corrupt;
+  reveal_opaque (`%state_pred_label) (state_pred_label);
+  FStar.Classical.forall_intro (FStar.Classical.move_requires (event_exists_fmap_trace_eq forget_label tr));
+  FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (event_at_fmap_trace_eq forget_label tr))
+
+val principal_label_input:
+  principal ->
+  state_pred_label_input
+let principal_label_input prin1 =
+  fun prin2 _ _ ->
+    prin1 == prin2
+
+val principal_label: principal -> label
+let principal_label prin =
+  state_pred_label (principal_label_input prin)
+
+val principal_state_label_input:
+  principal -> state_id ->
+  state_pred_label_input
+let principal_state_label_input prin1 sess_id1 =
+  fun prin2 sess_id2 _ ->
+    prin1 == prin2 /\
+    sess_id1 == sess_id2
+
+val principal_state_label: principal -> state_id -> label
+let principal_state_label prin sess_id =
+  state_pred_label (principal_state_label_input prin sess_id)
+
+val principal_state_content_label_input:
+  principal -> state_id -> bytes ->
+  state_pred_label_input
+let principal_state_content_label_input prin1 sess_id1 content1 =
+  fun prin2 sess_id2 content2 ->
+    prin1 == prin2 /\
+    sess_id1 == sess_id2 /\
+    content1 == content2
+
+val principal_state_content_label: principal -> state_id -> bytes -> label
+let principal_state_content_label prin sess_id content =
+  state_pred_label (principal_state_content_label_input prin sess_id content)

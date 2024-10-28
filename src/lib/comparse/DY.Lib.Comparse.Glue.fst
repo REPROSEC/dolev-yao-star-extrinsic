@@ -61,6 +61,19 @@ instance bytes_like_bytes: bytes_like bytes = {
 
 /// Compability of some DY*'s predicates with concat and split.
 
+val bytes_well_formed_is_pre_compatible:
+  tr:trace ->
+  Lemma
+  (bytes_pre_is_compatible (bytes_well_formed tr))
+  [SMTPat (bytes_pre_is_compatible (bytes_well_formed tr))]
+let bytes_well_formed_is_pre_compatible tr =
+  enable_bytes_well_formed_smtpats tr;
+  bytes_pre_is_compatible_intro #bytes (bytes_well_formed tr)
+    ()
+    (fun b1 b2 -> ())
+    (fun b i -> ())
+    (fun sz n -> ())
+
 val bytes_invariant_is_pre_compatible:
   {|crypto_invariants|} -> tr:trace ->
   Lemma
@@ -105,6 +118,6 @@ val parse_serialize_inv_lemma_smtpat:
   x:a ->
   Lemma
   (ensures parse a (serialize #bytes a x) == Some x)
-  [SMTPat (parse #bytes #bl a #ps_a (serialize #bytes a #ps_a x))]
+  [SMTPat ((serialize #bytes a #ps_a x))]
 let parse_serialize_inv_lemma_smtpat #bytes #bl a #ps_a x =
   parse_serialize_inv_lemma #bytes a #ps_a x
