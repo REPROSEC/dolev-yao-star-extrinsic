@@ -184,7 +184,6 @@ val db_invariant_empty :
   ))
 let db_invariant_empty #cinvs #row_t #db_t db_pred tr prin sess_id =
   let tmp = List.Tot.list_ref #state_id #(is_pointer_to_row #row_t tr prin) [] in
-//  let tmp = list_coerceP (is_pointer_to_row #row_t tr prin) [] in
   ()
 #pop-options
 
