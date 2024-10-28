@@ -68,10 +68,10 @@ let sign_crypto_predicates_communication_layer cusages = {
         //Some plain_msg == decrypt_message sk_receiver enc_payload /\
         //get_label sk_receiver == principal_label receiver /\
         enc_payload == encrypt_message pk_receiver nonce plain_msg /\
-        event_triggered tr sender (CommConfSendMsg sender receiver plain_msg) /\
-        event_triggered tr sender (CommAuthSendMsg sender plain_msg) /\
-        event_triggered tr sender (CommConfAuthSendMsg sender receiver plain_msg) /\
-        get_label plain_msg `can_flow tr` (join (principal_label sender) (principal_label receiver))
+        //event_triggered tr sender (CommConfSendMsg sender receiver plain_msg) /\
+        //event_triggered tr sender (CommAuthSendMsg sender plain_msg) /\
+        event_triggered tr sender (CommConfAuthSendMsg sender receiver plain_msg) //\
+        //get_label plain_msg `can_flow tr` (join (principal_label sender) (principal_label receiver))
       )
       (*match payload with
       | DY.Core.Bytes.Type.PkEnc pk nonce msg -> (
@@ -131,12 +131,11 @@ let event_predicate_communication_layer {|cinvs:crypto_invariants|} (higher_laye
     )
     | CommConfReceiveMsg receiver payload -> (
       exists sender.
-      (
-        event_triggered tr sender (CommConfSendMsg sender receiver payload) /\
-        is_knowable_by (join (principal_label sender) (principal_label receiver)) tr payload
-      ) \/ (
-        is_publishable tr payload
-      )
+        is_knowable_by (join (principal_label sender) (principal_label receiver)) tr payload /\
+        (
+          event_triggered tr sender (CommConfSendMsg sender receiver payload) \/
+          is_publishable tr payload
+        )
     )
     | CommAuthSendMsg sender payload -> (
       higher_layer_preds.send_auth sender payload tr
@@ -155,14 +154,18 @@ let event_predicate_communication_layer {|cinvs:crypto_invariants|} (higher_laye
       higher_layer_preds.send_conf_auth sender receiver payload tr
     )
     | CommConfAuthReceiveMsg sender receiver payload -> (
-      (
-        //event_triggered tr sender (CommConfSendMsg sender receiver payload) /\
-        //event_triggered tr sender (CommAuthSendMsg sender payload) /\
-        //is_knowable_by (join (principal_label sender) (principal_label receiver)) tr payload
-        event_triggered tr sender (CommConfAuthSendMsg sender receiver payload)
-      ) \/ (
-        is_corrupt tr (principal_label sender)
-      )
+      // We can only show the following about the decrypted ciphertext (payload):
+      // is_knowable_by (join (principal_label sender) (principal_label receiver)) tr payload \/
+      // is_corrupt tr (principal_label sender)
+      // There are two cases how the ciphertext is created:
+      // 1. The corrupted sender created the ciphertext. This means that the
+      //    payload flows to public. This would also mean that it flows to the
+      //    sender and receiver. The problem is the second case.
+      // 2. The corrupted sender takes a ciphertext from an honest principal.
+      //    Since the crypto predicates apply to this ciphertext, the
+      //    decrypted payload flows to the receiver and some unknown sender'.
+      event_triggered tr sender (CommConfAuthSendMsg sender receiver payload) \/
+      is_corrupt tr (principal_label sender)
     ))
 #pop-options
 
