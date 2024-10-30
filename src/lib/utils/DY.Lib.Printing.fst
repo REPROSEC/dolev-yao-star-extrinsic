@@ -194,23 +194,23 @@ let trace_event_to_string printers tr_event i =
   | MsgSent msg -> (
     let msg_str = option_to_string printers.message_to_string msg in
     Printf.sprintf "{\"TraceID\": %d, \"Type\": \"Message\", \"Content\": \"%s\"}\n"
-      i msg_str
+      (i-1) msg_str
   )
   | RandGen usg lab len -> (
     Printf.sprintf "{\"TraceID\": %d, \"Type\": \"Nonce\", \"Usage\": %s}\n" 
-    i (usage_to_string usg)
+      (i-1) (usage_to_string usg)
   )
   | Corrupt time -> ""
   | SetState prin sess_id full_content -> (
     let content_str = state_to_string printers.state_to_string full_content in
     Printf.sprintf "{\"TraceID\": %d, \"Type\": \"Session\", \"SessionID\": %d, \"Principal\": \"%s\", \"Content\": \"%s\"}\n"
-      i sess_id.the_id prin content_str
+      (i-1) sess_id.the_id prin content_str
   )
   | Event prin tag content -> (
     let printer = find_printer printers.event_to_string tag in
     let content_str = option_to_string printer content in
     Printf.sprintf "{\"TraceID\": %d, \"Type\": \"Event\", \"Principal\": \"%s\", \"Tag\": \"%s\", \"Content\": \"%s\"}\n" 
-      i prin tag content_str
+      (i-1) prin tag content_str
   )
 
 /// Helper function for `trace_to_string` to avoid calling `length` for each trace event,
