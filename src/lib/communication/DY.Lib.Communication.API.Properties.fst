@@ -37,7 +37,7 @@ val confidential_message_sender_authentication:
   Lemma
   (requires
     trace_invariant tr  /\
-    has_communication_layer_event_predicates invs higher_layer_preds /\
+    has_communication_layer_event_predicates higher_layer_preds /\
     event_triggered tr receiver (CommConfReceiveMsg receiver payload)
   )
   (ensures
