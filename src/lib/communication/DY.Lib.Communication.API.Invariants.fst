@@ -5,6 +5,7 @@ open DY.Core
 open DY.Lib.Crypto.PkEncryption.Split
 open DY.Lib.Crypto.Signature.Split
 open DY.Lib.Event.Typed
+open DY.Lib.State.PrivateKeys
 
 open DY.Lib.Communication.API
 
@@ -12,13 +13,12 @@ open DY.Lib.Communication.API
 
 (*** PkEnc Predicates ***)
 
-val pkenc_crypto_predicates_communication_layer: cusages:crypto_usages -> pkenc_crypto_predicate cusages
-let pkenc_crypto_predicates_communication_layer cusages = {
-  pred = (fun tr pk msg ->
-    get_sk_usage pk == PkKey comm_layer_pkenc_tag empty /\
+val pkenc_crypto_predicates_communication_layer: {|cusages:crypto_usages|} -> pkenc_crypto_predicate
+let pkenc_crypto_predicates_communication_layer #cusages = {
+  pred = (fun tr sk_usage msg ->
     (exists sender receiver.
-      get_sk_label pk == principal_label receiver /\
-      (get_label msg) `can_flow tr` (join (principal_label sender) (principal_label receiver)) /\
+      sk_usage == long_term_key_type_to_usage (LongTermPkEncKey comm_layer_pkenc_tag)  receiver /\
+      (get_label tr msg) `can_flow tr` (join (principal_label sender) (principal_label receiver)) /\
       event_triggered tr sender (CommConfSendMsg sender receiver msg)
     ));
   pred_later = (fun tr1 tr2 pk msg -> ());
@@ -26,9 +26,9 @@ let pkenc_crypto_predicates_communication_layer cusages = {
 
 val pkenc_crypto_predicates_communication_layer_and_tag: 
   {|cusages:crypto_usages|} ->
-  (string & pkenc_crypto_predicate cusages)
+  (string & pkenc_crypto_predicate)
 let pkenc_crypto_predicates_communication_layer_and_tag #cusages = 
-  (comm_layer_pkenc_tag, pkenc_crypto_predicates_communication_layer cusages)
+  (comm_layer_pkenc_tag, pkenc_crypto_predicates_communication_layer)
 
 (*** Sign Predicates ***)
 
@@ -49,19 +49,18 @@ let pk_enc_extract_sk enc_msg =
   | _ -> None*)
 
 #push-options "--ifuel 3 --fuel 0"
-val sign_crypto_predicates_communication_layer: cusages:crypto_usages -> sign_crypto_predicate cusages
-let sign_crypto_predicates_communication_layer cusages = {
-  pred = (fun tr vk sig_msg ->
-    get_signkey_usage vk == SigKey comm_layer_sign_tag empty /\
+val sign_crypto_predicates_communication_layer: {|cusages:crypto_usages|} -> sign_crypto_predicate
+let sign_crypto_predicates_communication_layer #cusages = {
+  pred = (fun tr sk_usage sig_msg ->
     (match parse signature_input sig_msg with
     | Some (Plain {sender; receiver; payload}) -> (
-      get_signkey_label vk == principal_label sender /\
-      get_label payload `can_flow tr` public /\
+      sk_usage == long_term_key_type_to_usage (LongTermSigKey comm_layer_sign_tag) sender /\
+      get_label tr payload `can_flow tr` public /\
       event_triggered tr sender (CommAuthSendMsg sender payload)
     )
-    | Some (Encrypted {sender; receiver; payload=enc_payload}) -> (      
-      get_signkey_label vk == principal_label sender /\
-      get_label enc_payload `can_flow tr` public /\
+    | Some (Encrypted {sender; receiver; payload=enc_payload}) -> (
+      sk_usage == long_term_key_type_to_usage (LongTermSigKey comm_layer_sign_tag) sender /\     
+      get_label tr enc_payload `can_flow tr` public /\
       
       (exists plain_msg nonce pk_receiver.
         //pk_enc_extract_pk enc_payload == Some (DY.Core.Bytes.Type.Pk sk_receiver) /\
@@ -84,22 +83,22 @@ let sign_crypto_predicates_communication_layer cusages = {
     )
     | None -> False)
   );
-  pred_later = (fun tr1 tr2 vk msg -> ());
+  pred_later = (fun tr1 tr2 vk msg ->  parse_wf_lemma signature_input (bytes_well_formed tr1) msg);
 }
 #pop-options
 
 val sign_crypto_predicates_communication_layer_and_tag: 
   {|cusages:crypto_usages|} ->
-  (string & sign_crypto_predicate cusages)
+  (string & sign_crypto_predicate)
 let sign_crypto_predicates_communication_layer_and_tag #cusages =
-  (comm_layer_sign_tag, sign_crypto_predicates_communication_layer cusages)
+  (comm_layer_sign_tag, sign_crypto_predicates_communication_layer)
 
 val has_communication_layer_invariants:
-  crypto_invariants ->
+  {|crypto_invariants|} ->
   prop
-let has_communication_layer_invariants cinvs =
-  has_pkenc_predicate cinvs pkenc_crypto_predicates_communication_layer_and_tag /\
-  has_sign_predicate cinvs sign_crypto_predicates_communication_layer_and_tag
+let has_communication_layer_invariants #cinvs =
+  has_pkenc_predicate pkenc_crypto_predicates_communication_layer_and_tag /\
+  has_sign_predicate sign_crypto_predicates_communication_layer_and_tag
 
 (*** Event Predicates ***)
 
@@ -146,7 +145,7 @@ let event_predicate_communication_layer {|cinvs:crypto_invariants|} (higher_laye
         (
           event_triggered tr sender (CommAuthSendMsg sender payload)
         ) \/
-        is_corrupt tr (principal_label sender)
+        is_corrupt tr (long_term_key_label sender)
       )
     )
     | CommConfAuthSendMsg sender receiver payload -> (
@@ -165,7 +164,7 @@ let event_predicate_communication_layer {|cinvs:crypto_invariants|} (higher_laye
       //    Since the crypto predicates apply to this ciphertext, the
       //    decrypted payload flows to the receiver and some unknown sender'.
       event_triggered tr sender (CommConfAuthSendMsg sender receiver payload) \/
-      is_corrupt tr (principal_label sender)
+      is_corrupt tr (long_term_key_label sender)
     ))
 #pop-options
 
@@ -177,8 +176,8 @@ let event_predicate_communication_layer_and_tag #cinvs higher_layer_preds =
   ("DY.Lib.Communication.Event", compile_event_pred #communication_event (event_predicate_communication_layer #cinvs higher_layer_preds))
 
 val has_communication_layer_event_predicates:
-  protocol_invariants ->
+  {|protocol_invariants|} ->
   comm_higher_layer_event_preds ->
   prop
-let has_communication_layer_event_predicates invs higher_layer_preds =
-  has_event_pred invs (event_predicate_communication_layer higher_layer_preds)
+let has_communication_layer_event_predicates #invs higher_layer_preds =
+  has_event_pred (event_predicate_communication_layer higher_layer_preds)
