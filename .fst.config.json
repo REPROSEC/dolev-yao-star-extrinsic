@@ -1,7 +1,7 @@
 { "fstar_exe":"fstar.exe",
   "options":["--cache_dir", "cache", "--hint_dir", "hints", "--use_hints", "--record_hints"],
   "include_dirs":[
-    "../comparse/src",
+    "${COMPARSE_HOME}/src",
     "src/core",
     "src/lib",
     "src/lib/comparse",
