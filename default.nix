@@ -13,9 +13,14 @@ let
     enableParallelBuilding = true;
     buildInputs = [ which fstar z3 ];
     COMPARSE_HOME = comparse;
+    prePatch = ''
+      cp -pr --no-preserve=mode ${comparse}/cache ${comparse}/ml .
+      mkdir obj
+      cp -p ml/lib/src/* obj/
+    '';
     installPhase = ''
       mkdir -p $out
-      cp -r ml src cache hints $out
+      cp -r Makefile ml src cache hints $out
     '';
     passthru.tests = dolev-yao-star-tests;
   };

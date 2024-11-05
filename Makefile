@@ -17,7 +17,7 @@ MAYBE_ADMIT = $(if $(ADMIT),--admit_smt_queries true)
 FSTAR_EXE ?= $(FSTAR_HOME)/bin/fstar.exe
 FSTAR = $(FSTAR_EXE) $(MAYBE_ADMIT)
 
-FSTAR_EXTRACT = --extract '-* +DY +Comparse'
+FSTAR_EXTRACT = --extract '-* +DY +Comparse -Comparse.Tactic'
 
 # Allowed warnings:
 # - (Warning 242) Definitions of inner let-rec ... and its enclosing top-level letbinding are not encoded to the solver, you will only be able to reason with their types
