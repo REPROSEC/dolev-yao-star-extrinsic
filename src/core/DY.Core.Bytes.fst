@@ -1015,8 +1015,7 @@ let rec bytes_invariant #cinvs tr b =
         )
       ) \/ (
         // Attacker case:
-        // the attacker knows both pk and nonce
-        (get_label tr pk) `can_flow tr` public /\
+        // the attacker knows the nonce
         (get_label tr nonce) `can_flow tr` public
       )
     )
@@ -2963,11 +2962,17 @@ val bytes_invariant_kem_encap:
   pk:bytes -> nonce:bytes -> usg:usage ->
   Lemma
   (requires
-    is_publishable tr pk /\
+    bytes_invariant tr pk /\
     bytes_invariant tr nonce /\
     nonce `has_usage tr` KemNonce usg /\
-    pk `has_kem_sk_usage tr` KemKey usg /\
-    (get_label tr nonce) `can_flow tr` (get_kem_sk_label tr pk)
+    (
+      (
+        pk `has_kem_sk_usage tr` KemKey usg /\
+        (get_label tr nonce) `can_flow tr` (get_kem_sk_label tr pk)
+      ) \/ (
+        (get_label tr nonce) `can_flow tr` public
+      )
+    )
   )
   (ensures (
     let (kem_output, ss) = kem_encap pk nonce in
