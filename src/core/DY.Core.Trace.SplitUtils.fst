@@ -135,7 +135,6 @@ let rec trace_split (#label_t:Type) (tr:trace_ label_t) (ts:timestamp{ts < lengt
 
 let rec trace_split_length (#label_t:Type) (tr:trace_ label_t) (ts:timestamp{ts < length tr})
   : Lemma
-    (requires True)
     (ensures (
       let (tr1, e, tr2) = trace_split tr ts in
       length tr1 = ts /\ length tr2 = (length tr) - ts - 1
@@ -151,7 +150,6 @@ let rec trace_split_length (#label_t:Type) (tr:trace_ label_t) (ts:timestamp{ts 
 
 let rec trace_split_left (#label_t:Type) (tr:trace_ label_t) (ts:timestamp{ts < length tr}) (i:timestamp{i < ts})
   : Lemma
-    (requires True)
     (ensures (
       let (tr1, _, _) = trace_split tr ts in
       length tr1 = ts /\
@@ -163,7 +161,6 @@ let rec trace_split_left (#label_t:Type) (tr:trace_ label_t) (ts:timestamp{ts < 
 
 let rec trace_split_mid (#label_t:Type) (tr:trace_ label_t) (ts:timestamp{ts < length tr})
   : Lemma
-    (requires True)
     (ensures (
       let (_, e, _) = trace_split tr ts in
       e == get_event_at tr ts
@@ -174,7 +171,6 @@ let rec trace_split_mid (#label_t:Type) (tr:trace_ label_t) (ts:timestamp{ts < l
 
 let rec trace_split_right (#label_t:Type) (tr:trace_ label_t) (ts:timestamp{ts < length tr}) (i:timestamp{ts < i /\ i < length tr})
   : Lemma
-    (requires True)
     (ensures (
       let (_, _, tr2) = trace_split tr ts in
       length tr2 = (length tr) - ts - 1 /\
