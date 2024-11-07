@@ -154,15 +154,10 @@ val sign_message_proof:
     is_private_key_for tr sk_sender (LongTermSigKey comm_layer_sign_tag) sender /\
     (
       if is_encrypted then (
-        (exists plain_msg nonce pk_receiver.
-          //pk_enc_extract_pk payload == Some (DY.Core.Bytes.Type.Pk sk_receiver) /\
-          //Some plain_msg == pk_dec sk_receiver payload /\
-          payload == encrypt_message pk_receiver nonce plain_msg /\
-          //get_label sk_receiver == principal_label receiver /\
-          //event_triggered tr sender (CommConfSendMsg sender receiver plain_msg) /\
-          //event_triggered tr sender (CommAuthSendMsg sender plain_msg) /\ 
-          event_triggered tr sender (CommConfAuthSendMsg sender receiver plain_msg) /\   
-          get_label tr plain_msg `can_flow tr` (join (principal_label sender) (principal_label receiver))
+        match pk_enc_extract_msg payload with
+        | None -> False
+        | Some plain_payload -> (     
+          event_triggered tr sender (CommConfAuthSendMsg sender receiver plain_payload)
         )
       ) else (
         event_triggered tr sender (CommAuthSendMsg sender payload)
@@ -249,15 +244,11 @@ val verify_message_proof:
           sender' == sender /\
           (
             if is_encrypted then (
-              exists plain_msg nonce pk_receiver.
-                //pk_enc_extract_pk payload == Some (DY.Core.Bytes.Type.Pk sk_receiver) /\
-                //Some plain_msg == decrypt_message sk_receiver payload /\
-                //get_label sk_receiver == principal_label receiver /\
-                payload == encrypt_message pk_receiver nonce plain_msg /\
-                //event_triggered tr sender (CommConfSendMsg sender receiver plain_msg) /\
-                //event_triggered tr sender (CommAuthSendMsg sender plain_msg) /\
-                event_triggered tr sender (CommConfAuthSendMsg sender receiver plain_msg) //\
-                //get_label plain_msg `can_flow tr` (join (principal_label sender) (principal_label receiver))
+              match pk_enc_extract_msg payload with
+              | None -> False
+              | Some plain_payload -> (
+                event_triggered tr sender (CommConfAuthSendMsg sender receiver plain_payload)
+              )
             ) else (
               event_triggered tr sender (CommAuthSendMsg sender payload)
             )
@@ -473,7 +464,7 @@ let encrypt_and_sign_message_proof #cinvs tr sender receiver payload pk_receiver
     sign_message_proof tr sender receiver enc_payload true sk_sender sign_nonce;
     ()
   );*)
-  
+  pk_enc_extract_msg_enc_lemma pk_receiver enc_nonce payload enc_payload;
   sign_message_proof tr sender receiver enc_payload true sk_sender sign_nonce;
   ()
 
@@ -556,24 +547,20 @@ let verify_and_decrypt_message_proof #cinvs tr sender receiver msg_encrypted_sig
   match verify_and_decrypt_message receiver msg_encrypted_signed sk_receiver vk_sender with
   | None -> ()
   | Some {sender=sender'; receiver=receiver'; payload} -> (
-    normalize_term_spec pk_dec;
-    normalize_term_spec pk_enc;
     verify_message_proof tr sender receiver msg_encrypted_signed true vk_sender;
     let Some {sender=sender''; receiver=receiver''; payload=enc_payload} = verify_message receiver msg_encrypted_signed true vk_sender in    
     assert(is_publishable tr enc_payload /\
       (
         (
           sender' == sender /\
-          (exists plain_msg nonce pk_receiver.
-            //pk_enc_extract_pk enc_payload == Some (DY.Core.Bytes.Type.Pk sk_receiver) /\
-            //Some plain_msg == decrypt_message sk_receiver enc_payload /\
-            //get_label sk_receiver == principal_label receiver /\
-            plain_msg == payload /\
-            enc_payload == encrypt_message pk_receiver nonce plain_msg /\
-            //event_triggered tr sender (CommConfSendMsg sender receiver plain_msg) /\
-            //event_triggered tr sender (CommAuthSendMsg sender plain_msg) /\
-            event_triggered tr sender (CommConfAuthSendMsg sender receiver plain_msg) //\
-            //get_label plain_msg `can_flow tr` (join (principal_label sender) (principal_label receiver))
+          (
+            match pk_enc_extract_msg enc_payload with
+            | None -> False
+            | Some plain_payload -> (
+              vk_sender `has_signkey_usage tr` long_term_key_type_to_usage (LongTermSigKey comm_layer_sign_tag) sender /\     
+              get_label tr enc_payload `can_flow tr` public /\
+              event_triggered tr sender (CommConfAuthSendMsg sender receiver plain_payload)
+            )
           )
         ) \/ (
           is_corrupt tr (long_term_key_label sender)
@@ -596,9 +583,17 @@ let verify_and_decrypt_message_proof #cinvs tr sender receiver msg_encrypted_sig
     );
     assert(exists sender. is_knowable_by (join (principal_label sender) (principal_label receiver)) tr payload);
 
-    // TODO transfer this property into the event or separate from the event
     assert(is_knowable_by (principal_label receiver) tr payload);
-      
+  
+    pk_enc_extract_msg_dec_lemma sk_receiver enc_payload payload;
+    assert(
+      match pk_enc_extract_msg enc_payload with
+      | Some plain_payload -> (
+        payload == plain_payload /\
+        event_triggered tr sender (CommConfAuthSendMsg sender receiver plain_payload)
+       
+      ) \/
+      is_corrupt tr (long_term_key_label sender));
 
     ()
     (*introduce ~(is_corrupt tr (principal_label sender)) /\ ~(is_publishable tr payload) ==> event_triggered tr sender (CommConfSendMsg sender receiver payload)
