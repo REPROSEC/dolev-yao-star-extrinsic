@@ -32,13 +32,44 @@ let pkenc_crypto_predicates_communication_layer_and_tag #cusages =
 
 (*** Sign Predicates ***)
 
-(*val pk_enc_extract_msg: enc_msg:bytes -> option bytes
+// The following functions should move into the core
+// **********************************************************
+val pk_enc_extract_msg: enc_msg:bytes -> GTot (option bytes)
 let pk_enc_extract_msg enc_msg =
   match enc_msg with
   | DY.Core.Bytes.Type.PkEnc pk nonce msg -> Some msg
   | _ -> None
 
-val pk_enc_extract_sk: enc_msg:bytes -> option bytes
+val pk_enc_extract_msg_enc_lemma:
+  pk_prin:bytes -> nonce:bytes ->
+  msg:bytes -> enc:bytes ->
+  Lemma
+  (requires
+    enc == pk_enc pk_prin nonce msg
+  )
+  (ensures
+    pk_enc_extract_msg enc == Some msg
+  )
+let pk_enc_extract_msg_enc_lemma pk_prin nonce msg enc =
+  normalize_term_spec pk_enc;
+  ()
+
+val pk_enc_extract_msg_dec_lemma:
+  sk_prin:bytes ->
+  enc:bytes -> msg:bytes ->
+  Lemma
+  (requires
+    pk_dec sk_prin enc == Some msg
+  )
+  (ensures 
+    pk_enc_extract_msg enc == Some msg
+  )
+let pk_enc_extract_msg_dec_lemma sk_prin enc msg = 
+  normalize_term_spec pk_dec;
+  ()
+// **********************************************************
+
+(*val pk_enc_extract_sk: enc_msg:bytes -> option bytes
 let pk_enc_extract_sk enc_msg =
   match enc_msg with
   | DY.Core.Bytes.Type.PkEnc pk nonce msg -> (
@@ -47,6 +78,14 @@ let pk_enc_extract_sk enc_msg =
     | _ -> None
   )
   | _ -> None*)
+
+(*)
+val pk_enc_extract_msg: enc_msg:bytes{exists pk nonce msg. enc_msg = pk_enc pk nonce msg} -> GTot (msg:bytes{exists pk nonce. enc_msg = pk_enc pk nonce msg})
+let pk_enc_extract_msg enc_msg =
+  normalize_term_spec pk_enc;
+  match enc_msg with
+  | DY.Core.Bytes.Type.PkEnc pk nonce msg -> msg
+*)
 
 #push-options "--ifuel 3 --fuel 0"
 val sign_crypto_predicates_communication_layer: {|cusages:crypto_usages|} -> sign_crypto_predicate
@@ -59,27 +98,13 @@ let sign_crypto_predicates_communication_layer #cusages = {
       event_triggered tr sender (CommAuthSendMsg sender payload)
     )
     | Some (Encrypted {sender; receiver; payload=enc_payload}) -> (
-      sk_usage == long_term_key_type_to_usage (LongTermSigKey comm_layer_sign_tag) sender /\     
-      get_label tr enc_payload `can_flow tr` public /\
-      
-      (exists plain_msg nonce pk_receiver.
-        //pk_enc_extract_pk enc_payload == Some (DY.Core.Bytes.Type.Pk sk_receiver) /\
-        //Some plain_msg == decrypt_message sk_receiver enc_payload /\
-        //get_label sk_receiver == principal_label receiver /\
-        enc_payload == encrypt_message pk_receiver nonce plain_msg /\
-        //event_triggered tr sender (CommConfSendMsg sender receiver plain_msg) /\
-        //event_triggered tr sender (CommAuthSendMsg sender plain_msg) /\
-        event_triggered tr sender (CommConfAuthSendMsg sender receiver plain_msg) //\
-        //get_label plain_msg `can_flow tr` (join (principal_label sender) (principal_label receiver))
+      match pk_enc_extract_msg enc_payload with
+      | None -> False
+      | Some plain_payload -> (
+        sk_usage == long_term_key_type_to_usage (LongTermSigKey comm_layer_sign_tag) sender /\     
+        get_label tr enc_payload `can_flow tr` public /\
+        event_triggered tr sender (CommConfAuthSendMsg sender receiver plain_payload)
       )
-      (*match payload with
-      | DY.Core.Bytes.Type.PkEnc pk nonce msg -> (
-        get_sk_usage pk == PkKey comm_layer_pkenc_tag empty /\
-        get_sk_label pk == principal_label receiver /\
-        get_label msg `can_flow tr` (join (principal_label sender) (principal_label receiver)) /\
-        event_triggered tr sender (CommConfSendMsg sender receiver msg)
-      )
-      | _ -> False*)
     )
     | None -> False)
   );
