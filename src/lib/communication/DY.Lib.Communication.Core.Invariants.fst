@@ -75,17 +75,17 @@ let sign_crypto_predicates_communication_layer #cusages = {
       get_label tr payload `can_flow tr` public /\
       event_triggered tr sender (CommAuthSendMsg sender payload)
     )
-    | Some (Encrypted payload) -> (  
+    | Some (Encrypted pk_receiver payload) -> (  
       get_label tr payload `can_flow tr` public /\
 
-      (exists (plain_payload:communication_message) nonce pk_receiver.
+      (exists (plain_payload:communication_message) nonce.
         sk_usage == long_term_key_type_to_usage (LongTermSigKey comm_layer_sign_tag) plain_payload.sender /\
 
         //pk_enc_extract_pk enc_payload == Some (DY.Core.Bytes.Type.Pk sk_receiver) /\
         //Some plain_msg == decrypt_message sk_receiver enc_payload /\
         //get_label sk_receiver == principal_label receiver /\
-        bytes_well_formed tr pk_receiver /\
-        pk_receiver `has_sk_usage tr` (long_term_key_type_to_usage (LongTermPkEncKey comm_layer_pkenc_tag) plain_payload.receiver) /\
+        //bytes_well_formed tr pk_receiver /\
+        //pk_receiver `has_sk_usage tr` (long_term_key_type_to_usage (LongTermPkEncKey comm_layer_pkenc_tag) plain_payload.receiver) /\
         payload == encrypt_message pk_receiver nonce (PkEncSignInput plain_payload) /\
         //event_triggered tr sender (CommConfSendMsg sender receiver plain_msg) /\
         //event_triggered tr sender (CommAuthSendMsg sender plain_msg) /\
