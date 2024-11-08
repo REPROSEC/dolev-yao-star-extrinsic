@@ -36,7 +36,7 @@ instance parseable_serializeable_bytes_pkenc_input: parseable_serializeable byte
 [@@with_bytes bytes]
 type signature_input = 
   | Plain: msg:communication_message -> signature_input
-  | Encrypted: payload:bytes -> signature_input
+  | Encrypted: pk:bytes -> payload:bytes -> signature_input
 
 #push-options "--ifuel 1 --fuel 0"
 %splice [ps_signature_input] (gen_parser (`signature_input))
@@ -117,7 +117,7 @@ let send_confidential comm_keys_ids sender receiver payload =
   let* nonce = mk_rand PkNonce (long_term_key_label sender) 32 in
   trigger_event sender (CommConfSendMsg sender receiver payload);*
   let msg_encrypted = encrypt_message pk_receiver nonce (PkEncInput payload) in
-  let* msg_id = send_msg msg_encrypted in  
+  let* msg_id = send_msg msg_encrypted in
   return (Some msg_id)
 
 
@@ -142,10 +142,10 @@ let receive_confidential comm_keys_ids receiver msg_id =
 
 (**** Authenticated Send and Receive Functions ****)
 
-val sign_message: principal -> principal -> bytes -> bool -> bytes -> bytes -> bytes
-let sign_message sender receiver payload is_encrypted sk nonce =
+val sign_message: principal -> principal -> bytes -> bytes -> bool -> bytes -> bytes -> bytes
+let sign_message sender receiver payload pk_receiver is_encrypted sk nonce =
   if is_encrypted then (
-    let sig_input = Encrypted payload in
+    let sig_input = Encrypted pk_receiver payload in
     let sig_input_bytes = serialize signature_input sig_input in
     let signature = sign sk nonce sig_input_bytes in
     let msg_signed = {payload=sig_input_bytes; signature} in
@@ -166,7 +166,7 @@ let send_authenticated comm_keys_ids sender receiver payload =
   let*? sk_sender = get_private_key sender comm_keys_ids.private_keys (LongTermSigKey comm_layer_sign_tag) in
   let* nonce = mk_rand SigNonce (long_term_key_label sender) 32 in
   trigger_event sender (CommAuthSendMsg sender payload);*
-  let msg_signed = sign_message sender receiver payload false sk_sender nonce in
+  let msg_signed = sign_message sender receiver payload empty false sk_sender nonce in
   let* msg_id = send_msg msg_signed in
   return (Some msg_id)
 
@@ -181,7 +181,7 @@ let verify_message receiver msg_bytes is_encrypted vk_sender =
     guard (cm.receiver = receiver);?
     Some cm.payload
   )
-  | Encrypted payload -> (
+  | Encrypted pk_receiver payload -> (
     guard (verify vk_sender msg_signed.payload msg_signed.signature);?
     //guard (msg_signed.receiver = receiver);?
     //guard (DY.Core.Bytes.Type.PkEnc? msg_signed.payload);?
@@ -214,7 +214,7 @@ val encrypt_and_sign_message: principal -> principal -> bytes -> bytes -> bytes 
 let encrypt_and_sign_message sender receiver payload pk_receiver sk_sender enc_nonce sign_nonce =
   let pkenc_sign_input = PkEncSignInput {sender; receiver; payload} in
   let enc_payload = encrypt_message pk_receiver enc_nonce pkenc_sign_input in
-  sign_message sender receiver enc_payload true sk_sender sign_nonce
+  sign_message sender receiver enc_payload pk_receiver true sk_sender sign_nonce
 
 // TODO remove comment if proof works
 // We do not encrypt the sender and receiver
@@ -244,6 +244,7 @@ let decrypt_signed_message receiver sk_receiver msg_encrypted_signed =
   let? signed_msg = parse communication_message_sign msg_encrypted_signed in
   let? signature_in = parse signature_input signed_msg.payload in
   guard(Encrypted? signature_in);?
+  guard((Encrypted?.pk signature_in) = pk sk_receiver);?
   let? pkenc_in = decrypt_message sk_receiver (Encrypted?.payload signature_in) in 
   guard(PkEncSignInput? pkenc_in);?
   let cm = PkEncSignInput?.cm pkenc_in in
