@@ -3,6 +3,8 @@ module DY.Core.Trace.SplitUtils
 open DY.Core.Trace.Type
 open DY.Core.Trace.Base
 
+open FStar.Calc
+
 /// Overall TODO: Many of the functions here can (and should) be made opaque to SMT,
 /// and then revealed in lemmas as necessary.
 
@@ -14,14 +16,58 @@ let nil_prefix (#label_t:Type) (tr:trace_ label_t)
     [SMTPat (Nil <$ tr)]
   = normalize_term_spec (grows #label_t)
 
-let prefix_full_eq (#label_t:Type) (tr1 tr2:trace_ label_t)
+let grows_snoc_right (#label_t:Type) (tr1 tr2:trace_ label_t) (e:trace_event_ label_t)
+  : Lemma
+    (requires tr1 <$ tr2)
+    (ensures tr1 <$ (Snoc tr2 e))
+    [SMTPat (tr1 <$ (Snoc tr2 e)); SMTPat (tr1 <$ tr2)]
+  = normalize_term_spec (grows #label_t)
+
+let grows_snoc_left (#label_t:Type) (tr1 tr2:trace_ label_t) (e:trace_event_ label_t)
+  : Lemma
+    (requires (Snoc tr1 e) <$ tr2)
+    (ensures tr1 <$ tr2)
+    [SMTPat (tr1 <$ tr2); SMTPat ((Snoc tr1 e) <$ tr2)]
+  = grows_snoc_right tr1 tr1 e
+
+let prefix_full_eq (#label_t:Type) (tr:trace_ label_t)
+  : Lemma (ensures (prefix tr (length tr) == tr))
+    [SMTPat (prefix tr (length tr))]
+  = normalize_term_spec (grows #label_t)
+
+let grows_full_eq (#label_t:Type) (tr1 tr2:trace_ label_t)
   : Lemma
     (requires tr1 <$ tr2 /\ length tr1 == length tr2)
     (ensures tr1 == tr2)
 // TODO:
 // It is not clear if this SMTPat is ever practically useful, but it seems like it could be in principle
     [SMTPat (tr1 == tr2); SMTPat (tr1 <$ tr2)]
-  = normalize_term_spec (grows #label_t)
+  = prefix_prefix_eq tr1 tr2 (length tr1)
+
+let grows_cases (#label_t:Type) (tr1 tr2:trace_ label_t)
+  : Lemma
+    (requires tr1 <$ tr2)
+    (ensures tr1 == tr2 \/ (
+      Snoc? tr2 /\ (
+      let Snoc hd _ = tr2 in
+      tr1 <$ hd
+    )))
+  = if length tr1 = length tr2
+    then grows_full_eq tr1 tr2
+    else begin
+      let Snoc hd e = tr2 in
+      calc (<$) {
+        tr1;
+        == {}
+        prefix tr1 (length tr1);
+        <$ { prefix_prefix_grows tr1 tr2 (length tr1) (length hd) }
+        prefix tr2 (length hd);
+        == { prefix_prefix_eq hd tr2 (length hd) }
+        prefix hd (length hd);
+        == { }
+        hd;
+      }
+    end
 
 
 (*** General utility functions for working with traces ***)
@@ -87,7 +133,7 @@ let trace_entry_equiv_transitive (#label_t:Type) (e1 e2 e3:trace_event_ label_t)
 /// Using trace entry equivalence and this first search function, we can find entries that are
 /// equivalent to a known trace entry, though they may not necessarily be equal.
 
-let rec trace_findP (#label_t:Type) (tr:trace_ label_t) (p:trace_event_ label_t -> bool)
+let rec trace_search (#label_t:Type) (tr:trace_ label_t) (p:trace_event_ label_t -> bool)
   : Pure (option timestamp)
     (requires True)
     (ensures fun ts_opt ->
@@ -101,11 +147,11 @@ let rec trace_findP (#label_t:Type) (tr:trace_ label_t) (p:trace_event_ label_t 
       if p entry then
         Some (last_ts tr)
       else
-        trace_findP hd p
+        trace_search hd p
 
 let trace_find (#label_t:Type) (tr:trace_ label_t) (e:trace_event_ label_t{event_exists tr e})
   : Pure timestamp (requires True) (ensures fun ts -> ts < length tr /\ trace_entry_equiv e (get_event_at tr ts))
-  = let Some ts = trace_findP tr (fun e' -> trace_entry_equiv e e') in
+  = let Some ts = trace_search tr (fun e' -> trace_entry_equiv e e') in
     ts
 
 
@@ -246,8 +292,18 @@ let trace_subtract (#label_t:Type) (tr1:trace_ label_t) (tr2:trace_ label_t{tr2 
     | _ -> let (_, _, tl) = trace_split tr1 (length tr2 - 1) in
           tl
 
+let rec trace_subtract' (#label_t:Type) (tr1:trace_ label_t) (tr2:trace_ label_t{tr2 <$ tr1})
+  : trace_ label_t
+  = if length tr1 = length tr2 then Nil
+    else begin
+      let Snoc hd e = tr1 in
+      grows_cases tr2 tr1;
+      assert(tr2 <$ hd);
+      Snoc (trace_subtract' hd tr2) e
+    end
+
 let (<++>) = trace_concat
-let (<-->) = trace_subtract
+let (<-->) = trace_subtract'
 
 /// Traces form a monoid with trace concatenation as operation, and Nil as unit.
 
@@ -269,11 +325,48 @@ let rec trace_concat_assoc (#label_t:Type) (tr1 tr2 tr3:trace_ label_t)
     | Nil -> ()
     | Snoc hd _ -> trace_concat_assoc tr1 tr2 hd
 
-let trace_subtract_nil (#label_t:Type) (tr:trace_ label_t)
+let rec trace_subtract_nil (#label_t:Type) (tr:trace_ label_t)
   : Lemma
     (ensures (tr <--> Nil) == tr)
     [SMTPat (tr <--> Nil)]
+  = match tr with
+    | Nil -> ()
+    | Snoc hd _ -> trace_subtract_nil hd
+  // Proves with () with initial trace subtract def
+
+let trace_subtract_snoc_left (#label_t:Type) (tr1 tr2:trace_ label_t) (e:trace_event_ label_t)
+  : Lemma
+    (requires tr1 <$ tr2)
+    (ensures ((Snoc tr2 e) <--> tr1) == Snoc (tr2 <--> tr1) e)
   = ()
+
+let trace_subtract_snoc_left' (#label_t:Type) (tr1 tr2:trace_ label_t)
+  : Lemma
+    (requires Snoc? tr2 /\ (let Snoc hd _ = tr2 in tr1 <$ hd))
+    (ensures (
+      let Snoc hd e = tr2 in
+      (tr2 <--> tr1) == Snoc (hd <--> tr1) e
+    ))
+  = ()
+
+let trace_concat_snoc_right (#label_t:Type) (tr1 tr2:trace_ label_t) (e:trace_event_ label_t)
+  : Lemma
+    (ensures tr1 <++> (Snoc tr2 e) == Snoc (tr1 <++> tr2) e)
+  = ()
+
+let snoc_is_concat_singleton (#label_t:Type) (tr :trace_ label_t) (e:trace_event_ label_t)
+  : Lemma
+    (ensures Snoc tr e == (tr <++> (Snoc Nil e)))
+  = ()
+
+let rec trace_concat_grows (#label_t:Type) (tr1 tr2 tr3:trace_ label_t)
+  : Lemma
+    (requires tr1 <$ tr2)
+    (ensures tr1 <$ (tr2 <++> tr3))
+    [SMTPat (tr1 <$ (tr2 <++> tr3)); SMTPat (tr1 <$ tr2)]
+  = match tr3 with
+    | Nil -> ()
+    | Snoc hd e -> trace_concat_grows tr1 tr2 hd
 
 
 /// Properties connecting trace concatenation, splitting, and subtraction.
@@ -288,15 +381,60 @@ let rec trace_split_concat (#label_t:Type) (tr:trace_ label_t) (ts:timestamp{ts 
     if ts = last_ts tr then ()
     else trace_split_concat hd ts
 
-let trace_subtract_concat (#label_t:Type) (tr1:trace_ label_t) (tr2:trace_ label_t{tr2 <$ tr1})
+let rec trace_subtract_matches_split (#label_t:Type) (tr1 tr2:trace_ label_t)
   : Lemma
+    (requires tr1 <$ tr2 /\ Snoc? tr1)
+    (ensures (
+      let (_, _, tl) = trace_split tr2 (length tr1 - 1) in
+      tl == (tr2 <--> tr1)
+    ))
+  = let Snoc hd e = tr2 in
+    let (_, _, tl) = trace_split tr2 (length tr1 - 1) in
+    grows_cases tr1 tr2;
+    eliminate tr1 == tr2 \/ tr1 <$ hd
+    returns tl == (tr2 <--> tr1)
+    with _. ()
+    and _. trace_subtract_matches_split tr1 hd
+
+let rec trace_subtract_concat_right (#label_t:Type) (tr1 tr2:trace_ label_t)
+  : Lemma
+    (requires tr2 <$ tr1)
     (ensures tr2 <++> (tr1 <--> tr2) == tr1)
-  = match tr2 with
-    | Nil -> ()
-    | Snoc hd e ->
+    [SMTPat (tr2 <++> (tr1 <--> tr2))]
+  = grows_cases tr2 tr1;
+    eliminate tr1 == tr2 \/ (Snoc? tr1 /\ (let Snoc hd _ = tr1 in tr2 <$ hd))
+    returns tr2 <++> (tr1 <--> tr2) == tr1
+    with _. ()
+    and _. begin
+      let Snoc hd e = tr1 in
+      trace_subtract_concat_right hd tr2;
+      trace_subtract_snoc_left' tr2 tr1;
+      trace_concat_snoc_right tr2 (hd <--> tr2) e
+    end
+    (* Proof with original trace_subtract definition
     begin
       trace_split_matches_prefix tr1 (length tr2 - 1);
-      prefix_full_eq (prefix tr2 (length tr2)) tr2;
+      prefix_full_eq tr2;
       trace_split_concat tr1 (length tr2 - 1);
       ()
     end
+*)
+
+let rec trace_subtract_concat_left (#label_t:Type) (tr1 tr2 tr3:trace_ label_t)
+  : Lemma
+    (requires tr1 <$ tr2)
+    (ensures ((tr2 <--> tr1) <++> tr3) == ((tr2 <++> tr3) <--> tr1))
+  = match tr3 with
+    | Nil -> ()
+    | Snoc hd e -> begin
+      trace_subtract_concat_left tr1 tr2 hd;
+      trace_subtract_snoc_left' tr1 (tr2 <++> tr3)
+    end
+
+let trace_subtract_concat_slices (#label_t:Type) (tr1 tr2 tr3:trace_ label_t)
+  : Lemma
+    (requires tr1 <$ tr2 /\ tr2 <$ tr3)
+    (ensures (tr3 <--> tr1) == ((tr2 <--> tr1) <++> (tr3 <--> tr2)))
+    [SMTPat ((tr2 <--> tr1) <++> (tr3 <--> tr2))]
+  = trace_subtract_concat_left tr1 tr2 (tr3 <--> tr2);
+    trace_subtract_concat_right tr3 tr2
