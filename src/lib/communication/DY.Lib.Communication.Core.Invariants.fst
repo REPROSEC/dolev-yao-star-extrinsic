@@ -48,20 +48,11 @@ let sign_crypto_predicates_communication_layer #cusages = {
     )
     | Some (Encrypted pk_receiver cm) -> (  
       get_label tr cm.payload `can_flow tr` public /\
-
       (exists plain_payload nonce.
         sk_usage == long_term_key_type_to_usage (LongTermSigKey comm_layer_sign_tag) cm.sender /\
-
-        //pk_enc_extract_pk enc_payload == Some (DY.Core.Bytes.Type.Pk sk_receiver) /\
-        //Some plain_msg == decrypt_message sk_receiver enc_payload /\
-        //get_label sk_receiver == principal_label receiver /\
-        //bytes_well_formed tr pk_receiver /\
-        //pk_receiver `has_sk_usage tr` (long_term_key_type_to_usage (LongTermPkEncKey comm_layer_pkenc_tag) cm.receiver) /\
         cm.payload == encrypt_message pk_receiver nonce plain_payload /\
-        //event_triggered tr sender (CommConfSendMsg sender receiver plain_msg) /\
         event_triggered tr cm.sender (CommAuthSendMsg cm.sender plain_payload) /\
-        event_triggered tr cm.sender (CommConfAuthSendMsg cm.sender cm.receiver plain_payload) //\
-        //get_label plain_msg `can_flow tr` (join (principal_label sender) (principal_label receiver))
+        event_triggered tr cm.sender (CommConfAuthSendMsg cm.sender cm.receiver plain_payload)
       )
     )
     | None -> False)
