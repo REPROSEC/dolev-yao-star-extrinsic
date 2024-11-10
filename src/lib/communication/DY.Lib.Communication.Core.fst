@@ -155,30 +155,31 @@ let send_authenticated comm_keys_ids sender receiver payload =
   return (Some msg_id)
 
 #push-options "--ifuel 1 --fuel 0"
-val verify_message: principal -> bytes -> bytes -> option communication_message
-let verify_message receiver sign_msg_bytes vk_sender =
+val verify_message: principal -> bytes -> bool -> bytes -> bytes -> option communication_message
+let verify_message receiver sign_msg_bytes is_encrypted sk_receiver vk_sender =
   let? msg_sign = parse communication_message_sign sign_msg_bytes in
   let? sign_input = parse signature_input msg_sign.msg in
   guard (verify vk_sender msg_sign.msg msg_sign.signature);?
-  match sign_input with
-  | Plain cm -> (    
+  if not is_encrypted then (
+    guard (Plain? sign_input);?
+    let Plain cm = sign_input in
     guard (cm.receiver = receiver);?
     Some cm
-  )
-  | Encrypted pk_receiver cm -> (
+  ) else (
+    guard (Encrypted? sign_input);?
+    let Encrypted pk_receiver cm = sign_input in
     guard (cm.receiver = receiver);?
+    guard (pk_receiver = pk sk_receiver);?
     Some cm
   )
 
-// This function is used to implicitly check that the signature input has to
-// correct type (Plain in this case)
 val get_sender: bytes -> option principal
 let get_sender msg_bytes =
   let? msg_sign = parse communication_message_sign msg_bytes in
   let? sign_input = parse signature_input msg_sign.msg in
   match sign_input with
   | Plain cm -> Some cm.sender
-  | Encrypted pk_receiver cm -> None
+  | Encrypted pk_receiver cm -> Some cm.sender
 #pop-options
 
 val receive_authenticated:
@@ -189,7 +190,7 @@ let receive_authenticated comm_keys_ids receiver msg_id =
   let*? msg_signed_bytes = recv_msg msg_id in
   let*? sender = return (get_sender msg_signed_bytes) in
   let*? vk_sender = get_public_key receiver comm_keys_ids.pki (LongTermSigKey comm_layer_sign_tag) sender in
-  let*? cm = return (verify_message receiver msg_signed_bytes vk_sender) in
+  let*? cm = return (verify_message receiver msg_signed_bytes false empty vk_sender) in
   trigger_event receiver (CommAuthReceiveMsg cm.sender receiver cm.payload);*
   return (Some cm)
 
@@ -219,22 +220,9 @@ let send_confidential_authenticated comm_keys_ids sender receiver payload =
   let* msg_id = send_msg msg_encrypted_signed_bytes in
   return (Some msg_id)
 
-val validate_signature_input: bytes -> bool -> bytes -> option bool
-let validate_signature_input msg is_encrypted sk_receiver =
-  let? msg_sign = parse communication_message_sign msg in
-  let? sign_input = parse signature_input msg_sign.msg in
-  if not is_encrypted then
-    Some (Plain? sign_input)
-  else
-    Some (Encrypted? sign_input && (Encrypted?.pk sign_input) = pk sk_receiver)
-
 val verify_and_decrypt_message: principal -> bytes -> bytes -> bytes -> option communication_message
 let verify_and_decrypt_message receiver sk_receiver vk_sender msg_encrypted_signed =
-  let? cm = verify_message receiver msg_encrypted_signed vk_sender in
-
-  let? validation_result = validate_signature_input msg_encrypted_signed true sk_receiver in
-  guard(validation_result);?
-
+  let? cm = verify_message receiver msg_encrypted_signed true sk_receiver vk_sender in
   let? payload = decrypt_message sk_receiver cm.payload in
   Some ({cm with payload})
 

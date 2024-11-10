@@ -67,10 +67,8 @@ let send_confidential_proof #invs tr higher_layer_preds keys_sess_ids sender rec
     let (Some pk_receiver, tr) = get_public_key sender keys_sess_ids.pki (LongTermPkEncKey comm_layer_pkenc_tag) receiver tr in
     let (nonce, tr) = mk_rand PkNonce (long_term_key_label sender) 32 tr in
     let ((), tr) = trigger_event sender (CommConfSendMsg sender receiver payload) tr in
-    let msg_encrypted = encrypt_message pk_receiver nonce payload in
-    assert(higher_layer_preds.send_conf sender receiver payload tr);
-    assert(event_triggered tr sender (CommConfSendMsg sender receiver payload));
     encrypt_message_proof tr sender receiver pk_receiver nonce payload;
+    let msg_encrypted = encrypt_message pk_receiver nonce payload in
     let (msg_id, tr) = send_msg msg_encrypted tr in
     assert(tr_out == tr);
     ()
@@ -157,17 +155,9 @@ val sign_message_proof:
     (
       if is_encrypted then (
         (exists plain_payload nonce.
-          //pk_enc_extract_pk payload == Some (DY.Core.Bytes.Type.Pk sk_receiver) /\
-          //Some plain_msg == pk_dec sk_receiver payload /\
           payload == encrypt_message pk_receiver nonce plain_payload /\
-          
-          //bytes_well_formed tr pk_receiver /\
-          //pk_receiver `has_sk_usage tr` (long_term_key_type_to_usage (LongTermPkEncKey comm_layer_pkenc_tag) plain_msg.receiver) /\
-          //get_label sk_receiver == principal_label receiver /\
-          //event_triggered tr sender (CommConfSendMsg sender receiver plain_msg) /\
           event_triggered tr sender (CommAuthSendMsg sender plain_payload) /\ 
-          event_triggered tr sender (CommConfAuthSendMsg sender receiver plain_payload) //\   
-          //get_label tr plain_msg.payload `can_flow tr` (join (principal_label plain_msg.sender) (principal_label plain_msg.receiver))
+          event_triggered tr sender (CommConfAuthSendMsg sender receiver plain_payload)
         )
       ) else (
         event_triggered tr sender (CommAuthSendMsg sender payload)
@@ -182,8 +172,6 @@ let sign_message_proof #cinvs tr sender receiver payload pk_receiver is_encrypte
   if is_encrypted then (
     let sig_input = Encrypted pk_receiver msg in
     let sig_input_bytes = serialize signature_input sig_input in
-    assert(is_publishable tr payload);
-    assert(is_publishable tr pk_receiver);
     serialize_wf_lemma signature_input (is_publishable tr) sig_input;
     let signature = sign sk_sender nonce sig_input_bytes in
     let msg_signed = {msg=sig_input_bytes; signature} in
@@ -194,13 +182,10 @@ let sign_message_proof #cinvs tr sender receiver payload pk_receiver is_encrypte
     let sig_input = Plain {sender; receiver; payload} in
     let sig_input_bytes = serialize signature_input sig_input in
     serialize_wf_lemma signature_input (is_publishable tr) sig_input;
-    assert(is_publishable tr sig_input_bytes);
     let signature = sign sk_sender nonce sig_input_bytes in
     assert(bytes_invariant tr signature);
     let msg_signed = {msg=sig_input_bytes; signature} in
-    //assert(is_publishable tr sig_input_bytes);
-    //assert(get_label tr signature `can_flow tr` public);
-    //assert(is_publishable tr signature);
+    assert(bytes_invariant tr signature);
     serialize_wf_lemma communication_message_sign (is_publishable tr) msg_signed;
     ()
   )
@@ -246,7 +231,7 @@ val verify_message_proof:
   {|cinvs:crypto_invariants|} ->
   tr:trace ->
   sender:principal -> receiver:principal ->
-  msg_bytes:bytes ->
+  msg_bytes:bytes -> is_encrypted:bool -> sk_receiver:bytes ->
   vk_sender:bytes ->
   Lemma
   (requires
@@ -255,7 +240,7 @@ val verify_message_proof:
     is_public_key_for tr vk_sender (LongTermSigKey comm_layer_sign_tag) sender
   )
   (ensures (
-    match verify_message receiver msg_bytes vk_sender with
+    match verify_message receiver msg_bytes is_encrypted sk_receiver vk_sender with
     | Some cm -> (
       is_publishable tr cm.payload /\
       
@@ -283,75 +268,14 @@ val verify_message_proof:
     )
     | _ -> True
   ))
-let verify_message_proof #cinvs tr sender receiver msg_bytes vk_sender =
+let verify_message_proof #cinvs tr sender receiver msg_bytes is_encrypted sk_receiver vk_sender =
   assert(get_signkey_label tr vk_sender == long_term_key_label sender);
-  match verify_message receiver msg_bytes vk_sender with
+  match verify_message receiver msg_bytes is_encrypted sk_receiver vk_sender with
   | Some cm -> (
-    assert(is_publishable tr msg_bytes);
     parse_wf_lemma communication_message_sign (is_publishable tr) msg_bytes;
     let Some msg_signed = parse communication_message_sign msg_bytes in
-    assert(is_publishable tr msg_signed.msg);
     parse_wf_lemma signature_input (is_publishable tr) msg_signed.msg;
-    let Some sign_input = parse signature_input msg_signed.msg in
-    assert(is_publishable tr cm.payload);
-
-    //assert(bytes_invariant tr vk_sender);
-    //assert(bytes_invariant tr msg_bytes);
-    //assert(bytes_invariant tr msg_signed.signature);
-    
-
-    (*assert(event_triggered tr sender (CommAuthSendMsg sender payload) \/
-      get_signkey_label vk_sender `can_flow tr` public);
-    
-    let DY.Core.Bytes.Type.Sign sk nonce sig_input_bytes = msg_signed.signature in
-    assert(sign_pred.pred tr (Vk sk) sig_input_bytes \/
-      get_signkey_label vk_sender `can_flow tr` public);
-
-    assert(receiver == receiver');
-    assert(sender == sender' \/
-      get_signkey_label vk_sender `can_flow tr` public);*)
-    
-    match sign_input with
-    | Plain cm' -> (
-      //let sig_input_p = Plain {sender=sender'; receiver=msg_signed.receiver; payload=msg_signed.payload} in
-      //let Some sig_input = parse signature_input msg_signed.payload in
-      //FStar.Classical.move_requires (serialize_wf_lemma signature_input (is_publishable tr)) sign_input;
-      assert(cm.payload == cm'.payload);
-      assert(event_triggered tr sender (CommAuthSendMsg sender cm.payload) \/
-        is_corrupt tr (long_term_key_label sender));
-      ()
-    )
-    | Encrypted pk_receiver cm' -> (
-      //let sig_input_e = Encrypted msg_signed.payload in
-      //let sig_input_bytes_e = serialize signature_input #parseable_serializeable_bytes_signature_input sig_input_e in
-      //serialize_wf_lemma signature_input (is_publishable tr) sign_input;
-      assert(bytes_invariant tr msg_signed.signature);
-      
-      assert(
-        (exists plain_payload nonce.
-          cm.payload == encrypt_message pk_receiver nonce plain_payload) \/
-          is_corrupt tr (long_term_key_label sender)
-      );
-
-      //assert(verify vk_sender sig_input_bytes_e msg_signed.signature);      
-      //assert(bytes_invariant tr sig_input_bytes_e);      
-      //bytes_invariant_verify tr vk_sender sig_input_bytes_e msg_signed.signature;
-
-      (*let Some sig_input = parse signature_input sig_input_bytes in
-      assert(Encrypted? sig_input);
-      let sig_input_record = Encrypted?.msg sig_input in
-      assert(sign_pred.pred tr (Vk sk) sig_input_bytes \/
-        get_signkey_label vk_sender `can_flow tr` public);
-      assert(msg_signed.receiver == receiver);
-      let sig_input' = Encrypted {sender=sender'; receiver=msg_signed.receiver; payload=msg_signed.payload} in
-      let sig_input_bytes' = serialize signature_input sig_input' in
-      assert(verify vk_sender sig_input_bytes' msg_signed.signature);
-      assert(sig_input_record.sender == sender \/
-        get_signkey_label vk_sender `can_flow tr` public);
-      assert(event_triggered tr sender (CommConfSendMsg sender receiver msg) \/
-        get_signkey_label (Vk sk) `can_flow tr` public);*)
-      ()
-    )  
+    ()
   )
   | _ -> ()
 #pop-options
@@ -416,76 +340,8 @@ val encrypt_and_sign_message_proof:
   )
 let encrypt_and_sign_message_proof #cinvs tr sender receiver payload pk_receiver sk_sender enc_nonce sign_nonce =
   let enc_payload = encrypt_message pk_receiver enc_nonce payload in
-  let msg_signed = sign_message sender receiver enc_payload pk_receiver true sk_sender sign_nonce in
-  
-  encrypt_message_proof tr sender receiver pk_receiver enc_nonce payload;
   sign_message_proof tr sender receiver enc_payload pk_receiver true sk_sender sign_nonce;
-
-  
-
-  assert(get_label tr sk_sender == long_term_key_label sender);
-  assert(is_publishable tr enc_payload);
-  assert(enc_payload == encrypt_message pk_receiver enc_nonce payload);
-  assert(event_triggered tr sender (CommConfSendMsg sender receiver payload));
-  assert(event_triggered tr sender (CommAuthSendMsg sender payload));
-  assert(event_triggered tr sender (CommConfAuthSendMsg sender receiver payload));
   ()
-  
-
-  (*assert(match pk_receiver with
-  | DY.Core.Bytes.Type.Pk sk -> get_usage sk == PkKey comm_layer_pkenc_tag empty
-  | _ -> False);
-  assert(match pk_receiver with
-  | DY.Core.Bytes.Type.Pk sk -> get_label sk == principal_label receiver
-  | _ -> False);
-
-  assert(is_publishable tr enc_payload);
-
-  assert(enc_payload == pk_enc pk_receiver enc_nonce payload);
-
-  
-    
-  eliminate exists sk_receiver. get_label sk_receiver == principal_label receiver
-  returns exists sk_receiver. pk_dec sk_receiver (pk_enc pk_receiver enc_nonce payload) == Some payload
-  with _. (
-    pk_dec_enc sk_receiver enc_nonce payload;
-    assert(
-        pk_dec sk_receiver (pk_enc (pk sk_receiver) enc_nonce payload) == Some payload
-    );
-    assert(Some payload == decrypt_message sk_receiver enc_payload);
-    assert(exists plain_msg.
-      Some plain_msg == decrypt_message sk_receiver enc_payload
-    );
-    assert(exists plain_msg.
-      get_label plain_msg `can_flow tr` (join (principal_label sender) (principal_label receiver)));
-
-    
-
-    assert(has_communication_layer_invariants cinvs /\
-      is_publishable tr enc_payload /\
-      is_secret (principal_label sender) tr sign_nonce /\
-      SigNonce? (get_usage sign_nonce) /\
-      is_signature_key (SigKey comm_layer_sign_tag empty) (principal_label sender) tr sk_sender /\
-      (
-        if true then (
-          (exists sk_receiver plain_msg.
-            Some plain_msg == pk_dec sk_receiver enc_payload /\
-            get_label sk_receiver == principal_label receiver /\
-            event_triggered tr sender (CommConfSendMsg sender receiver plain_msg) /\
-            event_triggered tr sender (CommAuthSendMsg sender plain_msg) /\      
-            get_label plain_msg `can_flow tr` (join (principal_label sender) (principal_label receiver))
-          )
-        ) else (
-          event_triggered tr sender (CommAuthSendMsg sender payload)
-        )
-      ));
-    sign_message_proof tr sender receiver enc_payload true sk_sender sign_nonce;
-    ()
-  );*)
-  
-  
-
-#push-options "--z3rlimit 10"
 val send_confidential_authenticated_proof:
   {|invs:protocol_invariants|} ->
   tr:trace ->
@@ -533,8 +389,6 @@ let send_confidential_authenticated_proof #invs tr higher_layer_preds comm_keys_
   )
 #pop-options
 
-
-#push-options "--fuel 4 --ifuel 4 --z3rlimit 50"
 val verify_and_decrypt_message_proof:
   {|cinvs:crypto_invariants|} ->
   tr:trace ->
@@ -545,8 +399,7 @@ val verify_and_decrypt_message_proof:
     has_communication_layer_crypto_predicates /\
     is_publishable tr msg_encrypted_signed /\
     is_private_key_for tr sk_receiver (LongTermPkEncKey comm_layer_pkenc_tag) receiver /\
-    is_public_key_for tr vk_sender (LongTermSigKey comm_layer_sign_tag) sender /\
-    Some sender == get_sender msg_encrypted_signed
+    is_public_key_for tr vk_sender (LongTermSigKey comm_layer_sign_tag) sender
   )
   (ensures (
     match verify_and_decrypt_message receiver sk_receiver vk_sender msg_encrypted_signed with
@@ -555,10 +408,8 @@ val verify_and_decrypt_message_proof:
       is_knowable_by (principal_label receiver) tr cm.payload /\
       (
         (
-          //event_triggered tr sender (CommAuthSendMsg sender payload) /\        
-          //event_triggered tr sender (CommConfSendMsg sender receiver payload) /\
-          event_triggered tr sender (CommConfAuthSendMsg sender receiver cm.payload) ///\
-          //is_knowable_by (join (principal_label sender) (principal_label receiver)) tr payload
+          event_triggered tr sender (CommAuthSendMsg sender cm.payload) /\
+          event_triggered tr sender (CommConfAuthSendMsg sender receiver cm.payload)
         ) \/ (
           is_corrupt tr (long_term_key_label sender)
         )
@@ -569,301 +420,32 @@ let verify_and_decrypt_message_proof #cinvs tr sender receiver msg_encrypted_sig
   match verify_and_decrypt_message receiver sk_receiver vk_sender msg_encrypted_signed with
   | None -> ()
   | Some cm -> (
-    verify_message_proof tr sender receiver msg_encrypted_signed vk_sender;
-    let Some cm' = verify_message receiver msg_encrypted_signed vk_sender in    
+    verify_message_proof tr sender receiver msg_encrypted_signed true sk_receiver vk_sender;
+    let Some cm' = verify_message receiver msg_encrypted_signed true sk_receiver vk_sender in    
 
     let Some msg_signed = parse communication_message_sign msg_encrypted_signed in
     let Some sign_input = parse signature_input msg_signed.msg in
-    assert(Encrypted? sign_input);
-    assert((Encrypted?.pk sign_input) = pk sk_receiver);
-    let Encrypted pk_receiver cm'' = sign_input in
-    assert(
-      (exists plain_payload nonce.
-        cm'.payload == encrypt_message pk_receiver nonce plain_payload /\
-        event_triggered tr sender (CommAuthSendMsg sender plain_payload) /\
-        event_triggered tr cm.sender (CommConfAuthSendMsg cm.sender cm.receiver plain_payload)) \/
-      is_corrupt tr (long_term_key_label sender)
-    );
-    introduce (~(is_corrupt tr (long_term_key_label sender))) ==> 
-    (exists plain_payload nonce.
-        cm'.payload == encrypt_message pk_receiver nonce plain_payload /\
-        event_triggered tr sender (CommAuthSendMsg sender plain_payload) /\
+    let Encrypted pk_receiver _ = sign_input in
+    assert(pk_receiver == pk sk_receiver);
+    
+    introduce (~(is_corrupt tr (long_term_key_label sender))) ==>  (
+        event_triggered tr sender (CommAuthSendMsg sender cm.payload) /\
         event_triggered tr sender (CommConfAuthSendMsg sender receiver cm.payload)
-    )
+      )
     with _. (
       eliminate exists plain_payload nonce.
           cm'.payload == encrypt_message pk_receiver nonce plain_payload /\
           event_triggered tr sender (CommAuthSendMsg sender plain_payload) /\
-          event_triggered tr cm.sender (CommConfAuthSendMsg cm.sender cm.receiver plain_payload)
-      returns (event_triggered tr sender (CommConfAuthSendMsg sender receiver cm.payload)
+          event_triggered tr sender (CommConfAuthSendMsg sender receiver plain_payload)
+      returns (event_triggered tr sender (CommAuthSendMsg sender cm.payload) /\
+        event_triggered tr sender (CommConfAuthSendMsg sender receiver cm.payload)
       )
       with _. (
         pk_dec_enc sk_receiver nonce plain_payload;
-        assert(cm'.payload == pk_enc pk_receiver nonce plain_payload);
-        
-        assert(event_triggered tr sender (CommConfAuthSendMsg sender receiver cm.payload));
-            
-        assert(Some cm.payload == pk_dec sk_receiver cm'.payload);
-        assert(Some cm.payload == pk_dec sk_receiver (pk_enc pk_receiver nonce cm.payload));
-        
-        
-        assert(cm'.payload == encrypt_message pk_receiver nonce plain_payload);
-        assert(decrypt_message sk_receiver cm'.payload == Some plain_payload);
-        
-        assert(plain_payload == cm.payload);
-        
         ()
       )
     )
-    (*assert(is_publishable tr msg_encrypted_signed);
-    parse_wf_lemma communication_message_sign (is_publishable tr) msg_encrypted_signed;
-    //parse_wf_lemma communication_message_sign (bytes_invariant tr) msg_encrypted_signed;
-    let Some signed_msg = parse communication_message_sign msg_encrypted_signed in
-    assert(is_publishable tr signed_msg.payload);
-    parse_wf_lemma signature_input (is_publishable tr) signed_msg.payload;
-    let Some signature_in = parse signature_input signed_msg.payload in
-    let enc_payload = Encrypted?.payload signature_in in
-    assert(is_publishable tr enc_payload);
-    decrypt_message_proof tr receiver sk_receiver enc_payload;
-    let Some (PkEncSignInput cm) = decrypt_message sk_receiver enc_payload in
-    assert(bytes_invariant tr cm.payload);
-    assert(cm.receiver == receiver);
-    assert(event_triggered tr cm.sender (CommConfAuthSendMsg cm.sender cm.receiver cm.payload) \/
-      get_label tr cm.payload `can_flow tr` public);
-    ()
-    *)
-    (*
-    verify_message_proof tr sender receiver msg_encrypted_signed true vk_sender;
-    let Some {sender=sender''; receiver=receiver''; payload=enc_payload} = verify_message receiver msg_encrypted_signed true vk_sender in    
-    decrypt_message_proof tr receiver sk_receiver enc_payload;
-    let Some payload' = decrypt_message sk_receiver enc_payload in
-    
-    //assert(pk_enc_extract_pk enc_payload == Some (DY.Core.Bytes.Type.Pk sk_receiver));
-    assert(payload == payload');
-    assert(exists sender.
-      is_knowable_by (join (principal_label sender) (principal_label receiver)) tr payload /\
-      (       
-        event_triggered tr sender (CommConfSendMsg sender receiver payload) \/
-        is_publishable tr payload
-      )
-    );
-    assert(exists sender. is_knowable_by (join (principal_label sender) (principal_label receiver)) tr payload);
-
-    // TODO transfer this property into the event or separate from the event
-    assert(is_knowable_by (principal_label receiver) tr payload);
-      
-    ()
-    *)
-    (*introduce ~(is_corrupt tr (principal_label sender)) /\ ~(is_publishable tr payload) ==> event_triggered tr sender (CommConfSendMsg sender receiver payload)
-    with _. (
-      assert(exists payload. event_triggered tr sender (CommConfSendMsg sender receiver payload));
-      eliminate exists plain_msg. event_triggered tr sender (CommConfSendMsg sender receiver plain_msg)
-      returns event_triggered tr sender (CommConfSendMsg sender receiver payload)
-      with _. (
-        assert(
-          event_triggered tr sender (CommAuthSendMsg sender payload) /\
-          is_knowable_by (join (principal_label sender) (principal_label receiver)) tr payload /\
-          event_triggered tr sender (CommConfSendMsg sender receiver payload)
-        );
-        ()
-      )
-    )*)
-    (*
-    let DY.Core.Bytes.Type.PkEnc pk nonce msg = enc_payload in
-    assert(if_comm_conf_payload sender receiver'' enc_payload tr \/
-      is_corrupt tr (principal_label sender));
-    assert(get_usage sk_receiver == PkKey comm_layer_pkenc_tag empty);
-    assert(Pk sk_receiver == pk);
-    assert(get_sk_usage pk == PkKey comm_layer_pkenc_tag empty);
-    assert(
-      (
-        get_sk_label pk == principal_label receiver'' /\
-        event_triggered tr sender (CommConfSendMsg sender receiver'' msg)
-      ) \/
-        is_corrupt tr (principal_label sender)                                                        
-    );
-    assert(get_label sk_receiver == principal_label receiver);
-    assert(get_sk_label pk == principal_label receiver'' \/
-      is_corrupt tr (principal_label sender));
-    assert(receiver == receiver'' \/
-      is_corrupt tr (principal_label sender));
-    decrypt_message_proof tr receiver sk_receiver enc_payload;*)
   )
-
-//#push-options "--fuel 4 --ifuel 4 --z3rlimit 50"
-(*val combine_lemma:
-  {|invs:protocol_invariants|} ->
-  tr:trace ->
-  sender:principal -> receiver:principal ->
-  payload:bytes -> enc_payload:bytes ->
-  sk_receiver:bytes -> pk_receiver:bytes ->
-  Lemma
-  (requires
-    has_communication_layer_invariants /\
-    is_publishable tr enc_payload /\
-    bytes_invariant tr payload /\
-    is_private_key_for tr sk_receiver (LongTermPkEncKey comm_layer_pkenc_tag) receiver /\
-    (
-      (exists (plain_payload:communication_message) nonce.
-        enc_payload == encrypt_message pk_receiver nonce (PkEncSignInput plain_payload) /\
-        plain_payload.sender == sender /\
-        event_triggered tr sender (CommConfAuthSendMsg sender plain_payload.receiver plain_payload.payload)
-        //(pk sk_receiver) == pk_receiver
-      ) \/
-      is_corrupt tr (long_term_key_label sender)
-    ) /\ (
-      (
-        event_triggered tr sender (CommConfSendMsg sender receiver payload) /\
-        event_triggered tr sender (CommConfAuthSendMsg sender receiver payload)
-      ) \/ (
-        is_publishable tr payload
-      )
-    ) /\ (
-      let sign_input_bytes = serialize signature_input #parseable_serializeable_bytes_signature_input (Encrypted pk_receiver enc_payload) in
-      let signed_msg_bytes = serialize communication_message_sign #parseable_serializeable_bytes_communication_message_sign {payload=sign_input_bytes; signature=empty} in
-      Some {sender; receiver; payload} = decrypt_signed_message receiver sk_receiver signed_msg_bytes
-    )
-  )
-  (ensures
-    event_triggered tr sender (CommConfAuthSendMsg sender receiver payload) \/
-    is_corrupt tr (long_term_key_label sender) 
-  )
-let combine_lemma #invs tr sender receiver payload enc_payload sk_receiver pk_receiver =
-  assert(forall (plain_payload:communication_message).
-    let pkenc_in_bytes = serialize pkenc_input (PkEncSignInput plain_payload) in
-    (pkenc_pred.pred tr (long_term_key_type_to_usage (LongTermPkEncKey comm_layer_pkenc_tag) receiver) pkenc_in_bytes ==>
-      event_triggered tr plain_payload.sender (CommConfAuthSendMsg plain_payload.sender receiver plain_payload.payload))
-  );
-  
-  assert(
-    (exists (plain_payload:communication_message) nonce.
-        enc_payload == encrypt_message pk_receiver nonce (PkEncSignInput plain_payload) /\
-        //decrypt_message sk_receiver enc_payload == Some (PkEncSignInput plain_payload) /\
-        plain_payload.sender == sender /\
-        //plain_payload.receiver == receiver /\
-        //plain_payload.payload == payload /\
-        event_triggered tr sender (CommConfAuthSendMsg sender plain_payload.receiver plain_payload.payload)
-        //(pk sk_receiver) == pk_receiver
-      ) \/
-      is_corrupt tr (long_term_key_label sender)
-  );
-
-  introduce (~(is_corrupt tr (long_term_key_label sender))) ==> 
-    (exists (plain_payload:communication_message) nonce. 
-      enc_payload == encrypt_message pk_receiver nonce (PkEncSignInput plain_payload) /\
-      plain_payload.sender == sender /\
-      event_triggered tr sender (CommConfAuthSendMsg sender receiver payload)
-      //(pk sk_receiver) == pk_receiver
-    )
-  with _. (
-    eliminate exists (plain_payload:communication_message) nonce. 
-      enc_payload == encrypt_message pk_receiver nonce (PkEncSignInput plain_payload) /\
-      plain_payload.sender == sender /\
-      event_triggered tr sender (CommConfAuthSendMsg sender plain_payload.receiver plain_payload.payload)
-      //(pk sk_receiver) == pk_receiver
-    returns (event_triggered tr sender (CommConfAuthSendMsg sender receiver payload)
-    )
-    with _. (
-      pk_dec_enc sk_receiver nonce (serialize pkenc_input (PkEncSignInput plain_payload));
-      let pkenc_in_bytes = serialize pkenc_input #parseable_serializeable_bytes_pkenc_input (PkEncSignInput plain_payload) in
-      assert(enc_payload == pk_enc pk_receiver nonce pkenc_in_bytes);
-      
-      (*
-      The following code needs this precondition:
-      is_private_key_for tr sk_receiver (LongTermPkEncKey comm_layer_pkenc_tag) receiver
-
-      assert(sk_receiver `has_usage tr` (long_term_key_type_to_usage (LongTermPkEncKey comm_layer_pkenc_tag) receiver));
-     
-      assert(decrypt_message sk_receiver enc_payload == Some (PkEncSignInput {sender; receiver; payload}));
-      
-      let b = serialize pkenc_input #parseable_serializeable_bytes_pkenc_input (PkEncSignInput {sender; receiver; payload}) in
-      assert(bytes_invariant tr payload);
-      serialize_wf_lemma pkenc_input (bytes_invariant tr) (PkEncSignInput {sender; receiver; payload});
-      assert(bytes_invariant tr b);
-      assert(bytes_invariant tr enc_payload);
-      parse_wf_lemma pkenc_input (bytes_invariant tr) enc_payload;
-      
-      let Some b' = pk_dec sk_receiver enc_payload in
-      assert(parse pkenc_input b' == Some (PkEncSignInput {sender; receiver; payload}));
-      assert(
-        pkenc_pred.pred tr (long_term_key_type_to_usage (LongTermPkEncKey comm_layer_pkenc_tag) receiver) b' \/
-        is_publishable tr b'  
-      );
-      assert(
-        (        
-          event_triggered tr sender (CommConfAuthSendMsg sender receiver payload) /\
-          is_knowable_by (join (principal_label sender) (principal_label receiver)) tr payload
-        ) \/
-        is_publishable tr b'
-      );
-      assert(plain_payload.sender == sender);
-      assert(event_triggered tr sender (CommConfAuthSendMsg sender plain_payload.receiver plain_payload.payload));
-      //assert(plain_payload.payload == payload);*)
-
-      
-      assert(event_triggered tr sender (CommConfAuthSendMsg sender receiver payload));
-      
-      
-      assert(Some pkenc_in_bytes == pk_dec sk_receiver enc_payload);
-      assert(Some pkenc_in_bytes == pk_dec sk_receiver (pk_enc pk_receiver nonce pkenc_in_bytes));
-      
-      
-      assert(enc_payload == encrypt_message pk_receiver nonce (PkEncSignInput plain_payload));
-      assert(decrypt_message sk_receiver enc_payload == Some (PkEncSignInput plain_payload));
-      
-      assert(plain_payload.sender == sender);
-      assert(plain_payload.receiver == receiver);
-      assert(plain_payload.payload == payload);
-      
-      
-      ()
-    )
-  );
- ()
-  
-  (*assert(
-    exists payload.
-      Some payload == pk_dec sk_receiver (pk_enc (pk sk_receiver) nonce payload)
-  );
-  assert(
-    (exists (plain_payload:communication_message) pk_receiver.
-      let pkenc_in_bytes = serialize pkenc_input #parseable_serializeable_bytes_pkenc_input (PkEncSignInput plain_payload) in
-
-      (pk sk_receiver) == pk_receiver /\
-
-      //Some pkenc_in_bytes == pk_dec sk_receiver (pk_enc pk_receiver nonce pkenc_in_bytes) ///\
-
-      enc_payload == pk_enc pk_receiver nonce pkenc_in_bytes /\
-      Some pkenc_in_bytes == pk_dec sk_receiver enc_payload //\
-      //decrypt_message sk_receiver enc_payload == Some (PkEncSignInput plain_payload) /\
-      //plain_payload.sender == sender /\
-      //plain_payload.receiver == receiver /\
-      //plain_payload.payload == payload /\
-      //event_triggered tr sender (CommConfAuthSendMsg sender plain_payload.receiver plain_payload.payload)
-    ) \/
-    is_corrupt tr (long_term_key_label sender)
-  );
-
-  
-  assert(Some (PkEncSignInput {sender; receiver; payload}) == decrypt_message sk_receiver enc_payload);
-  let Some plain_payload = pk_dec sk_receiver enc_payload in
-  FStar.Classical.move_requires (parse_wf_lemma pkenc_input (is_publishable tr)) plain_payload;
-  FStar.Classical.move_requires (parse_wf_lemma pkenc_input (bytes_invariant tr)) plain_payload;
-  assert(
-    (pkenc_pred.pred tr (long_term_key_type_to_usage (LongTermPkEncKey comm_layer_pkenc_tag) receiver) plain_payload \/
-      is_publishable tr plain_payload    
-    ) /\
-    (
-      (        
-        event_triggered tr sender (CommConfAuthSendMsg sender receiver payload) /\
-        is_knowable_by (join (principal_label sender) (principal_label receiver)) tr payload
-      ) \/
-      is_publishable tr payload
-    ) /\
-    Some (PkEncSignInput {sender; receiver; payload}) == parse pkenc_input plain_payload
-  );
-
-  ()*)*)
 
 val receive_confidential_authenticated_proof:
   {|invs:protocol_invariants|} ->
@@ -906,4 +488,3 @@ let receive_confidential_authenticated_proof #invs tr higher_layer_preds comm_ke
     assert(tr == tr_out);
     ()
   )
-#pop-options
