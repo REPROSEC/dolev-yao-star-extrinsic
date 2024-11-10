@@ -16,29 +16,17 @@ open DY.Lib.Communication.Core
 
 (*** PkEnc Predicates ***)
 
-#push-options "--ifuel 3 --fuel 0"
 val pkenc_crypto_predicates_communication_layer: {|cusages:crypto_usages|} -> pkenc_crypto_predicate
 let pkenc_crypto_predicates_communication_layer #cusages = {
   pred = (fun tr sk_usage msg ->
-    match parse pkenc_input msg with
-    | Some (PkEncInput payload) -> (
-      (exists sender receiver.
-        sk_usage == long_term_key_type_to_usage (LongTermPkEncKey comm_layer_pkenc_tag)  receiver /\
-        (get_label tr payload) `can_flow tr` (join (principal_label sender) (principal_label receiver)) /\
-        event_triggered tr sender (CommConfSendMsg sender receiver payload)
-      )
-    )
-    | Some (PkEncSignInput {sender; receiver; payload}) -> (
+    (exists sender receiver.
       sk_usage == long_term_key_type_to_usage (LongTermPkEncKey comm_layer_pkenc_tag)  receiver /\
-      (get_label tr payload) `can_flow tr` (join (principal_label sender) (principal_label receiver)) /\
-      event_triggered tr sender (CommConfSendMsg sender receiver payload) /\
-      event_triggered tr sender (CommConfAuthSendMsg sender receiver payload)
+      (get_label tr msg) `can_flow tr` (join (principal_label sender) (principal_label receiver)) /\
+      event_triggered tr sender (CommConfSendMsg sender receiver msg)
     )
-    | None -> False
     );
-  pred_later = (fun tr1 tr2 pk msg -> parse_wf_lemma pkenc_input (bytes_well_formed tr1) msg);
+  pred_later = (fun tr1 tr2 pk msg -> ());
 }
-#pop-options
 
 val pkenc_crypto_predicates_communication_layer_and_tag: 
   {|cusages:crypto_usages|} ->
@@ -48,24 +36,7 @@ let pkenc_crypto_predicates_communication_layer_and_tag #cusages =
 
 (*** Sign Predicates ***)
 
-(*
-val pk_enc_extract_msg: enc_msg:bytes{exists pk nonce msg. enc_msg = pk_enc pk nonce msg} -> GTot (msg:bytes{exists pk nonce. enc_msg = pk_enc pk nonce msg})
-let pk_enc_extract_msg enc_msg =
-  normalize_term_spec pk_enc;
-  match enc_msg with
-  | DY.Core.Bytes.Type.PkEnc pk nonce msg -> msg
-
-val pk_enc_extract_sk: enc_msg:bytes -> option bytes
-let pk_enc_extract_sk enc_msg =
-  match enc_msg with
-  | DY.Core.Bytes.Type.PkEnc pk nonce msg -> (
-    match pk with
-    | DY.Core.Bytes.Type.Pk sk -> Some sk
-    | _ -> None
-  )
-  | _ -> None*)
-
-#push-options "--ifuel 4 --fuel 4 --z3rlimit 50"
+#push-options "--ifuel 3 --fuel 0"
 val sign_crypto_predicates_communication_layer: {|cusages:crypto_usages|} -> sign_crypto_predicate
 let sign_crypto_predicates_communication_layer #cusages = {
   pred = (fun tr sk_usage vk sig_msg ->
@@ -75,21 +46,21 @@ let sign_crypto_predicates_communication_layer #cusages = {
       get_label tr payload `can_flow tr` public /\
       event_triggered tr sender (CommAuthSendMsg sender payload)
     )
-    | Some (Encrypted pk_receiver payload) -> (  
-      get_label tr payload `can_flow tr` public /\
+    | Some (Encrypted pk_receiver cm) -> (  
+      get_label tr cm.payload `can_flow tr` public /\
 
-      (exists (plain_payload:communication_message) nonce.
-        sk_usage == long_term_key_type_to_usage (LongTermSigKey comm_layer_sign_tag) plain_payload.sender /\
+      (exists plain_payload nonce.
+        sk_usage == long_term_key_type_to_usage (LongTermSigKey comm_layer_sign_tag) cm.sender /\
 
         //pk_enc_extract_pk enc_payload == Some (DY.Core.Bytes.Type.Pk sk_receiver) /\
         //Some plain_msg == decrypt_message sk_receiver enc_payload /\
         //get_label sk_receiver == principal_label receiver /\
         //bytes_well_formed tr pk_receiver /\
-        //pk_receiver `has_sk_usage tr` (long_term_key_type_to_usage (LongTermPkEncKey comm_layer_pkenc_tag) plain_payload.receiver) /\
-        payload == encrypt_message pk_receiver nonce (PkEncSignInput plain_payload) /\
+        //pk_receiver `has_sk_usage tr` (long_term_key_type_to_usage (LongTermPkEncKey comm_layer_pkenc_tag) cm.receiver) /\
+        cm.payload == encrypt_message pk_receiver nonce plain_payload /\
         //event_triggered tr sender (CommConfSendMsg sender receiver plain_msg) /\
-        //event_triggered tr sender (CommAuthSendMsg sender plain_msg) /\
-        event_triggered tr plain_payload.sender (CommConfAuthSendMsg plain_payload.sender plain_payload.receiver plain_payload.payload) //\
+        event_triggered tr cm.sender (CommAuthSendMsg cm.sender plain_payload) /\
+        event_triggered tr cm.sender (CommConfAuthSendMsg cm.sender cm.receiver plain_payload) //\
         //get_label plain_msg `can_flow tr` (join (principal_label sender) (principal_label receiver))
       )
     )
