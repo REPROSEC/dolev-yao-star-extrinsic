@@ -51,7 +51,7 @@ module DY.Core
 /// we will not actually have them perform stateful, impure actions
 /// (such as sending messages to the actual network).
 /// Instead, every impure action performed by the protocol
-/// will be stored as an event in a trace (see DY.Core.Trace.Type.trace).
+/// will be stored as an entry in a trace (see DY.Core.Trace.Type.trace).
 /// The trace is a log of every event that has happened during a protocol execution.
 /// From this trace can be deduced many facts,
 /// such as the set of bytestrings that can be computed by the attacker
@@ -96,7 +96,7 @@ module DY.Core
 /// but that the attacker has to perform some corruption
 /// in order to compute a secret value.
 /// To express this kind of properties,
-/// the corruption will be represented as a corruption event in the trace.
+/// the corruption will be represented as a corruption entry in the trace.
 /// Therefore, many DY* predicates will depend on the trace to account for such corruptions.
 /// All predicates and relations in DY* will satisfy a key property
 /// being that they stay true when the trace is extended,

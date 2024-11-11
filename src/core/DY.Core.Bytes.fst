@@ -95,7 +95,7 @@ let rec length b =
 /// The well-formedness invariant preserved by any protocol using the DY* API,
 /// whether it is proved secure or not.
 /// It checks whether all `Rand`om bytes inside a given `bytes`
-/// correspond to a `RandGen` event in the trace.
+/// correspond to a `RandGen` entry in the trace.
 /// This property is weaker than the full-fledged `bytes_invariant` (see theorem `bytes_invariant_implies_well_formed`).
 /// It is a crucial precondition to ensure that the result of `get_label`
 /// is independent of the trace (see theorem `get_label_later`).
@@ -108,7 +108,7 @@ let rec bytes_well_formed tr b =
     True
   | Rand len time ->
     time < DY.Core.Trace.Base.length tr /\
-    RandGen? (get_event_at tr time)
+    RandGen? (get_entry_at tr time)
   | Concat left right ->
     bytes_well_formed tr left /\
     bytes_well_formed tr right
@@ -172,7 +172,7 @@ let rec bytes_well_formed_later tr1 tr2 b =
   match b with
   | Literal buf -> ()
   | Rand len time -> (
-    assert(event_at tr1 time (get_event_at tr1 time))
+    assert(entry_at tr1 time (get_entry_at tr1 time))
   )
   | Concat left right -> ()
   | AeadEnc key nonce msg ad -> ()
@@ -296,7 +296,7 @@ let rec get_usage #cusages tr b =
   match b with
   | Rand len time ->
     if time < DY.Core.Trace.Base.length tr then (
-      match get_event_at tr time with
+      match get_entry_at tr time with
       | RandGen usg _ _ -> usg
       | _ -> NoUsage // garbage
     ) else (
@@ -351,7 +351,7 @@ let rec get_usage_later #cusgs tr1 tr2 b =
   normalize_term_spec get_usage;
   match b with
   | Rand len time ->
-    assert(event_at tr1 time (get_event_at tr1 time))
+    assert(entry_at tr1 time (get_entry_at tr1 time))
   | Dh sk1 (DhPub sk2) ->
     get_usage_later tr1 tr2 sk1;
     get_usage_later tr1 tr2 sk2
@@ -375,7 +375,7 @@ let rec get_label #cusages tr b =
     public
   | Rand len time ->
     if time < DY.Core.Trace.Base.length tr then (
-      match get_event_at tr time with
+      match get_entry_at tr time with
       | RandGen _ lab _ -> lab
       | _ -> DY.Core.Label.Unknown.unknown_label
     ) else (
@@ -435,7 +435,7 @@ let rec get_label_later #cusgs tr1 tr2 b =
   match b with
   | Literal buf -> ()
   | Rand len time ->
-    assert(event_at tr1 time (get_event_at tr1 time))
+    assert(entry_at tr1 time (get_entry_at tr1 time))
   | Concat left right ->
     get_label_later tr1 tr2 left;
     get_label_later tr1 tr2 right
@@ -847,8 +847,8 @@ let rec bytes_invariant #cinvs tr b =
   | Literal buf ->
     True
   | Rand len time ->
-    // Random bytes correspond to an event
-    (exists usage lab. event_at tr time (RandGen usage lab len))
+    // Random bytes correspond to an entry
+    (exists usage lab. entry_at tr time (RandGen usage lab len))
   | Concat left right ->
     bytes_invariant tr left /\
     bytes_invariant tr right

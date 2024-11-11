@@ -14,7 +14,7 @@ open DY.Core.Trace.Type
 /// We therefore want labels to be predicates `trace -> prop`,
 /// however this doesn't work with F*'s positivity checker.
 /// (see https://fstar-lang.org/tutorial/book/part2/part2_inductive_type_families.html#strictly-positive-definitions )
-/// Indeed, we want the trace to contain labels (see `RandGen` event),
+/// Indeed, we want the trace to contain labels (see `RandGen` entry),
 /// and we want labels to be predicates on the trace, namely `trace -> prop` (see DY.Core.Label.Type).
 /// A type `t` cannot contain `t -> prop` because this could be used to derive False (using Cantor's diagonal argument).
 /// To circumvent that, labels are predicates on traces with no labels (i.e. whose label type is `unit`).
@@ -39,7 +39,7 @@ val is_monotonic:
   (trace_ unit -> prop) ->
   prop
 let is_monotonic is_corrupt =
-  forall tr ev. is_corrupt tr ==> is_corrupt (Snoc tr ev)
+  forall tr entry. is_corrupt tr ==> is_corrupt (Snoc tr entry)
 
 [@@erasable]
 noeq

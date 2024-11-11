@@ -51,7 +51,7 @@ val label_is_corrupt_later:
   )
   (ensures l.is_corrupt tr2)
 let label_is_corrupt_later l tr1 tr2 =
-  grows_induction_principle l.is_corrupt (fun tr ev ->
+  grows_induction_principle l.is_corrupt (fun tr entry ->
     l.is_corrupt_later;
     reveal_opaque (`%is_monotonic) is_monotonic
   ) tr1 tr2
@@ -79,7 +79,7 @@ let mk_label l = {
     reveal_opaque (`%is_monotonic) is_monotonic;
     reveal_opaque (`%grows) (grows #unit);
     norm_spec [zeta; delta_only [`%prefix]] (prefix #unit);
-    assert(forall (tr:trace_ unit) ev. tr <$ (Snoc tr ev));
+    assert(forall (tr:trace_ unit) entry. tr <$ (Snoc tr entry));
     FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 l.is_corrupt_later)
   );
 }
@@ -87,7 +87,7 @@ let mk_label l = {
 
 /// If the attacker knows a value with label `l`, then it must have done some corruptions in the trace.
 /// The corruption predicate express whether values with label `l` are still secure,
-/// with respect to corruption events in the trace.
+/// with respect to corruption entries in the trace.
 /// For example:
 /// - a public value can always be known to the attacker, so the label `public` is always corrupt.
 /// - a shared secret between Alice and Bob has the label `join (principal "Alice") (principal "Bob")`,
@@ -297,7 +297,7 @@ let join_flow_to_public_eq tr x1 x2 =
 
 /// Generic label for states:
 /// `state_pred_label p` is corrupt when
-/// there exists a corrupt `SetState` event satisfying the predicate `p`.
+/// there exists a corrupt `SetState` entry satisfying the predicate `p`.
 /// It can for example be used to depict any state of a principal
 /// (e.g. as done by `principal_label`)
 
@@ -352,8 +352,8 @@ let state_pred_label_can_flow_public tr p =
   flow_to_public_eq tr (state_pred_label p);
   reveal_opaque (`%is_corrupt) is_corrupt;
   reveal_opaque (`%state_pred_label) (state_pred_label);
-  FStar.Classical.forall_intro (FStar.Classical.move_requires (event_exists_fmap_trace_eq forget_label tr));
-  FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (event_at_fmap_trace_eq forget_label tr))
+  FStar.Classical.forall_intro (FStar.Classical.move_requires (entry_exists_fmap_trace_eq forget_label tr));
+  FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (entry_at_fmap_trace_eq forget_label tr))
 
 val principal_label_input:
   principal ->
