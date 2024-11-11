@@ -69,24 +69,6 @@ let pk_enc_extract_msg_dec_lemma sk_prin enc msg =
   ()
 // **********************************************************
 
-(*val pk_enc_extract_sk: enc_msg:bytes -> option bytes
-let pk_enc_extract_sk enc_msg =
-  match enc_msg with
-  | DY.Core.Bytes.Type.PkEnc pk nonce msg -> (
-    match pk with
-    | DY.Core.Bytes.Type.Pk sk -> Some sk
-    | _ -> None
-  )
-  | _ -> None*)
-
-(*)
-val pk_enc_extract_msg: enc_msg:bytes{exists pk nonce msg. enc_msg = pk_enc pk nonce msg} -> GTot (msg:bytes{exists pk nonce. enc_msg = pk_enc pk nonce msg})
-let pk_enc_extract_msg enc_msg =
-  normalize_term_spec pk_enc;
-  match enc_msg with
-  | DY.Core.Bytes.Type.PkEnc pk nonce msg -> msg
-*)
-
 #push-options "--ifuel 3 --fuel 0"
 val sign_crypto_predicates_communication_layer: {|cusages:crypto_usages|} -> sign_crypto_predicate
 let sign_crypto_predicates_communication_layer #cusages = {
@@ -198,7 +180,7 @@ val event_predicate_communication_layer_and_tag:
   comm_higher_layer_event_preds ->
   (string & compiled_event_predicate)
 let event_predicate_communication_layer_and_tag #cinvs higher_layer_preds =
-  ("DY.Lib.Communication.Event", compile_event_pred #communication_event (event_predicate_communication_layer #cinvs higher_layer_preds))
+  (event_communication_event.tag, compile_event_pred #communication_event (event_predicate_communication_layer #cinvs higher_layer_preds))
 
 val has_communication_layer_event_predicates:
   {|protocol_invariants|} ->

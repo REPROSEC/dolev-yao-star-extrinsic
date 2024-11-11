@@ -8,7 +8,7 @@ extended via the `comm_higher_layer_event_preds` type. This layer provides the f
 
 - [x] Confidential send and receive functions
 - [x] Authenticated send and receive functions
-- [ ] Confidential and authenticated send and receive functions
+- [x] Confidential and authenticated send and receive functions
 - [ ] Response-request pair send and receive functions
 
 ## Overview
@@ -16,7 +16,7 @@ extended via the `comm_higher_layer_event_preds` type. This layer provides the f
 The module `DY.Lib.Communication.API` provides the functional
 code to send and receive messages but does not give any
 security guarantees.
-The module `DY.Lib.Communication.API.Predicates` contains
+The module `DY.Lib.Communication.API.Invariants` contains
 the cryptographic predicates and event predicates that have
 to be included in the user's code to get the security guarantees from
 the communication layer. These predicates are combined with the
