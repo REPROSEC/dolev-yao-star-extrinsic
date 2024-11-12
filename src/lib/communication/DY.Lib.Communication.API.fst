@@ -49,7 +49,7 @@ instance parseable_serializeable_bytes_signature_input: parseable_serializeable 
 
 (*** Events ***)
 
-#push-options "--ifuel 1 --fuel 0"
+
 [@@with_bytes bytes]
 type communication_event =
   | CommConfSendMsg: sender:principal -> receiver:principal -> payload:bytes -> communication_event
@@ -59,6 +59,7 @@ type communication_event =
   | CommConfAuthSendMsg: sender:principal -> receiver:principal -> payload:bytes -> communication_event
   | CommConfAuthReceiveMsg: sender:principal -> receiver:principal -> payload:bytes -> communication_event
 
+#push-options "--ifuel 1 --fuel 0"
 %splice [ps_communication_event] (gen_parser (`communication_event))
 %splice [ps_communication_event_is_well_formed] (gen_is_well_formed_lemma (`communication_event))
 #pop-options
