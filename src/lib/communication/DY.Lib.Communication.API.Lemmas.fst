@@ -2,6 +2,7 @@ module DY.Lib.Communication.API.Lemmas
 
 open Comparse
 open DY.Core
+open DY.Lib.Communication.Core.Extension
 open DY.Lib.Crypto.PkEncryption.Split
 open DY.Lib.Crypto.Signature.Split
 open DY.Lib.State.PKI
