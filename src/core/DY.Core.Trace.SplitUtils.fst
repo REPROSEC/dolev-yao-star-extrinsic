@@ -16,14 +16,14 @@ let nil_prefix (#label_t:Type) (tr:trace_ label_t)
     [SMTPat (Nil <$ tr)]
   = normalize_term_spec (grows #label_t)
 
-let grows_snoc_right (#label_t:Type) (tr1 tr2:trace_ label_t) (e:trace_event_ label_t)
+let grows_snoc_right (#label_t:Type) (tr1 tr2:trace_ label_t) (e:trace_entry_ label_t)
   : Lemma
     (requires tr1 <$ tr2)
     (ensures tr1 <$ (Snoc tr2 e))
     [SMTPat (tr1 <$ (Snoc tr2 e)); SMTPat (tr1 <$ tr2)]
   = normalize_term_spec (grows #label_t)
 
-let grows_snoc_left (#label_t:Type) (tr1 tr2:trace_ label_t) (e:trace_event_ label_t)
+let grows_snoc_left (#label_t:Type) (tr1 tr2:trace_ label_t) (e:trace_entry_ label_t)
   : Lemma
     (requires (Snoc tr1 e) <$ tr2)
     (ensures tr1 <$ tr2)
@@ -80,7 +80,7 @@ let last_ts (#label_t:Type) (tr:trace_ label_t{Snoc? tr}) : timestamp = length t
 // Now that trace entries are abstracted over label types, we cannot compare
 // trace entries for equality with =. This function implements trace equality
 // when the label type is an eqtype (as for unit, for instance).
-let trace_entry_equal (#label_t:eqtype) (e1 e2:trace_event_ label_t)
+let trace_entry_equal (#label_t:eqtype) (e1 e2:trace_entry_ label_t)
   : bool
   = match (e1, e2) with
     | MsgSent b1, MsgSent b2 -> b1 = b2
@@ -91,30 +91,30 @@ let trace_entry_equal (#label_t:eqtype) (e1 e2:trace_event_ label_t)
     | _ -> false
 
 // By forgetting labels, we can work with a label-ignoring equivalence on entries
-let trace_entry_equiv (#label_t:Type) (e1 e2:trace_event_ label_t)
+let trace_entry_equiv (#label_t:Type) (e1 e2:trace_entry_ label_t)
   : bool
-  = trace_entry_equal #unit (fmap_trace_event forget_label e1) (fmap_trace_event forget_label e2)
+  = trace_entry_equal #unit (fmap_trace_entry forget_label e1) (fmap_trace_entry forget_label e2)
 
-let trace_entry_equal_is_eq (#label_t:eqtype) (e1 e2:trace_event_ label_t)
+let trace_entry_equal_is_eq (#label_t:eqtype) (e1 e2:trace_entry_ label_t)
   : Lemma
     (ensures trace_entry_equal e1 e2 <==> e1 == e2)
     [SMTPat (trace_entry_equal e1 e2)]
   = ()
 
 // trace_entry_equiv is an equivalence relation
-let trace_entry_equiv_reflexive (#label_t:Type) (e:trace_event_ label_t)
+let trace_entry_equiv_reflexive (#label_t:Type) (e:trace_entry_ label_t)
   : Lemma
     (ensures trace_entry_equiv e e)
     [SMTPat (trace_entry_equiv e e)]
   = ()
 
-let trace_entry_equiv_symmetric (#label_t:Type) (e1 e2:trace_event_ label_t)
+let trace_entry_equiv_symmetric (#label_t:Type) (e1 e2:trace_entry_ label_t)
   : Lemma
     (requires trace_entry_equiv e1 e2)
     (ensures trace_entry_equiv e2 e1)
   = ()
 
-let trace_entry_equiv_transitive (#label_t:Type) (e1 e2 e3:trace_event_ label_t)
+let trace_entry_equiv_transitive (#label_t:Type) (e1 e2 e3:trace_entry_ label_t)
   : Lemma
     (requires
        trace_entry_equiv e1 e2 /\
@@ -133,13 +133,13 @@ let trace_entry_equiv_transitive (#label_t:Type) (e1 e2 e3:trace_event_ label_t)
 /// Using trace entry equivalence and this first search function, we can find entries that are
 /// equivalent to a known trace entry, though they may not necessarily be equal.
 
-let rec trace_search (#label_t:Type) (tr:trace_ label_t) (p:trace_event_ label_t -> bool)
+let rec trace_search (#label_t:Type) (tr:trace_ label_t) (p:trace_entry_ label_t -> bool)
   : Pure (option timestamp)
     (requires True)
     (ensures fun ts_opt ->
        match ts_opt with
-       | None -> forall ts. ts < length tr ==> ~(p(get_event_at tr ts))
-       | Some ts -> ts < length tr /\ p (get_event_at tr ts)
+       | None -> forall ts. ts < length tr ==> ~(p(get_entry_at tr ts))
+       | Some ts -> ts < length tr /\ p (get_entry_at tr ts)
     )
   = match tr with
     | Nil -> None
@@ -149,8 +149,8 @@ let rec trace_search (#label_t:Type) (tr:trace_ label_t) (p:trace_event_ label_t
       else
         trace_search hd p
 
-let trace_find (#label_t:Type) (tr:trace_ label_t) (e:trace_event_ label_t{event_exists tr e})
-  : Pure timestamp (requires True) (ensures fun ts -> ts < length tr /\ trace_entry_equiv e (get_event_at tr ts))
+let trace_find (#label_t:Type) (tr:trace_ label_t) (e:trace_entry_ label_t{entry_exists tr e})
+  : Pure timestamp (requires True) (ensures fun ts -> ts < length tr /\ trace_entry_equiv e (get_entry_at tr ts))
   = let Some ts = trace_search tr (fun e' -> trace_entry_equiv e e') in
     ts
 
@@ -164,14 +164,14 @@ let trace_find (#label_t:Type) (tr:trace_ label_t) (e:trace_event_ label_t{event
 /// the output trace that is its "difference" with the input trace).
 ///
 /// The trace splitting functions here unify getting prefixes and suffixes, either based on a
-/// timestamp or a particular event.
+/// timestamp or a particular entry.
 ///
 /// The trace split function is also compatible with the various other trace functions ---
-/// in particular, length and get_event_at, which give us a correctness guarantee of the split,
+/// in particular, length and get_entry_at, which give us a correctness guarantee of the split,
 /// but also prefix, grows/<$, and fmap_trace.
 
 let rec trace_split (#label_t:Type) (tr:trace_ label_t) (ts:timestamp{ts < length tr})
-  : (trace_ label_t & trace_event_ label_t & trace_ label_t)
+  : (trace_ label_t & trace_entry_ label_t & trace_ label_t)
   = let Snoc hd entry = tr in
     if ts = last_ts tr then
       (hd, entry, Nil)
@@ -199,7 +199,7 @@ let rec trace_split_left (#label_t:Type) (tr:trace_ label_t) (ts:timestamp{ts < 
     (ensures (
       let (tr1, _, _) = trace_split tr ts in
       length tr1 = ts /\
-      get_event_at tr1 i == get_event_at tr i
+      get_entry_at tr1 i == get_entry_at tr i
     ))
   = let Snoc hd entry = tr in
     if ts = last_ts tr then ()
@@ -209,7 +209,7 @@ let rec trace_split_mid (#label_t:Type) (tr:trace_ label_t) (ts:timestamp{ts < l
   : Lemma
     (ensures (
       let (_, e, _) = trace_split tr ts in
-      e == get_event_at tr ts
+      e == get_entry_at tr ts
     ))
   = let Snoc hd entry = tr in
     if ts = last_ts tr then ()
@@ -220,7 +220,7 @@ let rec trace_split_right (#label_t:Type) (tr:trace_ label_t) (ts:timestamp{ts <
     (ensures (
       let (_, _, tr2) = trace_split tr ts in
       length tr2 = (length tr) - ts - 1 /\
-      get_event_at tr2 (i - ts - 1) == get_event_at tr i
+      get_entry_at tr2 (i - ts - 1) == get_entry_at tr i
     ))
   = let Snoc hd entry = tr in
     if ts = last_ts tr then ()
@@ -258,15 +258,15 @@ let rec trace_split_fmap (#a #b:Type) (tr:trace_ a) (ts:timestamp {ts < length t
       let (tr1, e, tr2) = trace_split tr ts in
       let (tr1', e', tr2') = trace_split (fmap_trace f tr) ts in
       fmap_trace f tr1 == tr1' /\
-      fmap_trace_event f e == e' /\
+      fmap_trace_entry f e == e' /\
       fmap_trace f tr2 == tr2'
     ))
   = let Snoc hd entry = tr in
     if ts = last_ts tr then ()
     else trace_split_fmap hd ts f
 
-let trace_split_at (#a:Type) (tr:trace_ a) (e:trace_event_ a{event_exists tr e})
-  : (trace_ a & (e':trace_event_ a{trace_entry_equiv e e'}) & trace_ a)
+let trace_split_at (#a:Type) (tr:trace_ a) (e:trace_entry_ a{entry_exists tr e})
+  : (trace_ a & (e':trace_entry_ a{trace_entry_equiv e e'}) & trace_ a)
   = let idx = trace_find tr e in
     let (tr1, e', tr2) = trace_split tr idx in
     trace_split_mid tr idx;
@@ -285,25 +285,28 @@ let rec trace_concat (#label_t:Type) (tr1 tr2:trace_ label_t)
     | Nil -> tr1
     | Snoc hd e -> Snoc (trace_concat tr1 hd) e
 
+(* Old definition of trace subtraction --- to be removed before merge.
+   TODO
 let trace_subtract (#label_t:Type) (tr1:trace_ label_t) (tr2:trace_ label_t{tr2 <$ tr1})
   : trace_ label_t
   = match tr2 with
     | Nil -> tr1
     | _ -> let (_, _, tl) = trace_split tr1 (length tr2 - 1) in
           tl
+*)
 
-let rec trace_subtract' (#label_t:Type) (tr1:trace_ label_t) (tr2:trace_ label_t{tr2 <$ tr1})
+let rec trace_subtract (#label_t:Type) (tr1:trace_ label_t) (tr2:trace_ label_t{tr2 <$ tr1})
   : trace_ label_t
   = if length tr1 = length tr2 then Nil
     else begin
       let Snoc hd e = tr1 in
       grows_cases tr2 tr1;
       assert(tr2 <$ hd);
-      Snoc (trace_subtract' hd tr2) e
+      Snoc (trace_subtract hd tr2) e
     end
 
 let (<++>) = trace_concat
-let (<-->) = trace_subtract'
+let (<-->) = trace_subtract
 
 /// Traces form a monoid with trace concatenation as operation, and Nil as unit.
 
@@ -333,8 +336,9 @@ let rec trace_subtract_nil (#label_t:Type) (tr:trace_ label_t)
     | Nil -> ()
     | Snoc hd _ -> trace_subtract_nil hd
   // Proves with () with initial trace subtract def
+  // TODO: Remove comment when trace subtraction is resolved
 
-let trace_subtract_snoc_left (#label_t:Type) (tr1 tr2:trace_ label_t) (e:trace_event_ label_t)
+let trace_subtract_snoc_left (#label_t:Type) (tr1 tr2:trace_ label_t) (e:trace_entry_ label_t)
   : Lemma
     (requires tr1 <$ tr2)
     (ensures ((Snoc tr2 e) <--> tr1) == Snoc (tr2 <--> tr1) e)
@@ -349,12 +353,12 @@ let trace_subtract_snoc_left' (#label_t:Type) (tr1 tr2:trace_ label_t)
     ))
   = ()
 
-let trace_concat_snoc_right (#label_t:Type) (tr1 tr2:trace_ label_t) (e:trace_event_ label_t)
+let trace_concat_snoc_right (#label_t:Type) (tr1 tr2:trace_ label_t) (e:trace_entry_ label_t)
   : Lemma
     (ensures tr1 <++> (Snoc tr2 e) == Snoc (tr1 <++> tr2) e)
   = ()
 
-let snoc_is_concat_singleton (#label_t:Type) (tr :trace_ label_t) (e:trace_event_ label_t)
+let snoc_is_concat_singleton (#label_t:Type) (tr :trace_ label_t) (e:trace_entry_ label_t)
   : Lemma
     (ensures Snoc tr e == (tr <++> (Snoc Nil e)))
   = ()
@@ -412,6 +416,7 @@ let rec trace_subtract_concat_right (#label_t:Type) (tr1 tr2:trace_ label_t)
       trace_concat_snoc_right tr2 (hd <--> tr2) e
     end
     (* Proof with original trace_subtract definition
+    TODO: Remove when trace subtraction is resolved
     begin
       trace_split_matches_prefix tr1 (length tr2 - 1);
       prefix_full_eq tr2;
