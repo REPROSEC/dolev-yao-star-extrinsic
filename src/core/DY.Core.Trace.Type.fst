@@ -6,7 +6,7 @@ open DY.Core.Bytes.Type
 /// It is separated from functions and predicates on trace (manipulation, invariants)
 /// in order to avoid dependency cycles.
 ///
-/// The trace is a log of every event that has happened during a protocol execution,
+/// The trace is a log of every action that has happened during a protocol execution,
 /// such as messages sent on the network, state storage or corruption by the attacker,
 /// as is standard is symbolic analysis tools to express security properties.
 ///
@@ -43,22 +43,22 @@ type state_id = { the_id: nat; }
 
 type timestamp = nat
 
-/// The type for events in the trace.
+/// The type for entries in the trace.
 
 noeq
-type trace_event_ (label_t:Type) =
+type trace_entry_ (label_t:Type) =
   // A message has been sent on the network.
-  | MsgSent: bytes -> trace_event_ label_t
+  | MsgSent: bytes -> trace_entry_ label_t
   // A random number has been generated, with some usage and label.
-  | RandGen: usg:usage -> label_t -> len:nat{len <> 0} -> trace_event_ label_t
+  | RandGen: usg:usage -> label_t -> len:nat{len <> 0} -> trace_entry_ label_t
   // A state of a principal has been corrupt.
-  | Corrupt: time:timestamp -> trace_event_ label_t
+  | Corrupt: time:timestamp -> trace_entry_ label_t
   // A principal stored some state.
-  | SetState: prin:principal -> sess_id:state_id -> content:bytes -> trace_event_ label_t
+  | SetState: prin:principal -> sess_id:state_id -> content:bytes -> trace_entry_ label_t
   // A custom and protocol-specific event has been triggered by a principal.
-  | Event: prin:principal -> tag:string -> content:bytes -> trace_event_ label_t
+  | Event: prin:principal -> tag:string -> content:bytes -> trace_entry_ label_t
 
-/// The trace is a list of trace events.
+/// The trace is a list of trace entries.
 /// Because the trace grows with time and the time is often represented going from left to right,
 /// the trace is actually a reversed list.
 /// To avoid confusions, we define a custom inductive to swap the arguments of the "cons" constructor.
@@ -66,4 +66,4 @@ type trace_event_ (label_t:Type) =
 noeq
 type trace_ (label_t:Type) =
   | Nil: trace_ label_t
-  | Snoc: trace_ label_t -> trace_event_ label_t -> trace_ label_t
+  | Snoc: trace_ label_t -> trace_entry_ label_t -> trace_ label_t

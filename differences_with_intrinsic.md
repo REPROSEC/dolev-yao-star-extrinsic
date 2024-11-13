@@ -72,7 +72,7 @@ Instead, we write stateful protocol code in a lightweight state monad.
 ### Explicit trace
 
 The original DY\* use the witness mechanism to have an implicit and global trace that can be used by various predicates.
-The predicate usually depend on a timestamp that is used to refer to a particular event of the trace or a particular prefix of the trace.
+The predicate usually depend on a timestamp that is used to refer to a particular entry of the trace or a particular prefix of the trace.
 
 The witness mechanism is sound only when using F\*'s effect system,
 hence this is not an option when working in a lightweight monad.

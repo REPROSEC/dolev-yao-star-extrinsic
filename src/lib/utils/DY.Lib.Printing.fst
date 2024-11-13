@@ -185,12 +185,12 @@ noeq type trace_to_string_printers = {
 
 (*** Functions to Print the Trace ***)
 
-val trace_event_to_string: 
+val trace_entry_to_string: 
   trace_to_string_printers -> 
-  trace_event -> timestamp -> 
+  trace_entry -> timestamp -> 
   string
-let trace_event_to_string printers tr_event i =
-  match tr_event with
+let trace_entry_to_string printers tr_entry i =
+  match tr_entry with
   | MsgSent msg -> (
     let msg_str = option_to_string printers.message_to_string msg in
     Printf.sprintf "{\"TraceID\": %d, \"Type\": \"Message\", \"Content\": \"%s\"}\n"
@@ -213,7 +213,7 @@ let trace_event_to_string printers tr_event i =
       (i-1) prin tag content_str
   )
 
-/// Helper function for `trace_to_string` to avoid calling `length` for each trace event,
+/// Helper function for `trace_to_string` to avoid calling `length` for each trace entry,
 /// which would lead to quadratic complexity.
 
 val trace_to_string_helper:
@@ -223,8 +223,8 @@ val trace_to_string_helper:
 let rec trace_to_string_helper printers tr i =
   match tr with
   | Nil -> ""
-  | Snoc ptr ev -> (
-      trace_to_string_helper printers ptr (i-1) ^ trace_event_to_string printers ev i
+  | Snoc ptr entry -> (
+      trace_to_string_helper printers ptr (i-1) ^ trace_entry_to_string printers entry i
   )
 
 (*** Functions for Users ***)

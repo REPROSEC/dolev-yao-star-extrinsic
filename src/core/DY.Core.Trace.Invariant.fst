@@ -78,11 +78,11 @@ let event_pred {|invs:protocol_invariants|} = invs.trace_invs.event_pred
 
 (*** Trace invariant definition ***)
 
-/// The invariant that must be satisfied by each event in the trace.
+/// The invariant that must be satisfied by each entry in the trace.
 
-val trace_event_invariant: {|protocol_invariants|} -> trace -> trace_event -> prop
-let trace_event_invariant #invs tr event =
-  match event with
+val trace_entry_invariant: {|protocol_invariants|} -> trace -> trace_entry -> prop
+let trace_entry_invariant #invs tr entry =
+  match entry with
   | MsgSent msg ->
     // Messages sent on the network are publishable
     is_publishable tr msg
@@ -98,40 +98,40 @@ let trace_event_invariant #invs tr event =
   | _ -> True
 
 /// The trace invariant ensures that
-/// each trace event satisfy the invariant define above.
+/// each trace entry satisfy the invariant define above.
 
 [@@ "opaque_to_smt"]
 val trace_invariant: {|protocol_invariants|} -> trace -> prop
 let rec trace_invariant #invs tr =
   match tr with
   | Nil -> True
-  | Snoc tr_init event ->
-    trace_event_invariant tr_init event /\
+  | Snoc tr_init entry ->
+    trace_entry_invariant tr_init entry /\
     trace_invariant tr_init
 
 (*** Lemmas on the trace invariant ***)
 
-/// If there is an event in the trace satisfying the invariants,
-/// then this event satisfy the trace event invariant.
+/// If there is an entry in the trace satisfying the invariants,
+/// then this entry satisfy the trace entry invariant.
 
-val event_at_implies_trace_event_invariant:
+val entry_at_implies_trace_entry_invariant:
   {|protocol_invariants|} ->
-  tr:trace -> i:timestamp -> event:trace_event ->
+  tr:trace -> i:timestamp -> entry:trace_entry ->
   Lemma
   (requires
-    event_at tr i event /\
+    entry_at tr i entry /\
     trace_invariant tr
   )
   (ensures
-    trace_event_invariant (prefix tr i) event
+    trace_entry_invariant (prefix tr i) entry
   )
-let rec event_at_implies_trace_event_invariant #invs tr i event =
+let rec entry_at_implies_trace_entry_invariant #invs tr i entry =
   norm_spec [zeta; delta_only [`%trace_invariant]] (trace_invariant);
   norm_spec [zeta; delta_only [`%prefix]] (prefix #label);
   if i+1 = DY.Core.Trace.Base.length tr then ()
   else (
     let Snoc tr_init _ = tr in
-    event_at_implies_trace_event_invariant tr_init i event
+    entry_at_implies_trace_entry_invariant tr_init i entry
   )
 
 /// The remaining theorems are special cases of the theorem above.
@@ -148,10 +148,10 @@ val msg_sent_on_network_are_publishable:
   )
   (ensures is_publishable tr msg)
 let msg_sent_on_network_are_publishable #invs tr msg =
-  eliminate exists i. event_at tr i (MsgSent msg)
+  eliminate exists i. entry_at tr i (MsgSent msg)
   returns is_publishable tr msg
   with _. (
-    event_at_implies_trace_event_invariant tr i (MsgSent msg)
+    entry_at_implies_trace_entry_invariant tr i (MsgSent msg)
   )
 
 /// States stored satisfy the custom state predicate.
@@ -169,10 +169,10 @@ val state_was_set_implies_pred:
    SMTPat (trace_invariant tr);
   ]
 let state_was_set_implies_pred #invs tr prin sess_id content =
-  eliminate exists i. event_at tr i (SetState prin sess_id content)
+  eliminate exists i. entry_at tr i (SetState prin sess_id content)
   returns invs.trace_invs.state_pred.pred tr prin sess_id content
   with _. (
-    event_at_implies_trace_event_invariant tr i (SetState prin sess_id content);
+    entry_at_implies_trace_entry_invariant tr i (SetState prin sess_id content);
     invs.trace_invs.state_pred.pred_later (prefix tr i) tr prin sess_id content
   )
 
@@ -206,4 +206,4 @@ val event_triggered_at_implies_pred:
    SMTPat (trace_invariant tr);
   ]
 let event_triggered_at_implies_pred #invs tr i prin tag content =
-  event_at_implies_trace_event_invariant tr i (Event prin tag content)
+  entry_at_implies_trace_entry_invariant tr i (Event prin tag content)

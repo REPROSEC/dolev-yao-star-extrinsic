@@ -6,9 +6,9 @@ open DY.Core.Label.Type
 
 #set-options "--fuel 1 --ifuel 1"
 
-/// Shorthands for trace and trace events.
+/// Shorthands for trace and trace entries.
 
-type trace_event = trace_event_ label
+type trace_entry = trace_entry_ label
 type trace = trace_ label
 
 /// The length of a trace.
@@ -49,7 +49,7 @@ let (<$) = grows
 val grows_induction_principle:
   #label_t:Type ->
   p:(trace_ label_t -> prop) ->
-  (tr:trace_ label_t -> ev:trace_event_ label_t -> Lemma (requires p tr) (ensures p (Snoc tr ev))) ->
+  (tr:trace_ label_t -> entry:trace_entry_ label_t -> Lemma (requires p tr) (ensures p (Snoc tr entry))) ->
   tr1:trace_ label_t -> tr2:trace_ label_t ->
   Lemma
   (requires
@@ -188,71 +188,71 @@ let rec prefix_prefix_eq #label_t tr1 tr2 i =
     prefix_prefix_eq tr1 tr2_init i
   )
 
-(*** Event in the trace predicates ***)
+(*** Entries in the trace predicates ***)
 
-/// Retrieve the event at some timestamp in the trace.
+/// Retrieve the entry at some timestamp in the trace.
 
-val get_event_at:
+val get_entry_at:
   #label_t:Type ->
   tr:trace_ label_t -> i:timestamp{i < length tr} ->
-  trace_event_ label_t
-let rec get_event_at #label_t tr i =
+  trace_entry_ label_t
+let rec get_entry_at #label_t tr i =
   if i+1 = length tr then
     let Snoc _ last = tr in
     last
   else (
     let Snoc tr_init _ = tr in
-    get_event_at tr_init i
+    get_entry_at tr_init i
   )
 
-/// Has some particular event been triggered at a some particular timestamp in the trace?
+/// Has some particular entry been triggered at a some particular timestamp in the trace?
 
-val event_at:
+val entry_at:
   #label_t:Type ->
-  trace_ label_t -> timestamp -> trace_event_ label_t ->
+  trace_ label_t -> timestamp -> trace_entry_ label_t ->
   prop
-let event_at #label_t tr i e =
+let entry_at #label_t tr i e =
   i < length tr /\
-  e == get_event_at tr i
+  e == get_entry_at tr i
 
-/// Has some particular event been triggered in the trace (at any timestamp)?
+/// Has some particular entry been triggered in the trace (at any timestamp)?
 
-val event_exists:
+val entry_exists:
   #label_t:Type ->
-  trace_ label_t -> trace_event_ label_t ->
+  trace_ label_t -> trace_entry_ label_t ->
   prop
-let event_exists #label_t tr e =
-  exists i. event_at tr i e
+let entry_exists #label_t tr e =
+  exists i. entry_at tr i e
 
-/// An event in the trace stays here when the trace grows.
+/// An entry in the trace stays here when the trace grows.
 
-val get_event_at_grows:
+val get_entry_at_grows:
   #label_t:Type ->
   tr1:trace_ label_t -> tr2:trace_ label_t ->
   i:timestamp{i < length tr1} ->
   Lemma
   (requires tr1 <$ tr2)
-  (ensures get_event_at tr1 i == get_event_at tr2 i)
-  [SMTPat (get_event_at tr1 i); SMTPat (tr1 <$ tr2)]
-let rec get_event_at_grows #label_t tr1 tr2 i =
+  (ensures get_entry_at tr1 i == get_entry_at tr2 i)
+  [SMTPat (get_entry_at tr1 i); SMTPat (tr1 <$ tr2)]
+let rec get_entry_at_grows #label_t tr1 tr2 i =
   reveal_opaque (`%grows) (grows #label_t);
   norm_spec [zeta; delta_only [`%prefix]] (prefix #label_t);
   if i >= length tr1 then ()
   else if length tr1 >= length tr2 then ()
   else (
     let Snoc tr2_init _ = tr2 in
-    get_event_at_grows tr1 tr2_init i
+    get_entry_at_grows tr1 tr2_init i
   )
 
-val event_at_grows:
+val entry_at_grows:
   #label_t:Type ->
   tr1:trace_ label_t -> tr2:trace_ label_t ->
-  i:timestamp -> e:trace_event_ label_t ->
+  i:timestamp -> e:trace_entry_ label_t ->
   Lemma
-  (requires event_at tr1 i e /\ tr1 <$ tr2)
-  (ensures event_at tr2 i e)
-  [SMTPat (event_at tr1 i e); SMTPat (tr1 <$ tr2)]
-let event_at_grows #label_t tr1 tr2 i e = ()
+  (requires entry_at tr1 i e /\ tr1 <$ tr2)
+  (ensures entry_at tr2 i e)
+  [SMTPat (entry_at tr1 i e); SMTPat (tr1 <$ tr2)]
+let entry_at_grows #label_t tr1 tr2 i e = ()
 
 val last_entry_exists:
   #label_t:Type ->
@@ -261,12 +261,12 @@ val last_entry_exists:
     (requires Snoc? tr )
     (ensures (
        let Snoc _ last = tr in
-       event_exists tr last
+       entry_exists tr last
     ))
     [SMTPat (Snoc? tr)]
 let last_entry_exists tr = 
   let Snoc _ last = tr in
-  assert(event_at tr (DY.Core.Trace.Base.length tr - 1) last)
+  assert(entry_at tr (DY.Core.Trace.Base.length tr - 1) last)
 
 /// Shorthand predicates.
 
@@ -277,7 +277,7 @@ val msg_sent_on_network:
   trace_ label_t -> bytes ->
   prop
 let msg_sent_on_network #label_t tr msg =
-  event_exists tr (MsgSent msg)
+  entry_exists tr (MsgSent msg)
 
 /// Has some state been stored by a principal?
 
@@ -286,7 +286,7 @@ val state_was_set:
   trace_ label_t -> principal -> state_id -> bytes ->
   prop
 let state_was_set #label_t tr prin sess_id content =
-  event_exists tr (SetState prin sess_id content)
+  entry_exists tr (SetState prin sess_id content)
 
 /// Has a principal been corrupt?
 
@@ -296,8 +296,8 @@ val state_was_corrupt:
   prop
 let state_was_corrupt tr prin sess_id content =
   exists time.
-    event_exists tr (Corrupt time) /\
-    event_at tr time (SetState prin sess_id content)
+    entry_exists tr (Corrupt time) /\
+    entry_at tr time (SetState prin sess_id content)
 
 /// Has a (custom, protocol-specific) event been triggered at some timestamp?
 
@@ -306,7 +306,7 @@ val event_triggered_at:
   trace_ label_t -> timestamp -> principal -> string -> bytes ->
   prop
 let event_triggered_at #label_t tr i prin tag content =
-  event_at tr i (Event prin tag content)
+  entry_at tr i (Event prin tag content)
 
 /// Has a (custom, protocol-specific) event been triggered (at any timestamp)?
 
@@ -406,7 +406,7 @@ val rand_generated_at:
 let rand_generated_at #label_t tr i b =
   match b with
   | Rand len time ->
-    time == i /\ (exists usg lab. event_at tr i (RandGen usg lab len))
+    time == i /\ (exists usg lab. entry_at tr i (RandGen usg lab len))
   | _ -> False
 
 (*** Forgetting labels ***)
@@ -418,17 +418,17 @@ let rand_generated_at #label_t tr i b =
 /// This is defined using a `fmap` function on traces,
 /// which can help proving properties on `trace_forget_labels`.
 /// It is named after Haskell's fmap `(a -> b) -> f a -> f b`,
-/// where here `f` is either `trace_event_` or `trace_`.
+/// where here `f` is either `trace_entry_` or `trace_`.
 /// Furthermore, `a` and `b` are types for labels
 /// (in practice either `label` or `unit`),
 /// and the `a -> b` function is applied on labels in the trace.
 
-val fmap_trace_event:
+val fmap_trace_entry:
   #a:Type -> #b:Type ->
-  (a -> b) -> trace_event_ a ->
-  trace_event_ b
-let fmap_trace_event #a #b f ev =
-  match ev with
+  (a -> b) -> trace_entry_ a ->
+  trace_entry_ b
+let fmap_trace_entry #a #b f entry =
+  match entry with
   | MsgSent msg -> MsgSent msg
   | RandGen usg lab len -> RandGen usg (f lab) len
   | Corrupt time -> Corrupt time
@@ -443,7 +443,7 @@ let rec fmap_trace #a #b f tr =
   match tr with
   | Nil -> Nil
   | Snoc init last ->
-    Snoc (fmap_trace f init) (fmap_trace_event f last)
+    Snoc (fmap_trace f init) (fmap_trace_entry f last)
 
 val length_fmap_trace:
   #a:Type -> #b:Type ->
@@ -525,65 +525,65 @@ let fmap_trace_recover_before #a #b f tr1 tr2 =
   fmap_trace_prefix f tr2 (length tr1);
   prefix tr2 (length tr1)
 
-val get_event_at_fmap_trace:
+val get_entry_at_fmap_trace:
   #a:Type -> #b:Type ->
   f:(a -> b) -> tr:trace_ a -> i:timestamp{i < length tr} ->
   Lemma (
-    get_event_at (fmap_trace f tr) i == fmap_trace_event f (get_event_at tr i)
+    get_entry_at (fmap_trace f tr) i == fmap_trace_entry f (get_entry_at tr i)
   )
-let rec get_event_at_fmap_trace #a #b f tr i =
+let rec get_entry_at_fmap_trace #a #b f tr i =
   if i+1 = length tr then ()
   else (
     let Snoc tr_init _ = tr in
-    get_event_at_fmap_trace f tr_init i
+    get_entry_at_fmap_trace f tr_init i
   )
 
-val event_at_fmap_trace:
+val entry_at_fmap_trace:
   #a:Type -> #b:Type ->
-  f:(a -> b) -> tr:trace_ a -> i:timestamp -> ev:trace_event_ a ->
+  f:(a -> b) -> tr:trace_ a -> i:timestamp -> entry:trace_entry_ a ->
   Lemma
-  (requires event_at tr i ev)
-  (ensures event_at (fmap_trace f tr) i (fmap_trace_event f ev))
-let event_at_fmap_trace #a #b f tr i ev =
+  (requires entry_at tr i entry)
+  (ensures entry_at (fmap_trace f tr) i (fmap_trace_entry f entry))
+let entry_at_fmap_trace #a #b f tr i entry =
   if i >= length tr then ()
   else (
-    get_event_at_fmap_trace f tr i
+    get_entry_at_fmap_trace f tr i
   )
 
-val event_at_fmap_trace_eq:
+val entry_at_fmap_trace_eq:
   #a:Type -> #b:Type ->
-  f:(a -> b) -> tr:trace_ a -> i:timestamp -> ev:trace_event_ a ->
+  f:(a -> b) -> tr:trace_ a -> i:timestamp -> entry:trace_entry_ a ->
   Lemma
-  (requires ~(RandGen? ev))
-  (ensures event_at tr i ev <==> event_at (fmap_trace f tr) i (fmap_trace_event f ev))
-let event_at_fmap_trace_eq #a #b f tr i ev =
+  (requires ~(RandGen? entry))
+  (ensures entry_at tr i entry <==> entry_at (fmap_trace f tr) i (fmap_trace_entry f entry))
+let entry_at_fmap_trace_eq #a #b f tr i entry =
   if i >= length tr then ()
   else (
-    get_event_at_fmap_trace f tr i
+    get_entry_at_fmap_trace f tr i
   )
 
-val event_exists_fmap_trace:
+val entry_exists_fmap_trace:
   #a:Type -> #b:Type ->
-  f:(a -> b) -> tr:trace_ a -> ev:trace_event_ a ->
+  f:(a -> b) -> tr:trace_ a -> entry:trace_entry_ a ->
   Lemma
-  (requires event_exists tr ev)
-  (ensures event_exists (fmap_trace f tr) (fmap_trace_event f ev))
-let event_exists_fmap_trace #a #b f tr ev =
-  eliminate exists i. event_at tr i ev
-  returns event_exists (fmap_trace f tr) (fmap_trace_event f ev)
+  (requires entry_exists tr entry)
+  (ensures entry_exists (fmap_trace f tr) (fmap_trace_entry f entry))
+let entry_exists_fmap_trace #a #b f tr entry =
+  eliminate exists i. entry_at tr i entry
+  returns entry_exists (fmap_trace f tr) (fmap_trace_entry f entry)
   with _. (
-    event_at_fmap_trace f tr i ev
+    entry_at_fmap_trace f tr i entry
   )
 
-val event_exists_fmap_trace_eq:
+val entry_exists_fmap_trace_eq:
   #a:Type -> #b:Type ->
-  f:(a -> b) -> tr:trace_ a -> ev:trace_event_ a ->
+  f:(a -> b) -> tr:trace_ a -> entry:trace_entry_ a ->
   Lemma
-  (requires ~(RandGen? ev))
-  (ensures event_exists tr ev <==> event_exists (fmap_trace f tr) (fmap_trace_event f ev))
-let event_exists_fmap_trace_eq #a #b f tr ev =
-  introduce forall i. event_at tr i ev <==> event_at (fmap_trace f tr) i (fmap_trace_event f ev) with (
-    event_at_fmap_trace_eq f tr i ev
+  (requires ~(RandGen? entry))
+  (ensures entry_exists tr entry <==> entry_exists (fmap_trace f tr) (fmap_trace_entry f entry))
+let entry_exists_fmap_trace_eq #a #b f tr entry =
+  introduce forall i. entry_at tr i entry <==> entry_at (fmap_trace f tr) i (fmap_trace_entry f entry) with (
+    entry_at_fmap_trace_eq f tr i entry
   )
 
 val replace_label:
