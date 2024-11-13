@@ -6,7 +6,7 @@ open DY.Core.Bytes.Type
 /// It is separated from functions and predicates on trace (manipulation, invariants)
 /// in order to avoid dependency cycles.
 ///
-/// The trace is a log of every event that has happened during a protocol execution,
+/// The trace is a log of every action that has happened during a protocol execution,
 /// such as messages sent on the network, state storage or corruption by the attacker,
 /// as is standard is symbolic analysis tools to express security properties.
 ///

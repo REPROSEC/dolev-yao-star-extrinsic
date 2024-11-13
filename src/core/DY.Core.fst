@@ -52,7 +52,7 @@ module DY.Core
 /// (such as sending messages to the actual network).
 /// Instead, every impure action performed by the protocol
 /// will be stored as an entry in a trace (see DY.Core.Trace.Type.trace).
-/// The trace is a log of every event that has happened during a protocol execution.
+/// The trace is a log of every action that has happened during a protocol execution.
 /// From this trace can be deduced many facts,
 /// such as the set of bytestrings that can be computed by the attacker
 /// (see DY.Core.Attacker.Knowledge.attacker_knows).
