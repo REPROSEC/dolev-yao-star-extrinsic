@@ -75,21 +75,50 @@ let has_communication_layer_invariants #cinvs =
 
 noeq
 type comm_higher_layer_event_preds = {
-  send_conf: sender:principal -> receiver:principal -> payload:bytes -> tr:trace -> prop;
-  send_auth: sender:principal -> payload:bytes -> tr:trace -> prop;
-  send_conf_auth: sender:principal -> receiver:principal -> payload:bytes -> tr:trace -> prop;
+  send_conf: tr:trace -> sender:principal -> receiver:principal -> payload:bytes -> prop;
+  send_conf_later: 
+    tr1:trace -> tr2:trace ->
+    sender:principal -> receiver:principal -> payload:bytes ->
+    Lemma
+    (requires
+      send_conf tr1 sender receiver payload /\
+      tr1 <$ tr2
+    )
+    (ensures send_conf tr2 sender receiver payload)
+  ;
+  send_auth: tr:trace -> sender:principal -> payload:bytes -> prop;
+  send_auth_later: 
+    tr1:trace -> tr2:trace ->
+    sender:principal -> payload:bytes ->
+    Lemma
+    (requires
+      send_auth tr1 sender payload /\
+      tr1 <$ tr2
+    )
+    (ensures send_auth tr2 sender payload)
+  ;
+  send_conf_auth: tr:trace -> sender:principal -> receiver:principal -> payload:bytes -> prop;
+  send_conf_auth_later: 
+    tr1:trace -> tr2:trace ->
+    sender:principal -> receiver:principal -> payload:bytes ->
+    Lemma
+    (requires
+      send_conf_auth tr1 sender receiver payload /\
+      tr1 <$ tr2
+    )
+    (ensures send_conf_auth tr2 sender receiver payload)
+  ;
 }
 
 val default_comm_higher_layer_event_preds: comm_higher_layer_event_preds
 let default_comm_higher_layer_event_preds = {
-  send_conf = (fun sender receiver payload tr -> True);
-  send_auth = (fun sender payload tr -> True);
-  send_conf_auth = (fun sender receiver payload tr -> True);
+  send_conf = (fun tr sender receiver payload -> True);
+  send_conf_later = (fun tr1 tr2 sender receiver payload -> ());
+  send_auth = (fun tr sender payload -> True);
+  send_auth_later = (fun tr1 tr2 sender payload -> ());
+  send_conf_auth = (fun tr sender receiver payload -> True);
+  send_conf_auth_later = (fun tr1 tr2 sender receiver payload -> ());
 }
-
-val comm_layer_preds_later: trace -> (trace -> prop) -> prop
-let comm_layer_preds_later tr higher_layer_preds =
-  forall tr'. tr <$ tr' ==> higher_layer_preds tr'
 
 #push-options "--ifuel 1 --fuel 0"
 let event_predicate_communication_layer {|cinvs:crypto_invariants|} (higher_layer_preds:comm_higher_layer_event_preds) : event_predicate communication_event =
@@ -97,7 +126,7 @@ let event_predicate_communication_layer {|cinvs:crypto_invariants|} (higher_laye
     (match e with
     | CommConfSendMsg sender receiver payload -> (
       is_knowable_by (join (principal_label sender) (principal_label receiver)) tr payload /\
-      higher_layer_preds.send_conf sender receiver payload tr
+      higher_layer_preds.send_conf tr sender receiver payload
     )
     | CommConfReceiveMsg receiver payload -> (
       exists sender.
@@ -108,7 +137,7 @@ let event_predicate_communication_layer {|cinvs:crypto_invariants|} (higher_laye
         )
     )
     | CommAuthSendMsg sender payload -> (
-      higher_layer_preds.send_auth sender payload tr
+      higher_layer_preds.send_auth tr sender payload
     )
     | CommAuthReceiveMsg sender receiver payload -> (
       is_publishable tr payload /\
@@ -121,7 +150,7 @@ let event_predicate_communication_layer {|cinvs:crypto_invariants|} (higher_laye
     )
     | CommConfAuthSendMsg sender receiver payload -> (
       is_knowable_by (join (principal_label sender) (principal_label receiver)) tr payload /\
-      higher_layer_preds.send_conf_auth sender receiver payload tr
+      higher_layer_preds.send_conf_auth tr sender receiver payload
     )
     | CommConfAuthReceiveMsg sender receiver payload -> (
       // We can only show the following about the decrypted ciphertext (payload):
