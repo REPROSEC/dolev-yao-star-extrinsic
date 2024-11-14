@@ -210,7 +210,6 @@ let send_confidential_authenticated comm_keys_ids sender receiver payload =
   let* enc_nonce = mk_rand PkNonce (long_term_key_label sender) 32 in
   let* sign_nonce = mk_rand SigNonce (long_term_key_label sender) 32 in
   trigger_event sender (CommConfSendMsg sender receiver payload);*
-  trigger_event sender (CommAuthSendMsg sender payload);*
   trigger_event sender (CommConfAuthSendMsg sender receiver payload);*
   let msg_encrypted_signed_bytes = encrypt_and_sign_message sender receiver payload pk_receiver sk_sender enc_nonce sign_nonce in
   let* msg_id = send_msg msg_encrypted_signed_bytes in
