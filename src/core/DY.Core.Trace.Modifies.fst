@@ -173,13 +173,13 @@ let traceful_modifies_trigger_event (prin:principal) (tag:string) (b:bytes) (tr:
 /// the result of looking up the state at the start and end of that trace (traceful) is the same.
 
 
-let rec tmp (#label_t:Type) (prin:principal) (sid:state_id) (tr:trace_ label_t)
+let rec trace_modifies_state_was_set (#label_t:Type) (prin:principal) (sid:state_id) (tr:trace_ label_t)
   : Lemma
     (ensures mem (prin, sid) (trace_modifies tr) <==> (exists b. state_was_set tr prin sid b))
   = match tr with
     | Nil -> ()
     | Snoc hd e -> begin
-      tmp prin sid hd;
+      trace_modifies_state_was_set prin sid hd;
       if SetState? e && SetState?.prin e = prin && SetState?.sess_id e = sid
       then begin
         assert(state_was_set tr prin sid (SetState?.content e))
@@ -187,21 +187,21 @@ let rec tmp (#label_t:Type) (prin:principal) (sid:state_id) (tr:trace_ label_t)
       else ()
     end
 
-let rec tmp2 (prin:principal) (sid:state_id) (tr1 tr2:trace)
+let rec trace_concat_same_state_aux (prin:principal) (sid:state_id) (tr1 tr2:trace)
   : Lemma
     (requires ~((prin, sid) `mem` (trace_modifies tr2)))
     (ensures (get_state_aux prin sid tr1) == (get_state_aux prin sid (tr1 <++> tr2)))
   = match tr2 with
     | Nil -> ()
-    | Snoc hd e -> tmp2 prin sid tr1 hd
+    | Snoc hd e -> trace_concat_same_state_aux prin sid tr1 hd
 
-let tmp3 (prin:principal) (sid:state_id) (tr1 tr2:trace)
+let trace_grows_same_state_aux (prin:principal) (sid:state_id) (tr1 tr2:trace)
   : Lemma
     (requires tr1 <$ tr2 /\ ~((prin, sid) `mem` (trace_modifies (tr2 <--> tr1))))
     (ensures (get_state_aux prin sid tr1) == (get_state_aux prin sid tr2))
-  = tmp2 prin sid tr1 (tr2 <--> tr1)
+  = trace_concat_same_state_aux prin sid tr1 (tr2 <--> tr1)
 
-let tmp4 (prin:principal) (sid:state_id) (tr1 tr2:trace)
+let trace_concat_same_state (prin:principal) (sid:state_id) (tr1 tr2:trace)
   : Lemma
     (requires ~((prin, sid) `mem` (trace_modifies tr2)))
     (ensures (
@@ -210,9 +210,9 @@ let tmp4 (prin:principal) (sid:state_id) (tr1 tr2:trace)
       st_opt1 == st_opt2
     ))
   = reveal_opaque (`%get_state) (get_state);
-    tmp2 prin sid tr1 tr2
+    trace_concat_same_state_aux prin sid tr1 tr2
 
-let tmp5 (prin:principal) (sid:state_id) (tr1 tr2:trace)
+let trace_grows_same_state (prin:principal) (sid:state_id) (tr1 tr2:trace)
   : Lemma
     (requires tr1 <$ tr2 /\ ~((prin, sid) `mem` (trace_modifies (tr2 <--> tr1))))
     (ensures (
@@ -224,9 +224,9 @@ let tmp5 (prin:principal) (sid:state_id) (tr1 tr2:trace)
      SMTPat (get_state prin sid tr2);
      SMTPat (~((prin, sid) `mem` (trace_modifies (tr2 <--> tr1))));
     ]
-  = tmp4 prin sid tr1 (tr2 <--> tr1)
+  = trace_concat_same_state prin sid tr1 (tr2 <--> tr1)
 
-let tmp6 (#a:Type) (prin:principal) (sid:state_id) (f:traceful a) (tr:trace)
+let traceful_unmodified_same_state (#a:Type) (prin:principal) (sid:state_id) (f:traceful a) (tr:trace)
   : Lemma
     (requires ~((prin, sid) `mem` (traceful_modifies f tr)))
     (ensures (
@@ -239,6 +239,8 @@ let tmp6 (#a:Type) (prin:principal) (sid:state_id) (f:traceful a) (tr:trace)
     assert(~((prin, sid) `mem` (trace_modifies (tr_out <--> tr))));
     ()
 
+/// TODO
+/// To be added to core?
 val get_trace_same_trace (tr:trace)
   : Lemma
     (ensures (
@@ -275,4 +277,4 @@ let tmp8 (#a:Type) (prin:principal) (sid:state_id) (f:traceful a) (tr_in:trace)
       let ((st_opt1, st_opt2), tr_out) = tmp7 prin sid f tr_in in
       st_opt1 == st_opt2
     ))
-  = tmp6 prin sid f tr_in
+  = traceful_unmodified_same_state prin sid f tr_in
