@@ -118,16 +118,16 @@ let traceful_modifies_guard_tr (b:bool) (tr:trace)
     [SMTPat (traceful_modifies (guard_tr b) tr)]
   = ()
 
-let traceful_modifies_add_event
-  (e:trace_event)
+let traceful_modifies_add_entry
+  (e:trace_entry)
   (tr:trace)
   : Lemma
     (ensures (
       match e with
-      | SetState prin sid _ -> traceful_modifies (add_event e) tr == singleton (prin, sid)
-      | _ -> traceful_modifies (add_event e) tr == empty
+      | SetState prin sid _ -> traceful_modifies (add_entry e) tr == singleton (prin, sid)
+      | _ -> traceful_modifies (add_entry e) tr == empty
     ))
-    [SMTPat (traceful_modifies (add_event e) tr)]
+    [SMTPat (traceful_modifies (add_entry e) tr)]
   = match e with
     | SetState prin sid _ -> begin
       assert(equal (add (prin, sid) empty) (singleton (prin, sid)))
