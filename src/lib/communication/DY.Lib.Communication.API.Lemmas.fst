@@ -8,11 +8,18 @@ open DY.Lib.Crypto.Signature.Split
 open DY.Lib.State.PKI
 open DY.Lib.State.PrivateKeys
 open DY.Lib.Event.Typed
+open DY.Lib.State.Typed
 
 open DY.Lib.Communication.API.Invariants
 open DY.Lib.Communication.API
 
 #set-options "--fuel 0 --ifuel 0 --z3cliopt 'smt.qi.eager_threshold=100'"
+
+(*** Layer Setup ***)
+
+class local_extension = {
+  local_extension_preds: comm_higher_layer_event_preds
+}
 
 (**** Confidential Send and Receive Lemmas ****)
 
@@ -23,7 +30,7 @@ val encrypt_message_proof:
   pk_receiver:bytes -> nonce:bytes -> payload:bytes ->
   Lemma
   (requires
-    has_communication_layer_invariants /\
+    has_communication_layer_crypto_predicates /\
     is_secret (long_term_key_label sender) tr nonce /\
     nonce `has_usage tr` PkNonce /\
     is_public_key_for tr pk_receiver (LongTermPkEncKey comm_layer_pkenc_tag) receiver /\
@@ -37,6 +44,7 @@ let encrypt_message_proof #cinvs tr sender receiver pk_receiver nonce payload = 
 
 val send_confidential_proof:
   {|invs:protocol_invariants|} ->
+  {|lep:local_extension|} ->
   tr:trace ->
   higher_layer_preds:comm_higher_layer_event_preds ->
   keys_sess_ids:communication_keys_sess_ids ->
@@ -45,9 +53,10 @@ val send_confidential_proof:
   (requires
     trace_invariant tr /\
     has_pki_invariant /\
-    has_communication_layer_invariants /\
-    has_communication_layer_event_predicates higher_layer_preds /\
+    has_communication_layer_crypto_predicates /\
+    has_communication_layer_event_predicates lep.local_extension_preds higher_layer_preds /\
     higher_layer_preds.send_conf tr sender receiver payload /\
+    lep.local_extension_preds.send_conf tr sender receiver payload /\
     // We only require the payload to flow to the sender and receiver to allow
     // the sender to send a payload readable by other principals. If you want
     // the payload to be only readable by the sender and receiver, you can use
@@ -59,13 +68,14 @@ val send_confidential_proof:
     let (_, tr_out) = send_confidential keys_sess_ids sender receiver payload tr in
     trace_invariant tr_out
   ))
-let send_confidential_proof #invs tr higher_layer_preds keys_sess_ids sender receiver payload =
+let send_confidential_proof #invs #lep tr higher_layer_preds keys_sess_ids sender receiver payload =
   match send_confidential keys_sess_ids sender receiver payload tr with
   | (None, tr_out) -> ()
   | (Some _, tr_out) -> (
     let (Some pk_receiver, tr') = get_public_key sender keys_sess_ids.pki (LongTermPkEncKey comm_layer_pkenc_tag) receiver tr in
     let (nonce, tr') = mk_rand PkNonce (long_term_key_label sender) 32 tr' in
     higher_layer_preds.send_conf_later tr tr' sender receiver payload;
+    lep.local_extension_preds.send_conf_later tr tr' sender receiver payload;
     let ((), tr') = trigger_event sender (CommConfSendMsg sender receiver payload) tr' in
     assert(event_triggered tr' sender (CommConfSendMsg sender receiver payload));
     encrypt_message_proof tr' sender receiver pk_receiver nonce payload;
@@ -83,7 +93,7 @@ val decrypt_message_proof:
   receiver:principal -> sk_receiver:bytes -> msg_encrypted:bytes ->  
   Lemma
   (requires
-    has_communication_layer_invariants /\
+    has_communication_layer_crypto_predicates /\
     is_private_key_for tr sk_receiver (LongTermPkEncKey comm_layer_pkenc_tag) receiver /\
     bytes_invariant tr msg_encrypted
   )
@@ -107,6 +117,7 @@ let decrypt_message_proof #cinvs tr receiver sk_receiver msg_encrypted =
 
 val receive_confidential_proof:
   {|invs:protocol_invariants|} ->
+  {|lep:local_extension|} ->
   tr:trace ->
   higher_layer_preds:comm_higher_layer_event_preds ->
   comm_keys_ids:communication_keys_sess_ids ->
@@ -115,8 +126,8 @@ val receive_confidential_proof:
   (requires
     trace_invariant tr /\ 
     has_private_keys_invariant /\
-    has_communication_layer_invariants /\
-    has_communication_layer_event_predicates higher_layer_preds
+    has_communication_layer_crypto_predicates /\
+    has_communication_layer_event_predicates lep.local_extension_preds higher_layer_preds
   )
   (ensures (
     match receive_confidential comm_keys_ids receiver msg_id tr with
@@ -126,7 +137,7 @@ val receive_confidential_proof:
       event_triggered tr_out receiver (CommConfReceiveMsg receiver payload)
     )
   ))
-let receive_confidential_proof #invs tr higher_layer_preds comm_keys_ids receiver msg_id =
+let receive_confidential_proof #invs #lep tr higher_layer_preds comm_keys_ids receiver msg_id =
   match receive_confidential comm_keys_ids receiver msg_id tr with
   | (None, tr_out) -> ()
   | (Some payload, tr_out) -> (
@@ -149,7 +160,7 @@ val sign_message_proof:
   sk_sender:bytes -> nonce:bytes -> 
   Lemma
   (requires
-    has_communication_layer_invariants /\
+    has_communication_layer_crypto_predicates /\
     is_publishable tr payload /\
     is_secret (long_term_key_label sender) tr nonce /\
     nonce `has_usage tr` SigNonce /\
@@ -192,6 +203,7 @@ let sign_message_proof #cinvs tr sender receiver payload is_encrypted sk_sender 
 
 val send_authenticated_proof:
   {|invs:protocol_invariants|} ->
+  {|lep:local_extension|} ->
   tr:trace ->
   higher_layer_preds:comm_higher_layer_event_preds ->
   comm_keys_ids:communication_keys_sess_ids ->
@@ -200,8 +212,8 @@ val send_authenticated_proof:
   (requires
     trace_invariant tr /\ 
     has_private_keys_invariant /\
-    has_communication_layer_invariants /\
-    has_communication_layer_event_predicates higher_layer_preds /\
+    has_communication_layer_crypto_predicates /\
+    has_communication_layer_event_predicates lep.local_extension_preds higher_layer_preds /\
     higher_layer_preds.send_auth tr sender payload /\
     is_publishable tr payload
   )
@@ -209,7 +221,7 @@ val send_authenticated_proof:
     let (_, tr_out) = send_authenticated comm_keys_ids sender receiver payload tr in
     trace_invariant tr_out
   ))
-let send_authenticated_proof #invs tr higher_layer_preds comm_keys_ids sender receiver payload =
+let send_authenticated_proof #invs #lep tr higher_layer_preds comm_keys_ids sender receiver payload =
     match send_authenticated comm_keys_ids sender receiver payload tr with
     | (None, tr_out) -> ()
     | (Some _, tr_out) -> (      
@@ -235,7 +247,7 @@ val verify_message_proof:
   vk_sender:bytes ->
   Lemma
   (requires
-    has_communication_layer_invariants /\
+    has_communication_layer_crypto_predicates /\
     is_publishable tr msg_bytes /\
     is_public_key_for tr vk_sender (LongTermSigKey comm_layer_sign_tag) sender    
   )
@@ -285,6 +297,7 @@ let verify_message_proof #cinvs tr sender receiver msg_bytes is_encrypted vk_sen
 
 val receive_authenticated_proof:
   {|invs:protocol_invariants|} ->
+  {|lep:local_extension|} ->
   tr:trace ->
   higher_layer_preds:comm_higher_layer_event_preds ->
   comm_keys_ids:communication_keys_sess_ids ->
@@ -293,8 +306,8 @@ val receive_authenticated_proof:
   (requires
     trace_invariant tr /\ 
     has_pki_invariant /\
-    has_communication_layer_invariants /\
-    has_communication_layer_event_predicates higher_layer_preds
+    has_communication_layer_crypto_predicates /\
+    has_communication_layer_event_predicates lep.local_extension_preds higher_layer_preds
   )
   (ensures (
     match receive_authenticated comm_keys_ids receiver msg_id tr with
@@ -304,7 +317,7 @@ val receive_authenticated_proof:
       event_triggered tr_out receiver (CommAuthReceiveMsg sender receiver payload)
     )
   ))
-let receive_authenticated_proof #invs tr higher_layer_preds comm_keys_ids receiver msg_id =
+let receive_authenticated_proof #invs #lep tr higher_layer_preds comm_keys_ids receiver msg_id =
   match receive_authenticated comm_keys_ids receiver msg_id tr with
   | (None, tr_out) -> ()
   | (Some {sender=sender'; receiver=receiver'; payload}, tr_out) -> (
@@ -328,7 +341,7 @@ val encrypt_and_sign_message_proof:
   pk_receiver:bytes -> sk_sender:bytes -> enc_nonce:bytes -> sign_nonce:bytes ->
   Lemma
   (requires
-    has_communication_layer_invariants /\
+    has_communication_layer_crypto_predicates /\
     is_secret (long_term_key_label sender) tr enc_nonce /\
     is_secret (long_term_key_label sender) tr sign_nonce /\
     enc_nonce `has_usage tr` PkNonce /\
@@ -352,6 +365,7 @@ let encrypt_and_sign_message_proof #cinvs tr sender receiver payload pk_receiver
 #push-options "--z3rlimit 10"
 val send_confidential_authenticated_proof:
   {|invs:protocol_invariants|} ->
+  {|lep:local_extension|} ->
   tr:trace ->
   higher_layer_preds:comm_higher_layer_event_preds ->
   comm_keys_ids:communication_keys_sess_ids ->
@@ -361,9 +375,10 @@ val send_confidential_authenticated_proof:
     trace_invariant tr /\
     has_private_keys_invariant /\
     has_pki_invariant /\
-    has_communication_layer_invariants /\
-    has_communication_layer_event_predicates higher_layer_preds /\
+    has_communication_layer_crypto_predicates /\
+    has_communication_layer_event_predicates lep.local_extension_preds higher_layer_preds /\
     higher_layer_preds.send_conf tr sender receiver payload /\
+    lep.local_extension_preds.send_conf tr sender receiver payload /\
     higher_layer_preds.send_conf_auth tr sender receiver payload /\
     is_knowable_by (join (principal_label sender) (principal_label receiver)) tr payload
   )
@@ -371,7 +386,7 @@ val send_confidential_authenticated_proof:
     let (_, tr_out) = send_confidential_authenticated comm_keys_ids sender receiver payload tr in
     trace_invariant tr_out
   ))
-let send_confidential_authenticated_proof #invs tr higher_layer_preds comm_keys_ids sender receiver payload =
+let send_confidential_authenticated_proof #invs #lep tr higher_layer_preds comm_keys_ids sender receiver payload =
   match send_confidential_authenticated comm_keys_ids sender receiver payload tr with
   | (None, tr_out) -> ()
   | (Some _, tr_out) -> (
@@ -381,6 +396,7 @@ let send_confidential_authenticated_proof #invs tr higher_layer_preds comm_keys_
     let (sign_nonce, tr') = mk_rand SigNonce (long_term_key_label sender) 32 tr' in
     
     higher_layer_preds.send_conf_later tr tr' sender receiver payload;
+    lep.local_extension_preds.send_conf_later tr tr' sender receiver payload;
     let ((), tr') = trigger_event sender (CommConfSendMsg sender receiver payload) tr' in
     assert(event_triggered tr' sender (CommConfSendMsg sender receiver payload));    
 
@@ -405,7 +421,7 @@ val verify_and_decrypt_message_proof:
   sk_receiver:bytes -> vk_sender:bytes ->
   Lemma
   (requires
-    has_communication_layer_invariants /\
+    has_communication_layer_crypto_predicates /\
     is_publishable tr msg_encrypted_signed /\
     is_public_key_for tr vk_sender (LongTermSigKey comm_layer_sign_tag) sender /\
     is_private_key_for tr sk_receiver (LongTermPkEncKey comm_layer_pkenc_tag) receiver
@@ -440,6 +456,7 @@ let verify_and_decrypt_message_proof #cinvs tr sender receiver msg_encrypted_sig
 #push-options "--z3rlimit 10"
 val receive_confidential_authenticated_proof:
   {|invs:protocol_invariants|} ->
+  {|lep:local_extension|} ->
   tr:trace ->
   higher_layer_preds:comm_higher_layer_event_preds ->
   comm_keys_ids:communication_keys_sess_ids ->
@@ -449,8 +466,8 @@ val receive_confidential_authenticated_proof:
     trace_invariant tr /\
     has_private_keys_invariant /\
     has_pki_invariant /\
-    has_communication_layer_invariants /\
-    has_communication_layer_event_predicates higher_layer_preds
+    has_communication_layer_crypto_predicates /\
+    has_communication_layer_event_predicates lep.local_extension_preds higher_layer_preds
   )
   (ensures
     (
@@ -463,7 +480,7 @@ val receive_confidential_authenticated_proof:
       )
     )
   )
-let receive_confidential_authenticated_proof #invs tr higher_layer_preds comm_keys_ids receiver msg_id =
+let receive_confidential_authenticated_proof #invs #lep tr higher_layer_preds comm_keys_ids receiver msg_id =
   match receive_confidential_authenticated comm_keys_ids receiver msg_id tr with
   | (None, tr_out) -> ()
   | (Some {sender; receiver=receiver'; payload}, tr_out) -> (
@@ -477,6 +494,221 @@ let receive_confidential_authenticated_proof #invs tr higher_layer_preds comm_ke
     assert(event_triggered tr receiver (CommConfAuthReceiveMsg msg.sender receiver msg.payload));
     assert(trace_invariant tr);
     assert(tr == tr_out);
+    ()
+  )
+#pop-options
+
+
+(**** Request-Response Pair Lemmas ****)
+
+val compute_request_message_proof:
+  {|crypto_invariants|} ->
+  tr:trace ->
+  client:principal -> server:principal ->
+  id:bytes -> payload:bytes -> key:bytes ->
+  Lemma
+  (requires
+    is_secret (comm_label client server) tr id /\
+    is_secret (comm_label client server) tr key /\
+    is_knowable_by (comm_label client server) tr payload
+  )
+  (ensures
+    is_knowable_by (comm_label client server) tr (compute_request_message client id payload key)
+  )
+let compute_request_message_proof #invs tr client server id payload key =
+  serialize_wf_lemma request_message (is_knowable_by (comm_label client server) tr) {client; id; payload; key};
+  ()
+
+val request_response_event_preconditions: bytes -> bytes -> comm_higher_layer_event_preds
+let request_response_event_preconditions id payload = {
+  default_comm_higher_layer_event_preds with
+  send_conf = (fun tr client server req_payload ->
+    event_triggered tr client (CommClientSendRequest client server id payload)
+  );
+}
+
+#push-options "--fuel 0 --ifuel 2"
+instance lep:local_extension = {
+  local_extension_preds = {
+    default_comm_higher_layer_event_preds with
+    send_conf = (fun tr client server req_payload ->
+      match decode_request_message req_payload with
+      | None -> False
+      | Some {id; client=client'; payload; key} -> (
+        client == client' /\
+        event_triggered tr client (CommClientSendRequest client server id payload)
+      )
+    )
+  }
+}
+#pop-options
+
+
+val send_request_proof:
+  {|protocol_invariants|} ->
+  tr:trace ->
+  comm_keys_ids:communication_keys_sess_ids ->
+  higher_layer_preds:comm_higher_layer_event_preds ->
+  client:principal -> server:principal -> payload:bytes ->
+  Lemma
+  (requires
+    trace_invariant tr /\
+    has_pki_invariant /\
+    has_communication_layer_crypto_predicates /\
+    has_communication_layer_event_predicates lep.local_extension_preds higher_layer_preds /\
+    has_communication_layer_state_predicates /\
+    higher_layer_preds.send_request tr client server payload /\
+    (forall p. higher_layer_preds.send_conf tr client server p) /\
+    is_knowable_by (comm_label client server) tr payload
+  )
+  (ensures (
+    let (_, tr_out) = send_request comm_keys_ids client server payload tr in
+    trace_invariant tr_out
+  ))
+let send_request_proof #invs tr comm_keys_ids higher_layer_preds client server payload =
+  match send_request comm_keys_ids client server payload tr with
+  | (None, tr_out) -> (
+    let (key, tr') = mk_rand (AeadKey comm_layer_aead_tag empty) (comm_label client server) 32 tr in
+    let (id, tr') = mk_rand NoUsage (comm_label client server) 32 tr' in
+    let (sid, tr') = new_session_id client tr' in
+    let ((), tr') = set_state client sid (ClientSendRequest {id; server; payload; key} <: communication_states) tr' in
+    higher_layer_preds.send_request_later tr tr' client server payload;
+    let ((), tr') = trigger_event client (CommClientSendRequest client server id payload) tr' in
+    ()
+  )
+  | (Some _, tr_out) -> (
+    let (key, tr') = mk_rand (AeadKey comm_layer_aead_tag empty) (comm_label client server) 32 tr in
+    let (id, tr') = mk_rand NoUsage (comm_label client server) 32 tr' in
+    
+    let (sid, tr') = new_session_id client tr' in
+    let ((), tr') = set_state client sid (ClientSendRequest {id; server; payload; key} <: communication_states) tr' in
+    
+    higher_layer_preds.send_request_later tr tr' client server payload;
+    assert(trace_invariant tr');
+    assert(is_knowable_by (comm_label client server) tr' payload);
+    assert(higher_layer_preds.send_request tr' client server payload);
+    let ((), tr') = trigger_event client (CommClientSendRequest client server id payload) tr' in
+    assert(trace_invariant tr');
+    assert(event_triggered tr' client (CommClientSendRequest client server id payload));
+    assert(trace_invariant tr');
+        
+    compute_request_message_proof tr' client server id payload key;
+    let req_payload = compute_request_message client id payload key in
+
+    higher_layer_preds.send_conf_later tr tr' client server req_payload;
+    assert(lep.local_extension_preds.send_conf tr' client server req_payload);
+    //lep.local_extension_preds.send_conf_later tr tr' client server req_payload;
+    assert(higher_layer_preds.send_conf tr' client server req_payload);
+    assert(lep.local_extension_preds.send_conf tr' client server req_payload);
+    send_confidential_proof #invs #lep tr' higher_layer_preds comm_keys_ids client server req_payload;
+    
+    let (Some msg_id, tr') = send_confidential comm_keys_ids client server req_payload tr' in
+    assert(tr_out == tr');
+    assert(trace_invariant tr_out);
+    ()
+  )
+
+
+val decode_request_message_proof:
+  {|crypto_invariants|} ->
+  tr:trace ->
+  server:principal -> msg_bytes:bytes ->
+  Lemma
+  (requires
+    exists client. is_knowable_by (comm_label client server) tr msg_bytes
+  )
+  (ensures (
+    match decode_request_message msg_bytes with
+    | None -> True
+    | Some {id; client=client'; payload; key} -> (
+      exists client.
+        is_knowable_by (comm_label client server) tr id /\
+        is_knowable_by (comm_label client server) tr payload /\
+        is_knowable_by (comm_label client server) tr key
+    )
+  ))
+let decode_request_message_proof #cinvs tr server msg_bytes =
+  match decode_request_message msg_bytes with
+  | None -> ()
+  | Some {id; client=client'; payload; key} -> (
+    eliminate exists client. is_knowable_by (comm_label client server) tr msg_bytes
+    returns (exists client.
+        is_knowable_by (comm_label client server) tr id /\
+        is_knowable_by (comm_label client server) tr payload /\
+        is_knowable_by (comm_label client server) tr key)
+    with _. (
+      parse_wf_lemma request_message (is_knowable_by (comm_label client server) tr) msg_bytes;
+     ()
+    )
+  )
+
+#push-options "--z3rlimit 10"
+val receive_request_proof:
+  {|protocol_invariants|} ->
+  tr:trace ->
+  comm_keys_ids:communication_keys_sess_ids ->
+  higher_layer_preds:comm_higher_layer_event_preds ->
+  server:principal -> msg_id:timestamp ->
+  Lemma
+  (requires
+    trace_invariant tr /\
+    has_private_keys_invariant /\
+    has_pki_invariant /\
+    has_communication_layer_crypto_predicates /\
+    has_communication_layer_event_predicates lep.local_extension_preds higher_layer_preds /\
+    has_communication_layer_state_predicates
+  )
+  (ensures (
+    match receive_request comm_keys_ids server msg_id tr with
+    | (None, tr_out) -> trace_invariant tr_out
+    | (Some (sid, payload), tr_out) -> (
+      trace_invariant tr_out /\
+      (exists client. is_knowable_by (comm_label client server) tr_out payload)
+    )
+  ))
+let receive_request_proof #invs tr comm_keys_ids higher_layer_preds server msg_id =
+  match receive_request comm_keys_ids server msg_id tr with
+  | (None, tr_out) -> ()
+  | (Some (sid, payload), tr_out) -> (
+    receive_confidential_proof #invs #lep tr higher_layer_preds comm_keys_ids server msg_id;
+    let (Some req_msg_bytes, tr) = receive_confidential comm_keys_ids server msg_id tr in
+    
+    assert(exists client.
+      event_triggered tr client (CommConfSendMsg client server req_msg_bytes) \/
+          is_publishable tr req_msg_bytes
+    );
+    assert(exists client.
+      lep.local_extension_preds.send_conf tr client server req_msg_bytes \/
+          is_publishable tr req_msg_bytes
+    );
+
+    decode_request_message_proof tr server req_msg_bytes;
+    let Some req_msg = decode_request_message req_msg_bytes in
+
+    FStar.Classical.move_requires (parse_wf_lemma request_message (is_publishable tr)) req_msg_bytes;
+    assert(exists client.
+      event_triggered tr client (CommClientSendRequest client server req_msg.id req_msg.payload) \/
+        is_publishable tr req_msg.payload
+    );
+
+    assert(exists client.
+      is_knowable_by (comm_label client server) tr req_msg.id /\
+      is_knowable_by (comm_label client server) tr req_msg.payload /\
+      is_knowable_by (comm_label client server) tr req_msg.key
+    );
+    
+   
+    let (sid, tr) = new_session_id server tr in
+    assert(trace_invariant tr);
+    let ((), tr) = set_state server sid (ServerReceiveRequest {id=req_msg.id; client=req_msg.client; payload=req_msg.payload; key=req_msg.key} <: communication_states) tr in
+    assert(trace_invariant tr);
+
+    let ((), tr) = trigger_event server (CommServerReceiveRequest server req_msg.id req_msg.payload) tr in
+    assert(trace_invariant tr);
+    assert(event_triggered tr server (CommServerReceiveRequest server req_msg.id req_msg.payload));
+    
+    assert(tr == tr_out);
+    assert(trace_invariant tr_out);
     ()
   )
 #pop-options
