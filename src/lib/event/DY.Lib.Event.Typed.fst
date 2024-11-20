@@ -220,17 +220,17 @@ let event_triggered_grows #a #ev tr1 tr2 prin e =
   reveal_opaque (`%event_triggered_at) (event_triggered_at #a);
   ()
 
-val event_triggered_at_implies_trace_event_at:
+val event_triggered_at_implies_trace_entry_at:
   #a:Type -> {|ev:event a|} ->
   tr:trace -> i:timestamp -> prin:principal -> e:a  ->
   Lemma
   (requires event_triggered_at tr i prin e)
   (ensures
-    get_event_at tr i == Event prin ev.tag (serialize a e) /\
+    get_entry_at tr i == Event prin ev.tag (serialize a e) /\
     parse #bytes a (serialize a e) == Some e
   )
   [SMTPat (event_triggered_at tr i prin e)]
-let event_triggered_at_implies_trace_event_at #a #ev tr i prin e =
+let event_triggered_at_implies_trace_entry_at #a #ev tr i prin e =
   reveal_opaque (`%event_triggered_at) (event_triggered_at #a);
   ()
 
