@@ -128,7 +128,7 @@ val entry_at_implies_trace_entry_invariant:
 let rec entry_at_implies_trace_entry_invariant #invs tr i entry =
   norm_spec [zeta; delta_only [`%trace_invariant]] (trace_invariant);
   norm_spec [zeta; delta_only [`%prefix]] (prefix #label);
-  if i+1 = DY.Core.Trace.Base.length tr then ()
+  if i+1 = trace_length tr then ()
   else (
     let Snoc tr_init _ = tr in
     entry_at_implies_trace_entry_invariant tr_init i entry

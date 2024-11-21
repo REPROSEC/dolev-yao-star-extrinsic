@@ -147,7 +147,7 @@ let add_entry_invariant #invs e tr =
 val get_time: traceful timestamp
 let get_time =
   let* tr = get_trace in
-  return (DY.Core.Trace.Base.length tr)
+  return (trace_length tr)
 
 (*** Sending messages ***)
 
@@ -198,7 +198,7 @@ let send_msg_invariant #invs msg tr =
 val recv_msg: timestamp -> traceful (option bytes)
 let recv_msg i =
   let* tr = get_trace in
-  if i < DY.Core.Trace.Base.length tr then
+  if i < trace_length tr then
     match get_entry_at tr i with
     | MsgSent msg -> return (Some msg)
     | _ -> return None
@@ -287,8 +287,8 @@ val mk_rand_rand_gen_at_end:
   Lemma
   (ensures (
     let (b, tr_out) = mk_rand usg lab len tr in
-    1 <= DY.Core.Trace.Base.length tr_out /\
-    rand_generated_at tr_out (DY.Core.Trace.Base.length tr_out - 1) b
+    1 <= trace_length tr_out /\
+    rand_generated_at tr_out (trace_length tr_out - 1) b
   ))
   [SMTPat (mk_rand usg lab len tr);]
 let mk_rand_rand_gen_at_end usg lab len tr =
