@@ -161,16 +161,6 @@ let rec trace_concat (#label_t:Type) (tr1 tr2:trace_ label_t)
     | Nil -> tr1
     | Snoc hd e -> Snoc (trace_concat tr1 hd) e
 
-(* Old definition of trace subtraction --- to be removed before merge.
-   TODO
-let trace_subtract (#label_t:Type) (tr1:trace_ label_t) (tr2:trace_ label_t{tr2 <$ tr1})
-  : trace_ label_t
-  = match tr2 with
-    | Nil -> tr1
-    | _ -> let (_, _, tl) = trace_split tr1 (length tr2 - 1) in
-          tl
-*)
-
 let rec trace_subtract (#label_t:Type) (tr1:trace_ label_t) (tr2:trace_ label_t{tr2 <$ tr1})
   : trace_ label_t
   = if length tr1 = length tr2 then Nil
@@ -211,8 +201,6 @@ let rec trace_subtract_nil (#label_t:Type) (tr:trace_ label_t)
   = match tr with
     | Nil -> ()
     | Snoc hd _ -> trace_subtract_nil hd
-  // Proves with () with initial trace subtract def
-  // TODO: Remove comment when trace subtraction is resolved
 
 let trace_subtract_snoc_left (#label_t:Type) (tr1 tr2:trace_ label_t) (e:trace_entry_ label_t)
   : Lemma
@@ -291,15 +279,6 @@ let rec trace_subtract_concat_right (#label_t:Type) (tr1 tr2:trace_ label_t)
       trace_subtract_snoc_left' tr2 tr1;
       trace_concat_snoc_right tr2 (hd <--> tr2) e
     end
-    (* Proof with original trace_subtract definition
-    TODO: Remove when trace subtraction is resolved
-    begin
-      trace_split_matches_prefix tr1 (length tr2 - 1);
-      prefix_full_eq tr2;
-      trace_split_concat tr1 (length tr2 - 1);
-      ()
-    end
-*)
 
 let rec trace_subtract_concat_left (#label_t:Type) (tr1 tr2 tr3:trace_ label_t)
   : Lemma
