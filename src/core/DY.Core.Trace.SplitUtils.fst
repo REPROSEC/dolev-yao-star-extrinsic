@@ -269,18 +269,18 @@ let rec trace_concat_subtract (#label_t:Type) (tr1 tr2:trace_ label_t)
 
 let rec trace_subtract_concat (#label_t:Type) (tr1 tr2:trace_ label_t)
   : Lemma
-    (requires tr2 <$ tr1)
-    (ensures tr2 <++> (tr1 <--> tr2) == tr1)
-    [SMTPat (tr2 <++> (tr1 <--> tr2))]
+    (requires tr1 <$ tr2)
+    (ensures tr1 <++> (tr2 <--> tr1) == tr2)
+    [SMTPat (tr1 <++> (tr2 <--> tr1))]
   = norm_spec [zeta; delta_only [`%trace_concat]] (trace_concat #label_t);
     norm_spec [zeta; delta_only [`%trace_subtract]] (trace_subtract #label_t);
-    grows_cases tr2 tr1;
-    eliminate tr1 == tr2 \/ (Snoc? tr1 /\ (let Snoc hd _ = tr1 in tr2 <$ hd))
-    returns tr2 <++> (tr1 <--> tr2) == tr1
+    grows_cases tr1 tr2;
+    eliminate tr2 == tr1 \/ (Snoc? tr2 /\ (let Snoc hd _ = tr2 in tr1 <$ hd))
+    returns tr1 <++> (tr2 <--> tr1) == tr2
     with _. ()
     and _. begin
-      let Snoc hd e = tr1 in
-      trace_subtract_concat hd tr2;
-      trace_subtract_snoc_left' tr2 tr1;
-      trace_concat_snoc_right tr2 (hd <--> tr2) e
+      let Snoc hd e = tr2 in
+      trace_subtract_concat tr1 hd;
+      trace_subtract_snoc_left' tr1 tr2;
+      trace_concat_snoc_right tr1 (hd <--> tr1) e
     end
