@@ -46,6 +46,66 @@ val append_entry: #label_t:Type -> trace_ label_t -> trace_entry_ label_t -> tra
 let append_entry tr en = Snoc tr en
 
 
+(*** To/From List Conversion ***)
+
+/// generate a trace from a list,
+/// where the first element of the list,
+/// is the last element of the trace
+/// (see the example below)
+val trace_from_rev_list: #label_t:Type -> list (trace_entry_ label_t) -> trace_ label_t
+let rec trace_from_rev_list entries =
+  match entries with
+  | [] -> Nil
+  | hd::tl -> Snoc (trace_from_rev_list tl) hd
+
+open FStar.List.Tot.Base
+
+/// generate a trace from a list,
+/// where the first element of the list,
+/// is the first element of the trace
+/// (see the example below)
+val trace_from_list: #label_t:Type -> list (trace_entry_ label_t) -> trace_ label_t
+let trace_from_list ens = trace_from_rev_list (rev ens)
+
+
+#push-options "--fuel 4"
+let _ =
+  let e1 = Corrupt 1 in
+  let e2 = Corrupt 2 in
+  let e3 = Corrupt 3 in
+  let tr_rev = trace_from_rev_list #label [e1;e2;e3] in
+  assert(tr_rev == Snoc (Snoc (Snoc Nil e3) e2) e1);
+  
+  let tr = trace_from_list #label [e1;e2;e3] in
+  assert(tr == Snoc (Snoc (Snoc Nil e1) e2) e3)
+#pop-options
+
+/// generate a list from a trace,
+/// where the last trace entry
+/// is the first entry in the list
+/// (see example below)
+let rec trace_to_rev_list tr =
+  match tr with
+  | Nil -> []
+  | Snoc init last -> last:: trace_to_rev_list init
+
+/// generate a list from a trace,
+/// where the last trace entry
+/// is the last entry in the list
+/// (see example below)
+let trace_to_list tr =
+  rev (trace_to_rev_list tr)
+
+#push-options "--fuel 4"
+let _ = 
+  let e1 = Corrupt 1 in
+  let e2 = Corrupt 2 in
+  let e3 = Corrupt 3 in
+  let tr = Snoc (Snoc (Snoc Nil e1) e2) e3 in
+  assert(trace_to_rev_list #label tr == [e3; e2; e1]);
+  assert(trace_to_list #label tr == [e1; e2; e3]);
+  assert(trace_to_list #label (trace_from_list [e1;e2;e3]) == [e1;e2;e3])
+#pop-options
 
 (*** Prefix and trace_ extension ***)
 
