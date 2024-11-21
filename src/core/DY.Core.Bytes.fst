@@ -746,7 +746,7 @@ type aead_crypto_predicate {|crypto_usages|} = {
 }
 
 noeq
-type pkenc_crypto_predicate {|crypto_usages|} = {
+type pke_crypto_predicate {|crypto_usages|} = {
   pred: tr:trace -> sk_usage:usage{PkeKey? sk_usage} -> msg:bytes -> prop;
   pred_later:
     tr1:trace -> tr2:trace ->
@@ -780,7 +780,7 @@ type sign_crypto_predicate {|crypto_usages|} = {
 noeq
 type crypto_predicates {|crypto_usages|} = {
   aead_pred: aead_crypto_predicate;
-  pkenc_pred: pkenc_crypto_predicate;
+  pke_pred: pke_crypto_predicate;
   sign_pred: sign_crypto_predicate;
 }
 
@@ -795,8 +795,8 @@ let default_aead_predicate #cusages = {
   pred_later = (fun tr1 tr2 key nonce msg ad -> ());
 }
 
-val default_pkenc_predicate: {|crypto_usages|} -> pkenc_crypto_predicate
-let default_pkenc_predicate #cusages = {
+val default_pke_predicate: {|crypto_usages|} -> pke_crypto_predicate
+let default_pke_predicate #cusages = {
   pred = (fun tr pk msg -> False);
   pred_later = (fun tr1 tr2 pk msg -> ());
 }
@@ -812,7 +812,7 @@ val default_crypto_predicates:
   crypto_predicates
 let default_crypto_predicates #cusages = {
   aead_pred = default_aead_predicate;
-  pkenc_pred = default_pkenc_predicate;
+  pke_pred = default_pke_predicate;
   sign_pred = default_sign_predicate;
 }
 
@@ -831,7 +831,7 @@ class crypto_invariants = {
 // hence we simulate inheritance like this.
 
 let aead_pred {|cinvs:crypto_invariants|} = cinvs.preds.aead_pred
-let pkenc_pred {|cinvs:crypto_invariants|} = cinvs.preds.pkenc_pred
+let pke_pred {|cinvs:crypto_invariants|} = cinvs.preds.pke_pred
 let sign_pred {|cinvs:crypto_invariants|} = cinvs.preds.sign_pred
 
 /// The invariants on every bytestring used in a protocol execution.
@@ -896,7 +896,7 @@ let rec bytes_invariant #cinvs tr b =
         pk `has_sk_usage tr` sk_usg /\
         PkeKey? sk_usg /\
         // - the custom (protocol-specific) invariant hold (authentication)
-        pkenc_pred.pred tr sk_usg msg /\
+        pke_pred.pred tr sk_usg msg /\
         // - the message is less secret than the decryption key
         //   (this is crucial so that decryption preserve publishability)
         (get_label tr msg) `can_flow tr` (get_sk_label tr pk) /\
@@ -1071,7 +1071,7 @@ let rec bytes_invariant_later #cinvs tr1 tr2 msg =
     bytes_invariant_later tr1 tr2 pk;
     bytes_invariant_later tr1 tr2 nonce;
     bytes_invariant_later tr1 tr2 msg;
-    FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (pkenc_pred.pred_later tr1 tr2))
+    FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (pke_pred.pred_later tr1 tr2))
   )
   | Vk sk ->
     bytes_invariant_later tr1 tr2 sk
@@ -1886,7 +1886,7 @@ val bytes_invariant_pk_enc:
     (
       (
         PkeKey? sk_usg /\
-        pkenc_pred.pred tr sk_usg msg
+        pke_pred.pred tr sk_usg msg
       ) \/ (
         (get_label tr msg) `can_flow tr` public
       )
@@ -1932,7 +1932,7 @@ val bytes_invariant_pk_dec:
       (
         (
           PkeKey? sk_usg /\
-          pkenc_pred.pred tr sk_usg plaintext
+          pke_pred.pred tr sk_usg plaintext
         ) \/ (
           (get_label tr plaintext) `can_flow tr` public
         )

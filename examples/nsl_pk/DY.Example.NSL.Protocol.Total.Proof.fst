@@ -21,7 +21,7 @@ val crypto_predicates_nsl: crypto_predicates
 let crypto_predicates_nsl = {
   default_crypto_predicates with
 
-  pkenc_pred = {
+  pke_pred = {
     pred = (fun tr sk_usage msg ->
       (exists prin. sk_usage == long_term_key_type_to_usage (LongTermPkeKey "NSL.PublicKey") prin /\ (
         match parse message msg with

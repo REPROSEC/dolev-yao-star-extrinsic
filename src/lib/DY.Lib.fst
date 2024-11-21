@@ -13,7 +13,7 @@ include DY.Lib.SplitFunction
 /// Split function methodology for cryptographic invariants
 include DY.Lib.Crypto.AEAD.Split
 include DY.Lib.Crypto.KdfExpand.Split
-include DY.Lib.Crypto.PkEncryption.Split
+include DY.Lib.Crypto.PKE.Split
 include DY.Lib.Crypto.Signature.Split
 
 /// User-friendly event API
