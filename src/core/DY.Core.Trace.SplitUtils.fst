@@ -8,68 +8,6 @@ open FStar.Calc
 /// Overall TODO: Many of the functions here can (and should) be made opaque to SMT,
 /// and then revealed in lemmas as necessary.
 
-(*** Lemmas on prefixes ***)
-/// TODO: These may belong in DY.Core.Trace.Base alongside the other prefix lemmas.
-
-let nil_prefix (#label_t:Type) (tr:trace_ label_t)
-  : Lemma (ensures Nil <$ tr)
-    [SMTPat (Nil <$ tr)]
-  = normalize_term_spec (grows #label_t)
-
-let grows_snoc_right (#label_t:Type) (tr1 tr2:trace_ label_t) (e:trace_entry_ label_t)
-  : Lemma
-    (requires tr1 <$ tr2)
-    (ensures tr1 <$ (Snoc tr2 e))
-    [SMTPat (tr1 <$ (Snoc tr2 e)); SMTPat (tr1 <$ tr2)]
-  = normalize_term_spec (grows #label_t)
-
-let grows_snoc_left (#label_t:Type) (tr1 tr2:trace_ label_t) (e:trace_entry_ label_t)
-  : Lemma
-    (requires (Snoc tr1 e) <$ tr2)
-    (ensures tr1 <$ tr2)
-    [SMTPat (tr1 <$ tr2); SMTPat ((Snoc tr1 e) <$ tr2)]
-  = grows_snoc_right tr1 tr1 e
-
-let prefix_full_eq (#label_t:Type) (tr:trace_ label_t)
-  : Lemma (ensures (prefix tr (length tr) == tr))
-    [SMTPat (prefix tr (length tr))]
-  = normalize_term_spec (grows #label_t)
-
-let grows_full_eq (#label_t:Type) (tr1 tr2:trace_ label_t)
-  : Lemma
-    (requires tr1 <$ tr2 /\ length tr1 == length tr2)
-    (ensures tr1 == tr2)
-// TODO:
-// It is not clear if this SMTPat is ever practically useful, but it seems like it could be in principle
-    [SMTPat (tr1 == tr2); SMTPat (tr1 <$ tr2)]
-  = prefix_prefix_eq tr1 tr2 (length tr1)
-
-let grows_cases (#label_t:Type) (tr1 tr2:trace_ label_t)
-  : Lemma
-    (requires tr1 <$ tr2)
-    (ensures tr1 == tr2 \/ (
-      Snoc? tr2 /\ (
-      let Snoc hd _ = tr2 in
-      tr1 <$ hd
-    )))
-  = if length tr1 = length tr2
-    then grows_full_eq tr1 tr2
-    else begin
-      let Snoc hd e = tr2 in
-      calc (<$) {
-        tr1;
-        == {}
-        prefix tr1 (length tr1);
-        <$ { prefix_prefix_grows tr1 tr2 (length tr1) (length hd) }
-        prefix tr2 (length hd);
-        == { prefix_prefix_eq hd tr2 (length hd) }
-        prefix hd (length hd);
-        == { }
-        hd;
-      }
-    end
-
-
 (*** General utility functions for working with traces ***)
 
 // This function is not terribly important, but we often want to check if we are at
