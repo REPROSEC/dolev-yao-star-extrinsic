@@ -227,15 +227,13 @@ let snoc_is_concat_singleton (#label_t:Type) (tr :trace_ label_t) (e:trace_entry
     (ensures Snoc tr e == (tr <++> (Snoc Nil e)))
   = ()
 
-let rec trace_concat_grows (#label_t:Type) (tr1 tr2 tr3:trace_ label_t)
+let rec trace_concat_grows (#label_t:Type) (tr1 tr2:trace_ label_t)
   : Lemma
-    (requires tr1 <$ tr2)
-    (ensures tr1 <$ (tr2 <++> tr3))
-    [SMTPat (tr1 <$ (tr2 <++> tr3)); SMTPat (tr1 <$ tr2)]
-  = match tr3 with
+    (ensures tr1 <$ (tr1 <++> tr2))
+    [SMTPat (tr1 <$ (tr1 <++> tr2))]
+  = match tr2 with
     | Nil -> ()
-    | Snoc hd e -> trace_concat_grows tr1 tr2 hd
-
+    | Snoc hd e -> trace_concat_grows tr1 hd
 
 /// Properties connecting trace concatenation, splitting, and subtraction.
 
@@ -264,7 +262,19 @@ let rec trace_subtract_matches_split (#label_t:Type) (tr1 tr2:trace_ label_t)
     with _. ()
     and _. trace_subtract_matches_split tr1 hd
 
-let rec trace_subtract_concat_right (#label_t:Type) (tr1 tr2:trace_ label_t)
+let rec trace_concat_subtract (#label_t:Type) (tr1 tr2:trace_ label_t)
+  : Lemma
+    (ensures tr2 == ((tr1 <++> tr2) <--> tr1))
+    [SMTPat ((tr1 <++> tr2) <--> tr1)]
+  = match tr2 with
+    | Nil -> ()
+    | Snoc hd e -> begin
+      trace_concat_subtract tr1 hd;
+      trace_subtract_snoc_left' tr1 (tr1 <++> tr2)
+    end
+
+
+let rec trace_subtract_concat (#label_t:Type) (tr1 tr2:trace_ label_t)
   : Lemma
     (requires tr2 <$ tr1)
     (ensures tr2 <++> (tr1 <--> tr2) == tr1)
@@ -275,21 +285,16 @@ let rec trace_subtract_concat_right (#label_t:Type) (tr1 tr2:trace_ label_t)
     with _. ()
     and _. begin
       let Snoc hd e = tr1 in
-      trace_subtract_concat_right hd tr2;
+      trace_subtract_concat hd tr2;
       trace_subtract_snoc_left' tr2 tr1;
       trace_concat_snoc_right tr2 (hd <--> tr2) e
     end
 
-let rec trace_subtract_concat_left (#label_t:Type) (tr1 tr2 tr3:trace_ label_t)
+let trace_subtract_concat_left (#label_t:Type) (tr1 tr2 tr3:trace_ label_t)
   : Lemma
     (requires tr1 <$ tr2)
     (ensures ((tr2 <--> tr1) <++> tr3) == ((tr2 <++> tr3) <--> tr1))
-  = match tr3 with
-    | Nil -> ()
-    | Snoc hd e -> begin
-      trace_subtract_concat_left tr1 tr2 hd;
-      trace_subtract_snoc_left' tr1 (tr2 <++> tr3)
-    end
+  = trace_concat_assoc tr1 (tr2 <--> tr1) tr3
 
 let trace_subtract_concat_slices (#label_t:Type) (tr1 tr2 tr3:trace_ label_t)
   : Lemma
@@ -297,4 +302,4 @@ let trace_subtract_concat_slices (#label_t:Type) (tr1 tr2 tr3:trace_ label_t)
     (ensures (tr3 <--> tr1) == ((tr2 <--> tr1) <++> (tr3 <--> tr2)))
     [SMTPat ((tr2 <--> tr1) <++> (tr3 <--> tr2))]
   = trace_subtract_concat_left tr1 tr2 (tr3 <--> tr2);
-    trace_subtract_concat_right tr3 tr2
+    trace_subtract_concat tr3 tr2
