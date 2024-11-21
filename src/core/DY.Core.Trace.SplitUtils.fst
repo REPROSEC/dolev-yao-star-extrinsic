@@ -15,51 +15,11 @@ open FStar.Calc
 // inside a function makes things look cleaner.
 let last_ts (#label_t:Type) (tr:trace_ label_t{Snoc? tr}) : timestamp = length tr - 1
 
-// Now that trace entries are abstracted over label types, we cannot compare
-// trace entries for equality with =. This function implements trace equality
-// when the label type is an eqtype (as for unit, for instance).
-let trace_entry_equal (#label_t:eqtype) (e1 e2:trace_entry_ label_t)
-  : bool
-  = match (e1, e2) with
-    | MsgSent b1, MsgSent b2 -> b1 = b2
-    | RandGen u1 l1 i1, RandGen u2 l2 i2 -> u1 = u2 && l1 = l2 && i1 = i2
-    | Corrupt ts1, Corrupt ts2 -> ts1 = ts2
-    | SetState p1 sid1 b1, SetState p2 sid2 b2 -> p1 = p2 && sid1 = sid2 && b1 = b2
-    | Event p1 t1 b1, Event p2 t2 b2 -> p1 = p2 && t1 = t2 && b1 = b2
-    | _ -> false
+/// By forgetting labels, we can work with a label-ignoring equivalence on entries
 
-// By forgetting labels, we can work with a label-ignoring equivalence on entries
 let trace_entry_equiv (#label_t:Type) (e1 e2:trace_entry_ label_t)
   : bool
-  = trace_entry_equal #unit (fmap_trace_entry forget_label e1) (fmap_trace_entry forget_label e2)
-
-let trace_entry_equal_is_eq (#label_t:eqtype) (e1 e2:trace_entry_ label_t)
-  : Lemma
-    (ensures trace_entry_equal e1 e2 <==> e1 == e2)
-    [SMTPat (trace_entry_equal e1 e2)]
-  = ()
-
-// trace_entry_equiv is an equivalence relation
-let trace_entry_equiv_reflexive (#label_t:Type) (e:trace_entry_ label_t)
-  : Lemma
-    (ensures trace_entry_equiv e e)
-    [SMTPat (trace_entry_equiv e e)]
-  = ()
-
-let trace_entry_equiv_symmetric (#label_t:Type) (e1 e2:trace_entry_ label_t)
-  : Lemma
-    (requires trace_entry_equiv e1 e2)
-    (ensures trace_entry_equiv e2 e1)
-  = ()
-
-let trace_entry_equiv_transitive (#label_t:Type) (e1 e2 e3:trace_entry_ label_t)
-  : Lemma
-    (requires
-       trace_entry_equiv e1 e2 /\
-       trace_entry_equiv e2 e3
-    )
-    (ensures trace_entry_equiv e1 e3)
-  = ()
+  = (fmap_trace_entry forget_label e1) = (fmap_trace_entry forget_label e2)
 
 (*** Trace search functions ***)
 
@@ -128,46 +88,24 @@ let rec trace_split_length (#label_t:Type) (tr:trace_ label_t) (ts:timestamp{ts 
 //      [SMTPat (length (Mktuple3?._1 (trace_split tr ts)))];
 //      [SMTPat (length (Mktuple3?._3 (trace_split tr ts)))]
 //    ]]
+    [SMTPat (trace_split tr ts)]
   = let Snoc hd entry = tr in
     if ts = last_ts tr then ()
     else trace_split_length hd ts
 
-let rec trace_split_left (#label_t:Type) (tr:trace_ label_t) (ts:timestamp{ts < length tr}) (i:timestamp{i < ts})
+let rec trace_split_get_entry (#label_t:Type) (tr:trace_ label_t) (ts:timestamp{ts < length tr}) (i:timestamp{i < length tr})
   : Lemma
     (ensures (
-      let (tr1, _, _) = trace_split tr ts in
-      length tr1 = ts /\
-      get_entry_at tr1 i == get_entry_at tr i
+      let (tr1, e, tr2) = trace_split tr ts in
+      get_entry_at tr i == (
+        if i < ts then get_entry_at tr1 i
+        else if i = ts then e
+        else get_entry_at tr2 (i - ts - 1)
+      )
     ))
   = let Snoc hd entry = tr in
-    if ts = last_ts tr then ()
-    else trace_split_left hd ts i
-
-let rec trace_split_mid (#label_t:Type) (tr:trace_ label_t) (ts:timestamp{ts < length tr})
-  : Lemma
-    (ensures (
-      let (_, e, _) = trace_split tr ts in
-      e == get_entry_at tr ts
-    ))
-  = let Snoc hd entry = tr in
-    if ts = last_ts tr then ()
-    else trace_split_mid hd ts
-
-let rec trace_split_right (#label_t:Type) (tr:trace_ label_t) (ts:timestamp{ts < length tr}) (i:timestamp{ts < i /\ i < length tr})
-  : Lemma
-    (ensures (
-      let (_, _, tr2) = trace_split tr ts in
-      length tr2 = (length tr) - ts - 1 /\
-      get_entry_at tr2 (i - ts - 1) == get_entry_at tr i
-    ))
-  = let Snoc hd entry = tr in
-    if ts = last_ts tr then ()
-    else begin
-      trace_split_length tr ts;
-      if i < length hd then
-        trace_split_right hd ts i
-      else ()
-    end
+    if ts = last_ts tr || i >= length hd then ()
+    else trace_split_get_entry hd ts i
 
 let rec trace_split_matches_prefix (#label_t:Type) (tr:trace_ label_t) (ts:timestamp{ts < length tr})
   : Lemma
@@ -207,7 +145,7 @@ let trace_split_at (#a:Type) (tr:trace_ a) (e:trace_entry_ a{entry_exists tr e})
   : (trace_ a & (e':trace_entry_ a{trace_entry_equiv e e'}) & trace_ a)
   = let idx = trace_find tr e in
     let (tr1, e', tr2) = trace_split tr idx in
-    trace_split_mid tr idx;
+    trace_split_get_entry tr idx idx;
     (tr1, e', tr2)
 
 
