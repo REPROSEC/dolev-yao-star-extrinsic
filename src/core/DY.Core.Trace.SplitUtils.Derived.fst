@@ -40,4 +40,4 @@ let trace_subtract_concat_slices (#label_t:Type) (tr1 tr2 tr3:trace_ label_t)
     (ensures (tr3 <--> tr1) == ((tr2 <--> tr1) <++> (tr3 <--> tr2)))
     [SMTPat ((tr2 <--> tr1) <++> (tr3 <--> tr2))]
   = trace_subtract_concat_left tr1 tr2 (tr3 <--> tr2);
-    trace_subtract_concat tr3 tr2
+    trace_subtract_concat tr2 tr3
