@@ -19,6 +19,9 @@ let rec trace_length tr =
   | Nil -> 0
   | Snoc init last -> trace_length init + 1
 
+val empty_trace : #label_t:Type -> trace_ label_t 
+let empty_trace = Nil
+
 (*** Prefix and trace_ extension ***)
 
 /// Compute the prefix of a trace.
