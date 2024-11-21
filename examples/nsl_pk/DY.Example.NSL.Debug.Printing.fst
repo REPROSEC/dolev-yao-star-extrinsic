@@ -27,12 +27,12 @@ let message_to_string sk_a sk_b msg_bytes =
   let? msg_plain = decrypt_message sk_a sk_b msg_bytes in
   let? msg = parse message msg_plain in
   match msg with
-  | Msg1 msg1 -> Some (Printf.sprintf "PkEnc[sk=(%s), msg=(n_a=(%s), principal=%s)]" (bytes_to_string sk_b) (bytes_to_string msg1.n_a) msg1.alice)
+  | Msg1 msg1 -> Some (Printf.sprintf "PkeEnc[sk=(%s), msg=(n_a=(%s), principal=%s)]" (bytes_to_string sk_b) (bytes_to_string msg1.n_a) msg1.alice)
   | Msg2 msg2 -> (
-    Some (Printf.sprintf "PkEnc[sk=(%s), msg=(n_a=(%s), n_b=(%s), principal=%s)]"
+    Some (Printf.sprintf "PkeEnc[sk=(%s), msg=(n_a=(%s), n_b=(%s), principal=%s)]"
             (bytes_to_string sk_a) (bytes_to_string msg2.n_a) (bytes_to_string msg2.n_b) msg2.bob)
   )
-  | Msg3 msg3 -> Some (Printf.sprintf "PkEnc[sk=(%s), msg=(n_b=(%s))]" (bytes_to_string sk_b) (bytes_to_string msg3.n_b))
+  | Msg3 msg3 -> Some (Printf.sprintf "PkeEnc[sk=(%s), msg=(n_b=(%s))]" (bytes_to_string sk_b) (bytes_to_string msg3.n_b))
 
 
 (*** Convert NSL Sessions to String ***)

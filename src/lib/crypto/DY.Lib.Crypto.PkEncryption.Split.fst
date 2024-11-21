@@ -5,15 +5,15 @@ open DY.Core
 open DY.Lib.Crypto.SplitPredicate
 
 let split_pkenc_predicate_params {|crypto_usages|}: split_crypto_predicate_parameters = {
-  key_usage_t = sk_usage:usage{PkKey? sk_usage};
+  key_usage_t = sk_usage:usage{PkeKey? sk_usage};
   data_t = bytes;
   get_usage = (fun sk_usage ->
-    let PkKey tag _ = sk_usage in
+    let PkeKey tag _ = sk_usage in
     tag
   );
 
   local_pred_t = pkenc_crypto_predicate;
-  global_pred_t = tr:trace -> sk_usage:usage{PkKey? sk_usage} -> msg:bytes -> prop;
+  global_pred_t = tr:trace -> sk_usage:usage{PkeKey? sk_usage} -> msg:bytes -> prop;
 
   apply_local_pred = (fun pred (tr, sk_usage, msg) ->
     pred.pred tr sk_usage msg
@@ -40,7 +40,7 @@ let has_pkenc_predicate #cinvs (tag, local_pred) =
   forall (tr:trace) (sk_usage:usage) (msg:bytes).
     {:pattern pkenc_pred.pred tr sk_usage msg}
     match sk_usage with
-    | PkKey pkenc_tag _ ->
+    | PkeKey pkenc_tag _ ->
         pkenc_tag = tag ==> pkenc_pred.pred tr sk_usage msg == local_pred.pred tr sk_usage msg
     | _ -> True
 
@@ -53,12 +53,12 @@ let intro_has_pkenc_predicate #cinvs (tag, local_pred) =
   introduce
     forall tr sk_usage msg.
       match sk_usage with
-      | PkKey pkenc_tag _ ->
+      | PkeKey pkenc_tag _ ->
           pkenc_tag = tag ==> pkenc_pred.pred tr sk_usage msg == local_pred.pred tr sk_usage msg
       | _ -> True
   with (
     match sk_usage with
-    | PkKey pkenc_tag _ ->
+    | PkeKey pkenc_tag _ ->
       has_local_crypto_predicate_elim split_pkenc_predicate_params pkenc_pred.pred tag local_pred tr sk_usage msg
     | _ -> ()
   )

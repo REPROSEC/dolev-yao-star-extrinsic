@@ -48,8 +48,8 @@ let rec bytes_to_string b =
   )
   
   | Pk sk -> Printf.sprintf "Pk(sk=(%s))" (bytes_to_string sk)
-  | PkEnc pk nonce msg -> (
-    Printf.sprintf "PkEnc(pk=(%s), nonce=(%s), msg=(%s))" 
+  | PkeEnc pk nonce msg -> (
+    Printf.sprintf "PkeEnc(pk=(%s), nonce=(%s), msg=(%s))" 
       (bytes_to_string pk) (bytes_to_string nonce) (bytes_to_string msg)
   )
   
@@ -84,10 +84,10 @@ let rec usage_to_string u =
     Printf.sprintf "{\"Type\": \"SigKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}"
       tag (bytes_to_string data)
   | SigNonce -> "{\"Type\": \"SigNonce\"}"
-  | PkKey tag data ->
-    Printf.sprintf "{\"Type\": \"PkKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}"
+  | PkeKey tag data ->
+    Printf.sprintf "{\"Type\": \"PkeKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}"
       tag (bytes_to_string data)
-  | PkNonce -> "{\"Type\": \"PkNonce\"}"
+  | PkeNonce -> "{\"Type\": \"PkeNonce\"}"
   | AeadKey tag data ->
     Printf.sprintf "{\"Type\": \"AeadKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}"
       tag (bytes_to_string data)
@@ -113,7 +113,7 @@ let rec usage_to_string u =
 val long_term_key_type_to_string: DY.Lib.State.PrivateKeys.long_term_key_type -> string
 let long_term_key_type_to_string t =
   match t with
-  | DY.Lib.State.PrivateKeys.LongTermPkEncKey u -> "LongTermPkEncKey " ^ u
+  | DY.Lib.State.PrivateKeys.LongTermPkeKey u -> "LongTermPkeKey " ^ u
   | DY.Lib.State.PrivateKeys.LongTermSigKey u -> "LongTermSigKey " ^ u
 
 val private_keys_types_to_string: (list (map_elem DY.Lib.State.PrivateKeys.private_key_key DY.Lib.State.PrivateKeys.private_key_value)) -> string
