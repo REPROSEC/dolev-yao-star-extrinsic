@@ -73,13 +73,13 @@ instance parseable_serializeable_bytes_message: parseable_serializeable bytes me
 val compute_message1: principal -> principal -> bytes -> bytes -> bytes -> bytes
 let compute_message1 alice bob pk_b n_a nonce =
   let msg = Msg1 {n_a; alice;} in
-  pk_enc pk_b nonce (serialize message msg)
+  pke_enc pk_b nonce (serialize message msg)
 
 /// Bob process message 1
 
 val decode_message1: principal -> bytes -> bytes -> option message1
 let decode_message1 bob msg1_cipher sk_b =
-  let? msg1_plain = pk_dec sk_b msg1_cipher in
+  let? msg1_plain = pke_dec sk_b msg1_cipher in
   let? msg1 = parse message msg1_plain in
   guard (Msg1? msg1);?
   Some (Msg1?._0 msg1)
@@ -91,13 +91,13 @@ let decode_message1 bob msg1_cipher sk_b =
 val compute_message2: principal -> message1 -> bytes -> bytes -> bytes -> bytes
 let compute_message2 bob msg1 pk_a n_b nonce =
   let msg2 = Msg2 {n_a = msg1.n_a;  n_b; bob;} in
-  pk_enc pk_a nonce (serialize message msg2)
+  pke_enc pk_a nonce (serialize message msg2)
 
 /// Alice process message 2
 
 val decode_message2: principal -> principal -> bytes -> bytes -> bytes -> option (message2)
 let decode_message2 alice bob msg2_cipher sk_a n_a =
-  let? msg2_plain = pk_dec sk_a msg2_cipher in
+  let? msg2_plain = pke_dec sk_a msg2_cipher in
   let? msg2 = parse _ msg2_plain in
   guard (Msg2? msg2);?
   let (Msg2 msg2) = msg2 in
@@ -112,13 +112,13 @@ let decode_message2 alice bob msg2_cipher sk_a n_a =
 val compute_message3: principal -> principal -> bytes -> bytes -> bytes -> bytes
 let compute_message3 alice bob pk_b n_b nonce =
   let msg3 = Msg3 {n_b;} in
-  pk_enc pk_b nonce (serialize message msg3)
+  pke_enc pk_b nonce (serialize message msg3)
 
 /// Bob process message 3
 
 val decode_message3: principal -> principal -> bytes -> bytes -> bytes -> option (message3)
 let decode_message3 alice bob msg_cipher sk_b n_b =
-  let? msg_plain = pk_dec sk_b msg_cipher in
+  let? msg_plain = pke_dec sk_b msg_cipher in
   let? msg = parse _ msg_plain in
   guard (Msg3? msg);?
   let (Msg3 msg3) = msg in

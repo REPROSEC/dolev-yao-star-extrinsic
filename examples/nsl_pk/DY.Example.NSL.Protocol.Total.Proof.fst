@@ -107,7 +107,7 @@ let decode_message1_proof tr bob msg_cipher sk_b =
   match decode_message1 bob msg_cipher sk_b with
   | None -> ()
   | Some msg1 ->
-    let Some msg = pk_dec sk_b msg_cipher in
+    let Some msg = pke_dec sk_b msg_cipher in
     FStar.Classical.move_requires (parse_wf_lemma message (is_publishable tr)) msg;
     FStar.Classical.move_requires (parse_wf_lemma message (bytes_invariant tr)) msg
 #pop-options
@@ -170,7 +170,7 @@ let decode_message2_proof tr alice bob msg_cipher sk_a n_a =
   match decode_message2 alice bob msg_cipher sk_a n_a with
   | None -> ()
   | Some msg2 -> (
-    let Some msg = pk_dec sk_a msg_cipher in
+    let Some msg = pke_dec sk_a msg_cipher in
     FStar.Classical.move_requires (parse_wf_lemma message (is_publishable tr)) msg;
     FStar.Classical.move_requires (parse_wf_lemma message (bytes_invariant tr)) msg
   )
@@ -234,7 +234,7 @@ let decode_message3_proof tr alice bob msg_cipher sk_b n_b =
   match decode_message3 alice bob msg_cipher sk_b n_b with
   | None -> ()
   | Some msg3 -> (
-    let Some msg = pk_dec sk_b msg_cipher in
+    let Some msg = pke_dec sk_b msg_cipher in
     FStar.Classical.move_requires (parse_wf_lemma message (is_publishable tr)) msg;
     FStar.Classical.move_requires (parse_wf_lemma message (bytes_invariant tr)) msg
   )

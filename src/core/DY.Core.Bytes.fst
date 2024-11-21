@@ -1679,15 +1679,15 @@ let pk sk = Pk sk
 /// Constructor.
 
 [@@"opaque_to_smt"]
-val pk_enc: bytes -> bytes -> bytes -> bytes
-let pk_enc pk nonce msg =
+val pke_enc: bytes -> bytes -> bytes -> bytes
+let pke_enc pk nonce msg =
   PkeEnc pk nonce msg
 
 /// Destructor.
 
 [@@"opaque_to_smt"]
-val pk_dec: bytes -> bytes -> option bytes
-let pk_dec sk msg =
+val pke_dec: bytes -> bytes -> option bytes
+let pke_dec sk msg =
   match msg with
   | PkeEnc (Pk sk') nonce res ->
     if sk = sk' then
@@ -1698,13 +1698,13 @@ let pk_dec sk msg =
 
 /// Symbolic reduction rule.
 
-val pk_dec_enc:
+val pke_dec_enc:
   sk:bytes -> nonce:bytes -> msg:bytes ->
   Lemma
-  (pk_dec sk (pk_enc (pk sk) nonce msg) == Some msg)
-let pk_dec_enc key nonce msg =
-  normalize_term_spec pk_dec;
-  normalize_term_spec pk_enc;
+  (pke_dec sk (pke_enc (pk sk) nonce msg) == Some msg)
+let pke_dec_enc key nonce msg =
+  normalize_term_spec pke_dec;
+  normalize_term_spec pke_enc;
   normalize_term_spec pk
 
 /// Lemma for attacker knowledge theorem.
@@ -1722,7 +1722,7 @@ let pk_preserves_publishability #cinvs tr sk =
 
 /// Lemma for attacker knowledge theorem.
 
-val pk_enc_preserves_publishability:
+val pke_enc_preserves_publishability:
   {|crypto_invariants|} -> tr:trace ->
   pk:bytes -> nonce:bytes -> msg:bytes ->
   Lemma
@@ -1731,16 +1731,16 @@ val pk_enc_preserves_publishability:
     is_publishable tr nonce /\
     is_publishable tr msg
   )
-  (ensures is_publishable tr (pk_enc pk nonce msg))
-let pk_enc_preserves_publishability #cinvs tr pk nonce msg =
-  normalize_term_spec pk_enc;
+  (ensures is_publishable tr (pke_enc pk nonce msg))
+let pke_enc_preserves_publishability #cinvs tr pk nonce msg =
+  normalize_term_spec pke_enc;
   normalize_term_spec bytes_invariant;
   normalize_term_spec get_label
 
 /// Lemma for attacker knowledge theorem.
 
 #push-options "--z3rlimit 25"
-val pk_dec_preserves_publishability:
+val pke_dec_preserves_publishability:
   {|crypto_invariants|} -> tr:trace ->
   sk:bytes -> msg:bytes ->
   Lemma
@@ -1749,12 +1749,12 @@ val pk_dec_preserves_publishability:
     is_publishable tr msg
   )
   (ensures (
-    match pk_dec sk msg with
+    match pke_dec sk msg with
     | Some res -> is_publishable tr res
     | None -> True
   ))
-let pk_dec_preserves_publishability #cinvs tr sk msg =
-  normalize_term_spec pk_dec;
+let pke_dec_preserves_publishability #cinvs tr sk msg =
+  normalize_term_spec pke_dec;
   normalize_term_spec get_sk_label;
   normalize_term_spec bytes_invariant;
   normalize_term_spec get_label
@@ -1775,30 +1775,30 @@ let bytes_well_formed_pk tr sk =
 
 /// User lemma (public-key encryption well-formedness)
 
-val bytes_well_formed_pk_enc:
+val bytes_well_formed_pke_enc:
   tr:trace ->
   pk:bytes -> nonce:bytes -> msg:bytes ->
   Lemma (
-    bytes_well_formed tr (pk_enc pk nonce msg) == (
+    bytes_well_formed tr (pke_enc pk nonce msg) == (
       bytes_well_formed tr pk /\
       bytes_well_formed tr nonce /\
       bytes_well_formed tr msg
     )
   )
-  [SMTPat (bytes_well_formed tr (pk_enc pk nonce msg));
+  [SMTPat (bytes_well_formed tr (pke_enc pk nonce msg));
    SMTPat (bytes_well_formed_smtpats_enabled tr)]
-let bytes_well_formed_pk_enc tr pk nonce msg =
-  normalize_term_spec pk_enc;
+let bytes_well_formed_pke_enc tr pk nonce msg =
+  normalize_term_spec pke_enc;
   normalize_term_spec bytes_well_formed
 
 /// User lemma (public-key decryption well-formedness)
 
-val bytes_well_formed_pk_dec:
+val bytes_well_formed_pke_dec:
   tr:trace ->
   sk:bytes -> msg:bytes ->
   Lemma
   (ensures (
-    match pk_dec sk msg with
+    match pke_dec sk msg with
     | None -> True
     | Some plaintext ->
       bytes_well_formed tr msg ==> (
@@ -1808,11 +1808,11 @@ val bytes_well_formed_pk_dec:
         // (unfortunately we don't have the nonce)
       )
   ))
-  [SMTPat (pk_dec sk msg);
+  [SMTPat (pke_dec sk msg);
    SMTPat (bytes_well_formed tr msg);
    SMTPat (bytes_well_formed_smtpats_enabled tr)]
-let bytes_well_formed_pk_dec tr sk msg =
-  normalize_term_spec pk_dec;
+let bytes_well_formed_pke_dec tr sk msg =
+  normalize_term_spec pke_dec;
   normalize_term_spec pk;
   normalize_term_spec bytes_well_formed
 
@@ -1871,7 +1871,7 @@ let has_sk_usage_pk #cusages tr sk usg =
 
 /// User lemma (public-key encryption bytes invariant).
 
-val bytes_invariant_pk_enc:
+val bytes_invariant_pke_enc:
   {|crypto_invariants|} -> tr:trace ->
   pk:bytes -> sk_usg:usage -> nonce:bytes -> msg:bytes ->
   Lemma
@@ -1892,30 +1892,30 @@ val bytes_invariant_pk_enc:
       )
     )
   )
-  (ensures bytes_invariant tr (pk_enc pk nonce msg))
-  [SMTPat (bytes_invariant tr (pk_enc pk nonce msg));
+  (ensures bytes_invariant tr (pke_enc pk nonce msg))
+  [SMTPat (bytes_invariant tr (pke_enc pk nonce msg));
    SMTPat (pk `has_sk_usage tr` sk_usg)]
-let bytes_invariant_pk_enc #cinvs tr pk pk_usg nonce msg =
-  normalize_term_spec pk_enc;
+let bytes_invariant_pke_enc #cinvs tr pk pke_usg nonce msg =
+  normalize_term_spec pke_enc;
   normalize_term_spec bytes_invariant
 
 /// User lemma (public-key encryption label).
 
-val get_label_pk_enc:
+val get_label_pke_enc:
   {|crypto_usages|} ->
   tr:trace ->
   pk:bytes -> nonce:bytes -> msg:bytes ->
   Lemma
-  (ensures get_label tr (pk_enc pk nonce msg) == public)
-  [SMTPat (get_label tr (pk_enc pk nonce msg))]
-let get_label_pk_enc #cusages tr pk nonce msg =
-  normalize_term_spec pk_enc;
+  (ensures get_label tr (pke_enc pk nonce msg) == public)
+  [SMTPat (get_label tr (pke_enc pk nonce msg))]
+let get_label_pke_enc #cusages tr pk nonce msg =
+  normalize_term_spec pke_enc;
   normalize_term_spec get_label
 
 /// User lemma (public-key decryption bytes invariant).
 
 #push-options "--z3rlimit 25"
-val bytes_invariant_pk_dec:
+val bytes_invariant_pke_dec:
   {|crypto_invariants|} -> tr:trace ->
   sk:bytes -> sk_usg:usage -> msg:bytes ->
   Lemma
@@ -1925,7 +1925,7 @@ val bytes_invariant_pk_dec:
     sk `has_usage tr` sk_usg
   )
   (ensures (
-    match pk_dec sk msg with
+    match pke_dec sk msg with
     | None -> True
     | Some plaintext ->
       is_knowable_by (get_label tr sk) tr plaintext /\
@@ -1938,12 +1938,12 @@ val bytes_invariant_pk_dec:
         )
       )
   ))
-  [SMTPat (pk_dec sk msg);
+  [SMTPat (pke_dec sk msg);
    SMTPat (bytes_invariant tr msg);
    SMTPat (sk `has_usage tr` sk_usg)
   ]
-let bytes_invariant_pk_dec #cinvs tr sk sk_usg msg =
-  normalize_term_spec pk_dec;
+let bytes_invariant_pke_dec #cinvs tr sk sk_usg msg =
+  normalize_term_spec pke_dec;
   normalize_term_spec pk;
   normalize_term_spec get_sk_label;
   normalize_term_spec get_label;

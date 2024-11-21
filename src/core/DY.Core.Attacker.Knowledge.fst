@@ -85,13 +85,13 @@ let rec attacker_knows_aux step tr msg =
         attacker_knows_aux (step-1) tr sk
     ) \/ (
       exists pk nonce buf.
-        msg == pk_enc pk nonce buf /\
+        msg == pke_enc pk nonce buf /\
         attacker_knows_aux (step-1) tr pk /\
         attacker_knows_aux (step-1) tr nonce /\
         attacker_knows_aux (step-1) tr buf
     ) \/ (
       exists sk buf.
-        Some msg == pk_dec sk buf /\
+        Some msg == pke_dec sk buf /\
         attacker_knows_aux (step-1) tr sk /\
         attacker_knows_aux (step-1) tr buf
     ) \/
@@ -214,8 +214,8 @@ let rec attacker_only_knows_publishable_values_aux #invs step tr msg =
     FStar.Classical.forall_intro_4 (FStar.Classical.move_requires_4 (aead_enc_preserves_publishability tr));
     FStar.Classical.forall_intro_4 (FStar.Classical.move_requires_4 (aead_dec_preserves_publishability tr));
     FStar.Classical.forall_intro   (FStar.Classical.move_requires   (pk_preserves_publishability tr));
-    FStar.Classical.forall_intro_3 (FStar.Classical.move_requires_3 (pk_enc_preserves_publishability tr));
-    FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (pk_dec_preserves_publishability tr));
+    FStar.Classical.forall_intro_3 (FStar.Classical.move_requires_3 (pke_enc_preserves_publishability tr));
+    FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (pke_dec_preserves_publishability tr));
     FStar.Classical.forall_intro   (FStar.Classical.move_requires   (vk_preserves_publishability tr));
     FStar.Classical.forall_intro_3 (FStar.Classical.move_requires_3 (sign_preserves_publishability tr));
     FStar.Classical.forall_intro   (FStar.Classical.move_requires   (hash_preserves_publishability tr));

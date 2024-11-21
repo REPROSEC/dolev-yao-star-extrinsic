@@ -15,11 +15,11 @@ open DY.Example.NSL.Protocol.Stateful
 
 val decrypt_message: bytes -> bytes -> bytes -> option bytes
 let decrypt_message sk_a sk_b msg_bytes =
-  let msg_plain = pk_dec sk_a msg_bytes in
+  let msg_plain = pke_dec sk_a msg_bytes in
   match msg_plain with
   | Some msg -> msg_plain
   | None -> (
-    pk_dec sk_b msg_bytes
+    pke_dec sk_b msg_bytes
   )
 
 val message_to_string: bytes -> bytes -> bytes -> option string
