@@ -3,9 +3,6 @@ module DY.Core.Trace.SplitUtils
 open DY.Core.Trace.Type
 open DY.Core.Trace.Base
 
-/// Overall TODO: Many of the functions here can (and should) be made opaque to SMT,
-/// and then revealed in lemmas as necessary.
-
 (*** General utility functions for working with traces ***)
 
 /// This function is not terribly important, but we often want to check if we are at
@@ -30,6 +27,7 @@ let trace_entry_equiv (#label_t:Type) (e1 e2:trace_entry_ label_t)
 /// Using trace entry equivalence and this first search function, we can find entries that are
 /// equivalent to a known trace entry, though they may not necessarily be equal.
 
+[@@"opaque_to_smt"]
 let rec trace_search (#label_t:Type) (tr:trace_ label_t) (p:trace_entry_ label_t -> bool)
   : Pure (option timestamp)
     (requires True)
@@ -46,6 +44,7 @@ let rec trace_search (#label_t:Type) (tr:trace_ label_t) (p:trace_entry_ label_t
       else
         trace_search hd p
 
+[@@"opaque_to_smt"]
 let trace_find (#label_t:Type) (tr:trace_ label_t) (e:trace_entry_ label_t{entry_exists tr e})
   : Pure timestamp (requires True) (ensures fun ts -> ts < length tr /\ trace_entry_equiv e (get_entry_at tr ts))
   = let Some ts = trace_search tr (fun e' -> trace_entry_equiv e e') in
