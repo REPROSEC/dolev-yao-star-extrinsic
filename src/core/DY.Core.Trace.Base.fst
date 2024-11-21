@@ -19,8 +19,33 @@ let rec trace_length tr =
   | Nil -> 0
   | Snoc init last -> trace_length init + 1
 
+
+(*** Hiding constructors ***)
+
 val empty_trace : #label_t:Type -> trace_ label_t 
 let empty_trace = Nil
+
+val is_empty: #label_t:Type -> trace_ label_t -> bool
+let is_empty tr = Nil? tr
+
+val is_not_empty: #label_t:Type -> trace_ label_t -> bool
+let is_not_empty tr = Snoc? tr
+
+val init : #label_t:Type -> tr:trace_ label_t{is_not_empty tr} -> trace_ label_t
+let init tr =
+  let Snoc init _ = tr in
+  init
+
+val last: #label_t:Type -> tr:trace_ label_t{is_not_empty tr} -> trace_entry_ label_t
+let last tr =
+  let Snoc _ en = tr in
+  en
+
+// to be used infix: tr `append_entry` entry
+val append_entry: #label_t:Type -> trace_ label_t -> trace_entry_ label_t -> trace_ label_t
+let append_entry tr en = Snoc tr en
+
+
 
 (*** Prefix and trace_ extension ***)
 
