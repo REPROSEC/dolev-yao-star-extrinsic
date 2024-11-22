@@ -287,8 +287,7 @@ val mk_rand_rand_gen_at_end:
   Lemma
   (ensures (
     let (b, tr_out) = mk_rand usg lab len tr in
-    1 <= trace_length tr_out /\
-    rand_generated_at tr_out (trace_length tr_out - 1) b
+    rand_just_generated tr_out b
   ))
   [SMTPat (mk_rand usg lab len tr);]
 let mk_rand_rand_gen_at_end usg lab len tr =

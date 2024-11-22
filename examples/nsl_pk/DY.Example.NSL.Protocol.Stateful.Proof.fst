@@ -55,14 +55,12 @@ let event_predicate_nsl: event_predicate nsl_event =
     | Initiate1 alice bob n_a -> (
       prin == alice /\
       is_secret (nsl_nonce_label alice bob) tr n_a /\
-      0 < trace_length tr /\
-      rand_generated_at tr (trace_length tr - 1) n_a
+      rand_just_generated tr n_a
     )
     | Respond1 alice bob n_a n_b -> (
       prin == bob /\
       is_secret (nsl_nonce_label alice bob) tr n_b /\
-      0 < trace_length tr /\
-      rand_generated_at tr (trace_length tr - 1) n_b
+      rand_just_generated tr n_b
     )
     | Initiate2 alice bob n_a n_b -> (
       prin == alice /\
@@ -143,6 +141,7 @@ let protocol_invariants_nsl_has_nsl_event_invariant = all_events_has_all_events 
 
 (*** Proofs ***)
 
+#push-options "--fuel 1"
 val prepare_msg1_proof:
   tr:trace ->
   alice:principal -> bob:principal ->
@@ -154,6 +153,7 @@ val prepare_msg1_proof:
   ))
 let prepare_msg1_proof tr alice bob =
   ()
+#pop-options
 
 val send_msg1_proof:
   tr:trace ->
@@ -176,6 +176,7 @@ let send_msg1_proof tr global_sess_id alice sess_id =
   )
   | _ -> ()
 
+#push-options "--fuel 1"
 val prepare_msg2_proof:
   tr:trace ->
   global_sess_id:nsl_global_sess_ids -> bob:principal -> msg_id:timestamp ->
@@ -195,6 +196,7 @@ let prepare_msg2_proof tr global_sess_id bob msg_id =
       decode_message1_proof tr bob msg sk_b
     )
   )
+#pop-options
 
 val send_msg2_proof:
   tr:trace ->

@@ -26,10 +26,10 @@ val empty_trace : #label_t:Type -> trace_ label_t
 let empty_trace = Nil
 
 val is_empty: #label_t:Type -> trace_ label_t -> bool
-let is_empty tr = Nil? tr
+let is_empty = Nil?
 
 val is_not_empty: #label_t:Type -> trace_ label_t -> bool
-let is_not_empty tr = Snoc? tr
+let is_not_empty = Snoc?
 
 val init : #label_t:Type -> tr:trace_ label_t{is_not_empty tr} -> trace_ label_t
 let init tr =
@@ -312,6 +312,18 @@ val entry_exists:
 let entry_exists #label_t tr e =
   exists i. entry_at tr i e
 
+
+/// Is a given entry the last entry on the trace?
+
+val trace_entry_just_occurred: #label_t:Type -> trace_ label_t -> trace_entry_ label_t -> prop
+let trace_entry_just_occurred tr en =
+  is_not_empty tr /\
+  entry_at tr (trace_length tr - 1) en
+  // the more intuitive and cleaner definition:
+  // last tr == en
+
+
+
 /// An entry in the trace stays here when the trace grows.
 
 val get_entry_at_grows:
@@ -496,6 +508,16 @@ let rand_generated_at #label_t tr i b =
   | Rand len time ->
     time == i /\ (exists usg lab. entry_at tr i (RandGen usg lab len))
   | _ -> False
+
+
+/// Was a random bytestring generated just now,
+/// i.e., at the end of the trace?
+
+val rand_just_generated: #label_t:Type -> trace_ label_t -> bytes -> prop
+let rand_just_generated tr rand =
+  1 <= trace_length tr /\ // or `is_not_empty tr` which I prefer but requires fuel 1 on the protocol level
+  rand_generated_at tr (trace_length tr - 1) rand 
+
 
 (*** Forgetting labels ***)
 
