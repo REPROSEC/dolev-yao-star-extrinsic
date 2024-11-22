@@ -17,7 +17,7 @@ open DY.Lib.Crypto.KdfExpand.Split
 /// The modularity is achieved using the split invariant mechanism for AEAD and KdfExpand,
 /// allowing for horizontal protocol composition.
 /// The proofs are parametrized by a global HPKE predicate `hpke_crypto_predicate`
-/// (similar to DY.Core.pkenc_crypto_predicate)
+/// (similar to DY.Core.pke_crypto_predicate)
 /// which is then compiled to a (local) AEAD predicate (see `hpke_aead_pred`),
 /// allowing for vertical protocol composition.
 ///

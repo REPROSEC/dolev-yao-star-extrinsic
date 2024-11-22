@@ -31,7 +31,7 @@ type bytes =
 
   // Public key encryption
   | Pk: sk:bytes -> bytes
-  | PkEnc: pk:bytes -> nonce:bytes -> msg:bytes -> bytes
+  | PkeEnc: pk:bytes -> nonce:bytes -> msg:bytes -> bytes
 
   // Signature
   | Vk: sk:bytes -> bytes
@@ -83,8 +83,8 @@ type usage =
   | NoUsage: usage // baked-in None
   | SigKey: tag:string -> data:bytes -> usage
   | SigNonce: usage
-  | PkKey: tag:string -> data:bytes -> usage
-  | PkNonce: usage
+  | PkeKey: tag:string -> data:bytes -> usage
+  | PkeNonce: usage
   | AeadKey: tag:string -> data:bytes -> usage
   | DhKey: tag:string -> data:bytes -> usage
   | KdfExpandKey: tag:string -> data:bytes -> usage
@@ -101,7 +101,7 @@ let rec encode_bytes b =
   | Concat left right -> 2::(encode_list [encode_bytes left; encode_bytes right])
   | AeadEnc key nonce msg ad -> 3::(encode_list [encode_bytes key; encode_bytes nonce; encode_bytes msg; encode_bytes ad])
   | Pk sk -> 4::(encode_list [encode_bytes sk])
-  | PkEnc pk nonce msg -> 5::(encode_list [encode_bytes pk; encode_bytes nonce; encode_bytes msg])
+  | PkeEnc pk nonce msg -> 5::(encode_list [encode_bytes pk; encode_bytes nonce; encode_bytes msg])
   | Vk sk -> 6::(encode_list [encode_bytes sk])
   | Sign sk nonce msg -> 7::(encode_list [encode_bytes sk; encode_bytes nonce; encode_bytes msg])
   | Hash msg -> 8::(encode_list [encode_bytes msg])
@@ -139,7 +139,7 @@ let rec encode_bytes_inj b1 b2 =
   | KemEncap x1 x2, KemEncap y1 y2 ->
     encode_bytes_inj x1 y1;
     encode_bytes_inj x2 y2
-  | PkEnc x1 x2 x3, PkEnc y1 y2 y3
+  | PkeEnc x1 x2 x3, PkeEnc y1 y2 y3
   | Sign x1 x2 x3, Sign y1 y2 y3 ->
     encode_bytes_inj x1 y1;
     encode_bytes_inj x2 y2;
