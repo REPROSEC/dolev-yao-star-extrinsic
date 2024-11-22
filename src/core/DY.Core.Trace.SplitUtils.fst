@@ -47,7 +47,7 @@ let rec trace_search (#label_t:Type) (tr:trace_ label_t) (p:trace_entry_ label_t
 [@@"opaque_to_smt"]
 let trace_find (#label_t:Type) (tr:trace_ label_t) (e:trace_entry_ label_t{entry_exists tr e})
   : Pure timestamp (requires True) (ensures fun ts -> ts < length tr /\ trace_entry_equiv e (get_entry_at tr ts))
-  = let Some ts = trace_search tr (fun e' -> trace_entry_equiv e e') in
+  = let Some ts = trace_search tr (trace_entry_equiv e) in
     ts
 
 
@@ -179,14 +179,22 @@ let rec trace_concat_assoc (#label_t:Type) (tr1 tr2 tr3:trace_ label_t)
     | Nil -> ()
     | Snoc hd _ -> trace_concat_assoc tr1 tr2 hd
 
-let rec trace_subtract_nil (#label_t:Type) (tr:trace_ label_t)
+let snoc_is_concat_singleton (#label_t:Type) (tr :trace_ label_t) (e:trace_entry_ label_t)
   : Lemma
-    ((tr <--> Nil) == tr)
-    [SMTPat (tr <--> Nil)]
-  = norm_spec [zeta; delta_only [`%trace_subtract]] (trace_subtract #label_t);
-    match tr with
+    (Snoc tr e == (tr <++> (Snoc Nil e)))
+    [SMTPat (tr <++> (Snoc Nil e))]
+  = norm_spec [zeta; delta_only [`%trace_concat]] (trace_concat #label_t)
+
+let rec trace_concat_grows (#label_t:Type) (tr1 tr2:trace_ label_t)
+  : Lemma
+    (tr1 <$ (tr1 <++> tr2))
+    [SMTPat (tr1 <$ (tr1 <++> tr2))]
+  = norm_spec [zeta; delta_only [`%trace_concat]] (trace_concat #label_t);
+    match tr2 with
     | Nil -> ()
-    | Snoc hd _ -> trace_subtract_nil hd
+    | Snoc hd e -> trace_concat_grows tr1 hd
+
+/// Properties of trace subtraction
 
 let trace_subtract_snoc_left (#label_t:Type) (tr1 tr2:trace_ label_t) (e:trace_entry_ label_t)
   : Lemma
@@ -202,25 +210,6 @@ let trace_subtract_snoc_left' (#label_t:Type) (tr1 tr2:trace_ label_t)
       (tr2 <--> tr1) == Snoc (hd <--> tr1) e
     ))
   = norm_spec [zeta; delta_only [`%trace_subtract]] (trace_subtract #label_t)
-
-let trace_concat_snoc_right (#label_t:Type) (tr1 tr2:trace_ label_t) (e:trace_entry_ label_t)
-  : Lemma
-    (tr1 <++> (Snoc tr2 e) == Snoc (tr1 <++> tr2) e)
-  = norm_spec [zeta; delta_only [`%trace_concat]] (trace_concat #label_t)
-
-let snoc_is_concat_singleton (#label_t:Type) (tr :trace_ label_t) (e:trace_entry_ label_t)
-  : Lemma
-    (Snoc tr e == (tr <++> (Snoc Nil e)))
-  = norm_spec [zeta; delta_only [`%trace_concat]] (trace_concat #label_t)
-
-let rec trace_concat_grows (#label_t:Type) (tr1 tr2:trace_ label_t)
-  : Lemma
-    (tr1 <$ (tr1 <++> tr2))
-    [SMTPat (tr1 <$ (tr1 <++> tr2))]
-  = norm_spec [zeta; delta_only [`%trace_concat]] (trace_concat #label_t);
-    match tr2 with
-    | Nil -> ()
-    | Snoc hd e -> trace_concat_grows tr1 hd
 
 /// Properties connecting trace concatenation, splitting, and subtraction.
 
@@ -280,6 +269,5 @@ let rec trace_subtract_concat (#label_t:Type) (tr1 tr2:trace_ label_t)
     and _. begin
       let Snoc hd e = tr2 in
       trace_subtract_concat tr1 hd;
-      trace_subtract_snoc_left' tr1 tr2;
-      trace_concat_snoc_right tr1 (hd <--> tr1) e
+      trace_subtract_snoc_left' tr1 tr2
     end
