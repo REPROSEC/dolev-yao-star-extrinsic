@@ -18,7 +18,7 @@ open DY.Lib.State.Map
 
 [@@ with_bytes bytes]
 type long_term_key_type =
-  | LongTermPkEncKey: [@@@ with_parser #bytes ps_string] usage:string -> long_term_key_type
+  | LongTermPkeKey: [@@@ with_parser #bytes ps_string] usage:string -> long_term_key_type
   | LongTermSigKey: [@@@ with_parser #bytes ps_string] usage:string -> long_term_key_type
 
 %splice [ps_long_term_key_type] (gen_parser (`long_term_key_type))
@@ -64,7 +64,7 @@ val long_term_key_type_to_usage:
   usage
 let long_term_key_type_to_usage sk_type who =
   match sk_type with
-  | LongTermPkEncKey usg -> PkKey usg (serialize _ {who})
+  | LongTermPkeKey usg -> PkeKey usg (serialize _ {who})
   | LongTermSigKey usg -> SigKey usg (serialize _ {who})
 
 val is_private_key_for:
@@ -72,7 +72,7 @@ val is_private_key_for:
   bytes -> long_term_key_type -> principal -> prop
 let is_private_key_for #cinvs tr sk sk_type who =
   match sk_type with
-  | LongTermPkEncKey usg -> (
+  | LongTermPkeKey usg -> (
     is_decryption_key (long_term_key_type_to_usage sk_type who) (long_term_key_label who) tr sk
   )
   | LongTermSigKey usg -> (
@@ -84,7 +84,7 @@ val is_public_key_for:
   bytes -> long_term_key_type -> principal -> prop
 let is_public_key_for #cinvs tr pk pk_type who =
   match pk_type with
-  | LongTermPkEncKey usg -> (
+  | LongTermPkeKey usg -> (
     is_encryption_key (long_term_key_type_to_usage pk_type who) (long_term_key_label who) tr pk
   )
   | LongTermSigKey usg -> (
@@ -132,7 +132,7 @@ val compute_public_key: principal -> state_id -> long_term_key_type -> traceful 
 let compute_public_key prin sess_id sk_type =
   let*? res = find_value prin sess_id ({ty = sk_type}) in
   match sk_type with
-  | LongTermPkEncKey _ ->
+  | LongTermPkeKey _ ->
     return (Some (pk res.private_key))
   | LongTermSigKey _ ->
     return (Some (vk res.private_key))
