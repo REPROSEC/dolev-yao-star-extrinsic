@@ -182,7 +182,7 @@ val event_triggered_at_on_trace:
   (requires
     event_triggered_at tr i prin e
   )
-  (ensures i < trace_length tr)
+  (ensures i `on_trace` tr)
   [SMTPat (event_triggered_at #a #ev tr i prin e)]
 let event_triggered_at_on_trace #a #ev  tr i prin e =
   reveal_opaque (`%event_triggered_at) (event_triggered_at #a)
