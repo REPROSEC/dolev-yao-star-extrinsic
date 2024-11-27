@@ -3,6 +3,7 @@ module DY.Core.Trace.Base
 open DY.Core.Trace.Type
 open DY.Core.Bytes.Type
 open DY.Core.Label.Type
+module L = FStar.List.Tot.Base
 
 #set-options "--fuel 1 --ifuel 1"
 
@@ -31,6 +32,14 @@ let is_empty = Nil?
 val is_not_empty: #label_t:Type -> trace_ label_t -> bool
 let is_not_empty = Snoc?
 
+val is_not_empty_trace_length:
+  #label_t:Type -> 
+  tr:trace_ label_t ->
+  Lemma 
+  (is_not_empty tr <==> 0 < trace_length tr)
+  [SMTPat (is_not_empty tr)]
+let is_not_empty_trace_length tr = ()
+
 val init : #label_t:Type -> tr:trace_ label_t{is_not_empty tr} -> trace_ label_t
 let init tr =
   let Snoc init _ = tr in
@@ -58,14 +67,13 @@ let rec trace_from_rev_list entries =
   | [] -> Nil
   | hd::tl -> Snoc (trace_from_rev_list tl) hd
 
-open FStar.List.Tot.Base
 
 /// generate a trace from a list,
 /// where the first element of the list,
 /// is the first element of the trace
 /// (see the example below)
 val trace_from_list: #label_t:Type -> list (trace_entry_ label_t) -> trace_ label_t
-let trace_from_list ens = trace_from_rev_list (rev ens)
+let trace_from_list ens = trace_from_rev_list (L.rev ens)
 
 
 #push-options "--fuel 4"
@@ -94,7 +102,7 @@ let rec trace_to_rev_list tr =
 /// is the last entry in the list
 /// (see example below)
 let trace_to_list tr =
-  rev (trace_to_rev_list tr)
+  L.rev (trace_to_rev_list tr)
 
 #push-options "--fuel 4"
 let _ = 
@@ -293,6 +301,15 @@ let rec get_entry_at #label_t tr i =
     get_entry_at tr_init i
   )
 
+
+val get_entry_at_trace_length_is_last:
+  #label_t:Type ->
+  tr:trace_ label_t{is_not_empty tr} ->
+  Lemma
+  (get_entry_at tr (trace_length tr - 1) == last tr)
+  [SMTPat (last tr)]
+let get_entry_at_trace_length_is_last tr = ()
+
 /// Has some particular entry been triggered at a some particular timestamp in the trace?
 
 val entry_at:
@@ -312,15 +329,12 @@ val entry_exists:
 let entry_exists #label_t tr e =
   exists i. entry_at tr i e
 
-
 /// Is a given entry the last entry on the trace?
 
 val trace_entry_just_occurred: #label_t:Type -> trace_ label_t -> trace_entry_ label_t -> prop
 let trace_entry_just_occurred tr en =
   is_not_empty tr /\
-  entry_at tr (trace_length tr - 1) en
-  // the more intuitive and cleaner definition:
-  // last tr == en
+  last tr == en
 
 
 
@@ -515,7 +529,7 @@ let rand_generated_at #label_t tr i b =
 
 val rand_just_generated: #label_t:Type -> trace_ label_t -> bytes -> prop
 let rand_just_generated tr rand =
-  1 <= trace_length tr /\ // or `is_not_empty tr` which I prefer but requires fuel 1 on the protocol level
+  is_not_empty tr /\
   rand_generated_at tr (trace_length tr - 1) rand 
 
 

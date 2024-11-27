@@ -141,7 +141,6 @@ let protocol_invariants_nsl_has_nsl_event_invariant = all_events_has_all_events 
 
 (*** Proofs ***)
 
-#push-options "--fuel 1"
 val prepare_msg1_proof:
   tr:trace ->
   alice:principal -> bob:principal ->
@@ -153,7 +152,6 @@ val prepare_msg1_proof:
   ))
 let prepare_msg1_proof tr alice bob =
   ()
-#pop-options
 
 val send_msg1_proof:
   tr:trace ->
@@ -176,7 +174,6 @@ let send_msg1_proof tr global_sess_id alice sess_id =
   )
   | _ -> ()
 
-#push-options "--fuel 1"
 val prepare_msg2_proof:
   tr:trace ->
   global_sess_id:nsl_global_sess_ids -> bob:principal -> msg_id:timestamp ->
@@ -196,7 +193,6 @@ let prepare_msg2_proof tr global_sess_id bob msg_id =
       decode_message1_proof tr bob msg sk_b
     )
   )
-#pop-options
 
 val send_msg2_proof:
   tr:trace ->
