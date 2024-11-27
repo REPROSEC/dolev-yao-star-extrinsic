@@ -200,15 +200,7 @@ let trace_subtract_snoc_left (#label_t:Type) (tr1 tr2:trace_ label_t) (e:trace_e
   : Lemma
     (requires tr1 <$ tr2)
     (ensures ((Snoc tr2 e) <--> tr1) == Snoc (tr2 <--> tr1) e)
-  = norm_spec [zeta; delta_only [`%trace_subtract]] (trace_subtract #label_t)
-
-let trace_subtract_snoc_left' (#label_t:Type) (tr1 tr2:trace_ label_t)
-  : Lemma
-    (requires Snoc? tr2 /\ (let Snoc hd _ = tr2 in tr1 <$ hd))
-    (ensures (
-      let Snoc hd e = tr2 in
-      (tr2 <--> tr1) == Snoc (hd <--> tr1) e
-    ))
+    [SMTPat ((Snoc tr2 e) <--> tr1)]
   = norm_spec [zeta; delta_only [`%trace_subtract]] (trace_subtract #label_t)
 
 /// Properties connecting trace concatenation, splitting, and subtraction.
@@ -250,10 +242,7 @@ let rec trace_concat_subtract (#label_t:Type) (tr1 tr2:trace_ label_t)
     norm_spec [zeta; delta_only [`%trace_subtract]] (trace_subtract #label_t);
     match tr2 with
     | Nil -> ()
-    | Snoc hd e -> begin
-      trace_concat_subtract tr1 hd;
-      trace_subtract_snoc_left' tr1 (tr1 <++> tr2)
-    end
+    | Snoc hd e -> trace_concat_subtract tr1 hd
 
 let rec trace_subtract_concat (#label_t:Type) (tr1 tr2:trace_ label_t)
   : Lemma
@@ -268,6 +257,5 @@ let rec trace_subtract_concat (#label_t:Type) (tr1 tr2:trace_ label_t)
     with _. ()
     and _. begin
       let Snoc hd e = tr2 in
-      trace_subtract_concat tr1 hd;
-      trace_subtract_snoc_left' tr1 tr2
+      trace_subtract_concat tr1 hd
     end
