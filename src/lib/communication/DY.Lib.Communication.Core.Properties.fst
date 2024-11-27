@@ -1,4 +1,4 @@
-module DY.Lib.Communication.API.Properties
+module DY.Lib.Communication.Core.Properties
 
 open Comparse
 open DY.Core
@@ -7,9 +7,9 @@ open DY.Lib.Crypto.Signature.Split
 open DY.Lib.Event.Typed
 open DY.Lib.State.PKI
 
-open DY.Lib.Communication.API
-open DY.Lib.Communication.API.Invariants
-open DY.Lib.Communication.API.Lemmas
+open DY.Lib.Communication.Core
+open DY.Lib.Communication.Core.Invariants
+open DY.Lib.Communication.Core.Lemmas
 
 #set-options "--fuel 0 --ifuel 0 --z3rlimit 10 --z3cliopt 'smt.qi.eager_threshold=100'"
 
@@ -38,7 +38,7 @@ val confidential_message_sender_authentication:
   Lemma
   (requires
     trace_invariant tr  /\
-    has_communication_layer_event_predicates lep.local_extension_preds higher_layer_preds /\
+    has_communication_layer_event_predicates higher_layer_preds /\
     event_triggered tr receiver (CommConfReceiveMsg receiver payload)
   )
   (ensures
