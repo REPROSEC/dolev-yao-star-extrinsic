@@ -20,6 +20,9 @@ let rec trace_length tr =
   | Nil -> 0
   | Snoc init last -> trace_length init + 1
 
+/// Is a given timestamp on a given trace?
+val on_trace: #label_t:Type -> timestamp -> trace_ label_t -> prop
+let on_trace ts tr = ts < trace_length tr
 
 (*** Hiding constructors ***)
 
@@ -257,7 +260,7 @@ let rec prefix_prefix_eq #label_t tr1 tr2 i =
 
 val get_entry_at:
   #label_t:Type ->
-  tr:trace_ label_t -> i:timestamp{i < trace_length tr} ->
+  tr:trace_ label_t -> i:timestamp{i `on_trace` tr} ->
   trace_entry_ label_t
 let rec get_entry_at #label_t tr i =
   if i+1 = trace_length tr then
@@ -284,7 +287,7 @@ val entry_at:
   trace_ label_t -> timestamp -> trace_entry_ label_t ->
   prop
 let entry_at #label_t tr i e =
-  i < trace_length tr /\
+  i `on_trace` tr /\
   e == get_entry_at tr i
 
 /// Has some particular entry been triggered in the trace (at any timestamp)?
@@ -310,7 +313,7 @@ let trace_entry_just_occurred tr en =
 val get_entry_at_grows:
   #label_t:Type ->
   tr1:trace_ label_t -> tr2:trace_ label_t ->
-  i:timestamp{i < trace_length tr1} ->
+  i:timestamp{i `on_trace` tr1} ->
   Lemma
   (requires tr1 <$ tr2)
   (ensures get_entry_at tr1 i == get_entry_at tr2 i)
@@ -618,7 +621,7 @@ let fmap_trace_recover_before #a #b f tr1 tr2 =
 
 val get_entry_at_fmap_trace:
   #a:Type -> #b:Type ->
-  f:(a -> b) -> tr:trace_ a -> i:timestamp{i < trace_length tr} ->
+  f:(a -> b) -> tr:trace_ a -> i:timestamp{i `on_trace` tr} ->
   Lemma (
     get_entry_at (fmap_trace f tr) i == fmap_trace_entry f (get_entry_at tr i)
   )

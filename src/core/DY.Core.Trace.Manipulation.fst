@@ -556,6 +556,7 @@ val trigger_event: principal -> string -> bytes -> traceful unit
 let trigger_event prin tag content =
   add_entry (Event prin tag content)
 
+#push-options "--z3rlimit 25"
 val trigger_event_event_triggered:
   prin:principal -> tag:string -> content:bytes -> tr:trace ->
   Lemma
@@ -566,6 +567,7 @@ val trigger_event_event_triggered:
   [SMTPat (trigger_event prin tag content tr);]
 let trigger_event_event_triggered prin tag content tr =
   reveal_opaque (`%trigger_event) trigger_event
+#pop-options
 
 /// Triggering a protocol event preserves the trace invariant
 /// when the protocol event satisfy the event predicate.
