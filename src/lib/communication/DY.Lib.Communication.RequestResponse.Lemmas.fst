@@ -20,6 +20,20 @@ open DY.Lib.Communication.RequestResponse.Invariants
 
 (*** Lemmas ***)
 
+val is_comm_response_payload: {|crypto_invariants|} -> trace -> principal -> comm_meta_data -> bytes -> prop
+let is_comm_response_payload #cusg tr server req_meta_data payload =
+  bytes_invariant tr payload /\
+  get_label tr payload `can_flow tr` get_label #default_crypto_usages tr req_meta_data.key /\
+  bytes_well_formed tr payload
+
+val get_response_label: tr:trace -> comm_meta_data -> label
+let get_response_label tr req_meta_data = get_label #default_crypto_usages tr req_meta_data.key
+
+val comm_meta_data_knowable: {|crypto_invariants|} -> trace -> principal -> comm_meta_data -> prop
+let comm_meta_data_knowable #cinvs tr prin req_meta_data =
+  is_knowable_by (principal_label prin) tr req_meta_data.id /\
+  is_knowable_by (principal_label prin) tr req_meta_data.key
+
 val compute_request_message_proof:
   {|crypto_invariants|} ->
   tr:trace ->
@@ -130,22 +144,8 @@ let decode_request_message_proof #cinvs tr server msg_bytes =
     )
   )
 
-val is_comm_response_payload: {|crypto_invariants|} -> trace -> principal -> state_id -> bytes -> prop
-let is_comm_response_payload #cusg tr server sid payload =
-  match get_state server sid tr with
-  | (None, _) -> False
-  | (Some state, tr) -> (
-    match state with
-    | ServerReceiveRequest {id; client; payload=payload'; key} -> (
-      bytes_invariant tr payload /\
-      get_label tr payload `can_flow tr` get_label #default_crypto_usages tr key /\
-      bytes_well_formed tr payload
-    )
-    | _ -> False
-  )
 
-//#push-options "--fuel 0 --ifuel 0 --z3rlimit 20"
-#push-options "--fuel 1 --ifuel 3 --z3rlimit 500"
+#push-options "--fuel 0 --ifuel 0 --z3rlimit 20"
 val receive_request_proof:
   {|protocol_invariants|} ->
   tr:trace ->
@@ -164,19 +164,19 @@ val receive_request_proof:
   (ensures (
     match receive_request comm_keys_ids server msg_id tr with
     | (None, tr_out) -> trace_invariant tr_out
-    | (Some (sid, payload, client, id, key), tr_out) -> (
+    | (Some (payload, req_meta_data), tr_out) -> (
       trace_invariant tr_out /\
       (*exists client. 
         is_knowable_by (comm_label client server) tr_out payload) /\*)
-      event_triggered tr_out server (CommServerReceiveRequest client server id payload key) // /\
+      event_triggered tr_out server (CommServerReceiveRequest req_meta_data.client server req_meta_data.id payload req_meta_data.key) /\
       //state_was_set tr_out server sid (ServerReceiveRequest {id; client; payload; key} <: communication_states)     
-      //is_comm_response_payload tr_out server sid payload
+      is_comm_response_payload tr_out server req_meta_data payload
     )
   ))
 let receive_request_proof #invs tr comm_keys_ids higher_layer_preds server msg_id =
   match receive_request comm_keys_ids server msg_id tr with
   | (None, tr_out) -> ()
-  | (Some (sid, payload, client, id, key), tr_out) -> (
+  | (Some (payload, req_meta_data), tr_out) -> (
     receive_confidential_proof #invs tr request_response_event_preconditions comm_keys_ids server msg_id;
     let (Some req_msg_bytes, tr') = receive_confidential comm_keys_ids server msg_id tr in
     decode_request_message_proof tr' server req_msg_bytes;
@@ -198,82 +198,12 @@ let receive_request_proof #invs tr comm_keys_ids higher_layer_preds server msg_i
     assert(event_triggered tr' server (CommServerReceiveRequest req_msg.client server req_msg.id req_msg.payload req_msg.key));
 
     let (sid', tr') = new_session_id server tr' in
-    let ((), tr_state_set) = set_state server sid' (ServerReceiveRequest {id=req_msg.id; client=req_msg.client; payload=req_msg.payload; key=req_msg.key} <: communication_states) tr' in
-    assert(state_was_set tr_state_set server sid' (ServerReceiveRequest {id; client; payload; key} <: communication_states));
-
-    normalize_term_spec (DY.Core.Trace.Manipulation.new_session_id);
-admit();
-    normalize_term_spec (DY.Lib.State.Typed.set_state #communication_states #local_state_communication_layer_session);
-    normalize_term_spec (DY.Lib.State.Tagged.set_tagged_state);
-    normalize_term_spec (DY.Core.Trace.Manipulation.set_state);
-
-    normalize_term_spec (DY.Lib.State.Typed.get_state #communication_states #local_state_communication_layer_session);
-    normalize_term_spec (DY.Lib.State.Tagged.get_tagged_state);
-    normalize_term_spec (DY.Core.Trace.Manipulation.get_state);
-    assert(
-      match get_state #communication_states #local_state_communication_layer_session server sid' tr_state_set with
-      | (None, _) -> True
-      | (Some state, tr') -> (
-        match state with
-        | ServerReceiveRequest {id=id'; client=client'; payload=payload'; key=key'} -> (
-          req_msg.payload == payload'
-        )
-        | _ -> True
-      )
-    );
+    let ((), tr') = set_state server sid' (ServerReceiveRequest {id=req_msg.id; client=req_msg.client; payload=req_msg.payload; key=req_msg.key} <: communication_states) tr' in
     
     assert(tr' == tr_out);
     assert(trace_invariant tr_out);
-
-    assert(bytes_invariant tr_out payload);
-    assert(bytes_well_formed tr_out payload);
-    assert(get_label tr_out payload `can_flow tr_out` get_label #default_crypto_usages tr_out key);
-    
+    assert(is_comm_response_payload tr_out server req_meta_data payload);    
     ()
-    (*
-    //normalize_term_spec (set_state #communication_states #local_state_communication_layer_session);
-    //normalize_term_spec (get_state #communication_states #local_state_communication_layer_session);
-    get_state_same_trace #communication_states #local_state_communication_layer_session server sid tr_out;
-
-    assert(
-      match get_state server sid tr_out with
-      | (None, _) -> True
-      | (Some state, tr) -> (
-        match state with
-        | ServerReceiveRequest {id; client; payload=payload'; key=key'} -> (
-          bytes_invariant tr payload' /\
-          payload' == payload /\
-          get_label tr payload `can_flow tr` get_label #default_crypto_usages tr key /\
-          bytes_well_formed tr payload'
-        )
-        | _ -> True
-      )
-    );
-    admit();
-    
-    //assert(is_comm_response_payload tr_out server sid payload);
-    
-    match get_state server sid tr_out with
-    | (None, tr') -> assert(tr' == tr_out); admit()
-    | (Some state, tr_out) -> (
-      match state with
-      | ServerReceiveRequest {id=id'; client=client'; payload=payload'; key=key'} -> (
-        assert(payload == payload');
-        assert(FStar.Ghost.reveal id == id');
-        assert(FStar.Ghost.reveal client == client');
-        assert(FStar.Ghost.reveal key == key');
-        
-        assert(
-          bytes_invariant tr_out payload /\
-          get_label tr_out payload `can_flow tr` get_label #default_crypto_usages tr_out key /\
-          bytes_well_formed tr_out payload
-        );
-        assert(is_comm_response_payload tr_out server sid payload);
-        ()
-      )
-      | _ -> ()
-    )
-    *)
   )
 #pop-options
 
@@ -314,6 +244,7 @@ let compute_response_message_proof #cinvs tr client server key nonce id payload 
   ()
 
 // TODO should this go into the core?
+(*
 val state_was_set_grows:
   #a:Type -> {|ev:local_state a|} ->
   tr1:trace -> tr2:trace ->
@@ -326,75 +257,34 @@ let state_was_set_grows #a #ev tr1 tr2 prin sid e =
   reveal_opaque (`%state_was_set) (state_was_set #a);
   reveal_opaque (`%DY.Lib.State.Tagged.tagged_state_was_set) (DY.Lib.State.Tagged.tagged_state_was_set);
   ()
-
-
-
-(*
-val is_comm_response_payload_later:
-  {|crypto_invariants|} ->
-  tr1:trace -> tr2:trace ->
-  server:principal -> sid:state_id -> payload:bytes ->
-  Lemma
-  (requires
-    is_comm_response_payload tr1 server sid payload /\
-    tr1 <$ tr2
-  )
-  (ensures
-    is_comm_response_payload tr2 server sid payload
-  )
-let is_comm_response_payload_later #cusg tr1 tr2 server sid payload =
-  match get_state server sid tr1 with
-  | (None, _) -> ()
-  | (Some state, tr') -> (
-    state_was_set_grows #communication_states #local_state_communication_layer_session tr1 tr2 server sid state;
-    assert(state_was_set tr2 server sid state);
-    admit()
-  )
 *)
 
-#push-options "--fuel 1 --ifuel 0"
 val mk_comm_layer_response_nonce_proof:
   {|protocol_invariants|} ->
   tr:trace ->
-  server:principal -> sid:state_id -> usg:usage ->
+  server:principal -> req_meta_data:comm_meta_data -> usg:usage ->
   Lemma
   (requires
     trace_invariant tr /\
     has_communication_layer_state_predicates /\
-    has_communication_layer_reqres_crypto_predicates
+    has_communication_layer_reqres_crypto_predicates /\
+    bytes_well_formed tr req_meta_data.key
   )
   (ensures (
-    match mk_comm_layer_response_nonce server sid usg tr with
+    match mk_comm_layer_response_nonce server req_meta_data usg tr with
     | (None, tr_out) -> trace_invariant tr_out
     | (Some nonce, tr_out) -> (
-      is_comm_response_payload tr_out server sid nonce
+      is_comm_response_payload tr_out server req_meta_data nonce
     )
   ))
-let mk_comm_layer_response_nonce_proof #invs tr server sid usg =
-  match mk_comm_layer_response_nonce server sid usg tr with
-  | (None, tr_out) -> ()
-  | (Some nonce, tr_out) -> (
-    let (Some state, tr') = get_state server sid tr in
-    assert(trace_invariant tr');
-    let ServerReceiveRequest srr = state in
-    let (nonce', tr') = mk_rand usg (get_label tr' srr.key) 32 tr' in
-    assert(tr_out == tr');
-    assert(get_label tr_out nonce' `can_flow tr_out` get_label #default_crypto_usages tr_out srr.key);
-    assert(bytes_invariant tr_out nonce');
-    assert(bytes_well_formed tr_out nonce');
-    normalize_term_spec mk_rand;
-    normalize_term_spec (get_state #communication_states #local_state_communication_layer_session);
-    assert(is_comm_response_payload tr_out server sid nonce');
-    ()
-  )
-#pop-options
+let mk_comm_layer_response_nonce_proof #invs tr server req_meta_data usg = ()
 
 val send_response_proof:
   {|protocol_invariants|} ->
   tr:trace ->
   comm_keys_ids:communication_keys_sess_ids ->
   higher_layer_preds:comm_reqres_higher_layer_event_preds ->
-  server:principal -> sid:state_id -> payload:bytes ->
+  server:principal -> req_meta_data:comm_meta_data -> payload:bytes ->
   Lemma
   (requires
     trace_invariant tr /\
@@ -402,7 +292,7 @@ val send_response_proof:
     has_communication_layer_reqres_event_predicates request_response_event_preconditions higher_layer_preds /\
     higher_layer_preds.send_response tr server payload /\
     has_communication_layer_state_predicates /\
-    is_comm_response_payload tr server sid payload
+    is_comm_response_payload tr server req_meta_data payload
     (*
       match get_state server sid tr with
       | (Some (ServerReceiveRequest {id; client; payload=payload'; key}), tr_out) -> (
@@ -412,42 +302,42 @@ val send_response_proof:
     *)
   )
   (ensures (
-    let (_, tr_out) = send_response comm_keys_ids server sid payload tr in
+    let (_, tr_out) = send_response comm_keys_ids server req_meta_data payload tr in
     trace_invariant tr_out
   ))
-let send_response_proof #invs tr comm_keys_ids higher_layer_preds server sid payload =
-  match send_response comm_keys_ids server sid payload tr with
+let send_response_proof #invs tr comm_keys_ids higher_layer_preds server req_meta_data payload =
+  match send_response comm_keys_ids server req_meta_data payload tr with
   | (None, tr_out) -> ()
   | (Some msg_id, tr_out) -> (
-    let (Some state, tr') = get_state server sid tr in
-    assert(trace_invariant tr');
+    let (Some state, tr') = get_state server req_meta_data.sid tr in
     let ServerReceiveRequest srr = state in
-    
-    
-    assert(higher_layer_preds.send_response tr server payload);
-    higher_layer_preds.send_response_later tr tr' server payload;
-    assert(higher_layer_preds.send_response tr' server payload);
+    assert(srr.key = req_meta_data.key);
+    assert(srr.id = req_meta_data.id);
 
-    //mk_comm_layer_response_nonce_proof tr' server sid payload_usg;
-    assert(tr' == tr);
-    assert(is_comm_response_payload tr' server sid payload);
-    assert(get_label tr' payload `can_flow tr'` get_label #default_crypto_usages tr' srr.key);
+    assert(
+      req_meta_data.key `has_usage tr'` (AeadKey comm_layer_aead_tag empty) \/
+        is_publishable tr' req_meta_data.key
+    );
+
+    assert(is_comm_response_payload tr' server req_meta_data payload);
+    assert(get_label tr payload `can_flow tr'` get_label #default_crypto_usages tr req_meta_data.key);
     assert(bytes_invariant tr' payload);
-    assert(is_knowable_by (get_label #default_crypto_usages tr' srr.key) tr' payload);
-
-    let ((), tr') = trigger_event server (CommServerSendResponse srr.client server srr.id payload) tr' in
+    assert(is_knowable_by (get_label #default_crypto_usages tr' req_meta_data.key) tr' payload);
+    
+    let ((), tr') = trigger_event server (CommServerSendResponse req_meta_data.client server req_meta_data.id payload) tr' in
     assert(trace_invariant tr');
-    (*assert(
-      exists client id key.
-      state_was_set tr' server sid (ServerReceiveRequest {id; client; payload; key}) /\
-      is_knowable_by (get_label tr' key) tr' payload /\
-      is_knowable_by (get_label tr' key) tr' id /\
-      srr.client == client
-    );*)
+
     
     let (nonce, tr') = mk_rand NoUsage public 32 tr' in
-    compute_response_message_proof tr' srr.client server srr.key nonce srr.id payload;
-    let resp_msg_bytes = compute_response_message srr.client server srr.key nonce srr.id payload in
+
+    assert(
+      is_knowable_by (comm_label req_meta_data.client server) tr' req_meta_data.key /\
+      is_knowable_by (get_label tr req_meta_data.key) tr' req_meta_data.id /\
+      is_knowable_by (get_label tr req_meta_data.key) tr' payload
+    );
+
+    compute_response_message_proof tr' req_meta_data.client server req_meta_data.key nonce req_meta_data.id payload;
+    let resp_msg_bytes = compute_response_message req_meta_data.client server req_meta_data.key nonce req_meta_data.id payload in
     let (msg_id, tr') = send_msg resp_msg_bytes tr' in
     assert(tr_out == tr');
     assert(trace_invariant tr_out);
@@ -455,7 +345,7 @@ let send_response_proof #invs tr comm_keys_ids higher_layer_preds server sid pay
   )
 
 
-#push-options "--fuel 2 --ifuel 4 --z3rlimit 50"
+#push-options "--fuel 0 --ifuel 1 --z3rlimit 10"
 val decode_response_proof:
   {|crypto_invariants|} ->
   tr:trace ->
@@ -474,7 +364,7 @@ val decode_response_proof:
     | Some payload -> (
       is_knowable_by (get_label tr key) tr payload /\
       (event_triggered tr server (CommServerSendResponse client server id payload)
-        \/ is_publishable tr key)
+        \/ is_corrupt tr (principal_label client) \/ is_corrupt tr (principal_label server))
     )
   ))
 let decode_response_proof #cinvs tr client server key id msg_bytes =
@@ -495,3 +385,50 @@ let decode_response_proof #cinvs tr client server key id msg_bytes =
     ()
   )
 #pop-options
+
+val receive_response_proof:
+  {|protocol_invariants|} ->
+  tr:trace ->
+  comm_keys_ids:communication_keys_sess_ids ->
+  higher_layer_preds:comm_reqres_higher_layer_event_preds ->
+  client:principal -> req_meta_data:comm_meta_data -> msg_id:timestamp ->
+  Lemma
+  (requires
+    trace_invariant tr /\
+    has_private_keys_invariant /\
+    has_pki_invariant /\
+    has_communication_layer_reqres_crypto_predicates /\
+    has_communication_layer_reqres_event_predicates request_response_event_preconditions higher_layer_preds /\
+    has_communication_layer_state_predicates
+  )
+  (ensures (
+    match receive_response comm_keys_ids client req_meta_data msg_id tr with
+    | (None, tr_out) -> trace_invariant tr_out
+    | (Some (payload, _), tr_out) -> (
+      trace_invariant tr_out /\
+      event_triggered tr_out client (CommClientReceiveResponse client req_meta_data.server req_meta_data.id payload req_meta_data.key)
+    )
+  ))
+let receive_response_proof #invs tr comm_keys_ids higher_layer_preds client req_meta_data msg_id =
+  match receive_response comm_keys_ids client req_meta_data msg_id tr with
+  | (None, tr_out) -> ()
+  | (Some (payload, _), tr_out) -> (
+    let server = req_meta_data.server in
+    let id = req_meta_data.id in
+    let key = req_meta_data.key in
+    let (Some state, tr') = get_state client req_meta_data.sid tr in
+    let ClientSendRequest csr = state in
+    let (Some resp_msg_bytes, tr') = recv_msg msg_id tr' in
+    decode_response_proof tr' client csr.server csr.key csr.id resp_msg_bytes;
+    let Some payload = decode_response_message client csr.server csr.key csr.id resp_msg_bytes in
+
+    let ((), tr') = set_state client req_meta_data.sid (ClientReceiveResponse {id=csr.id; server=csr.server; payload; key=csr.key} <: communication_states) tr' in
+    assert(trace_invariant tr');
+    let ((), tr') = trigger_event client (CommClientReceiveResponse client csr.server csr.id payload csr.key) tr' in
+    assert(trace_invariant tr');
+    assert(event_triggered tr' client (CommClientReceiveResponse client csr.server csr.id payload csr.key));
+
+    assert(tr_out == tr');
+    assert(trace_invariant tr_out);
+    ()
+  )
