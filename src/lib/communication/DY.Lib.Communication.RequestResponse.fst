@@ -64,13 +64,6 @@ instance parseable_serializeable_bytes_authenticated_data: parseable_serializeab
   = mk_parseable_serializeable ps_authenticated_data
 
 
-[@@with_bytes bytes]
-type request_meta_data = {
-  id:bytes;
-  key:bytes
-}
-
-
 (*** States ***)
 
 [@@with_bytes bytes]
@@ -147,6 +140,19 @@ instance event_communication_reqres_event: event communication_reqres_event = {
 val comm_layer_aead_tag: string
 let comm_layer_aead_tag = "DY.Lib.Communication.Aead.Key"
 
+[@@with_bytes bytes]
+type comm_meta_data = {
+  id:bytes;
+  key:bytes;
+  client:principal;
+  server:principal;
+  sid:state_id;
+}
+
+%splice [ps_comm_meta_data] (gen_parser (`comm_meta_data))
+%splice [ps_comm_meta_data_is_well_formed] (gen_is_well_formed_lemma (`comm_meta_data))
+
+
 (*** API ***)
 
 val compute_request_message: principal -> bytes -> bytes -> bytes -> bytes
@@ -157,7 +163,7 @@ let compute_request_message client id payload key =
 val send_request:
   communication_keys_sess_ids ->
   principal -> principal -> bytes ->
-  traceful (option (state_id & timestamp))
+  traceful (option (timestamp & comm_meta_data))
 let send_request comm_keys_ids client server payload =
   let* key = mk_rand (AeadKey comm_layer_aead_tag empty) (comm_label client server) 32 in
   let* id = mk_rand NoUsage (join (principal_label client) (principal_label server)) 32 in
@@ -168,7 +174,8 @@ let send_request comm_keys_ids client server payload =
   
   let* req_payload = return (compute_request_message client id payload key) in
   let*? msg_id = send_confidential comm_keys_ids client server req_payload in
-  return (Some (sid, msg_id))
+  let req_meta_data = {id; key; client; server; sid} in
+  return (Some (msg_id, req_meta_data))
 
 val decode_request_message: bytes -> option request_message
 let decode_request_message msg_bytes =
@@ -177,23 +184,20 @@ let decode_request_message msg_bytes =
 val receive_request:
   communication_keys_sess_ids ->
   principal -> timestamp ->
-  traceful (option (state_id & bytes & (FStar.Ghost.erased principal) & (FStar.Ghost.erased bytes) & (FStar.Ghost.erased bytes)))
+  traceful (option (bytes & comm_meta_data))
 let receive_request comm_keys_ids server msg_id =
   let*? req_msg_bytes = receive_confidential comm_keys_ids server msg_id in
   let*? req_msg:request_message = return (decode_request_message req_msg_bytes) in  
   trigger_event server (CommServerReceiveRequest req_msg.client server req_msg.id req_msg.payload req_msg.key);*
   let* sid = new_session_id server in
   set_state server sid (ServerReceiveRequest {id=req_msg.id; client=req_msg.client; payload=req_msg.payload; key=req_msg.key} <: communication_states);*
-  let* tr = get_trace in
-  return (Some (sid, req_msg.payload, FStar.Ghost.hide req_msg.client, FStar.Ghost.hide req_msg.id, FStar.Ghost.hide req_msg.key))
+  let req_meta_data = {key=req_msg.key; id=req_msg.id; client=req_msg.client; server; sid} in
+  return (Some (req_msg.payload, req_meta_data))
 
-val mk_comm_layer_response_nonce: principal -> state_id -> usage -> traceful (option bytes)
-let mk_comm_layer_response_nonce server sid usg =
-  let*? state = get_state server sid in
-  guard_tr (ServerReceiveRequest? state);*?
-  let ServerReceiveRequest srr = state in
+val mk_comm_layer_response_nonce: principal -> comm_meta_data -> usage -> traceful (option bytes)
+let mk_comm_layer_response_nonce server req_meta_data usg =
   let* tr = get_trace in
-  let* nonce = mk_rand usg (get_label #default_crypto_usages tr srr.key) 32 in
+  let* nonce = mk_rand usg (get_label #default_crypto_usages tr req_meta_data.key) 32 in
   return (Some nonce)
 
 val compute_response_message: principal -> principal -> bytes -> bytes -> bytes -> bytes -> bytes
@@ -207,14 +211,17 @@ let compute_response_message client server key nonce id payload =
 
 val send_response:
   communication_keys_sess_ids ->
-  principal -> state_id -> bytes -> traceful (option timestamp)
-let send_response comm_keys_ids server sid payload =
-  let*? state = get_state server sid in
+  principal -> comm_meta_data -> bytes -> traceful (option timestamp)
+let send_response comm_keys_ids server req_meta_data payload =
+  let*? state = get_state server req_meta_data.sid in
   guard_tr (ServerReceiveRequest? state);*?
   let ServerReceiveRequest srr = state in
-  trigger_event server (CommServerSendResponse srr.client server srr.id payload);*
+  guard_tr (srr.key = req_meta_data.key);*?
+  guard_tr (srr.id = req_meta_data.id);*?
+  guard_tr (srr.client = req_meta_data.client);*?
+  trigger_event server (CommServerSendResponse req_meta_data.client server req_meta_data.id payload);*
   let* nonce = mk_rand NoUsage public 32 in
-  let resp_msg = compute_response_message srr.client server srr.key nonce srr.id payload in
+  let resp_msg = compute_response_message req_meta_data.client server req_meta_data.key nonce req_meta_data.id payload in
   let* msg_id = send_msg resp_msg in
   return (Some msg_id)
 
@@ -230,14 +237,17 @@ let decode_response_message client server key id msg_bytes =
 
 val receive_response:
   communication_keys_sess_ids ->
-  principal -> state_id -> timestamp ->
-  traceful (option bytes)
-let receive_response comm_keys_ids client sid msg_id =
-  let*? state = get_state client sid in
+  principal -> comm_meta_data -> timestamp ->
+  traceful (option (bytes & comm_meta_data))
+let receive_response comm_keys_ids client req_meta_data msg_id =
+  let*? state = get_state client req_meta_data.sid in
   guard_tr (ClientSendRequest? state);*?
   let ClientSendRequest csr = state in
   let*? resp_msg_bytes = recv_msg msg_id in
   let*? payload = return (decode_response_message client csr.server csr.key csr.id resp_msg_bytes) in
-  set_state client sid (ClientReceiveResponse {id=csr.id; server=csr.server; payload; key=csr.key} <: communication_states);*
+  guard_tr (csr.id = req_meta_data.id);*?
+  guard_tr (csr.key = req_meta_data.key);*?
+  guard_tr (csr.server = req_meta_data.server);*?  
+  set_state client req_meta_data.sid (ClientReceiveResponse {id=csr.id; server=csr.server; payload; key=csr.key} <: communication_states);*
   trigger_event client (CommClientReceiveResponse client csr.server csr.id payload csr.key);*
-  return (Some payload)
+  return (Some (payload, req_meta_data))
