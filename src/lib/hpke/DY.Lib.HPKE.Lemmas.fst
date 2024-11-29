@@ -237,7 +237,7 @@ val bytes_invariant_hpke_enc:
   usg:(string & bytes) ->
   Lemma
   (requires
-    is_publishable tr pkR /\
+    bytes_invariant tr pkR /\
     bytes_invariant tr entropy /\
     bytes_invariant tr msg /\
     bytes_invariant tr info /\
@@ -252,13 +252,13 @@ val bytes_invariant_hpke_enc:
     // e.g. if a public key of ProtocolA is injected in ProtocolB by the attacker,
     // then the sender sends a secret to this public key (safe by ProtocolB invariants)
     // but the receiver expect messages encrypted to this public key to be public (safe by ProtocolA invariants)
-    pkR `has_hpke_sk_usage tr` mk_hpke_sk_usage usg /\
     entropy `has_usage tr` mk_hpke_entropy_usage usg /\
     (
       (
+        pkR `has_hpke_sk_usage tr` mk_hpke_sk_usage usg /\
         hpke_pred.pred tr usg msg info ad
       ) \/ (
-        get_label tr msg `can_flow tr` public
+        get_label tr entropy `can_flow tr` public
       )
     ) /\
     // the global protocol invariants must contain the HPKE invariants
