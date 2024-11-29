@@ -273,8 +273,8 @@ let rec prefix_prefix_eq #label_t tr1 tr2 i =
 /// Every trace is equal to its full-length prefix
 
 let prefix_full_eq (#label_t:Type) (tr:trace_ label_t)
-  : Lemma (ensures (prefix tr (length tr) == tr))
-    [SMTPat (prefix tr (length tr))]
+  : Lemma (ensures (prefix tr (trace_length tr) == tr))
+    [SMTPat (prefix tr (trace_length tr))]
   = reveal_opaque (`%prefix) (prefix #label_t);
     norm_spec [zeta; delta_only [`%prefix]] (prefix #label_t)
 
@@ -282,12 +282,12 @@ let prefix_full_eq (#label_t:Type) (tr:trace_ label_t)
 
 let grows_full_eq (#label_t:Type) (tr1 tr2:trace_ label_t)
   : Lemma
-    (requires tr1 <$ tr2 /\ length tr1 == length tr2)
+    (requires tr1 <$ tr2 /\ trace_length tr1 == trace_length tr2)
     (ensures tr1 == tr2)
 // TODO:
 // It is not clear if this SMTPat is ever practically useful, but it seems like it could be in principle
     [SMTPat (tr1 == tr2); SMTPat (tr1 <$ tr2)]
-  = prefix_prefix_eq tr1 tr2 (length tr1)
+  = prefix_prefix_eq tr1 tr2 (trace_length tr1)
 
 /// The relation <$ is a non-strict partial order, and so if tr1 <$ tr2,
 /// we can split into the case where tr1 and tr2 are equal, and that in which
@@ -301,7 +301,7 @@ let grows_cases (#label_t:Type) (tr1 tr2:trace_ label_t)
       let Snoc hd _ = tr2 in
       tr1 <$ hd
     )))
-  = if length tr1 = length tr2
+  = if trace_length tr1 = trace_length tr2
     then grows_full_eq tr1 tr2
     else begin
       let open FStar.Calc in
@@ -309,11 +309,11 @@ let grows_cases (#label_t:Type) (tr1 tr2:trace_ label_t)
       calc (<$) {
         tr1;
         == {}
-        prefix tr1 (length tr1);
+        prefix tr1 (trace_length tr1);
         <$ {}
-        prefix tr2 (length hd);
+        prefix tr2 (trace_length hd);
         == { assert(hd <$ tr2) } // Triggers prefix_prefix_eq hd tr2 (length hd)
-        prefix hd (length hd);
+        prefix hd (trace_length hd);
         == {}
         hd;
       }
