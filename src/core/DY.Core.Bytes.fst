@@ -107,7 +107,7 @@ let rec bytes_well_formed tr b =
   | Literal buf ->
     True
   | Rand len time ->
-    time < DY.Core.Trace.Base.length tr /\
+    time < trace_length tr /\
     RandGen? (get_entry_at tr time)
   | Concat left right ->
     bytes_well_formed tr left /\
@@ -295,7 +295,7 @@ val get_usage: {|crypto_usages|} -> trace -> bytes -> usage
 let rec get_usage #cusages tr b =
   match b with
   | Rand len time ->
-    if time < DY.Core.Trace.Base.length tr then (
+    if time < trace_length tr then (
       match get_entry_at tr time with
       | RandGen usg _ _ -> usg
       | _ -> NoUsage // garbage
@@ -374,7 +374,7 @@ let rec get_label #cusages tr b =
   | Literal buf ->
     public
   | Rand len time ->
-    if time < DY.Core.Trace.Base.length tr then (
+    if time < trace_length tr then (
       match get_entry_at tr time with
       | RandGen _ lab _ -> lab
       | _ -> DY.Core.Label.Unknown.unknown_label

@@ -55,14 +55,12 @@ let event_predicate_nsl: event_predicate nsl_event =
     | Initiate1 alice bob n_a -> (
       prin == alice /\
       is_secret (nsl_nonce_label alice bob) tr n_a /\
-      0 < DY.Core.Trace.Base.length tr /\
-      rand_generated_at tr (DY.Core.Trace.Base.length tr - 1) n_a
+      rand_just_generated tr n_a
     )
     | Respond1 alice bob n_a n_b -> (
       prin == bob /\
       is_secret (nsl_nonce_label alice bob) tr n_b /\
-      0 < DY.Core.Trace.Base.length tr /\
-      rand_generated_at tr (DY.Core.Trace.Base.length tr - 1) n_b
+      rand_just_generated tr n_b
     )
     | Initiate2 alice bob n_a n_b -> (
       prin == alice /\

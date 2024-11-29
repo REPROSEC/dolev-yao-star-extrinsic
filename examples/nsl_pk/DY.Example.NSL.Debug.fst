@@ -67,5 +67,5 @@ let debug () : traceful (option unit)  =
 
 //Run ``debug ()`` when the module loads
 #push-options "--warn_error -272"
-let _ = debug () Nil
+let _ = debug () empty_trace
 #pop-options
