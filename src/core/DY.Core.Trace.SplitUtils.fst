@@ -115,7 +115,7 @@ let rec trace_concat_grows (#label_t:Type) (tr1 tr2:trace_ label_t)
 
 /// Properties of trace subtraction
 
-let trace_subtract_snoc_left (#label_t:Type) (tr1 tr2:trace_ label_t) (e:trace_entry_ label_t)
+let trace_subtract_append_entry (#label_t:Type) (tr1 tr2:trace_ label_t) (e:trace_entry_ label_t)
   : Lemma
     (requires tr1 <$ tr2)
     (ensures ((append_entry tr2 e) <--> tr1) == append_entry (tr2 <--> tr1) e)
@@ -137,7 +137,7 @@ let rec trace_subtract_trace_length (#label_t:Type) (tr1 tr2:trace_ label_t)
 let rec trace_subtract_get_entry (#label_t:Type) (tr1 tr2:trace_ label_t) (i:timestamp{i `on_trace` tr2})
   : Lemma
     (requires tr1 <$ tr2 /\ i >= trace_length tr1)
-    (ensures (i - trace_length tr1) `on_trace` (tr2 <--> tr1) /\ get_entry_at tr2 i == get_entry_at (tr2 <--> tr1) (i - trace_length tr1))
+    (ensures get_entry_at tr2 i == get_entry_at (tr2 <--> tr1) (i - trace_length tr1))
   = norm_spec [zeta; delta_only [`%trace_subtract]] (trace_subtract #label_t);
     if i = last_ts tr2 then ()
     else begin
