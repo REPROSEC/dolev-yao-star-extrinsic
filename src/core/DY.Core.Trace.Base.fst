@@ -284,9 +284,6 @@ let grows_full_eq (#label_t:Type) (tr1 tr2:trace_ label_t)
   : Lemma
     (requires tr1 <$ tr2 /\ trace_length tr1 == trace_length tr2)
     (ensures tr1 == tr2)
-// TODO:
-// It is not clear if this SMTPat is ever practically useful, but it seems like it could be in principle
-    [SMTPat (tr1 == tr2); SMTPat (tr1 <$ tr2)]
   = prefix_prefix_eq tr1 tr2 (trace_length tr1)
 
 /// The relation <$ is a non-strict partial order, and so if tr1 <$ tr2,
