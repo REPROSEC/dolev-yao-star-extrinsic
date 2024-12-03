@@ -297,25 +297,23 @@ let grows_cases (#label_t:Type) (tr1 tr2:trace_ label_t)
   : Lemma
     (requires tr1 <$ tr2)
     (ensures tr1 == tr2 \/ (
-      Snoc? tr2 /\ (
-      let Snoc hd _ = tr2 in
-      tr1 <$ hd
-    )))
+      is_not_empty tr2 /\
+      tr1 <$ (init tr2)
+    ))
   = if trace_length tr1 = trace_length tr2
     then grows_full_eq tr1 tr2
     else begin
       let open FStar.Calc in
-      let Snoc hd e = tr2 in
       calc (<$) {
         tr1;
         == {}
         prefix tr1 (trace_length tr1);
         <$ {}
-        prefix tr2 (trace_length hd);
-        == { assert(hd <$ tr2) } // Triggers prefix_prefix_eq hd tr2 (length hd)
-        prefix hd (trace_length hd);
+        prefix tr2 (trace_length (init tr2));
+        == { assert((init tr2) <$ tr2) } // Triggers prefix_prefix_eq (init tr2) tr2 (length (init tr2))
+        prefix (init tr2) (trace_length (init tr2));
         == {}
-        hd;
+        (init tr2);
       }
     end
 
@@ -662,6 +660,10 @@ val fmap_trace_later:
   Lemma
   (requires tr1 <$ tr2)
   (ensures (fmap_trace f tr1) <$ (fmap_trace f tr2))
+  [SMTPat (fmap_trace f tr1);
+   SMTPat (fmap_trace f tr2);
+   SMTPat (tr1 <$ tr2)
+  ]
 let fmap_trace_later #a #b f tr1 tr2 =
   reveal_opaque (`%grows) (grows #a);
   reveal_opaque (`%grows) (grows #b);

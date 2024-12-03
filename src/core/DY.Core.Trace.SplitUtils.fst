@@ -50,83 +50,6 @@ let trace_find (#label_t:Type) (tr:trace_ label_t) (e:trace_entry_ label_t{entry
   = let Some ts = trace_search tr (trace_entry_equiv e) in
     ts
 
-
-(*** Trace splitting functions ***)
-
-/// In reasoning about the trace, we most often make use of the prefix function to extract
-/// the portion of a trace before some entry that we are focused on. For some purposes, however,
-/// for instance, to give a modifies analysis for a trace-passing function which specifies what
-/// pieces of state it may modify, it is useful to look at suffixes as well (e.g., the suffix of
-/// the output trace that is its "difference" with the input trace).
-///
-/// The trace splitting functions here unify getting prefixes and suffixes, either based on a
-/// timestamp or a particular entry.
-///
-/// The trace split function is also compatible with the various other trace functions ---
-/// in particular, trace_length and get_entry_at, which give us a correctness guarantee of the split,
-/// but also prefix, grows/<$, and fmap_trace.
-
-[@@"opaque_to_smt"]
-let rec trace_split (#label_t:Type) (tr:trace_ label_t) (ts:timestamp{ts `on_trace` tr})
-  : (trace_ label_t & trace_entry_ label_t & trace_ label_t)
-  = let Snoc hd entry = tr in
-    if ts = last_ts tr then
-      (hd, entry, empty_trace)
-    else
-      let (tr1, e, tr2') = trace_split hd ts in
-      (tr1, e, append_entry tr2' entry)
-
-let rec trace_split_trace_length (#label_t:Type) (tr:trace_ label_t) (ts:timestamp{ts `on_trace` tr})
-  : Lemma
-    (
-      let (tr1, e, tr2) = trace_split tr ts in
-      trace_length tr1 = ts /\ trace_length tr2 = (trace_length tr) - ts - 1
-    )
-    [SMTPat (trace_split tr ts)]
-  = norm_spec [zeta; delta_only [`%trace_split]] (trace_split #label_t);
-    if ts = last_ts tr then ()
-    else trace_split_trace_length (init tr) ts
-
-let rec trace_split_get_entry (#label_t:Type) (tr:trace_ label_t) (ts:timestamp{ts `on_trace` tr}) (i:timestamp{i `on_trace` tr})
-  : Lemma
-    (
-      let (tr1, e, tr2) = trace_split tr ts in
-      get_entry_at tr i == (
-        if i < ts then get_entry_at tr1 i
-        else if i = ts then e
-        else get_entry_at tr2 (i - ts - 1)
-      )
-    )
-  = norm_spec [zeta; delta_only [`%trace_split]] (trace_split #label_t);
-    if ts = last_ts tr || i >= trace_length (init tr) then ()
-    else trace_split_get_entry (init tr) ts i
-
-let rec trace_split_matches_prefix (#label_t:Type) (tr:trace_ label_t) (ts:timestamp{ts `on_trace` tr})
-  : Lemma
-    (
-      let (tr1, e, _) = trace_split tr ts in
-      tr1 == prefix tr ts /\
-      (Snoc tr1 e) == prefix tr (ts + 1)
-    )
-  = norm_spec [zeta; delta_only [`%trace_split]] (trace_split #label_t);
-    norm_spec [zeta; delta_only [`%prefix]] (prefix #label_t);
-    if ts = last_ts tr then ()
-    else trace_split_matches_prefix (init tr) ts
-
-let rec trace_split_fmap (#a #b:Type) (tr:trace_ a) (ts:timestamp {ts `on_trace` tr}) (f:a -> b)
-  : Lemma
-    (
-      let (tr1, e, tr2) = trace_split tr ts in
-      let (tr1', e', tr2') = trace_split (fmap_trace f tr) ts in
-      fmap_trace f tr1 == tr1' /\
-      fmap_trace_entry f e == e' /\
-      fmap_trace f tr2 == tr2'
-    )
-  = norm_spec [zeta; delta_only [`%trace_split]] (trace_split #a);
-    norm_spec [zeta; delta_only [`%trace_split]] (trace_split #b);
-    if ts = last_ts tr then ()
-    else trace_split_fmap (init tr) ts f
-
 (*** Trace arithmetic ***)
 
 /// We define trace concatenation (the monoid operation), as well as
@@ -199,34 +122,43 @@ let trace_subtract_snoc_left (#label_t:Type) (tr1 tr2:trace_ label_t) (e:trace_e
     [SMTPat ((append_entry tr2 e) <--> tr1)]
   = norm_spec [zeta; delta_only [`%trace_subtract]] (trace_subtract #label_t)
 
-/// Properties connecting trace concatenation, splitting, and subtraction.
-
-let rec trace_split_concat (#label_t:Type) (tr:trace_ label_t) (ts:timestamp{ts `on_trace` tr})
+let rec trace_subtract_trace_length (#label_t:Type) (tr1 tr2:trace_ label_t)
   : Lemma
-    (
-      let (tr1, e, tr2) = trace_split tr ts in
-      (append_entry tr1 e) <++> tr2 == tr
-    )
-  = norm_spec [zeta; delta_only [`%trace_concat]] (trace_concat #label_t);
-    norm_spec [zeta; delta_only [`%trace_split]] (trace_split #label_t);
-    if ts = last_ts tr then ()
-    else trace_split_concat (init tr) ts
-
-let rec trace_subtract_matches_split (#label_t:Type) (tr1 tr2:trace_ label_t)
-  : Lemma
-    (requires tr1 <$ tr2 /\ is_not_empty tr1)
-    (ensures (
-      let (_, _, tl) = trace_split tr2 (trace_length tr1 - 1) in
-      tl == (tr2 <--> tr1)
-    ))
+    (requires tr1 <$ tr2)
+    (ensures trace_length (tr2 <--> tr1) == trace_length tr2 - trace_length tr1)
+    [SMTPat (trace_length (tr2 <--> tr1))]
   = norm_spec [zeta; delta_only [`%trace_subtract]] (trace_subtract #label_t);
-    norm_spec [zeta; delta_only [`%trace_split]] (trace_split #label_t);
-    let (_, _, tl) = trace_split tr2 (trace_length tr1 - 1) in
-    grows_cases tr1 tr2;
-    eliminate tr1 == tr2 \/ tr1 <$ (init tr2)
-    returns tl == (tr2 <--> tr1)
-    with _. ()
-    and _. trace_subtract_matches_split tr1 (init tr2)
+    if trace_length tr2 = trace_length tr1 then ()
+    else begin
+      grows_cases tr1 tr2;
+      trace_subtract_trace_length tr1 (init tr2)
+    end
+
+let rec trace_subtract_get_entry (#label_t:Type) (tr1 tr2:trace_ label_t) (i:timestamp{i `on_trace` tr2})
+  : Lemma
+    (requires tr1 <$ tr2 /\ i >= trace_length tr1)
+    (ensures (i - trace_length tr1) `on_trace` (tr2 <--> tr1) /\ get_entry_at tr2 i == get_entry_at (tr2 <--> tr1) (i - trace_length tr1))
+  = norm_spec [zeta; delta_only [`%trace_subtract]] (trace_subtract #label_t);
+    if i = last_ts tr2 then ()
+    else begin
+      grows_cases tr1 tr2;
+      trace_subtract_get_entry tr1 (init tr2) i
+    end
+
+let rec trace_subtract_fmap_trace (#a #b:Type) (tr1 tr2:trace_ a) (f:a -> b)
+  : Lemma
+    (requires tr1 <$ tr2)
+    (ensures (fmap_trace f (tr2 <--> tr1) == ((fmap_trace f tr2) <--> (fmap_trace f tr1))))
+  = norm_spec [zeta; delta_only [`%trace_subtract]] (trace_subtract #a);
+    norm_spec [zeta; delta_only [`%trace_subtract]] (trace_subtract #b);
+    if trace_length tr2 = trace_length tr1 then ()
+    else begin
+      grows_cases tr1 tr2;
+      trace_subtract_fmap_trace tr1 (init tr2) f
+    end
+
+
+/// Properties connecting trace concatenation and subtraction
 
 let rec trace_concat_subtract (#label_t:Type) (tr1 tr2:trace_ label_t)
   : Lemma
