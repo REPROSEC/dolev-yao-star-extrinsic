@@ -21,7 +21,7 @@ let rec trace_length tr =
   | Snoc init last -> trace_length init + 1
 
 /// Is a given timestamp on a given trace?
-val on_trace: #label_t:Type -> timestamp -> trace_ label_t -> prop
+val on_trace: #label_t:Type -> timestamp -> trace_ label_t -> bool
 let on_trace ts tr = ts < trace_length tr
 
 (*** Hiding constructors ***)
@@ -205,8 +205,11 @@ let prefix_grows #label_t tr i =
   norm_spec [zeta; delta_only [`%prefix]] (prefix #label_t)
 
 
-/// The relation <$ has Nil as a least element, and
-/// is compatible with growing traces via Snoc
+/// The relation <$ has Nil (empty_trace) as a least element, and
+/// is compatible with growing traces via Snoc (append_entry).
+/// Note that these two lemmas use Nil and Snoc directly, rather than
+/// empty_trace and append_entry, because this allows their SMTPats to
+/// trigger more robustly.
 
 let grows_nil (#label_t:Type) (tr:trace_ label_t)
   : Lemma (ensures Nil <$ tr)
