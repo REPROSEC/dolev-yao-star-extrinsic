@@ -18,13 +18,13 @@ open DY.Lib.Communication.Core
 
 val pkenc_crypto_predicates_communication_layer: {|cusages:crypto_usages|} -> pkenc_crypto_predicate
 let pkenc_crypto_predicates_communication_layer #cusages = {
-  pred = (fun tr sk_usage msg ->
+  pred = (fun tr sk_usage pk msg ->
     (exists sender receiver.
       sk_usage == long_term_key_type_to_usage (LongTermPkEncKey comm_layer_pkenc_tag)  receiver /\
       (get_label tr msg) `can_flow tr` (join (principal_label sender) (principal_label receiver)) /\
       event_triggered tr sender (CommConfSendMsg sender receiver msg)
     ));
-  pred_later = (fun tr1 tr2 pk msg -> ());
+  pred_later = (fun tr1 tr2 sk_usage pk msg -> ());
 }
 
 val pkenc_crypto_predicates_communication_layer_and_tag: 
@@ -38,7 +38,7 @@ let pkenc_crypto_predicates_communication_layer_and_tag #cusages =
 #push-options "--ifuel 3 --fuel 0"
 val sign_crypto_predicates_communication_layer: {|cusages:crypto_usages|} -> sign_crypto_predicate
 let sign_crypto_predicates_communication_layer #cusages = {
-  pred = (fun tr sk_usage sig_msg ->
+  pred = (fun tr sk_usage vk sig_msg ->
     (match parse signature_input sig_msg with
     | Some (Plain {sender; receiver; payload}) -> (
       sk_usage == long_term_key_type_to_usage (LongTermSigKey comm_layer_sign_tag) sender /\
@@ -56,7 +56,7 @@ let sign_crypto_predicates_communication_layer #cusages = {
     )
     | None -> False)
   );
-  pred_later = (fun tr1 tr2 vk msg ->  parse_wf_lemma signature_input (bytes_well_formed tr1) msg);
+  pred_later = (fun tr1 tr2 sk_usage vk msg ->  parse_wf_lemma signature_input (bytes_well_formed tr1) msg);
 }
 #pop-options
 
