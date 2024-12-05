@@ -115,7 +115,7 @@ let trace_split_grows (#label_t:Type) (tr:trace_ label_t) (ts:timestamp{ts `on_t
 
 let trace_split_at (#a:Type) (tr:trace_ a) (e:trace_entry_ a{entry_exists tr e})
   : (trace_ a & (e':trace_entry_ a{trace_entry_equiv e e'}) & trace_ a)
-  = let idx = trace_find tr e in
+  = let idx = trace_find_first tr e in
     let (tr1, e', tr2) = trace_split tr idx in
     trace_split_get_entry tr idx idx;
     (tr1, e', tr2)

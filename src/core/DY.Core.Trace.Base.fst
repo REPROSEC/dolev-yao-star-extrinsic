@@ -746,3 +746,88 @@ val trace_forget_labels:
 let trace_forget_labels tr =
   fmap_trace forget_label tr
 
+
+(*** Trace Searching ***)
+
+#push-options "--fuel 2 --ifuel 1"
+/// Finds the first (oldest) trace entry satisfying a given predicate.
+[@@"opaque_to_smt"]
+val trace_search_first: #label_t:Type -> tr:trace_ label_t -> p:(trace_entry_ label_t -> bool) ->
+    Pure (option timestamp)
+    (requires True)
+    (ensures fun ts_opt ->
+       match ts_opt with
+       | None -> forall ts. ts `on_trace` tr ==> ~(p(get_entry_at tr ts))
+       | Some ts -> (
+         ts `on_trace` tr /\
+         p (get_entry_at tr ts) /\
+         forall ts'. (ts' `on_trace` tr /\ p (get_entry_at tr ts')) ==> ts' >= ts
+       )
+    )
+let rec trace_search_first tr p
+  = match tr with
+    | Nil -> None
+    | Snoc hd entry ->
+      match trace_search_first hd p with
+      | None -> if p entry then Some (last_timestamp tr) else None
+      | Some ts -> Some ts
+
+/// Finds the last (most recent) trace entry satisfying a given predicate.
+[@@"opaque_to_smt"]
+val trace_search_last: #label_t:Type -> tr:trace_ label_t -> p:(trace_entry_ label_t -> bool) ->
+    Pure (option timestamp)
+    (requires True)
+    (ensures fun ts_opt ->
+       match ts_opt with
+       | None -> forall ts. ts `on_trace` tr ==> ~(p(get_entry_at tr ts))
+       | Some ts -> (
+         ts `on_trace` tr /\
+         p (get_entry_at tr ts) /\
+         forall ts'. (ts' `on_trace` tr /\ p (get_entry_at tr ts')) ==> ts' <= ts
+       )
+    )
+let rec trace_search_last tr p
+  = match tr with
+    | Nil -> None
+    | Snoc hd entry ->
+      if p entry then
+        Some (last_timestamp tr)
+      else
+        trace_search_last hd p
+#pop-options
+
+/// When searching the trace for an entry that we know to exist, we need to be able
+/// to decide if a given entry is the one we are looking for, and so we use this
+/// label-ignoring equivalence. This is exactly == for non-RandGen trace entries,
+/// but treats two RandGen entries with the same non-label content as equivalent.
+let trace_entry_equiv (#label_t:Type) (e1 e2:trace_entry_ label_t)
+  : bool
+  = (fmap_trace_entry forget_label e1) = (fmap_trace_entry forget_label e2)
+
+/// The trace_find functions make use of trace_search to get the timestamp of a
+/// trace entry that is already known to exist on the trace. Since a given entry
+/// may in principle occur multiple times, we have two functions to give the first
+/// and last occurrence of such an entry.
+[@@"opaque_to_smt"]
+val trace_find_first: #label_t:Type -> tr:trace_ label_t -> e:trace_entry_ label_t{entry_exists tr e} ->
+    Pure timestamp
+      (requires True)
+      (ensures fun ts ->
+        ts `on_trace` tr /\
+        trace_entry_equiv e (get_entry_at tr ts) /\
+        forall ts'. (ts' `on_trace` tr /\ trace_entry_equiv e (get_entry_at tr ts')) ==> ts' >= ts
+      )
+let trace_find_first tr e
+  = Some?.v (trace_search_first tr (trace_entry_equiv e))
+
+[@@"opaque_to_smt"]
+val trace_find_last: #label_t:Type -> tr:trace_ label_t -> e:trace_entry_ label_t{entry_exists tr e} ->
+    Pure timestamp
+      (requires True)
+      (ensures fun ts ->
+        ts `on_trace` tr /\
+        trace_entry_equiv e (get_entry_at tr ts) /\
+        forall ts'. (ts' `on_trace` tr /\ trace_entry_equiv e (get_entry_at tr ts')) ==> ts' <= ts
+      )
+let trace_find_last tr e
+  = Some?.v (trace_search_last tr (trace_entry_equiv e))

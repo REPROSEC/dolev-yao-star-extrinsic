@@ -3,47 +3,6 @@ module DY.Core.Trace.SplitUtils
 open DY.Core.Trace.Type
 open DY.Core.Trace.Base
 
-(*** General utility functions for working with traces ***)
-
-/// By forgetting labels, we can work with a label-ignoring equivalence on entries
-
-let trace_entry_equiv (#label_t:Type) (e1 e2:trace_entry_ label_t)
-  : bool
-  = (fmap_trace_entry forget_label e1) = (fmap_trace_entry forget_label e2)
-
-(*** Trace search functions ***)
-
-/// As trace entries are not an eqtype, rather than looking up a specific trace entry,
-/// we first implement a function that lets us look up trace entries with a given property.
-/// Currently, this will find the most recent entry satisfying the property, if multiple
-/// exist, but it is easy to generalize to find the oldest such entry, or all such entries.
-///
-/// Using trace entry equivalence and this first search function, we can find entries that are
-/// equivalent to a known trace entry, though they may not necessarily be equal.
-
-[@@"opaque_to_smt"]
-let rec trace_search (#label_t:Type) (tr:trace_ label_t) (p:trace_entry_ label_t -> bool)
-  : Pure (option timestamp)
-    (requires True)
-    (ensures fun ts_opt ->
-       match ts_opt with
-       | None -> forall ts. ts `on_trace` tr ==> ~(p(get_entry_at tr ts))
-       | Some ts -> ts `on_trace` tr /\ p (get_entry_at tr ts)
-    )
-  = match tr with
-    | Nil -> None
-    | Snoc hd entry ->
-      if p entry then
-        Some (last_timestamp tr)
-      else
-        trace_search hd p
-
-[@@"opaque_to_smt"]
-let trace_find (#label_t:Type) (tr:trace_ label_t) (e:trace_entry_ label_t{entry_exists tr e})
-  : Pure timestamp (requires True) (ensures fun ts -> ts `on_trace` tr /\ trace_entry_equiv e (get_entry_at tr ts))
-  = let Some ts = trace_search tr (trace_entry_equiv e) in
-    ts
-
 (*** Trace arithmetic ***)
 
 /// We define trace concatenation (the monoid operation), as well as
