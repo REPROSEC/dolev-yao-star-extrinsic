@@ -1,8 +1,8 @@
-module DY.Core.Trace.SplitUtils.Derived
+module DY.Core.Trace.Arithmetic.Derived
 
 open DY.Core.Trace.Type
 open DY.Core.Trace.Base
-open DY.Core.Trace.SplitUtils
+open DY.Core.Trace.Arithmetic
 
 /// This module contains derived functions and lemmas based on
 /// trace arithmetic (trace_concat, trace_subtract).

@@ -1,4 +1,4 @@
-module DY.Core.Trace.SplitUtils
+module DY.Core.Trace.Arithmetic
 
 open DY.Core.Trace.Type
 open DY.Core.Trace.Base
