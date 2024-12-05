@@ -156,6 +156,18 @@ val state_was_set:
 let state_was_set #a #ls tr prin sess_id content =
   tagged_state_was_set tr ls.tag prin sess_id (serialize _ content)
 
+val state_was_set_grows:
+  #a:Type -> {|ev:local_state a|} ->
+  tr1:trace -> tr2:trace ->
+  prin:principal -> sid:state_id -> e:a  ->
+  Lemma
+  (requires state_was_set tr1 prin sid e /\ tr1 <$ tr2)
+  (ensures state_was_set tr2 prin sid e)
+  [SMTPat (state_was_set tr1 prin sid e); SMTPat (tr1 <$ tr2)]
+let state_was_set_grows #a #ev tr1 tr2 prin sid e =
+  reveal_opaque (`%state_was_set) (state_was_set #a);
+  ()
+
 [@@ "opaque_to_smt"]
 val set_state:
   #a:Type -> {|local_state a|} ->
