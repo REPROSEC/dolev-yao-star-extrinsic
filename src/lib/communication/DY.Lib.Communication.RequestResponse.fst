@@ -80,7 +80,6 @@ type client_send_request = {
 [@@with_bytes bytes]
 type server_receive_request = {
   id:bytes;
-  client:principal;
   payload:bytes;
   key:bytes
 }
@@ -121,8 +120,8 @@ instance local_state_communication_layer_session: local_state communication_stat
 [@@with_bytes bytes]
 type communication_reqres_event =
   | CommClientSendRequest: client:principal -> server:principal -> id:bytes -> payload:bytes -> key:bytes -> communication_reqres_event
-  | CommServerReceiveRequest: client:principal -> server:principal -> id:bytes -> payload:bytes -> key:bytes -> communication_reqres_event
-  | CommServerSendResponse: client:principal -> server:principal -> id:bytes -> payload:bytes -> communication_reqres_event
+  | CommServerReceiveRequest: server:principal -> id:bytes -> payload:bytes -> key:bytes -> communication_reqres_event
+  | CommServerSendResponse: server:principal -> id:bytes -> payload:bytes -> communication_reqres_event
   | CommClientReceiveResponse: client:principal -> server:principal -> id:bytes -> payload:bytes -> key:bytes -> communication_reqres_event
 
 #push-options "--ifuel 1"
@@ -188,9 +187,9 @@ val receive_request:
 let receive_request comm_keys_ids server msg_id =
   let*? req_msg_bytes = receive_confidential comm_keys_ids server msg_id in
   let*? req_msg:request_message = return (decode_request_message req_msg_bytes) in  
-  trigger_event server (CommServerReceiveRequest req_msg.client server req_msg.id req_msg.payload req_msg.key);*
+  trigger_event server (CommServerReceiveRequest server req_msg.id req_msg.payload req_msg.key);*
   let* sid = new_session_id server in
-  set_state server sid (ServerReceiveRequest {id=req_msg.id; client=req_msg.client; payload=req_msg.payload; key=req_msg.key} <: communication_states);*
+  set_state server sid (ServerReceiveRequest {id=req_msg.id; payload=req_msg.payload; key=req_msg.key} <: communication_states);*
   let req_meta_data = {key=req_msg.key; id=req_msg.id; client=req_msg.client; server; sid} in
   return (Some (req_msg.payload, req_meta_data))
 
@@ -218,8 +217,7 @@ let send_response comm_keys_ids server req_meta_data payload =
   let ServerReceiveRequest srr = state in
   guard_tr (srr.key = req_meta_data.key);*?
   guard_tr (srr.id = req_meta_data.id);*?
-  guard_tr (srr.client = req_meta_data.client);*?
-  trigger_event server (CommServerSendResponse req_meta_data.client server req_meta_data.id payload);*
+  trigger_event server (CommServerSendResponse server req_meta_data.id payload);*
   let* nonce = mk_rand NoUsage public 32 in
   let resp_msg = compute_response_message req_meta_data.client server req_meta_data.key nonce req_meta_data.id payload in
   let* msg_id = send_msg resp_msg in
