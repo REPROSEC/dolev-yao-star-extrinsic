@@ -773,6 +773,8 @@ let rec trace_search_first tr p
       match trace_search_first hd p with
       | None -> if p entry
                then begin
+                 // This assertion seems to be necessary for proof performance
+                 // to avoid flakiness.
                  assert(forall ts'. ts' `on_trace` hd ==> ~(p(get_entry_at tr ts')));
                  Some (last_timestamp tr)
                end
@@ -800,7 +802,14 @@ let rec trace_search_last tr p
       if p entry then
         Some (last_timestamp tr)
       else
-        trace_search_last hd p
+        match trace_search_last hd p with
+        | None -> begin
+          // This assertion seems to be necessary for proof performance
+          // to avoid flakiness.
+          assert(forall ts'. ts' `on_trace` hd ==> ~(p(get_entry_at tr ts')));
+          None
+        end
+        | Some ts -> Some ts
 #pop-options
 
 /// When searching the trace for an entry that we know to exist, we need to be able
