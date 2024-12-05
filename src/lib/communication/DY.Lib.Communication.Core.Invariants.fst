@@ -149,9 +149,7 @@ let event_predicate_communication_layer
     | CommAuthReceiveMsg sender receiver payload -> (
       is_publishable tr payload /\
       (
-        (
-          event_triggered tr sender (CommAuthSendMsg sender payload)
-        ) \/
+        event_triggered tr sender (CommAuthSendMsg sender payload) \/
         is_corrupt tr (long_term_key_label sender)
       )
     )

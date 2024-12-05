@@ -25,13 +25,12 @@ let aead_crypto_predicate_communication_layer #cusages = {
   pred = (fun tr key_usage key nonce msg ad ->
     (match parse response_message msg with
     | None -> False
-    | Some {id; payload} -> (
+    | Some {payload} -> (
       match parse authenticated_data ad with
       | None -> False
-      | Some {client; server} -> (
-          event_triggered tr server (CommServerSendResponse server id payload) /\
-          (get_label tr id) `can_flow tr` (get_label tr key) /\
-          (get_label tr payload) `can_flow tr` (get_label tr key)
+      | Some {server} -> (
+        event_triggered tr server (CommServerSendResponse server payload) /\
+        (get_label tr payload) `can_flow tr` (get_label tr key)
       )
     ))
   );
@@ -66,26 +65,23 @@ let has_communication_layer_reqres_crypto_predicates #cinvs =
 let state_predicates_communication_layer {|crypto_invariants|}: local_state_predicate communication_states = {
   pred = (fun tr prin sess_id st -> 
     match st with
-    | ClientSendRequest {id; server; payload; key} -> (
+    | ClientSendRequest {server; payload; key} -> (
       let client = prin in
-      is_secret (comm_label client server) tr id /\
       is_knowable_by (comm_label client server) tr payload /\
       is_secret (comm_label client server) tr key /\
       key `has_usage tr` (AeadKey comm_layer_aead_tag empty)
     )
-    | ServerReceiveRequest {id; payload; key} -> (
+    | ServerReceiveRequest {payload; key} -> (
       let server = prin in
       is_knowable_by (principal_label server) tr key /\
       is_knowable_by (get_label tr key) tr payload /\
-      is_knowable_by (get_label tr key) tr id /\
       (
         key `has_usage tr` (AeadKey comm_layer_aead_tag empty) \/
         is_publishable tr key
       )
     )
-    | ClientReceiveResponse {id; server; payload; key} -> (
+    | ClientReceiveResponse {server; payload; key} -> (
       let client = prin in
-      is_secret (comm_label client server) tr id /\
       is_knowable_by (comm_label client server) tr payload /\
       is_secret (comm_label client server) tr key
     )
@@ -156,23 +152,22 @@ let event_predicate_communication_layer_reqres
   event_predicate communication_reqres_event =
   fun tr prin e ->
     (match e with
-    | CommClientSendRequest client server id payload key -> (
+    | CommClientSendRequest client server payload key -> (
       is_knowable_by (get_label tr key) tr payload /\
       is_secret (comm_label client server) tr key /\
-      is_secret (get_label tr key) tr id /\
       key `has_usage tr` (AeadKey comm_layer_aead_tag empty) /\
       higher_layer_resreq_preds.send_request tr client server payload (get_label tr key)
     )
-    | CommServerReceiveRequest server id payload key -> (
+    | CommServerReceiveRequest server payload key -> (
       is_knowable_by (principal_label server) tr payload /\
-      (exists client. event_triggered tr client (CommClientSendRequest client server id payload key) \/
+      (exists client. event_triggered tr client (CommClientSendRequest client server payload key) \/
         is_publishable tr payload)
     )
-    | CommServerSendResponse server id payload -> (
+    | CommServerSendResponse server payload -> (
       higher_layer_resreq_preds.send_response tr server payload
     )
-    | CommClientReceiveResponse client server id payload key -> (
-      event_triggered tr server (CommServerSendResponse server id payload) \/
+    | CommClientReceiveResponse client server payload key -> (
+      event_triggered tr server (CommServerSendResponse server payload) \/
       is_corrupt tr (principal_label client) \/ is_corrupt tr (principal_label server)
     )
     )
@@ -186,10 +181,8 @@ let request_response_event_preconditions #cinvs = {
   send_conf = (fun tr client server req_payload -> (
       match decode_request_message req_payload with
       | None -> False
-      | Some {id; client=client'; payload; key} -> (
-        client == client' /\
-        //is_knowable_by (get_label tr key) tr id /\
-        event_triggered tr client (CommClientSendRequest client server id payload key)
+      | Some {payload; key} -> (
+        event_triggered tr client (CommClientSendRequest client server payload key)
       )
     )
   );
