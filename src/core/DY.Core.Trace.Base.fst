@@ -391,13 +391,15 @@ val entry_at_grows:
   [SMTPat (entry_at tr1 i e); SMTPat (tr1 <$ tr2)]
 let entry_at_grows #label_t tr1 tr2 i e = ()
 
+/// The Snoc in the SMT pattern here is needed to make the lemma
+/// trigger more robustly.
 val last_entry_exists:
   #label_t:Type ->
   tr:trace_ label_t ->
   Lemma
     (requires is_not_empty tr)
     (ensures entry_exists tr (last tr))
-    [SMTPat (is_not_empty tr)]
+    [SMTPat (Snoc? tr)]
 let last_entry_exists tr =
   assert(entry_at tr (last_timestamp tr) (last tr))
 
