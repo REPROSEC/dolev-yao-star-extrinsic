@@ -168,7 +168,7 @@ val receive_request_proof:
       trace_invariant tr_out /\
       (*exists client. 
         is_knowable_by (comm_label client server) tr_out payload) /\*)
-      event_triggered tr_out server (CommServerReceiveRequest req_meta_data.client server req_meta_data.id payload req_meta_data.key) /\
+      event_triggered tr_out server (CommServerReceiveRequest server req_meta_data.id payload req_meta_data.key) /\
       //state_was_set tr_out server sid (ServerReceiveRequest {id; client; payload; key} <: communication_states)     
       is_comm_response_payload tr_out server req_meta_data payload
     )
@@ -194,11 +194,11 @@ let receive_request_proof #invs tr comm_keys_ids higher_layer_preds server msg_i
     );
     assert(is_knowable_by (get_label tr req_msg.key) tr' req_msg.id);*)
 
-    let ((), tr') = trigger_event server (CommServerReceiveRequest req_msg.client server req_msg.id req_msg.payload req_msg.key) tr' in
-    assert(event_triggered tr' server (CommServerReceiveRequest req_msg.client server req_msg.id req_msg.payload req_msg.key));
+    let ((), tr') = trigger_event server (CommServerReceiveRequest server req_msg.id req_msg.payload req_msg.key) tr' in
+    assert(event_triggered tr' server (CommServerReceiveRequest server req_msg.id req_msg.payload req_msg.key));
 
     let (sid', tr') = new_session_id server tr' in
-    let ((), tr') = set_state server sid' (ServerReceiveRequest {id=req_msg.id; client=req_msg.client; payload=req_msg.payload; key=req_msg.key} <: communication_states) tr' in
+    let ((), tr') = set_state server sid' (ServerReceiveRequest {id=req_msg.id; payload=req_msg.payload; key=req_msg.key} <: communication_states) tr' in
     
     assert(tr' == tr_out);
     assert(trace_invariant tr_out);
@@ -216,14 +216,14 @@ val compute_response_message_proof:
   Lemma
   (requires
     has_communication_layer_reqres_crypto_predicates /\
-    is_knowable_by (comm_label client server) tr key /\
+    is_knowable_by (principal_label server) tr key /\
     is_knowable_by (get_label tr key) tr id /\
     is_knowable_by (get_label tr key) tr payload /\    
     is_publishable tr nonce /\
     (key `has_usage tr` (AeadKey comm_layer_aead_tag empty) \/
       is_publishable tr key    
     ) /\
-    event_triggered tr server (CommServerSendResponse client server id payload)
+    event_triggered tr server (CommServerSendResponse server id payload)
   )
   (ensures
     is_publishable tr (compute_response_message client server key nonce id payload)
@@ -324,14 +324,14 @@ let send_response_proof #invs tr comm_keys_ids higher_layer_preds server req_met
     assert(bytes_invariant tr' payload);
     assert(is_knowable_by (get_label #default_crypto_usages tr' req_meta_data.key) tr' payload);
     
-    let ((), tr') = trigger_event server (CommServerSendResponse req_meta_data.client server req_meta_data.id payload) tr' in
+    let ((), tr') = trigger_event server (CommServerSendResponse server req_meta_data.id payload) tr' in
     assert(trace_invariant tr');
 
     
     let (nonce, tr') = mk_rand NoUsage public 32 tr' in
 
     assert(
-      is_knowable_by (comm_label req_meta_data.client server) tr' req_meta_data.key /\
+      is_knowable_by (principal_label server) tr' req_meta_data.key /\
       is_knowable_by (get_label tr req_meta_data.key) tr' req_meta_data.id /\
       is_knowable_by (get_label tr req_meta_data.key) tr' payload
     );
@@ -363,7 +363,7 @@ val decode_response_proof:
     | None -> True
     | Some payload -> (
       is_knowable_by (get_label tr key) tr payload /\
-      (event_triggered tr server (CommServerSendResponse client server id payload)
+      (event_triggered tr server (CommServerSendResponse server id payload)
         \/ is_corrupt tr (principal_label client) \/ is_corrupt tr (principal_label server))
     )
   ))
