@@ -22,20 +22,20 @@ open DY.Lib.Communication.Core.Invariants
 #push-options "--ifuel 1"
 val aead_crypto_predicate_communication_layer: {|cusages:crypto_usages|} -> aead_crypto_predicate
 let aead_crypto_predicate_communication_layer #cusages = {
-  pred = (fun tr key_usage nonce msg ad ->
+  pred = (fun tr key_usage key nonce msg ad ->
     (match parse response_message msg with
     | None -> False
     | Some {id; payload} -> (
       match parse authenticated_data ad with
       | None -> False
       | Some {client; server} -> (
-          event_triggered tr server (CommServerSendResponse client server id payload) /\
-          (get_label tr id) `can_flow tr` (comm_label client server) /\
-          (get_label tr payload) `can_flow tr` (comm_label client server)
+          event_triggered tr server (CommServerSendResponse server id payload) /\
+          (get_label tr id) `can_flow tr` (get_label tr key) /\
+          (get_label tr payload) `can_flow tr` (get_label tr key)
       )
     ))
   );
-  pred_later = (fun tr1 tr2 key_usage nonce msg ad -> (
+  pred_later = (fun tr1 tr2 key_usage key nonce msg ad -> (
     parse_wf_lemma response_message (bytes_well_formed tr1) msg;
     parse_wf_lemma authenticated_data (bytes_well_formed tr1) ad;
     ()
@@ -73,9 +73,9 @@ let state_predicates_communication_layer {|crypto_invariants|}: local_state_pred
       is_secret (comm_label client server) tr key /\
       key `has_usage tr` (AeadKey comm_layer_aead_tag empty)
     )
-    | ServerReceiveRequest {id; client; payload; key} -> (
+    | ServerReceiveRequest {id; payload; key} -> (
       let server = prin in
-      is_knowable_by (comm_label client server) tr key /\
+      is_knowable_by (principal_label server) tr key /\
       is_knowable_by (get_label tr key) tr payload /\
       is_knowable_by (get_label tr key) tr id /\
       (
@@ -163,16 +163,16 @@ let event_predicate_communication_layer_reqres
       key `has_usage tr` (AeadKey comm_layer_aead_tag empty) /\
       higher_layer_resreq_preds.send_request tr client server payload (get_label tr key)
     )
-    | CommServerReceiveRequest client server id payload key -> (
-      is_knowable_by (comm_label client server) tr payload /\
-      (event_triggered tr client (CommClientSendRequest client server id payload key) \/
+    | CommServerReceiveRequest server id payload key -> (
+      is_knowable_by (principal_label server) tr payload /\
+      (exists client. event_triggered tr client (CommClientSendRequest client server id payload key) \/
         is_publishable tr payload)
     )
-    | CommServerSendResponse client server id payload -> (
+    | CommServerSendResponse server id payload -> (
       higher_layer_resreq_preds.send_response tr server payload
     )
     | CommClientReceiveResponse client server id payload key -> (
-      event_triggered tr server (CommServerSendResponse client server id payload) \/
+      event_triggered tr server (CommServerSendResponse server id payload) \/
       is_corrupt tr (principal_label client) \/ is_corrupt tr (principal_label server)
     )
     )
