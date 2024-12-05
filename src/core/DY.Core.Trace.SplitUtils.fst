@@ -5,12 +5,6 @@ open DY.Core.Trace.Base
 
 (*** General utility functions for working with traces ***)
 
-/// This function is not terribly important, but we often want to check if we are at
-/// the end of a trace, and hiding the off-by-one between trace_length and the last index
-/// inside a function makes things look cleaner.
-
-let last_ts (#label_t:Type) (tr:trace_ label_t{is_not_empty tr}) : timestamp = trace_length tr - 1
-
 /// By forgetting labels, we can work with a label-ignoring equivalence on entries
 
 let trace_entry_equiv (#label_t:Type) (e1 e2:trace_entry_ label_t)
@@ -40,7 +34,7 @@ let rec trace_search (#label_t:Type) (tr:trace_ label_t) (p:trace_entry_ label_t
     | Nil -> None
     | Snoc hd entry ->
       if p entry then
-        Some (last_ts tr)
+        Some (last_timestamp tr)
       else
         trace_search hd p
 
@@ -133,7 +127,7 @@ let rec trace_concat_get_entry (#label_t:Type) (tr1 tr2:trace_ label_t) (ts:time
      )
     )
   = norm_spec [zeta; delta_only [`%trace_concat]] (trace_concat #label_t);
-    if is_empty tr2 || ts = last_ts (tr1 <++> tr2) then ()
+    if is_empty tr2 || ts = last_timestamp (tr1 <++> tr2) then ()
     else trace_concat_get_entry tr1 (init tr2) ts
 
 let rec trace_concat_fmap_trace (#a #b:Type) (tr1 tr2:trace_ a) (f:a -> b)
@@ -171,7 +165,7 @@ let rec trace_subtract_get_entry (#label_t:Type) (tr1 tr2:trace_ label_t) (ts:ti
     (requires tr1 <$ tr2 /\ ~(ts `on_trace` tr1))
     (ensures get_entry_at tr2 ts == get_entry_at (tr2 <--> tr1) (ts - trace_length tr1))
   = norm_spec [zeta; delta_only [`%trace_subtract]] (trace_subtract #label_t);
-    if ts = last_ts tr2 then ()
+    if ts = last_timestamp tr2 then ()
     else begin
       grows_cases tr1 tr2;
       trace_subtract_get_entry tr1 (init tr2) ts
