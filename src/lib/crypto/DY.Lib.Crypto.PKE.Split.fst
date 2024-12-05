@@ -5,6 +5,7 @@ open DY.Core
 open DY.Lib.Crypto.SplitPredicate
 
 let split_pke_predicate_params {|crypto_usages|}: split_crypto_predicate_parameters = {
+  key_t = bytes;
   key_usage_t = sk_usage:usage{PkeKey? sk_usage};
   data_t = (bytes & bytes);
   get_usage = (fun sk_usage ->
@@ -12,17 +13,28 @@ let split_pke_predicate_params {|crypto_usages|}: split_crypto_predicate_paramet
     tag
   );
 
-  local_pred_t = pke_crypto_predicate;
-  global_pred_t = tr:trace -> sk_usage:usage{PkeKey? sk_usage} -> pk:bytes -> msg:bytes -> prop;
+  key_well_formed = bytes_well_formed;
+  has_usage_split = has_sk_usage;
+  has_usage_split_later = (fun tr1 tr2 pk sk_usage ->
+    normalize_term_spec bytes_well_formed;
+    match pk with
+    | Pk sk -> (
+      get_usage_later tr1 tr2 sk
+    )
+    | _ -> ()
+  );
 
-  apply_local_pred = (fun pred (tr, sk_usage, (pk, msg)) ->
+  local_pred_t = pke_crypto_predicate;
+  global_pred_t = tr:trace -> sk_usage:usage{PkeKey? sk_usage} -> pk:bytes{pk `has_sk_usage tr` sk_usage} -> msg:bytes -> prop;
+
+  apply_local_pred = (fun pred (|tr, sk_usage, pk, msg|) ->
     pred.pred tr sk_usage pk msg
   );
-  apply_global_pred = (fun pred (tr, sk_usage, (pk, msg)) ->
+  apply_global_pred = (fun pred (|tr, sk_usage, pk, msg|) ->
     pred tr sk_usage pk msg
   );
   mk_global_pred = (fun pred tr sk_usage pk msg ->
-    pred (tr, sk_usage, (pk, msg))
+    pred (|tr, sk_usage, pk, msg|)
   );
 
   data_well_formed = (fun tr (key, msg) ->
@@ -38,7 +50,7 @@ let split_pke_predicate_params {|crypto_usages|}: split_crypto_predicate_paramet
 
 val has_pke_predicate: {|crypto_invariants|} -> (string & pke_crypto_predicate) -> prop
 let has_pke_predicate #cinvs (tag, local_pred) =
-  forall (tr:trace) (sk_usage:usage) (pk:bytes) (msg:bytes).
+  forall (tr:trace) (sk_usage:usage) (pk:bytes{pk `has_sk_usage tr` sk_usage}) (msg:bytes).
     {:pattern pke_pred.pred tr sk_usage pk msg}
     match sk_usage with
     | PkeKey pke_tag _ ->
@@ -60,7 +72,7 @@ let intro_has_pke_predicate #cinvs (tag, local_pred) =
   with (
     match sk_usage with
     | PkeKey pke_tag _ ->
-      has_local_crypto_predicate_elim split_pke_predicate_params pke_pred.pred tag local_pred tr sk_usage (pk, msg)
+      has_local_crypto_predicate_elim split_pke_predicate_params pke_pred.pred tag local_pred tr sk_usage pk msg
     | _ -> ()
   )
 
@@ -73,7 +85,7 @@ val mk_pke_predicate:
 let mk_pke_predicate #cusgs l = {
   pred = mk_global_crypto_predicate split_pke_predicate_params l;
   pred_later = (fun tr1 tr2 sk_usage pk msg -> 
-    mk_global_crypto_predicate_later split_pke_predicate_params l tr1 tr2 sk_usage (pk, msg)
+    mk_global_crypto_predicate_later split_pke_predicate_params l tr1 tr2 sk_usage pk msg
   );
 }
 
