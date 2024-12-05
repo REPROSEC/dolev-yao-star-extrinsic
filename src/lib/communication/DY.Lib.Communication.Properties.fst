@@ -66,7 +66,7 @@ val server_authentication:
     event_triggered_at tr i client (CommClientReceiveResponse client server  id payload key)    
   )
   (ensures
-    event_triggered (prefix tr i) server (CommServerSendResponse client server id payload) \/
+    event_triggered (prefix tr i) server (CommServerSendResponse server id payload) \/
     is_corrupt (prefix tr i) (principal_label client) \/ 
     is_corrupt (prefix tr i) (principal_label server)
   )
