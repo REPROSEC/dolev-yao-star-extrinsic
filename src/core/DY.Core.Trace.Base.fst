@@ -771,7 +771,12 @@ let rec trace_search_first tr p
     | Nil -> None
     | Snoc hd entry ->
       match trace_search_first hd p with
-      | None -> if p entry then Some (last_timestamp tr) else None
+      | None -> if p entry
+               then begin
+                 assert(forall ts'. ts' `on_trace` hd ==> ~(p(get_entry_at tr ts')));
+                 Some (last_timestamp tr)
+               end
+               else None
       | Some ts -> Some ts
 
 /// Finds the last (most recent) trace entry satisfying a given predicate.
