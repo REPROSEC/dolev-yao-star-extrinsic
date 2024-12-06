@@ -422,6 +422,17 @@ val state_was_set:
 let state_was_set #label_t tr prin sess_id content =
   entry_exists tr (SetState prin sess_id content)
 
+/// A state being set at some time stays on the trace as the trace grows.
+
+val state_was_set_grows:
+  tr1:trace -> tr2:trace ->
+  prin:principal -> sid:state_id -> content:bytes  ->
+  Lemma
+  (requires state_was_set tr1 prin sid content /\ tr1 <$ tr2)
+  (ensures state_was_set tr2 prin sid content)
+  [SMTPat (state_was_set tr1 prin sid content); SMTPat (tr1 <$ tr2)]
+let state_was_set_grows tr1 tr2 prin sid content = ()
+
 /// Has a principal been corrupt?
 
 val state_was_corrupt:
