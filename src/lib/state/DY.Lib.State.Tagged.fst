@@ -253,8 +253,7 @@ val tagged_state_was_set_grows:
   (ensures tagged_state_was_set tr2 tag prin sid e)
   [SMTPat (tagged_state_was_set tr1 tag prin sid e); SMTPat (tr1 <$ tr2)]
 let tagged_state_was_set_grows tr1 tr2 tag prin sid e =
-  reveal_opaque (`%tagged_state_was_set) (tagged_state_was_set);
-  ()
+  reveal_opaque (`%tagged_state_was_set) (tagged_state_was_set)
 
 (*** API for tagged sessions ***)
 

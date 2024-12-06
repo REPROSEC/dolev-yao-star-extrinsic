@@ -165,8 +165,7 @@ val state_was_set_grows:
   (ensures state_was_set tr2 prin sid e)
   [SMTPat (state_was_set tr1 prin sid e); SMTPat (tr1 <$ tr2)]
 let state_was_set_grows #a #ev tr1 tr2 prin sid e =
-  reveal_opaque (`%state_was_set) (state_was_set #a);
-  ()
+  reveal_opaque (`%state_was_set) (state_was_set #a)
 
 [@@ "opaque_to_smt"]
 val set_state:
