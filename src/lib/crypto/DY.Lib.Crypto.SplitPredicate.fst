@@ -26,7 +26,8 @@ type split_crypto_predicate_parameters = {
     (requires 
       key `has_usage_split tr1` key_usg /\ 
       key_well_formed tr1 key /\
-      tr1 <$ tr2)
+      tr1 <$ tr2
+    )
     (ensures key `has_usage_split tr2` key_usg);
 
   local_pred_t: Type;

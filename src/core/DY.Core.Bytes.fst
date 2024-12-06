@@ -752,10 +752,7 @@ type aead_crypto_predicate {|crypto_usages|} = {
       bytes_well_formed tr1 ad /\
       tr1 <$ tr2
     )
-    (ensures 
-      key `has_usage tr2` key_usage /\
-      pred tr2 key_usage key nonce msg ad
-    )
+    (ensures pred tr2 key_usage key nonce msg ad)
   ;
 }
 
@@ -1126,16 +1123,9 @@ let rec bytes_invariant_later #cinvs tr1 tr2 msg =
     bytes_invariant_later tr1 tr2 nonce;
     bytes_invariant_later tr1 tr2 msg;
     bytes_invariant_later tr1 tr2 ad;
-    introduce (exists key_usg. key `has_usage tr1` key_usg /\ AeadKey? key_usg /\ aead_pred.pred tr1 key_usg key nonce msg ad) ==> 
-      (exists key_usg. key `has_usage tr2` key_usg /\ aead_pred.pred tr2 key_usg key nonce msg ad)
-    with _. (
-      assert(exists key_usg. key `has_usage tr1` key_usg /\ AeadKey? key_usg /\ aead_pred.pred tr1 key_usg key nonce msg ad);
-      eliminate exists key_usg. key `has_usage tr1` key_usg /\ AeadKey? key_usg /\ aead_pred.pred tr1 key_usg key nonce msg ad
-      returns (exists key_usg. key `has_usage tr2` key_usg /\ aead_pred.pred tr2 key_usg key nonce msg ad)
-      with _. (
-        aead_pred.pred_later tr1 tr2 key_usg key nonce msg ad;
-        assert(exists key_usg. key `has_usage tr2` key_usg /\ aead_pred.pred tr2 key_usg key nonce msg ad);
-        ()
+    introduce forall key_usg. key `has_usage tr1` key_usg /\ aead_pred.pred tr1 key_usg key nonce msg ad ==> aead_pred.pred tr2 key_usg key nonce msg ad with (
+      introduce key `has_usage tr1` key_usg /\ aead_pred.pred tr1 key_usg key nonce msg ad ==> aead_pred.pred tr2 key_usg key nonce msg ad with _. (
+        aead_pred.pred_later tr1 tr2 key_usg key nonce msg ad
       )
     )
   )
@@ -1145,16 +1135,9 @@ let rec bytes_invariant_later #cinvs tr1 tr2 msg =
     bytes_invariant_later tr1 tr2 pk;
     bytes_invariant_later tr1 tr2 nonce;
     bytes_invariant_later tr1 tr2 msg;
-    introduce (exists sk_usg. pk `has_sk_usage tr1` sk_usg /\ PkeKey? sk_usg /\ pke_pred.pred tr1 sk_usg pk msg) ==>
-      (exists sk_usg. pk `has_sk_usage tr2` sk_usg /\ pke_pred.pred tr2 sk_usg pk msg)
-    with _. (
-      assert(exists sk_usg. pk `has_sk_usage tr1` sk_usg /\ PkeKey? sk_usg /\ pke_pred.pred tr1 sk_usg pk msg);
-      eliminate exists sk_usg. pk `has_sk_usage tr1` sk_usg /\ PkeKey? sk_usg /\ pke_pred.pred tr1 sk_usg pk msg
-      returns (exists sk_usg. pk `has_sk_usage tr2` sk_usg /\ pke_pred.pred tr2 sk_usg pk msg)
-      with _. (
-        pke_pred.pred_later tr1 tr2 sk_usg pk msg;
-        assert(exists sk_usg. pk `has_sk_usage tr2` sk_usg /\ pke_pred.pred tr2 sk_usg pk msg);
-        ()
+    introduce forall sk_usg. pk `has_sk_usage tr1` sk_usg /\ pke_pred.pred tr1 sk_usg pk msg ==> pke_pred.pred tr2 sk_usg pk msg with (
+      introduce pk `has_sk_usage tr1` sk_usg /\ pke_pred.pred tr1 sk_usg pk msg ==> pke_pred.pred tr2 sk_usg pk msg with _. (
+        pke_pred.pred_later tr1 tr2 sk_usg pk msg
       )
     )
   )
@@ -1165,17 +1148,9 @@ let rec bytes_invariant_later #cinvs tr1 tr2 msg =
     bytes_invariant_later tr1 tr2 nonce;
     bytes_invariant_later tr1 tr2 msg;
     assert(bytes_invariant tr1 (Vk sk)); // to prove well-formedness
-    let vk = Vk sk in
-    introduce (exists sk_usg. vk `has_signkey_usage tr1` sk_usg /\ SigKey? sk_usg /\ sign_pred.pred tr1 sk_usg vk msg) ==>
-      (exists sk_usg. vk `has_signkey_usage tr2` sk_usg /\ sign_pred.pred tr2 sk_usg vk msg)
-    with _. (
-      assert(exists sk_usg. vk `has_signkey_usage tr1` sk_usg /\ SigKey? sk_usg /\ sign_pred.pred tr1 sk_usg vk msg);
-      eliminate exists sk_usg. vk `has_signkey_usage tr1` sk_usg /\ SigKey? sk_usg /\ sign_pred.pred tr1 sk_usg vk msg
-      returns (exists sk_usg. vk `has_signkey_usage tr2` sk_usg /\ sign_pred.pred tr2 sk_usg vk msg)
-      with _. (
-        sign_pred.pred_later tr1 tr2 sk_usg vk msg;
-        assert(exists sk_usg. vk `has_signkey_usage tr2` sk_usg /\ sign_pred.pred tr2 sk_usg vk msg);
-        ()
+    introduce forall sk_usg. (Vk sk) `has_signkey_usage tr1` sk_usg /\ sign_pred.pred tr1 sk_usg (Vk sk) msg ==> sign_pred.pred tr2 sk_usg (Vk sk) msg with (
+      introduce (Vk sk) `has_signkey_usage tr1` sk_usg /\ sign_pred.pred tr1 sk_usg (Vk sk) msg ==> sign_pred.pred tr2 sk_usg (Vk sk) msg with _. (
+        sign_pred.pred_later tr1 tr2 sk_usg (Vk sk) msg
       )
     )
   )
