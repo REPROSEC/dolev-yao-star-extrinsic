@@ -2217,7 +2217,7 @@ let bytes_invariant_verify #cinvs tr vkey sk_usg msg signature =
   normalize_term_spec get_label;
   normalize_term_spec vk;
   FStar.Classical.forall_intro_3 (FStar.Classical.move_requires_3 (has_usage_inj tr));
-  assert(forall sk sk_usg. (Vk sk) `has_signkey_usage tr` sk_usg == (vk sk) `has_signkey_usage tr` sk_usg)
+  assert(forall sk. Vk sk == vk sk)
 
 (*** Hash ***)
 
