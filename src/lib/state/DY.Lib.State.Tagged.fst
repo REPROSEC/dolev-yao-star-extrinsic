@@ -247,12 +247,12 @@ let tagged_state_was_set tr tag prin sess_id content =
 
 val tagged_state_was_set_grows:
   tr1:trace -> tr2:trace ->
-  tag:string -> prin:principal -> sid:state_id -> e:bytes  ->
+  tag:string -> prin:principal -> sid:state_id -> content:bytes  ->
   Lemma
-  (requires tagged_state_was_set tr1 tag prin sid e /\ tr1 <$ tr2)
-  (ensures tagged_state_was_set tr2 tag prin sid e)
-  [SMTPat (tagged_state_was_set tr1 tag prin sid e); SMTPat (tr1 <$ tr2)]
-let tagged_state_was_set_grows tr1 tr2 tag prin sid e =
+  (requires tagged_state_was_set tr1 tag prin sid content /\ tr1 <$ tr2)
+  (ensures tagged_state_was_set tr2 tag prin sid content)
+  [SMTPat (tagged_state_was_set tr1 tag prin sid content); SMTPat (tr1 <$ tr2)]
+let tagged_state_was_set_grows tr1 tr2 tag prin sid content =
   reveal_opaque (`%tagged_state_was_set) (tagged_state_was_set)
 
 (*** API for tagged sessions ***)
