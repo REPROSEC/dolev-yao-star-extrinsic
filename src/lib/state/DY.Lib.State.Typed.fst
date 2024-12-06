@@ -157,14 +157,14 @@ let state_was_set #a #ls tr prin sess_id content =
   tagged_state_was_set tr ls.tag prin sess_id (serialize _ content)
 
 val state_was_set_grows:
-  #a:Type -> {|ev:local_state a|} ->
+  #a:Type -> {|local_state a|} ->
   tr1:trace -> tr2:trace ->
-  prin:principal -> sid:state_id -> e:a  ->
+  prin:principal -> sid:state_id -> content:a  ->
   Lemma
-  (requires state_was_set tr1 prin sid e /\ tr1 <$ tr2)
-  (ensures state_was_set tr2 prin sid e)
-  [SMTPat (state_was_set tr1 prin sid e); SMTPat (tr1 <$ tr2)]
-let state_was_set_grows #a #ev tr1 tr2 prin sid e =
+  (requires state_was_set tr1 prin sid content /\ tr1 <$ tr2)
+  (ensures state_was_set tr2 prin sid content)
+  [SMTPat (state_was_set tr1 prin sid content); SMTPat (tr1 <$ tr2)]
+let state_was_set_grows #a #ls tr1 tr2 prin sid content =
   reveal_opaque (`%state_was_set) (state_was_set #a)
 
 [@@ "opaque_to_smt"]
