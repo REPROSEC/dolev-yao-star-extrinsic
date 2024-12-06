@@ -45,7 +45,6 @@ type timestamp = nat
 
 /// The type for entries in the trace.
 
-noeq
 type trace_entry_ (label_t:Type) =
   // A message has been sent on the network.
   | MsgSent: bytes -> trace_entry_ label_t
@@ -63,7 +62,6 @@ type trace_entry_ (label_t:Type) =
 /// the trace is actually a reversed list.
 /// To avoid confusions, we define a custom inductive to swap the arguments of the "cons" constructor.
 
-noeq
 type trace_ (label_t:Type) =
   | Nil: trace_ label_t
   | Snoc: trace_ label_t -> trace_entry_ label_t -> trace_ label_t
