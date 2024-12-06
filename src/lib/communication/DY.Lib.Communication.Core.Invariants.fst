@@ -51,7 +51,6 @@ let sign_crypto_predicates_communication_layer #cusages = {
       (exists plain_payload nonce.
         sk_usage == long_term_key_type_to_usage (LongTermSigKey comm_layer_sign_tag) cm.sender /\
         cm.payload == encrypt_message pk_receiver nonce plain_payload /\
-        event_triggered tr cm.sender (CommAuthSendMsg cm.sender plain_payload) /\
         event_triggered tr cm.sender (CommConfAuthSendMsg cm.sender cm.receiver plain_payload)
       )
     )
