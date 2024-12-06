@@ -751,65 +751,59 @@ let trace_forget_labels tr =
 
 (*** Trace Searching ***)
 
-#push-options "--fuel 2 --ifuel 1"
 /// Finds the first (oldest) trace entry satisfying a given predicate.
+#push-options "--fuel 2 --ifuel 1"
 [@@"opaque_to_smt"]
 val trace_search_first: #label_t:Type -> tr:trace_ label_t -> p:(trace_entry_ label_t -> bool) ->
     Pure (option timestamp)
     (requires True)
     (ensures fun ts_opt ->
        match ts_opt with
-       | None -> forall ts. ts `on_trace` tr ==> ~(p(get_entry_at tr ts))
+       | None -> forall (ts:timestamp). ts `on_trace` tr ==> ~(p(get_entry_at tr ts))
        | Some ts -> (
          ts `on_trace` tr /\
          p (get_entry_at tr ts) /\
-         forall ts'. (ts' `on_trace` tr /\ p (get_entry_at tr ts')) ==> ts' >= ts
+         forall (ts':timestamp). (ts' `on_trace` tr /\ p (get_entry_at tr ts')) ==> ts' >= ts
        )
     )
-let rec trace_search_first tr p
-  = match tr with
-    | Nil -> None
-    | Snoc hd entry ->
-      match trace_search_first hd p with
-      | None -> if p entry
-               then begin
-                 // This assertion seems to be necessary for proof performance
-                 // to avoid flakiness.
-                 assert(forall ts'. ts' `on_trace` hd ==> ~(p(get_entry_at tr ts')));
-                 Some (last_timestamp tr)
-               end
-               else None
-      | Some ts -> Some ts
+let rec trace_search_first tr p =
+  match tr with
+  | Nil -> None
+  | Snoc hd entry -> (
+    match trace_search_first hd p with
+    | None -> (
+      if p entry then
+       Some (last_timestamp tr)
+     else
+       None
+    )
+    | Some ts -> Some ts
+  )
+#pop-options
 
 /// Finds the last (most recent) trace entry satisfying a given predicate.
+#push-options
 [@@"opaque_to_smt"]
 val trace_search_last: #label_t:Type -> tr:trace_ label_t -> p:(trace_entry_ label_t -> bool) ->
     Pure (option timestamp)
     (requires True)
     (ensures fun ts_opt ->
        match ts_opt with
-       | None -> forall ts. ts `on_trace` tr ==> ~(p(get_entry_at tr ts))
+       | None -> forall (ts:timestamp). ts `on_trace` tr ==> ~(p(get_entry_at tr ts))
        | Some ts -> (
          ts `on_trace` tr /\
          p (get_entry_at tr ts) /\
-         forall ts'. (ts' `on_trace` tr /\ p (get_entry_at tr ts')) ==> ts' <= ts
+         forall (ts':timestamp). (ts' `on_trace` tr /\ p (get_entry_at tr ts')) ==> ts' <= ts
        )
     )
-let rec trace_search_last tr p
-  = match tr with
-    | Nil -> None
-    | Snoc hd entry ->
-      if p entry then
-        Some (last_timestamp tr)
-      else
-        match trace_search_last hd p with
-        | None -> begin
-          // This assertion seems to be necessary for proof performance
-          // to avoid flakiness.
-          assert(forall ts'. ts' `on_trace` hd ==> ~(p(get_entry_at tr ts')));
-          None
-        end
-        | Some ts -> Some ts
+let rec trace_search_last tr p =
+  match tr with
+  | Nil -> None
+  | Snoc hd entry ->
+    if p entry then
+      Some (last_timestamp tr)
+    else
+      trace_search_last hd p
 #pop-options
 
 /// When searching the trace for an entry that we know to exist, we need to be able
@@ -833,8 +827,8 @@ val trace_find_first: #label_t:Type -> tr:trace_ label_t -> e:trace_entry_ label
         trace_entry_equiv e (get_entry_at tr ts) /\
         forall ts'. (ts' `on_trace` tr /\ trace_entry_equiv e (get_entry_at tr ts')) ==> ts' >= ts
       )
-let trace_find_first tr e
-  = Some?.v (trace_search_first tr (trace_entry_equiv e))
+let trace_find_first tr e =
+  Some?.v (trace_search_first tr (trace_entry_equiv e))
 
 [@@"opaque_to_smt"]
 val trace_find_last: #label_t:Type -> tr:trace_ label_t -> e:trace_entry_ label_t{entry_exists tr e} ->
@@ -845,5 +839,5 @@ val trace_find_last: #label_t:Type -> tr:trace_ label_t -> e:trace_entry_ label_
         trace_entry_equiv e (get_entry_at tr ts) /\
         forall ts'. (ts' `on_trace` tr /\ trace_entry_equiv e (get_entry_at tr ts')) ==> ts' <= ts
       )
-let trace_find_last tr e
-  = Some?.v (trace_search_last tr (trace_entry_equiv e))
+let trace_find_last tr e =
+  Some?.v (trace_search_last tr (trace_entry_equiv e))
