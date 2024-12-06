@@ -245,6 +245,16 @@ let tagged_state_was_set tr tag prin sess_id content =
   let full_content_bytes = serialize tagged_state full_content in
   state_was_set tr prin sess_id full_content_bytes
 
+val tagged_state_was_set_grows:
+  tr1:trace -> tr2:trace ->
+  tag:string -> prin:principal -> sid:state_id -> content:bytes  ->
+  Lemma
+  (requires tagged_state_was_set tr1 tag prin sid content /\ tr1 <$ tr2)
+  (ensures tagged_state_was_set tr2 tag prin sid content)
+  [SMTPat (tagged_state_was_set tr1 tag prin sid content); SMTPat (tr1 <$ tr2)]
+let tagged_state_was_set_grows tr1 tr2 tag prin sid content =
+  reveal_opaque (`%tagged_state_was_set) (tagged_state_was_set)
+
 (*** API for tagged sessions ***)
 
 [@@ "opaque_to_smt"]
