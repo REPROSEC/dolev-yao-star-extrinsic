@@ -2,7 +2,6 @@ module DY.Lib.Communication.Core.Invariants
 
 open Comparse
 open DY.Core
-open DY.Lib.Communication.Core.Extension
 open DY.Lib.Crypto.PkEncryption.Split
 open DY.Lib.Crypto.Signature.Split
 open DY.Lib.Crypto.AEAD.Split
@@ -23,7 +22,8 @@ let pkenc_crypto_predicates_communication_layer #cusages = {
       sk_usage == long_term_key_type_to_usage (LongTermPkEncKey comm_layer_pkenc_tag)  receiver /\
       (get_label tr msg) `can_flow tr` (join (principal_label sender) (principal_label receiver)) /\
       event_triggered tr sender (CommConfSendMsg sender receiver msg)
-    ));
+    )
+    );
   pred_later = (fun tr1 tr2 sk_usage pk msg -> ());
 }
 
@@ -45,13 +45,13 @@ let sign_crypto_predicates_communication_layer #cusages = {
       get_label tr payload `can_flow tr` public /\
       event_triggered tr sender (CommAuthSendMsg sender payload)
     )
-    | Some (Encrypted {sender; receiver; payload=enc_payload}) -> (
-      match pk_enc_extract_msg enc_payload with
-      | None -> False
-      | Some plain_payload -> (
-        sk_usage == long_term_key_type_to_usage (LongTermSigKey comm_layer_sign_tag) sender /\     
-        get_label tr enc_payload `can_flow tr` public /\
-        event_triggered tr sender (CommConfAuthSendMsg sender receiver plain_payload)
+    | Some (Encrypted pk_receiver cm) -> (  
+      get_label tr cm.payload `can_flow tr` public /\
+      (exists plain_payload nonce.
+        sk_usage == long_term_key_type_to_usage (LongTermSigKey comm_layer_sign_tag) cm.sender /\
+        cm.payload == encrypt_message pk_receiver nonce plain_payload /\
+        //event_triggered tr cm.sender (CommAuthSendMsg cm.sender plain_payload) /\
+        event_triggered tr cm.sender (CommConfAuthSendMsg cm.sender cm.receiver plain_payload)
       )
     )
     | None -> False)
