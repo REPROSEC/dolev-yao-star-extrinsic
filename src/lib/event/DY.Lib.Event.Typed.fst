@@ -94,7 +94,9 @@ let has_event_pred #a #ev #invs epred =
 
 (*** Global event predicate builder ***)
 
-val mk_event_pred: {|crypto_invariants|} -> list (string & compiled_event_predicate) -> trace -> principal -> string -> bytes -> prop
+val mk_event_pred:
+  {|crypto_invariants|} -> list (string & compiled_event_predicate) ->
+  trace -> principal -> string -> bytes -> prop
 let mk_event_pred #cinvs tagged_local_preds =
   mk_global_fun split_event_pred_params (mk_dependent_tagged_local_funs tagged_local_preds)
 
