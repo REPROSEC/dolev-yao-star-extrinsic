@@ -20,7 +20,7 @@ open DY.Core.Label
 /// meaning that its label flows to public (by definition of publishability),
 /// which in turn will imply that some set of principals have been compromised (property of labels).
 
-/// Auxillary prediate for the attacker knowledge:
+/// Auxillary predicate for the attacker knowledge:
 /// given a trace `tr`,
 /// can the attacker compute `msg`
 /// by applying at most `step` cryptographic functions?
