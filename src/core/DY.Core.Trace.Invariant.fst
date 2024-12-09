@@ -198,8 +198,8 @@ val event_triggered_at_implies_pred:
   i:timestamp -> prin:principal -> tag:string -> content:bytes ->
   Lemma
   (requires
-    event_triggered_at tr i prin tag content /\
-    trace_invariant tr
+    trace_invariant tr /\
+    event_triggered_at tr i prin tag content
   )
   (ensures event_pred (prefix tr i) prin tag content)
   [SMTPat (event_triggered_at tr i prin tag content);
