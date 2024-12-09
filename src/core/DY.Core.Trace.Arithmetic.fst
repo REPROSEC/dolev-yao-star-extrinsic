@@ -39,7 +39,7 @@ val trace_concat_empty_trace: #label_t:Type -> tr:trace_ label_t ->
   )
   [SMTPatOr [[SMTPat (tr <++> empty_trace)]; [SMTPat (empty_trace <++> tr)]]]
 let rec trace_concat_empty_trace #label_t tr =
-  norm_spec [zeta; delta_only [`%trace_concat]] (trace_concat #label_t);
+  reveal_opaque (`%trace_concat) (trace_concat #label_t);
   match tr with
   | Nil -> ()
   | Snoc hd _ -> trace_concat_empty_trace hd
@@ -49,7 +49,7 @@ val trace_concat_assoc:
   tr1:trace_ label_t -> tr2:trace_ label_t -> tr3:trace_ label_t ->
   Lemma (((tr1 <++> tr2) <++> tr3) == (tr1 <++> (tr2 <++> tr3)))
 let rec trace_concat_assoc #label_t tr1 tr2 tr3 =
-  norm_spec [zeta; delta_only [`%trace_concat]] (trace_concat #label_t);
+  reveal_opaque (`%trace_concat) (trace_concat #label_t);
   match tr3 with
   | Nil -> ()
   | Snoc hd _ -> trace_concat_assoc tr1 tr2 hd
@@ -60,13 +60,13 @@ val append_entry_is_concat_singleton: #label_t:Type -> tr:trace_ label_t -> e:tr
   Lemma (append_entry tr e == (tr <++> (append_entry empty_trace e)))
   [SMTPat (tr <++> (append_entry empty_trace e))]
 let append_entry_is_concat_singleton #label_t tr e =
-  norm_spec [zeta; delta_only [`%trace_concat]] (trace_concat #label_t)
+  reveal_opaque (`%trace_concat) (trace_concat #label_t)
 
 val trace_concat_grows: #label_t:Type -> tr1:trace_ label_t -> tr2:trace_ label_t ->
   Lemma (tr1 <$ (tr1 <++> tr2))
   [SMTPat (tr1 <$ (tr1 <++> tr2))]
 let rec trace_concat_grows #label_t tr1 tr2 =
-  norm_spec [zeta; delta_only [`%trace_concat]] (trace_concat #label_t);
+  reveal_opaque (`%trace_concat) (trace_concat #label_t);
   match tr2 with
   | Nil -> ()
   | Snoc hd e -> trace_concat_grows tr1 hd
@@ -75,7 +75,7 @@ val trace_concat_trace_length: #label_t:Type -> tr1:trace_ label_t -> tr2:trace_
   Lemma (trace_length (tr1 <++> tr2) == trace_length tr1 + trace_length tr2)
   [SMTPat (trace_length (tr1 <++> tr2))]
 let rec trace_concat_trace_length #label_t tr1 tr2 =
-  norm_spec [zeta; delta_only [`%trace_concat]] (trace_concat #label_t);
+  reveal_opaque (`%trace_concat) (trace_concat #label_t);
   match tr2 with
   | Nil -> ()
   | Snoc hd e -> trace_concat_trace_length tr1 hd
@@ -94,7 +94,7 @@ val trace_concat_get_entry:
     )
   ))
 let rec trace_concat_get_entry #label_t tr1 tr2 ts =
-  norm_spec [zeta; delta_only [`%trace_concat]] (trace_concat #label_t);
+  reveal_opaque (`%trace_concat) (trace_concat #label_t);
   if is_empty tr2 || ts = last_timestamp (tr1 <++> tr2) then ()
   else trace_concat_get_entry tr1 (init tr2) ts
 
@@ -104,8 +104,8 @@ val trace_concat_fmap_trace:
   f:(a -> b) ->
   Lemma ((fmap_trace f (tr1 <++> tr2) == ((fmap_trace f tr1) <++> (fmap_trace f tr2))))
 let rec trace_concat_fmap_trace #a #b tr1 tr2 f =
-  norm_spec [zeta; delta_only [`%trace_concat]] (trace_concat #a);
-  norm_spec [zeta; delta_only [`%trace_concat]] (trace_concat #b);
+  reveal_opaque (`%trace_concat) (trace_concat #a);
+  reveal_opaque (`%trace_concat) (trace_concat #b);
   match tr2 with
   | Nil -> ()
   | Snoc hd e -> trace_concat_fmap_trace tr1 hd f
@@ -122,7 +122,7 @@ val trace_subtract_append_entry:
   (ensures ((append_entry tr2 e) <--> tr1) == append_entry (tr2 <--> tr1) e)
   [SMTPat ((append_entry tr2 e) <--> tr1)]
 let trace_subtract_append_entry #label_t tr1 tr2 e =
-  norm_spec [zeta; delta_only [`%trace_subtract]] (trace_subtract #label_t)
+  reveal_opaque (`%trace_subtract) (trace_subtract #label_t)
 
 val trace_subtract_trace_length:
   #label_t:Type ->
@@ -132,7 +132,7 @@ val trace_subtract_trace_length:
   (ensures trace_length (tr2 <--> tr1) == trace_length tr2 - trace_length tr1)
   [SMTPat (trace_length (tr2 <--> tr1))]
 let rec trace_subtract_trace_length #label_t tr1 tr2 =
-  norm_spec [zeta; delta_only [`%trace_subtract]] (trace_subtract #label_t);
+  reveal_opaque (`%trace_subtract) (trace_subtract #label_t);
   if trace_length tr2 = trace_length tr1 then ()
   else begin
     grows_cases tr1 tr2;
@@ -153,7 +153,7 @@ val trace_subtract_get_entry:
     )
   ))
 let rec trace_subtract_get_entry #label_t tr1 tr2 ts =
-  norm_spec [zeta; delta_only [`%trace_subtract]] (trace_subtract #label_t);
+  reveal_opaque (`%trace_subtract) (trace_subtract #label_t);
   grows_cases tr1 tr2;
   if ts `on_trace` tr1
   then get_entry_at_grows tr1 tr2 ts
@@ -169,8 +169,8 @@ val trace_subtract_fmap_trace:
   (requires tr1 <$ tr2)
   (ensures (fmap_trace f (tr2 <--> tr1) == ((fmap_trace f tr2) <--> (fmap_trace f tr1))))
 let rec trace_subtract_fmap_trace #a #b tr1 tr2 f =
-  norm_spec [zeta; delta_only [`%trace_subtract]] (trace_subtract #a);
-  norm_spec [zeta; delta_only [`%trace_subtract]] (trace_subtract #b);
+  reveal_opaque (`%trace_subtract) (trace_subtract #a);
+  reveal_opaque (`%trace_subtract) (trace_subtract #b);
   grows_cases tr1 tr2;
   if trace_length tr2 = trace_length tr1 then ()
   else trace_subtract_fmap_trace tr1 (init tr2) f
@@ -182,8 +182,8 @@ val trace_concat_subtract: #label_t:Type -> tr1:trace_ label_t -> tr2:trace_ lab
   Lemma (tr2 == ((tr1 <++> tr2) <--> tr1))
   [SMTPat ((tr1 <++> tr2) <--> tr1)]
 let rec trace_concat_subtract #label_t tr1 tr2 =
-  norm_spec [zeta; delta_only [`%trace_concat]] (trace_concat #label_t);
-  norm_spec [zeta; delta_only [`%trace_subtract]] (trace_subtract #label_t);
+  reveal_opaque (`%trace_concat) (trace_concat #label_t);
+  reveal_opaque (`%trace_subtract) (trace_subtract #label_t);
   match tr2 with
   | Nil -> ()
   | Snoc hd e -> trace_concat_subtract tr1 hd
@@ -196,8 +196,8 @@ val trace_subtract_concat:
   (ensures tr1 <++> (tr2 <--> tr1) == tr2)
   [SMTPat (tr1 <++> (tr2 <--> tr1))]
 let rec trace_subtract_concat #label_t tr1 tr2 =
-  norm_spec [zeta; delta_only [`%trace_concat]] (trace_concat #label_t);
-  norm_spec [zeta; delta_only [`%trace_subtract]] (trace_subtract #label_t);
+  reveal_opaque (`%trace_concat) (trace_concat #label_t);
+  reveal_opaque (`%trace_subtract) (trace_subtract #label_t);
   grows_cases tr1 tr2;
   eliminate tr2 == tr1 \/ (is_not_empty tr2 /\ tr1 <$ (init tr2))
   returns tr1 <++> (tr2 <--> tr1) == tr2

@@ -131,7 +131,7 @@ val grows_induction_principle:
   (ensures p tr2)
 let rec grows_induction_principle #label_t p pf tr1 tr2 =
   reveal_opaque (`%grows) (grows #label_t);
-  norm_spec [zeta; delta_only [`%prefix]] (prefix #label_t);
+  reveal_opaque (`%prefix) (prefix #label_t);
   if trace_length tr1 = trace_length tr2 then ()
   else (
     let Snoc init2 last2 = tr2 in
@@ -148,7 +148,7 @@ val grows_reflexive:
   [SMTPat (tr <$ tr)]
 let grows_reflexive #label_t tr =
   reveal_opaque (`%grows) (grows #label_t);
-  norm_spec [zeta; delta_only [`%prefix]] (prefix #label_t)
+  reveal_opaque (`%prefix) (prefix #label_t)
 
 /// The relation <$ is transitive.
 
@@ -161,7 +161,7 @@ val grows_transitive:
   [SMTPat (tr1 <$ tr2); SMTPat (tr1 <$ tr3)]
 let rec grows_transitive #label_t tr1 tr2 tr3 =
   reveal_opaque (`%grows) (grows #label_t);
-  norm_spec [zeta; delta_only [`%prefix]] (prefix #label_t);
+  reveal_opaque (`%prefix) (prefix #label_t);
   if trace_length tr2 >= trace_length tr3 then
     ()
   else
@@ -176,7 +176,7 @@ val trace_length_prefix:
   (ensures trace_length (prefix tr i) == i)
   [SMTPat (trace_length (prefix tr i))]
 let rec trace_length_prefix #label_t tr i =
-  norm_spec [zeta; delta_only [`%prefix]] (prefix #label_t);
+  reveal_opaque (`%prefix) (prefix #label_t);
   if trace_length tr = i then ()
   else
     trace_length_prefix (init tr) i
@@ -205,7 +205,7 @@ val prefix_grows:
   //[SMTPat ((prefix tr i) <$ tr)]
 let prefix_grows #label_t tr i =
   reveal_opaque (`%grows) (grows #label_t);
-  norm_spec [zeta; delta_only [`%prefix]] (prefix #label_t)
+  reveal_opaque (`%prefix) (prefix #label_t)
 
 
 /// The relation <$ has Nil (empty_trace) as a least element, and
@@ -223,7 +223,7 @@ let grows_snoc (#label_t:Type) (tr:trace_ label_t) (e:trace_entry_ label_t)
   : Lemma (ensures tr <$ (Snoc tr e))
     [SMTPat (tr <$ (Snoc tr e))]
   = reveal_opaque (`%grows) (grows #label_t);
-    norm_spec [zeta; delta_only [`%prefix]] (prefix #label_t)
+    reveal_opaque (`%prefix) (prefix #label_t)
 
 
 val prefix_prefix_grows:
@@ -244,7 +244,7 @@ val prefix_prefix_grows:
   //  SMTPat (tr1 <$ tr2)]
 let rec prefix_prefix_grows #label_t tr1 tr2 i1 i2 =
   reveal_opaque (`%grows) (grows #label_t);
-  norm_spec [zeta; delta_only [`%prefix]] (prefix #label_t);
+  reveal_opaque (`%prefix) (prefix #label_t);
   if i2 = trace_length tr2 then ()
   else if trace_length tr1 = trace_length tr2 then
     prefix_prefix_grows (init tr1) (init tr2) i1 i2
@@ -265,7 +265,7 @@ val prefix_prefix_eq:
    SMTPat (tr1 <$ tr2)]
 let rec prefix_prefix_eq #label_t tr1 tr2 i =
   reveal_opaque (`%grows) (grows #label_t);
-  norm_spec [zeta; delta_only [`%prefix]] (prefix #label_t);
+  reveal_opaque (`%prefix) (prefix #label_t);
   if trace_length tr1 = trace_length tr2 then ()
   else
     prefix_prefix_eq tr1 (init tr2) i
@@ -276,7 +276,7 @@ let prefix_full_eq (#label_t:Type) (tr:trace_ label_t)
   : Lemma (ensures (prefix tr (trace_length tr) == tr))
     [SMTPat (prefix tr (trace_length tr))]
   = reveal_opaque (`%prefix) (prefix #label_t);
-    norm_spec [zeta; delta_only [`%prefix]] (prefix #label_t)
+    reveal_opaque (`%prefix) (prefix #label_t)
 
 /// Two traces with the same length, where one is a prefix of the other, must be the same
 
@@ -377,7 +377,7 @@ val get_entry_at_grows:
   [SMTPat (get_entry_at tr1 i); SMTPat (tr1 <$ tr2)]
 let rec get_entry_at_grows #label_t tr1 tr2 i =
   reveal_opaque (`%grows) (grows #label_t);
-  norm_spec [zeta; delta_only [`%prefix]] (prefix #label_t);
+  reveal_opaque (`%prefix) (prefix #label_t);
   if  i `on_trace` tr1 && trace_length tr1 < trace_length tr2
   then get_entry_at_grows tr1 (init tr2) i
   else ()
@@ -514,7 +514,7 @@ let rec find_event_triggered_at_timestamp_later #label_t tr1 tr2 prin tag conten
   if trace_length tr1 = trace_length tr2 then ()
   else (
     reveal_opaque (`%grows) (grows #label_t);
-    norm_spec [zeta; delta_only [`%prefix]] (prefix #label_t);
+    reveal_opaque (`%prefix) (prefix #label_t);
     let Snoc init2 last2 = tr2 in
     find_event_triggered_at_timestamp_later tr1 init2 prin tag content
   )
@@ -633,8 +633,8 @@ val fmap_trace_prefix:
     prefix (fmap_trace f tr) i == fmap_trace f (prefix tr i)
   )
 let rec fmap_trace_prefix #a #b f tr i =
-  norm_spec [zeta; delta_only [`%prefix]] (prefix #a);
-  norm_spec [zeta; delta_only [`%prefix]] (prefix #b);
+  reveal_opaque (`%prefix) (prefix #a);
+  reveal_opaque (`%prefix) (prefix #b);
   if trace_length tr = i then ()
   else
     fmap_trace_prefix f (init tr) i
