@@ -844,9 +844,9 @@ let trace_entry_equiv e1 e2 =
 /// may in principle occur multiple times, we have two functions to give the first
 /// and last occurrence of such an entry.
 [@@"opaque_to_smt"]
-val trace_find_first: #label_t:Type -> tr:trace_ label_t -> e:trace_entry_ label_t{entry_exists tr e} ->
+val trace_find_first: #label_t:Type -> tr:trace_ label_t -> e:trace_entry_ label_t ->
     Pure timestamp
-      (requires True)
+      (requires entry_exists tr e)
       (ensures fun ts ->
         ts `on_trace` tr /\
         trace_entry_equiv e (get_entry_at tr ts) /\
@@ -856,9 +856,9 @@ let trace_find_first tr e =
   Some?.v (trace_search_first tr (trace_entry_equiv e))
 
 [@@"opaque_to_smt"]
-val trace_find_last: #label_t:Type -> tr:trace_ label_t -> e:trace_entry_ label_t{entry_exists tr e} ->
+val trace_find_last: #label_t:Type -> tr:trace_ label_t -> e:trace_entry_ label_t ->
     Pure timestamp
-      (requires True)
+      (requires entry_exists tr e)
       (ensures fun ts ->
         ts `on_trace` tr /\
         trace_entry_equiv e (get_entry_at tr ts) /\
