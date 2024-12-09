@@ -21,24 +21,25 @@ let rec trace_length tr =
   | Snoc init last -> trace_length init + 1
 
 /// Is a given timestamp on a given trace?
-val on_trace: #label_t:Type -> timestamp -> trace_ label_t -> prop
+val on_trace: #label_t:Type -> timestamp -> trace_ label_t -> bool
 let on_trace ts tr = ts < trace_length tr
 
 (*** Hiding constructors ***)
 
-val empty_trace : #label_t:Type -> trace_ label_t 
+val empty_trace : #label_t:Type -> trace_ label_t
 let empty_trace = Nil
 
 val is_empty: #label_t:Type -> trace_ label_t -> bool
 let is_empty = Nil?
 
+unfold
 val is_not_empty: #label_t:Type -> trace_ label_t -> bool
 let is_not_empty = Snoc?
 
 val is_not_empty_trace_length:
-  #label_t:Type -> 
+  #label_t:Type ->
   tr:trace_ label_t ->
-  Lemma 
+  Lemma
   (is_not_empty tr <==> 0 < trace_length tr)
   [SMTPat (is_not_empty tr)]
 let is_not_empty_trace_length tr = ()
@@ -57,6 +58,12 @@ let last tr =
 val append_entry: #label_t:Type -> trace_ label_t -> trace_entry_ label_t -> trace_ label_t
 let append_entry tr en = Snoc tr en
 
+
+/// The last valid timestamp on a given trace. Used in recursive
+/// functions that operate on timestamp to avoid the need for explicit
+/// + 1 and - 1 when checking for the end of a trace.
+val last_timestamp: #label_t:Type -> tr:trace_ label_t{is_not_empty tr} -> timestamp
+let last_timestamp tr = trace_length tr - 1
 
 (*** From/To List Conversion ***)
 
@@ -95,8 +102,7 @@ let rec prefix #label_t tr i =
   if trace_length tr = i then
     tr
   else
-    let Snoc tr_init _ = tr in
-    prefix tr_init i
+    prefix (init tr) i
 
 /// Express whether a trace is the extension of another.
 /// This is a crucial relation between traces,
@@ -125,7 +131,7 @@ val grows_induction_principle:
   (ensures p tr2)
 let rec grows_induction_principle #label_t p pf tr1 tr2 =
   reveal_opaque (`%grows) (grows #label_t);
-  norm_spec [zeta; delta_only [`%prefix]] (prefix #label_t);
+  reveal_opaque (`%prefix) (prefix #label_t);
   if trace_length tr1 = trace_length tr2 then ()
   else (
     let Snoc init2 last2 = tr2 in
@@ -142,7 +148,7 @@ val grows_reflexive:
   [SMTPat (tr <$ tr)]
 let grows_reflexive #label_t tr =
   reveal_opaque (`%grows) (grows #label_t);
-  norm_spec [zeta; delta_only [`%prefix]] (prefix #label_t)
+  reveal_opaque (`%prefix) (prefix #label_t)
 
 /// The relation <$ is transitive.
 
@@ -155,13 +161,11 @@ val grows_transitive:
   [SMTPat (tr1 <$ tr2); SMTPat (tr1 <$ tr3)]
 let rec grows_transitive #label_t tr1 tr2 tr3 =
   reveal_opaque (`%grows) (grows #label_t);
-  norm_spec [zeta; delta_only [`%prefix]] (prefix #label_t);
+  reveal_opaque (`%prefix) (prefix #label_t);
   if trace_length tr2 >= trace_length tr3 then
     ()
-  else (
-    let Snoc tr3_init _ = tr3 in
-    grows_transitive tr1 tr2 tr3_init
-  )
+  else
+    grows_transitive tr1 tr2 (init tr3)
 
 /// The prefix function outputs traces of the correct trace_length.
 
@@ -172,11 +176,10 @@ val trace_length_prefix:
   (ensures trace_length (prefix tr i) == i)
   [SMTPat (trace_length (prefix tr i))]
 let rec trace_length_prefix #label_t tr i =
-  norm_spec [zeta; delta_only [`%prefix]] (prefix #label_t);
+  reveal_opaque (`%prefix) (prefix #label_t);
   if trace_length tr = i then ()
   else
-    let Snoc tr_init _ = tr in
-    trace_length_prefix tr_init i
+    trace_length_prefix (init tr) i
 
 /// A trace which is the prefix of another is shorter.
 
@@ -202,7 +205,26 @@ val prefix_grows:
   //[SMTPat ((prefix tr i) <$ tr)]
 let prefix_grows #label_t tr i =
   reveal_opaque (`%grows) (grows #label_t);
-  norm_spec [zeta; delta_only [`%prefix]] (prefix #label_t)
+  reveal_opaque (`%prefix) (prefix #label_t)
+
+
+/// The relation <$ has Nil (empty_trace) as a least element, and
+/// is compatible with growing traces via Snoc (append_entry).
+/// Note that these two lemmas use Nil and Snoc directly, rather than
+/// empty_trace and append_entry, because this allows their SMTPats to
+/// trigger more robustly.
+
+let grows_nil (#label_t:Type) (tr:trace_ label_t)
+  : Lemma (ensures Nil <$ tr)
+    [SMTPat (Nil <$ tr)]
+  = reveal_opaque (`%grows) (grows #label_t)
+
+let grows_snoc (#label_t:Type) (tr:trace_ label_t) (e:trace_entry_ label_t)
+  : Lemma (ensures tr <$ (Snoc tr e))
+    [SMTPat (tr <$ (Snoc tr e))]
+  = reveal_opaque (`%grows) (grows #label_t);
+    reveal_opaque (`%prefix) (prefix #label_t)
+
 
 val prefix_prefix_grows:
   #label_t:Type ->
@@ -222,16 +244,12 @@ val prefix_prefix_grows:
   //  SMTPat (tr1 <$ tr2)]
 let rec prefix_prefix_grows #label_t tr1 tr2 i1 i2 =
   reveal_opaque (`%grows) (grows #label_t);
-  norm_spec [zeta; delta_only [`%prefix]] (prefix #label_t);
+  reveal_opaque (`%prefix) (prefix #label_t);
   if i2 = trace_length tr2 then ()
-  else if trace_length tr1 = trace_length tr2 then (
-    let Snoc tr1_init _ = tr1 in
-    let Snoc tr2_init _ = tr2 in
-    prefix_prefix_grows tr1_init tr2_init i1 i2
-  ) else (
-    let Snoc tr2_init _ = tr2 in
-    prefix_prefix_grows tr1 tr2_init i1 i2
-  )
+  else if trace_length tr1 = trace_length tr2 then
+    prefix_prefix_grows (init tr1) (init tr2) i1 i2
+  else
+    prefix_prefix_grows tr1 (init tr2) i1 i2
 
 val prefix_prefix_eq:
   #label_t:Type ->
@@ -247,12 +265,54 @@ val prefix_prefix_eq:
    SMTPat (tr1 <$ tr2)]
 let rec prefix_prefix_eq #label_t tr1 tr2 i =
   reveal_opaque (`%grows) (grows #label_t);
-  norm_spec [zeta; delta_only [`%prefix]] (prefix #label_t);
+  reveal_opaque (`%prefix) (prefix #label_t);
   if trace_length tr1 = trace_length tr2 then ()
-  else (
-    let Snoc tr2_init _ = tr2 in
-    prefix_prefix_eq tr1 tr2_init i
-  )
+  else
+    prefix_prefix_eq tr1 (init tr2) i
+
+/// Every trace is equal to its full-length prefix
+
+let prefix_full_eq (#label_t:Type) (tr:trace_ label_t)
+  : Lemma (ensures (prefix tr (trace_length tr) == tr))
+    [SMTPat (prefix tr (trace_length tr))]
+  = reveal_opaque (`%prefix) (prefix #label_t);
+    reveal_opaque (`%prefix) (prefix #label_t)
+
+/// Two traces with the same length, where one is a prefix of the other, must be the same
+
+let grows_full_eq (#label_t:Type) (tr1 tr2:trace_ label_t)
+  : Lemma
+    (requires tr1 <$ tr2 /\ trace_length tr1 == trace_length tr2)
+    (ensures tr1 == tr2)
+  = prefix_prefix_eq tr1 tr2 (trace_length tr1)
+
+/// The relation <$ is a non-strict partial order, and so if tr1 <$ tr2,
+/// we can split into the case where tr1 and tr2 are equal, and that in which
+/// tr1 is a strict prefix of tr2
+
+let grows_cases (#label_t:Type) (tr1 tr2:trace_ label_t)
+  : Lemma
+    (requires tr1 <$ tr2)
+    (ensures tr1 == tr2 \/ (
+      is_not_empty tr2 /\
+      tr1 <$ (init tr2)
+    ))
+  = if trace_length tr1 = trace_length tr2
+    then grows_full_eq tr1 tr2
+    else begin
+      let open FStar.Calc in
+      calc (<$) {
+        tr1;
+        == {}
+        prefix tr1 (trace_length tr1);
+        <$ {}
+        prefix tr2 (trace_length (init tr2));
+        == { assert((init tr2) <$ tr2) } // Triggers prefix_prefix_eq (init tr2) tr2 (length (init tr2))
+        prefix (init tr2) (trace_length (init tr2));
+        == {}
+        (init tr2);
+      }
+    end
 
 (*** Entries in the trace predicates ***)
 
@@ -263,22 +323,19 @@ val get_entry_at:
   tr:trace_ label_t -> i:timestamp{i `on_trace` tr} ->
   trace_entry_ label_t
 let rec get_entry_at #label_t tr i =
-  if i+1 = trace_length tr then
-    let Snoc _ last = tr in
-    last
-  else (
-    let Snoc tr_init _ = tr in
-    get_entry_at tr_init i
-  )
+  if i = last_timestamp tr then
+    last tr
+  else
+    get_entry_at (init tr) i
 
 
-val get_entry_at_trace_length_is_last:
+val get_entry_at_last_timestamp_is_last:
   #label_t:Type ->
   tr:trace_ label_t{is_not_empty tr} ->
   Lemma
-  (get_entry_at tr (trace_length tr - 1) == last tr)
+  (get_entry_at tr (last_timestamp tr) == last tr)
   [SMTPat (last tr)]
-let get_entry_at_trace_length_is_last tr = ()
+let get_entry_at_last_timestamp_is_last tr = ()
 
 /// Has some particular entry been triggered at a some particular timestamp in the trace?
 
@@ -320,13 +377,10 @@ val get_entry_at_grows:
   [SMTPat (get_entry_at tr1 i); SMTPat (tr1 <$ tr2)]
 let rec get_entry_at_grows #label_t tr1 tr2 i =
   reveal_opaque (`%grows) (grows #label_t);
-  norm_spec [zeta; delta_only [`%prefix]] (prefix #label_t);
-  if i >= trace_length tr1 then ()
-  else if trace_length tr1 >= trace_length tr2 then ()
-  else (
-    let Snoc tr2_init _ = tr2 in
-    get_entry_at_grows tr1 tr2_init i
-  )
+  reveal_opaque (`%prefix) (prefix #label_t);
+  if  i `on_trace` tr1 && trace_length tr1 < trace_length tr2
+  then get_entry_at_grows tr1 (init tr2) i
+  else ()
 
 val entry_at_grows:
   #label_t:Type ->
@@ -342,15 +396,11 @@ val last_entry_exists:
   #label_t:Type ->
   tr:trace_ label_t ->
   Lemma
-    (requires Snoc? tr )
-    (ensures (
-       let Snoc _ last = tr in
-       entry_exists tr last
-    ))
-    [SMTPat (Snoc? tr)]
-let last_entry_exists tr = 
-  let Snoc _ last = tr in
-  assert(entry_at tr (trace_length tr - 1) last)
+    (requires is_not_empty tr)
+    (ensures entry_exists tr (last tr))
+    [SMTPat (is_not_empty tr)]
+let last_entry_exists tr =
+  assert(entry_at tr (last_timestamp tr) (last tr))
 
 /// Shorthand predicates.
 
@@ -475,7 +525,7 @@ let rec find_event_triggered_at_timestamp_later #label_t tr1 tr2 prin tag conten
   if trace_length tr1 = trace_length tr2 then ()
   else (
     reveal_opaque (`%grows) (grows #label_t);
-    norm_spec [zeta; delta_only [`%prefix]] (prefix #label_t);
+    reveal_opaque (`%prefix) (prefix #label_t);
     let Snoc init2 last2 = tr2 in
     find_event_triggered_at_timestamp_later tr1 init2 prin tag content
   )
@@ -511,7 +561,7 @@ let rand_generated_at #label_t tr i b =
 val rand_just_generated: #label_t:Type -> trace_ label_t -> bytes -> prop
 let rand_just_generated tr rand =
   is_not_empty tr /\
-  rand_generated_at tr (trace_length tr - 1) rand 
+  rand_generated_at tr (last_timestamp tr) rand
 
 
 (*** Forgetting labels ***)
@@ -594,12 +644,11 @@ val fmap_trace_prefix:
     prefix (fmap_trace f tr) i == fmap_trace f (prefix tr i)
   )
 let rec fmap_trace_prefix #a #b f tr i =
-  norm_spec [zeta; delta_only [`%prefix]] (prefix #a);
-  norm_spec [zeta; delta_only [`%prefix]] (prefix #b);
+  reveal_opaque (`%prefix) (prefix #a);
+  reveal_opaque (`%prefix) (prefix #b);
   if trace_length tr = i then ()
   else
-    let Snoc tr_init _ = tr in
-    fmap_trace_prefix f tr_init i
+    fmap_trace_prefix f (init tr) i
 
 val fmap_trace_later:
   #a:Type -> #b:Type ->
@@ -608,6 +657,10 @@ val fmap_trace_later:
   Lemma
   (requires tr1 <$ tr2)
   (ensures (fmap_trace f tr1) <$ (fmap_trace f tr2))
+  [SMTPat (fmap_trace f tr1);
+   SMTPat (fmap_trace f tr2);
+   SMTPat (tr1 <$ tr2)
+  ]
 let fmap_trace_later #a #b f tr1 tr2 =
   reveal_opaque (`%grows) (grows #a);
   reveal_opaque (`%grows) (grows #b);
@@ -638,10 +691,7 @@ val get_entry_at_fmap_trace:
   )
 let rec get_entry_at_fmap_trace #a #b f tr i =
   if i+1 = trace_length tr then ()
-  else (
-    let Snoc tr_init _ = tr in
-    get_entry_at_fmap_trace f tr_init i
-  )
+  else get_entry_at_fmap_trace f (init tr) i
 
 val entry_at_fmap_trace:
   #a:Type -> #b:Type ->
@@ -708,3 +758,96 @@ val trace_forget_labels:
 let trace_forget_labels tr =
   fmap_trace forget_label tr
 
+
+(*** Trace Searching ***)
+
+/// Finds the first (oldest) trace entry satisfying a given predicate.
+#push-options "--fuel 2 --ifuel 1"
+[@@"opaque_to_smt"]
+val trace_search_first: #label_t:Type -> tr:trace_ label_t -> p:(trace_entry_ label_t -> bool) ->
+    Pure (option timestamp)
+    (requires True)
+    (ensures fun ts_opt ->
+       match ts_opt with
+       | None -> forall (ts:timestamp). ts `on_trace` tr ==> ~(p(get_entry_at tr ts))
+       | Some ts -> (
+         ts `on_trace` tr /\
+         p (get_entry_at tr ts) /\
+         forall (ts':timestamp). (ts' `on_trace` tr /\ p (get_entry_at tr ts')) ==> ts' >= ts
+       )
+    )
+let rec trace_search_first tr p =
+  match tr with
+  | Nil -> None
+  | Snoc hd entry -> (
+    match trace_search_first hd p with
+    | None -> (
+      if p entry then
+       Some (last_timestamp tr)
+     else
+       None
+    )
+    | Some ts -> Some ts
+  )
+#pop-options
+
+/// Finds the last (most recent) trace entry satisfying a given predicate.
+#push-options
+[@@"opaque_to_smt"]
+val trace_search_last: #label_t:Type -> tr:trace_ label_t -> p:(trace_entry_ label_t -> bool) ->
+    Pure (option timestamp)
+    (requires True)
+    (ensures fun ts_opt ->
+       match ts_opt with
+       | None -> forall (ts:timestamp). ts `on_trace` tr ==> ~(p(get_entry_at tr ts))
+       | Some ts -> (
+         ts `on_trace` tr /\
+         p (get_entry_at tr ts) /\
+         forall (ts':timestamp). (ts' `on_trace` tr /\ p (get_entry_at tr ts')) ==> ts' <= ts
+       )
+    )
+let rec trace_search_last tr p =
+  match tr with
+  | Nil -> None
+  | Snoc hd entry ->
+    if p entry then
+      Some (last_timestamp tr)
+    else
+      trace_search_last hd p
+#pop-options
+
+/// When searching the trace for an entry that we know to exist, we need to be able
+/// to decide if a given entry is the one we are looking for, and so we use this
+/// label-ignoring equivalence. This is exactly == for non-RandGen trace entries,
+/// but treats two RandGen entries with the same non-label content as equivalent.
+let trace_entry_equiv (#label_t:Type) (e1 e2:trace_entry_ label_t)
+  : bool
+  = (fmap_trace_entry forget_label e1) = (fmap_trace_entry forget_label e2)
+
+/// The trace_find functions make use of trace_search to get the timestamp of a
+/// trace entry that is already known to exist on the trace. Since a given entry
+/// may in principle occur multiple times, we have two functions to give the first
+/// and last occurrence of such an entry.
+[@@"opaque_to_smt"]
+val trace_find_first: #label_t:Type -> tr:trace_ label_t -> e:trace_entry_ label_t{entry_exists tr e} ->
+    Pure timestamp
+      (requires True)
+      (ensures fun ts ->
+        ts `on_trace` tr /\
+        trace_entry_equiv e (get_entry_at tr ts) /\
+        forall ts'. (ts' `on_trace` tr /\ trace_entry_equiv e (get_entry_at tr ts')) ==> ts' >= ts
+      )
+let trace_find_first tr e =
+  Some?.v (trace_search_first tr (trace_entry_equiv e))
+
+[@@"opaque_to_smt"]
+val trace_find_last: #label_t:Type -> tr:trace_ label_t -> e:trace_entry_ label_t{entry_exists tr e} ->
+    Pure timestamp
+      (requires True)
+      (ensures fun ts ->
+        ts `on_trace` tr /\
+        trace_entry_equiv e (get_entry_at tr ts) /\
+        forall ts'. (ts' `on_trace` tr /\ trace_entry_equiv e (get_entry_at tr ts')) ==> ts' <= ts
+      )
+let trace_find_last tr e =
+  Some?.v (trace_search_last tr (trace_entry_equiv e))
