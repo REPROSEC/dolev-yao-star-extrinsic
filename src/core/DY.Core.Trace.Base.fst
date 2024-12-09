@@ -866,3 +866,36 @@ val trace_find_last: #label_t:Type -> tr:trace_ label_t -> e:trace_entry_ label_
       )
 let trace_find_last tr e =
   Some?.v (trace_search_last tr (trace_entry_equiv e))
+
+val opt_less_defined: #a:eqtype -> option a -> option a -> bool
+let opt_less_defined o1 o2 =
+  o1 = None || o1 = o2
+
+val trace_search_first_later:
+  #label_t:Type ->
+  tr1:trace_ label_t -> tr2:trace_ label_t ->
+  p:(trace_entry_ label_t -> bool) ->
+  Lemma
+  (requires tr1 <$ tr2)
+  (ensures opt_less_defined (trace_search_first tr1 p) (trace_search_first tr2 p))
+  [SMTPat (tr1 <$ tr2);
+   SMTPat (trace_search_first tr1 p);
+   SMTPat (trace_search_first tr2 p);
+  ]
+let trace_search_first_later tr1 tr2 p = ()
+
+val trace_find_first_later:
+  #label_t:Type ->
+  tr1:trace_ label_t -> tr2:trace_ label_t ->
+  e:trace_entry_ label_t ->
+  Lemma
+  (requires
+    entry_exists tr1 e /\
+    tr1 <$ tr2
+  )
+  (ensures trace_find_first tr1 e == trace_find_first tr2 e)
+  [SMTPat (tr1 <$ tr2);
+   SMTPat (trace_find_first tr1 e);
+   SMTPat (trace_find_first tr2 e);
+  ]
+let trace_find_first_later tr1 tr2 e = ()
