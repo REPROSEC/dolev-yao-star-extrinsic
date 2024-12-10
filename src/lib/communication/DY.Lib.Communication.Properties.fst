@@ -2,7 +2,7 @@ module DY.Lib.Communication.Properties
 
 open Comparse
 open DY.Core
-open DY.Lib.Crypto.PkEncryption.Split
+open DY.Lib.Crypto.PKE.Split
 open DY.Lib.Crypto.Signature.Split
 open DY.Lib.Event.Typed
 open DY.Lib.State.PKI
