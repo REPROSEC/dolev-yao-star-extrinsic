@@ -92,15 +92,15 @@ let comm_label sender receiver = join (principal_label sender) (principal_label 
 
 val encrypt_message: bytes -> bytes -> bytes -> bytes
 let encrypt_message pk_receiver nonce payload =
-  pk_enc pk_receiver nonce payload
+  pke_enc pk_receiver nonce payload
 
 val send_confidential:
   communication_keys_sess_ids ->
   principal -> principal -> bytes ->
   traceful (option timestamp)
 let send_confidential comm_keys_ids sender receiver payload =
-  let*? pk_receiver = get_public_key sender comm_keys_ids.pki (LongTermPkEncKey comm_layer_pkenc_tag) receiver in
-  let* nonce = mk_rand PkNonce (long_term_key_label sender) 32 in
+  let*? pk_receiver = get_public_key sender comm_keys_ids.pki (LongTermPkeKey comm_layer_pkenc_tag) receiver in
+  let* nonce = mk_rand PkeNonce (long_term_key_label sender) 32 in
   trigger_event sender (CommConfSendMsg sender receiver payload);*
   let msg_encrypted = encrypt_message pk_receiver nonce payload in
   let* msg_id = send_msg msg_encrypted in
@@ -109,14 +109,14 @@ let send_confidential comm_keys_ids sender receiver payload =
 
 val decrypt_message: bytes -> bytes -> option bytes
 let decrypt_message sk_receiver msg_encrypted =
-  pk_dec sk_receiver msg_encrypted
+  pke_dec sk_receiver msg_encrypted
 
 val receive_confidential:
   communication_keys_sess_ids ->
   principal -> timestamp ->
   traceful (option bytes)
 let receive_confidential comm_keys_ids receiver msg_id =
-  let*? sk_receiver = get_private_key receiver comm_keys_ids.private_keys (LongTermPkEncKey comm_layer_pkenc_tag) in
+  let*? sk_receiver = get_private_key receiver comm_keys_ids.private_keys (LongTermPkeKey comm_layer_pkenc_tag) in
   let*? msg_encrypted = recv_msg msg_id in
   let*? payload = return (decrypt_message sk_receiver msg_encrypted) in
   trigger_event receiver (CommConfReceiveMsg receiver payload);*
@@ -210,9 +210,9 @@ val send_confidential_authenticated:
   principal -> principal -> bytes ->
   traceful (option timestamp)
 let send_confidential_authenticated comm_keys_ids sender receiver payload =
-  let*? pk_receiver = get_public_key sender comm_keys_ids.pki (LongTermPkEncKey comm_layer_pkenc_tag) receiver in
+  let*? pk_receiver = get_public_key sender comm_keys_ids.pki (LongTermPkeKey comm_layer_pkenc_tag) receiver in
   let*? sk_sender = get_private_key sender comm_keys_ids.private_keys (LongTermSigKey comm_layer_sign_tag) in
-  let* enc_nonce = mk_rand PkNonce (long_term_key_label sender) 32 in
+  let* enc_nonce = mk_rand PkeNonce (long_term_key_label sender) 32 in
   let* sign_nonce = mk_rand SigNonce (long_term_key_label sender) 32 in
   trigger_event sender (CommConfSendMsg sender receiver payload);*
   trigger_event sender (CommConfAuthSendMsg sender receiver payload);*
@@ -232,7 +232,7 @@ val receive_confidential_authenticated:
   traceful (option communication_message)
 let receive_confidential_authenticated comm_keys_ids receiver msg_id =
   let*? msg_encrypted_signed = recv_msg msg_id in
-  let*? sk_receiver = get_private_key receiver comm_keys_ids.private_keys (LongTermPkEncKey comm_layer_pkenc_tag) in
+  let*? sk_receiver = get_private_key receiver comm_keys_ids.private_keys (LongTermPkeKey comm_layer_pkenc_tag) in
   let*? sender = return (get_sender msg_encrypted_signed) in
   let*? vk_sender = get_public_key receiver comm_keys_ids.pki (LongTermSigKey comm_layer_sign_tag) sender in 
   let*? cm:communication_message = return (verify_and_decrypt_message receiver sk_receiver vk_sender msg_encrypted_signed) in 
@@ -246,20 +246,20 @@ val initialize_communication: principal -> principal -> traceful (option (commun
 let initialize_communication sender receiver =
   // Initialize keys for public key encryption
   let* client_global_session_priv_key_id = initialize_private_keys sender in
-  generate_private_key sender client_global_session_priv_key_id (LongTermPkEncKey comm_layer_pkenc_tag);*
+  generate_private_key sender client_global_session_priv_key_id (LongTermPkeKey comm_layer_pkenc_tag);*
 
   let* receiver_global_session_priv_key_id = initialize_private_keys receiver in
-  generate_private_key receiver receiver_global_session_priv_key_id (LongTermPkEncKey comm_layer_pkenc_tag);*
+  generate_private_key receiver receiver_global_session_priv_key_id (LongTermPkeKey comm_layer_pkenc_tag);*
 
-  let*? priv_key_receiver = get_private_key receiver receiver_global_session_priv_key_id (LongTermPkEncKey comm_layer_pkenc_tag) in
+  let*? priv_key_receiver = get_private_key receiver receiver_global_session_priv_key_id (LongTermPkeKey comm_layer_pkenc_tag) in
   let pub_key_receiver = pk priv_key_receiver in
   let* client_global_session_pub_key_id = initialize_pki sender in
-  install_public_key sender client_global_session_pub_key_id (LongTermPkEncKey comm_layer_pkenc_tag) receiver pub_key_receiver;*
+  install_public_key sender client_global_session_pub_key_id (LongTermPkeKey comm_layer_pkenc_tag) receiver pub_key_receiver;*
 
-  let*? priv_key_client = get_private_key sender client_global_session_priv_key_id (LongTermPkEncKey comm_layer_pkenc_tag) in
+  let*? priv_key_client = get_private_key sender client_global_session_priv_key_id (LongTermPkeKey comm_layer_pkenc_tag) in
   let pub_key_client = pk priv_key_client in
   let* receiver_global_session_pub_key_id = initialize_pki receiver in
-  install_public_key receiver receiver_global_session_pub_key_id (LongTermPkEncKey comm_layer_pkenc_tag) sender pub_key_client;*
+  install_public_key receiver receiver_global_session_pub_key_id (LongTermPkeKey comm_layer_pkenc_tag) sender pub_key_client;*
 
   // Initialize signing keys
   generate_private_key sender client_global_session_priv_key_id (LongTermSigKey comm_layer_sign_tag);*

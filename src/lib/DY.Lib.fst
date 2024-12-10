@@ -35,4 +35,5 @@ include DY.Lib.Printing
 /// Functions and lemmas for HPKE, built on top of kem, kdf and aead
 include DY.Lib.HPKE
 
+/// Functions and lemmas to securely send messages over the network
 include DY.Lib.Communication

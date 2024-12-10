@@ -2,8 +2,7 @@ module DY.Lib.Communication.RequestResponse.Invariants
 
 open Comparse
 open DY.Core
-open DY.Lib.Communication.Core.Extension
-open DY.Lib.Crypto.PkEncryption.Split
+open DY.Lib.Crypto.PKE.Split
 open DY.Lib.Crypto.Signature.Split
 open DY.Lib.Crypto.AEAD.Split
 open DY.Lib.Event.Typed
@@ -54,7 +53,7 @@ val has_communication_layer_reqres_crypto_predicates:
 let has_communication_layer_reqres_crypto_predicates #cinvs =
   // Fix for the get_label function in the model code
   cinvs.usages == default_crypto_usages /\
-  has_pkenc_predicate pkenc_crypto_predicates_communication_layer_and_tag /\
+  has_pke_predicate pke_crypto_predicates_communication_layer_and_tag /\
   has_sign_predicate sign_crypto_predicates_communication_layer_and_tag /\
   has_aead_predicate aead_crypto_predicates_communication_layer_and_tag
 
