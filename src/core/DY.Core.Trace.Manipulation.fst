@@ -510,6 +510,7 @@ let get_state_same_trace prin sess_id tr =
   reveal_opaque (`%get_state) get_state
 
 
+#push-options "--ifuel 1"
 val get_state_aux_state_was_set:
   prin:principal -> sess_id:state_id -> tr:trace ->
   Lemma
@@ -519,10 +520,8 @@ val get_state_aux_state_was_set:
     | Some content ->
         state_was_set tr prin sess_id content
   ))
-let get_state_aux_state_was_set prin sess_id tr =
-  match get_state_aux prin sess_id tr with
-  | None -> ()
-  | Some content -> assert(exists ts. get_entry_at tr ts == SetState prin sess_id content)
+let get_state_aux_state_was_set prin sess_id tr = ()
+#pop-options
 
 val get_state_state_was_set:
   prin:principal -> sess_id:state_id -> tr:trace ->
@@ -548,7 +547,7 @@ val trigger_event: principal -> string -> bytes -> traceful unit
 let trigger_event prin tag content =
   add_entry (Event prin tag content)
 
-#push-options "--z3rlimit 25"
+#push-options "--z3rlimit 30"
 val trigger_event_event_triggered:
   prin:principal -> tag:string -> content:bytes -> tr:trace ->
   Lemma
