@@ -2,8 +2,7 @@ module DY.Lib.Communication.Core.Invariants
 
 open Comparse
 open DY.Core
-open DY.Lib.Communication.Core.Extension
-open DY.Lib.Crypto.PkEncryption.Split
+open DY.Lib.Crypto.PKE.Split
 open DY.Lib.Crypto.Signature.Split
 open DY.Lib.Crypto.AEAD.Split
 open DY.Lib.Event.Typed
@@ -16,23 +15,23 @@ open DY.Lib.Communication.Core
 
 (*** PkEnc Predicates ***)
 
-val pkenc_crypto_predicates_communication_layer: {|cusages:crypto_usages|} -> pkenc_crypto_predicate
-let pkenc_crypto_predicates_communication_layer #cusages = {
-  pred = (fun tr sk_usage msg ->
+val pke_crypto_predicates_communication_layer: {|cusages:crypto_usages|} -> pke_crypto_predicate
+let pke_crypto_predicates_communication_layer #cusages = {
+  pred = (fun tr sk_usage pk msg ->
     (exists sender receiver.
-      sk_usage == long_term_key_type_to_usage (LongTermPkEncKey comm_layer_pkenc_tag)  receiver /\
+      sk_usage == long_term_key_type_to_usage (LongTermPkeKey comm_layer_pkenc_tag)  receiver /\
       (get_label tr msg) `can_flow tr` (join (principal_label sender) (principal_label receiver)) /\
       event_triggered tr sender (CommConfSendMsg sender receiver msg)
     )
     );
-  pred_later = (fun tr1 tr2 pk msg -> ());
+  pred_later = (fun tr1 tr2 sk_usage pk msg -> ());
 }
 
-val pkenc_crypto_predicates_communication_layer_and_tag: 
+val pke_crypto_predicates_communication_layer_and_tag: 
   {|cusages:crypto_usages|} ->
-  (string & pkenc_crypto_predicate)
-let pkenc_crypto_predicates_communication_layer_and_tag #cusages = 
-  (comm_layer_pkenc_tag, pkenc_crypto_predicates_communication_layer)
+  (string & pke_crypto_predicate)
+let pke_crypto_predicates_communication_layer_and_tag #cusages = 
+  (comm_layer_pkenc_tag, pke_crypto_predicates_communication_layer)
 
 (*** Sign Predicates ***)
 
@@ -56,7 +55,7 @@ let sign_crypto_predicates_communication_layer #cusages = {
     )
     | None -> False)
   );
-  pred_later = (fun tr1 tr2 sk_usage msg -> parse_wf_lemma signature_input (bytes_well_formed tr1) msg);
+  pred_later = (fun tr1 tr2 sk_usage vk msg -> parse_wf_lemma signature_input (bytes_well_formed tr1) msg);
 }
 #pop-options
 
@@ -70,7 +69,7 @@ val has_communication_layer_crypto_predicates:
   {|crypto_invariants|} ->
   prop
 let has_communication_layer_crypto_predicates #cinvs =
-  has_pkenc_predicate pkenc_crypto_predicates_communication_layer_and_tag /\
+  has_pke_predicate pke_crypto_predicates_communication_layer_and_tag /\
   has_sign_predicate sign_crypto_predicates_communication_layer_and_tag
 
 (*** Event Predicates ***)
