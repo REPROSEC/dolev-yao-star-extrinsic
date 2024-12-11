@@ -143,8 +143,8 @@ val msg_sent_on_network_are_publishable:
   {|protocol_invariants|} -> tr:trace -> msg:bytes ->
   Lemma
   (requires
-    trace_invariant tr /\
-    msg_sent_on_network tr msg
+    msg_sent_on_network tr msg /\
+    trace_invariant tr
   )
   (ensures is_publishable tr msg)
 let msg_sent_on_network_are_publishable #invs tr msg =
@@ -161,8 +161,8 @@ val state_was_set_implies_pred:
   prin:principal -> sess_id:state_id -> content:bytes ->
   Lemma
   (requires
-    trace_invariant tr /\
-    state_was_set tr prin sess_id content
+    state_was_set tr prin sess_id content /\
+    trace_invariant tr
   )
   (ensures state_pred.pred tr prin sess_id content)
   [SMTPat (state_was_set tr prin sess_id content);
@@ -184,8 +184,8 @@ val state_is_knowable_by:
   prin:principal -> sess_id:state_id -> content:bytes ->
   Lemma
   (requires
-    trace_invariant tr /\
-    state_was_set tr prin sess_id content
+    state_was_set tr prin sess_id content /\
+    trace_invariant tr
   )
   (ensures is_knowable_by (principal_state_content_label prin sess_id content) tr content)
 let state_is_knowable_by #invs tr prin sess_id content =

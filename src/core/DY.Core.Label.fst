@@ -230,7 +230,7 @@ let secret_is_bottom tr l =
   reveal_opaque (`%secret) secret;
   reveal_opaque (`%is_corrupt) is_corrupt
 
-/// `secret` is the maximum of the label lattice.
+/// `public` is the maximum of the label lattice.
 
 val public_is_top:
   tr:trace -> l:label ->
