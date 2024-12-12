@@ -462,74 +462,6 @@ val event_triggered:
 let event_triggered #label_t tr prin tag content =
   exists i. event_triggered_at tr i prin tag content
 
-/// Find the timestamp at which an event has been triggered.
-/// (Can be useful when debugging a proof.)
-
-#push-options "--ifuel 1 --fuel 2 --z3rlimit 25"
-val find_event_triggered_at_timestamp_opt:
-  #label_t:Type ->
-  tr:trace_ label_t -> prin:principal -> tag:string -> content:bytes ->
-  Pure (option timestamp)
-  (requires True)
-  (ensures fun opt_i ->
-    match opt_i with
-    | Some i ->
-      event_triggered_at tr i prin tag content /\
-      ~(event_triggered (prefix tr i) prin tag content)
-    | None -> ~(event_triggered tr prin tag content)
-  )
-let rec find_event_triggered_at_timestamp_opt #label_t tr prin tag content =
-  match tr with
-  | Nil -> None
-  | Snoc init last ->
-    match find_event_triggered_at_timestamp_opt init prin tag content with
-    | Some i -> Some i
-    | None -> (
-      match last with
-      | Event prin' tag' content' ->
-        if prin = prin' && tag = tag' && content = content' then
-          Some (trace_length init)
-        else None
-      | _ -> None
-    )
-#pop-options
-
-[@@ "opaque_to_smt"]
-val find_event_triggered_at_timestamp:
-  #label_t:Type ->
-  tr:trace_ label_t -> prin:principal -> tag:string -> content:bytes ->
-  Pure timestamp
-  (requires event_triggered tr prin tag content)
-  (ensures fun i ->
-    event_triggered_at tr i prin tag content /\
-    ~(event_triggered (prefix tr i) prin tag content)
-  )
-let find_event_triggered_at_timestamp #label_t tr prin tag content =
-  Some?.v (find_event_triggered_at_timestamp_opt tr prin tag content)
-
-val find_event_triggered_at_timestamp_later:
-  #label_t:Type ->
-  tr1:trace_ label_t -> tr2:trace_ label_t ->
-  prin:principal -> tag:string -> content:bytes ->
-  Lemma
-  (requires
-    event_triggered tr1 prin tag content /\
-    tr1 <$ tr2
-  )
-  (ensures find_event_triggered_at_timestamp tr1 prin tag content == find_event_triggered_at_timestamp tr2 prin tag content)
-  [SMTPat (find_event_triggered_at_timestamp tr1 prin tag content);
-   SMTPat (find_event_triggered_at_timestamp tr2 prin tag content);
-   SMTPat (tr1 <$ tr2)
-  ]
-let rec find_event_triggered_at_timestamp_later #label_t tr1 tr2 prin tag content =
-  if trace_length tr1 = trace_length tr2 then ()
-  else (
-    reveal_opaque (`%grows) (grows #label_t);
-    reveal_opaque (`%prefix) (prefix #label_t);
-    let Snoc init2 last2 = tr2 in
-    find_event_triggered_at_timestamp_later tr1 init2 prin tag content
-  )
-
 /// An event being triggered at some time stays triggered as the trace grows.
 
 val event_triggered_grows:
@@ -829,9 +761,9 @@ let trace_entry_equiv (#label_t:Type) (e1 e2:trace_entry_ label_t)
 /// may in principle occur multiple times, we have two functions to give the first
 /// and last occurrence of such an entry.
 [@@"opaque_to_smt"]
-val trace_find_first: #label_t:Type -> tr:trace_ label_t -> e:trace_entry_ label_t{entry_exists tr e} ->
+val trace_find_first: #label_t:Type -> tr:trace_ label_t -> e:trace_entry_ label_t ->
     Pure timestamp
-      (requires True)
+      (requires entry_exists tr e)
       (ensures fun ts ->
         ts `on_trace` tr /\
         trace_entry_equiv e (get_entry_at tr ts) /\
@@ -841,9 +773,9 @@ let trace_find_first tr e =
   Some?.v (trace_search_first tr (trace_entry_equiv e))
 
 [@@"opaque_to_smt"]
-val trace_find_last: #label_t:Type -> tr:trace_ label_t -> e:trace_entry_ label_t{entry_exists tr e} ->
+val trace_find_last: #label_t:Type -> tr:trace_ label_t -> e:trace_entry_ label_t ->
     Pure timestamp
-      (requires True)
+      (requires entry_exists tr e)
       (ensures fun ts ->
         ts `on_trace` tr /\
         trace_entry_equiv e (get_entry_at tr ts) /\
@@ -851,3 +783,69 @@ val trace_find_last: #label_t:Type -> tr:trace_ label_t -> e:trace_entry_ label_
       )
 let trace_find_last tr e =
   Some?.v (trace_search_last tr (trace_entry_equiv e))
+
+val opt_less_defined: #a:eqtype -> option a -> option a -> bool
+let opt_less_defined o1 o2 =
+  o1 = None || o1 = o2
+
+val trace_search_first_later:
+  #label_t:Type ->
+  tr1:trace_ label_t -> tr2:trace_ label_t ->
+  p:(trace_entry_ label_t -> bool) ->
+  Lemma
+  (requires tr1 <$ tr2)
+  (ensures opt_less_defined (trace_search_first tr1 p) (trace_search_first tr2 p))
+  [SMTPat (tr1 <$ tr2);
+   SMTPat (trace_search_first tr1 p);
+   SMTPat (trace_search_first tr2 p);
+  ]
+let trace_search_first_later tr1 tr2 p = ()
+
+val trace_find_first_later:
+  #label_t:Type ->
+  tr1:trace_ label_t -> tr2:trace_ label_t ->
+  e:trace_entry_ label_t ->
+  Lemma
+  (requires
+    entry_exists tr1 e /\
+    tr1 <$ tr2
+  )
+  (ensures trace_find_first tr1 e == trace_find_first tr2 e)
+  [SMTPat (tr1 <$ tr2);
+   SMTPat (trace_find_first tr1 e);
+   SMTPat (trace_find_first tr2 e);
+  ]
+let trace_find_first_later tr1 tr2 e = ()
+
+
+/// Find the timestamp at which an event has been triggered.
+/// (Can be useful when debugging a proof.)
+
+[@@ "opaque_to_smt"]
+val find_event_triggered_at_timestamp:
+  #label_t:Type ->
+  tr:trace_ label_t -> prin:principal -> tag:string -> content:bytes ->
+  Pure timestamp
+  (requires event_triggered tr prin tag content)
+  (ensures fun i ->
+    event_triggered_at tr i prin tag content /\
+    ~(event_triggered (prefix tr i) prin tag content)
+  )
+let find_event_triggered_at_timestamp #label_t tr prin tag content =
+  trace_find_first tr (Event prin tag content)
+
+val find_event_triggered_at_timestamp_later:
+  #label_t:Type ->
+  tr1:trace_ label_t -> tr2:trace_ label_t ->
+  prin:principal -> tag:string -> content:bytes ->
+  Lemma
+  (requires
+    event_triggered tr1 prin tag content /\
+    tr1 <$ tr2
+  )
+  (ensures find_event_triggered_at_timestamp tr1 prin tag content == find_event_triggered_at_timestamp tr2 prin tag content)
+  [SMTPat (find_event_triggered_at_timestamp tr1 prin tag content);
+   SMTPat (find_event_triggered_at_timestamp tr2 prin tag content);
+   SMTPat (tr1 <$ tr2)
+  ]
+let find_event_triggered_at_timestamp_later #label_t tr1 tr2 prin tag content = ()
