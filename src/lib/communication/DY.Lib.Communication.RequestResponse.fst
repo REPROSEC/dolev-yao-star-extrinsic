@@ -145,44 +145,47 @@ type comm_meta_data = {
 
 (*** API ***)
 
-val compute_request_message: bytes -> bytes -> bytes
-let compute_request_message payload key =
-  let req:request_message = {payload; key} in
-  serialize request_message req
+(*val compute_request_message:
+  #a:Type -> {| parseable_serializeable bytes a |} ->
+  a -> bytes -> request_message
+let compute_request_message #a payload key =
+  {payload=(serialize a payload); key}*)
 
 val send_request:
+  #a:Type -> {| parseable_serializeable bytes a |} ->
   communication_keys_sess_ids ->
-  principal -> principal -> bytes ->
+  principal -> principal -> a ->
   traceful (option (timestamp & comm_meta_data))
-let send_request comm_keys_ids client server payload =
+let send_request #a comm_keys_ids client server payload =
   let* key = mk_rand (AeadKey comm_layer_aead_tag empty) (comm_label client server) 32 in
   let* id = mk_rand NoUsage (join (principal_label client) (principal_label server)) 32 in
   
+  let payload_bytes = serialize #bytes a payload in
   let* sid = new_session_id client in
-  set_state client sid (ClientSendRequest {server; payload; key} <: communication_states);*
-  trigger_event client (CommClientSendRequest client server payload key);*
-  
-  let* req_payload = return (compute_request_message payload key) in
-  let*? msg_id = send_confidential comm_keys_ids client server req_payload in
+  set_state client sid (ClientSendRequest {server; payload=payload_bytes; key} <: communication_states);*
+  trigger_event client (CommClientSendRequest client server payload_bytes key);*
+  let req_payload:request_message = {payload=payload_bytes; key} in
+  let*? msg_id = send_confidential #request_message comm_keys_ids client server req_payload in
   let req_meta_data = {key; server; sid} in
   return (Some (msg_id, req_meta_data))
 
-val decode_request_message: bytes -> option request_message
+(*val decode_request_message: bytes -> option request_message
 let decode_request_message msg_bytes =
-  parse request_message msg_bytes
+  parse request_message msg_bytes*)
 
 val receive_request:
+  #a:Type -> {| parseable_serializeable bytes a |} ->
   communication_keys_sess_ids ->
   principal -> timestamp ->
-  traceful (option (bytes & comm_meta_data))
-let receive_request comm_keys_ids server msg_id =
-  let*? req_msg_bytes = receive_confidential comm_keys_ids server msg_id in
-  let*? req_msg:request_message = return (decode_request_message req_msg_bytes) in  
+  traceful (option (a & comm_meta_data))
+let receive_request #a comm_keys_ids server msg_id =
+  let*? req_msg:request_message = receive_confidential #request_message comm_keys_ids server msg_id in  
   trigger_event server (CommServerReceiveRequest server req_msg.payload req_msg.key);*
   let* sid = new_session_id server in
   set_state server sid (ServerReceiveRequest {payload=req_msg.payload; key=req_msg.key} <: communication_states);*
+  let*? payload = return (parse a req_msg.payload) in
   let req_meta_data = {key=req_msg.key; server; sid} in
-  return (Some (req_msg.payload, req_meta_data))
+  return (Some (payload, req_meta_data))
 
 val mk_comm_layer_response_nonce: principal -> comm_meta_data -> usage -> traceful (option bytes)
 let mk_comm_layer_response_nonce server req_meta_data usg =
@@ -190,50 +193,55 @@ let mk_comm_layer_response_nonce server req_meta_data usg =
   let* nonce = mk_rand usg (get_label #default_crypto_usages tr req_meta_data.key) 32 in
   return (Some nonce)
 
-val compute_response_message: principal -> bytes -> bytes -> bytes -> bytes
-let compute_response_message server key nonce payload =
-  let res:response_message = {payload} in
-  let res_bytes = serialize response_message res in
+val compute_response_message:
+  #a:Type -> {| parseable_serializeable bytes a |} ->
+  principal -> bytes -> bytes -> a -> bytes
+let compute_response_message #a server key nonce payload =
+  let res_bytes = serialize a payload in
   let ad:authenticated_data = {server} in
   let ad_bytes = serialize authenticated_data ad in
   let ciphertext = aead_enc key nonce res_bytes ad_bytes in
   serialize response_envelope {nonce; ciphertext}
 
 val send_response:
+  #a:Type -> {| parseable_serializeable bytes a |} ->
   communication_keys_sess_ids ->
-  principal -> comm_meta_data -> bytes -> traceful (option timestamp)
-let send_response comm_keys_ids server req_meta_data payload =
+  principal -> comm_meta_data -> a -> traceful (option timestamp)
+let send_response #a comm_keys_ids server req_meta_data payload =
   let*? state = get_state server req_meta_data.sid in
   guard_tr (ServerReceiveRequest? state);*?
   let ServerReceiveRequest srr = state in
   guard_tr (srr.key = req_meta_data.key);*?
-  trigger_event server (CommServerSendResponse server payload);*
+  trigger_event server (CommServerSendResponse server (serialize a payload));*
   let* nonce = mk_rand NoUsage public 32 in
   let resp_msg = compute_response_message server req_meta_data.key nonce payload in
   let* msg_id = send_msg resp_msg in
   return (Some msg_id)
 
-val decode_response_message: principal -> bytes -> bytes -> option bytes
-let decode_response_message server key msg_bytes =
+val decode_response_message:
+  #a:Type -> {| parseable_serializeable bytes a |} ->
+  principal -> bytes -> bytes -> option a
+let decode_response_message #a server key msg_bytes =
   let? resp_env:response_envelope = parse response_envelope msg_bytes in
   let ad:authenticated_data = {server} in
   let ad_bytes = serialize authenticated_data ad in
   let? resp_bytes = aead_dec key resp_env.nonce resp_env.ciphertext ad_bytes in
-  let? resp = parse response_message resp_bytes in
-  Some resp.payload
+  let? resp = parse a resp_bytes in
+  Some resp
 
 val receive_response:
+  #a:Type -> {| parseable_serializeable bytes a |} ->
   communication_keys_sess_ids ->
   principal -> comm_meta_data -> timestamp ->
-  traceful (option (bytes & comm_meta_data))
-let receive_response comm_keys_ids client req_meta_data msg_id =
+  traceful (option (a & comm_meta_data))
+let receive_response #a comm_keys_ids client req_meta_data msg_id =
   let*? state = get_state client req_meta_data.sid in
   guard_tr (ClientSendRequest? state);*?
   let ClientSendRequest csr = state in
   let*? resp_msg_bytes = recv_msg msg_id in
-  let*? payload = return (decode_response_message csr.server csr.key resp_msg_bytes) in
+  let*? payload = return (decode_response_message #a csr.server csr.key resp_msg_bytes) in
+  guard_tr (csr.server = req_meta_data.server);*?
   guard_tr (csr.key = req_meta_data.key);*?
-  guard_tr (csr.server = req_meta_data.server);*?  
-  set_state client req_meta_data.sid (ClientReceiveResponse {server=csr.server; payload; key=csr.key} <: communication_states);*
-  trigger_event client (CommClientReceiveResponse client csr.server payload csr.key);*
+  set_state client req_meta_data.sid (ClientReceiveResponse {server=csr.server; payload=(serialize a payload); key=csr.key} <: communication_states);*
+  trigger_event client (CommClientReceiveResponse client csr.server (serialize a payload) csr.key);*
   return (Some (payload, req_meta_data))
