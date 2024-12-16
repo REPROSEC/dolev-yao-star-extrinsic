@@ -145,12 +145,6 @@ type comm_meta_data = {
 
 (*** API ***)
 
-(*val compute_request_message:
-  #a:Type -> {| parseable_serializeable bytes a |} ->
-  a -> bytes -> request_message
-let compute_request_message #a payload key =
-  {payload=(serialize a payload); key}*)
-
 val send_request:
   #a:Type -> {| parseable_serializeable bytes a |} ->
   communication_keys_sess_ids ->
@@ -158,7 +152,6 @@ val send_request:
   traceful (option (timestamp & comm_meta_data))
 let send_request #a comm_keys_ids client server payload =
   let* key = mk_rand (AeadKey comm_layer_aead_tag empty) (comm_label client server) 32 in
-  let* id = mk_rand NoUsage (join (principal_label client) (principal_label server)) 32 in
   
   let payload_bytes = serialize #bytes a payload in
   let* sid = new_session_id client in
