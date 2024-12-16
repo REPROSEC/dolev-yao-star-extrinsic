@@ -22,16 +22,12 @@ open DY.Lib.Communication.Core.Invariants
 val aead_crypto_predicate_communication_layer: {|cusages:crypto_usages|} -> aead_crypto_predicate
 let aead_crypto_predicate_communication_layer #cusages = {
   pred = (fun tr key_usage key nonce msg ad ->
-    (match parse response_message msg with
-    | None -> False
-    | Some {payload} -> (
-      match parse authenticated_data ad with
+      (match parse authenticated_data ad with
       | None -> False
       | Some {server} -> (
-        event_triggered tr server (CommServerSendResponse server payload) /\
-        (get_label tr payload) `can_flow tr` (get_label tr key)
+        event_triggered tr server (CommServerSendResponse server msg)
       )
-    ))
+    )
   );
   pred_later = (fun tr1 tr2 key_usage key nonce msg ad -> (
     parse_wf_lemma response_message (bytes_well_formed tr1) msg;
@@ -106,29 +102,29 @@ let has_communication_layer_state_predicates #invs =
 (*** Event Predicates ***)
 
 noeq
-type comm_reqres_higher_layer_event_preds = {
-  send_request: tr:trace -> client:principal -> server:principal -> payload:bytes -> key_label:label -> prop;
+type comm_reqres_higher_layer_event_preds (a:Type) {| parseable_serializeable bytes a |} = {
+  send_request: tr:trace -> client:principal -> server:principal -> payload:a -> key_label:label -> prop;
   send_request_later:
     tr1:trace -> tr2:trace ->
-    client:principal -> server:principal -> payload:bytes -> key_label:label ->
+    client:principal -> server:principal -> payload:a -> key_label:label ->
     Lemma
     (requires
       send_request tr1 client server payload key_label /\
-      bytes_well_formed tr1 payload /\
+      bytes_well_formed tr1 (serialize a payload) /\
       tr1 <$ tr2
     )
     (ensures
       send_request tr2 client server payload key_label
     )
   ;
-  send_response: tr:trace -> server:principal -> payload:bytes -> prop;
+  send_response: tr:trace -> server:principal -> payload:a -> prop;
   send_response_later:
     tr1:trace -> tr2:trace ->
-    server:principal -> payload:bytes ->
+    server:principal -> payload:a ->
     Lemma
     (requires
       send_response tr1 server payload /\
-      bytes_well_formed tr1 payload /\
+      bytes_well_formed tr1 (serialize a payload) /\
       tr1 <$ tr2
     )
     (ensures
@@ -136,8 +132,7 @@ type comm_reqres_higher_layer_event_preds = {
     )
 }
 
-val default_comm_reqres_higher_layer_event_preds: comm_reqres_higher_layer_event_preds
-let default_comm_reqres_higher_layer_event_preds = {
+let default_comm_reqres_higher_layer_event_preds (a:Type) {| parseable_serializeable bytes a |} : comm_reqres_higher_layer_event_preds a = {
   send_request = (fun tr client server payload key_label -> True);
   send_request_later = (fun tr1 tr2 client server payload key_label -> ());
   send_response = (fun tr server payload -> True);
@@ -147,7 +142,8 @@ let default_comm_reqres_higher_layer_event_preds = {
 #push-options "--ifuel 1 --fuel 0"
 let event_predicate_communication_layer_reqres
   {|cinvs:crypto_invariants|}
-  (higher_layer_resreq_preds:comm_reqres_higher_layer_event_preds) : 
+  (#a:Type) {| parseable_serializeable bytes a |}
+  (higher_layer_resreq_preds:comm_reqres_higher_layer_event_preds a) : 
   event_predicate communication_reqres_event =
   fun tr prin e ->
     (match e with
@@ -155,7 +151,9 @@ let event_predicate_communication_layer_reqres
       is_knowable_by (get_label tr key) tr payload /\
       is_secret (comm_label client server) tr key /\
       key `has_usage tr` (AeadKey comm_layer_aead_tag empty) /\
-      higher_layer_resreq_preds.send_request tr client server payload (get_label tr key)
+      (match parse a payload with
+      | None -> False
+      | Some payload -> higher_layer_resreq_preds.send_request tr client server payload (get_label tr key))
     )
     | CommServerReceiveRequest server payload key -> (
       is_knowable_by (principal_label server) tr payload /\
@@ -163,7 +161,9 @@ let event_predicate_communication_layer_reqres
         is_publishable tr payload)
     )
     | CommServerSendResponse server payload -> (
-      higher_layer_resreq_preds.send_response tr server payload
+      (match parse a payload with
+      | None -> False
+      | Some payload -> higher_layer_resreq_preds.send_response tr server payload)
     )
     | CommClientReceiveResponse client server payload key -> (
       event_triggered tr server (CommServerSendResponse server payload) \/
@@ -174,30 +174,23 @@ let event_predicate_communication_layer_reqres
 
 // Additional event preconditions for the events from the core communication layer
 #push-options "--fuel 0 --ifuel 1"
-val request_response_event_preconditions: {|cinvs:crypto_invariants|} -> comm_higher_layer_event_preds
+val request_response_event_preconditions: {|cinvs:crypto_invariants|} -> comm_higher_layer_event_preds request_message
 let request_response_event_preconditions #cinvs = {
-  default_comm_higher_layer_event_preds with
-  send_conf = (fun tr client server req_payload -> (
-      match decode_request_message req_payload with
-      | None -> False
-      | Some {payload; key} -> (
-        event_triggered tr client (CommClientSendRequest client server payload key)
-      )
-    )
+  (default_comm_higher_layer_event_preds request_message) with
+  send_conf = (fun tr client server (req_payload:request_message) ->
+    event_triggered tr client (CommClientSendRequest client server req_payload.payload req_payload.key)
   );
-  send_conf_later = (fun tr1 tr2 client server req_payload -> (
-      parse_wf_lemma request_message (bytes_well_formed tr1) req_payload;
-      ()
-    )
+  send_conf_later = (fun tr1 tr2 client server req_payload -> ()
   )
 }
 #pop-options
 
 val event_predicate_communication_layer_reqres_and_tag: 
   {|cinvs:crypto_invariants|} ->
-  comm_reqres_higher_layer_event_preds ->
+  #a:Type -> {| parseable_serializeable bytes a |} ->
+  comm_reqres_higher_layer_event_preds a ->
   list (string & compiled_event_predicate)
-let event_predicate_communication_layer_reqres_and_tag #cinvs higher_layer_resreq_preds =
+let event_predicate_communication_layer_reqres_and_tag #cinvs #a higher_layer_resreq_preds =
   [
     event_predicate_communication_layer_and_tag request_response_event_preconditions;
     event_communication_reqres_event.tag, compile_event_pred (event_predicate_communication_layer_reqres #cinvs higher_layer_resreq_preds)
@@ -205,9 +198,10 @@ let event_predicate_communication_layer_reqres_and_tag #cinvs higher_layer_resre
 
 val has_communication_layer_reqres_event_predicates:
   {|protocol_invariants|} ->
-  comm_higher_layer_event_preds ->
-  comm_reqres_higher_layer_event_preds ->
+  #a:Type -> {| parseable_serializeable bytes a |} ->
+  comm_higher_layer_event_preds request_message ->
+  comm_reqres_higher_layer_event_preds a ->
   prop
-let has_communication_layer_reqres_event_predicates #invs higher_layer_preds higher_layer_resreq_preds =
+let has_communication_layer_reqres_event_predicates #invs #a higher_layer_preds higher_layer_resreq_preds =
   has_event_pred (event_predicate_communication_layer #invs.crypto_invs higher_layer_preds) /\
   has_event_pred (event_predicate_communication_layer_reqres #invs.crypto_invs higher_layer_resreq_preds)
