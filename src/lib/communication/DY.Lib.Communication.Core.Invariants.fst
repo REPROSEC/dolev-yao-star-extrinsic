@@ -40,17 +40,21 @@ val sign_crypto_predicates_communication_layer: {|cusages:crypto_usages|} -> sig
 let sign_crypto_predicates_communication_layer #cusages = {
   pred = (fun tr sk_usage vk sig_msg ->
     (match parse signature_input sig_msg with
-    | Some (Plain {sender; receiver; payload}) -> (
+    | Some (Plain sender receiver payload_bytes) -> (
       sk_usage == long_term_key_type_to_usage (LongTermSigKey comm_layer_sign_tag) sender /\
-      get_label tr payload `can_flow tr` public /\
-      event_triggered tr sender (CommAuthSendMsg sender payload)
+      get_label tr payload_bytes `can_flow tr` public /\
+      event_triggered tr sender (CommAuthSendMsg sender payload_bytes)
     )
-    | Some (Encrypted pk_receiver cm) -> (  
-      get_label tr cm.payload `can_flow tr` public /\
-      (exists plain_payload nonce.
-        sk_usage == long_term_key_type_to_usage (LongTermSigKey comm_layer_sign_tag) cm.sender /\
-        cm.payload == encrypt_message pk_receiver nonce plain_payload /\
-        event_triggered tr cm.sender (CommConfAuthSendMsg cm.sender cm.receiver plain_payload)
+    | Some (Encrypted sender receiver payload_bytes pk_receiver) -> (
+      match parse com_send_byte payload_bytes with
+      | None -> False
+      | Some payload -> (
+        get_label tr payload_bytes `can_flow tr` public /\
+        (exists plain_payload nonce.
+          sk_usage == long_term_key_type_to_usage (LongTermSigKey comm_layer_sign_tag) sender /\
+          payload.b == pke_enc pk_receiver nonce plain_payload /\
+          event_triggered tr sender (CommConfAuthSendMsg sender receiver plain_payload)
+        )
       )
     )
     | None -> False)
@@ -75,46 +79,45 @@ let has_communication_layer_crypto_predicates #cinvs =
 (*** Event Predicates ***)
 
 noeq
-type comm_higher_layer_event_preds = {
-  send_conf: tr:trace -> sender:principal -> receiver:principal -> payload:bytes -> prop;
+type comm_higher_layer_event_preds (a:Type) {| parseable_serializeable bytes a |} = {
+  send_conf: tr:trace -> sender:principal -> receiver:principal -> payload:a -> prop;
   send_conf_later: 
     tr1:trace -> tr2:trace ->
-    sender:principal -> receiver:principal -> payload:bytes ->
+    sender:principal -> receiver:principal -> payload:a ->
     Lemma
     (requires
       send_conf tr1 sender receiver payload /\
-      bytes_well_formed tr1 payload /\
+      bytes_well_formed tr1 (serialize a payload) /\
       tr1 <$ tr2
     )
     (ensures send_conf tr2 sender receiver payload)
   ;
-  send_auth: tr:trace -> sender:principal -> payload:bytes -> prop;
+  send_auth: tr:trace -> sender:principal -> payload:a -> prop;
   send_auth_later: 
     tr1:trace -> tr2:trace ->
-    sender:principal -> payload:bytes ->
+    sender:principal -> payload:a ->
     Lemma
     (requires
       send_auth tr1 sender payload /\
-      bytes_well_formed tr1 payload /\
+      bytes_well_formed tr1 (serialize a payload) /\
       tr1 <$ tr2
     )
     (ensures send_auth tr2 sender payload)
   ;
-  send_conf_auth: tr:trace -> sender:principal -> receiver:principal -> payload:bytes -> prop;
+  send_conf_auth: tr:trace -> sender:principal -> receiver:principal -> payload:a -> prop;
   send_conf_auth_later: 
     tr1:trace -> tr2:trace ->
-    sender:principal -> receiver:principal -> payload:bytes ->
+    sender:principal -> receiver:principal -> payload:a ->
     Lemma
     (requires
       send_conf_auth tr1 sender receiver payload /\
-      bytes_well_formed tr1 payload /\
+      bytes_well_formed tr1 (serialize a payload) /\
       tr1 <$ tr2
     )
     (ensures send_conf_auth tr2 sender receiver payload)
 }
 
-val default_comm_higher_layer_event_preds: comm_higher_layer_event_preds
-let default_comm_higher_layer_event_preds = {
+let default_comm_higher_layer_event_preds (a:Type) {| parseable_serializeable bytes a |} : comm_higher_layer_event_preds a = {
   send_conf = (fun tr sender receiver payload -> True);
   send_conf_later = (fun tr1 tr2 sender receiver payload -> ());
   send_auth = (fun tr sender payload -> True);
@@ -126,13 +129,17 @@ let default_comm_higher_layer_event_preds = {
 #push-options "--ifuel 1 --fuel 0"
 let event_predicate_communication_layer 
   {|cinvs:crypto_invariants|}
-  (higher_layer_preds:comm_higher_layer_event_preds) : 
+  (#a:Type) {| parseable_serializeable bytes a |}
+  (higher_layer_preds:comm_higher_layer_event_preds a) : 
   event_predicate communication_event =
   fun tr prin e ->
     (match e with
     | CommConfSendMsg sender receiver payload -> (
       is_knowable_by (join (principal_label sender) (principal_label receiver)) tr payload /\
-      higher_layer_preds.send_conf tr sender receiver payload
+      (match parse a payload with
+      | None -> False
+      | Some payload_p -> higher_layer_preds.send_conf tr sender receiver payload_p
+      )      
     )
     | CommConfReceiveMsg receiver payload -> (
       exists sender.
@@ -143,7 +150,10 @@ let event_predicate_communication_layer
         )
     )
     | CommAuthSendMsg sender payload -> (
-      higher_layer_preds.send_auth tr sender payload
+      (match parse a payload with
+      | None -> False
+      | Some payload_p -> higher_layer_preds.send_auth tr sender payload_p
+      )
     )
     | CommAuthReceiveMsg sender receiver payload -> (
       is_publishable tr payload /\
@@ -154,7 +164,10 @@ let event_predicate_communication_layer
     )
     | CommConfAuthSendMsg sender receiver payload -> (
       is_knowable_by (join (principal_label sender) (principal_label receiver)) tr payload /\
-      higher_layer_preds.send_conf_auth tr sender receiver payload
+      (match parse a payload with
+      | None -> False
+      | Some payload_p -> higher_layer_preds.send_conf_auth tr sender receiver payload_p
+      )
     )
     | CommConfAuthReceiveMsg sender receiver payload -> (
       // We can only show the following about the decrypted ciphertext (payload):
@@ -175,14 +188,16 @@ let event_predicate_communication_layer
 
 val event_predicate_communication_layer_and_tag: 
   {|cinvs:crypto_invariants|} ->
-  comm_higher_layer_event_preds ->
+  #a:Type -> {| parseable_serializeable bytes a |} ->
+  comm_higher_layer_event_preds a ->
   (string & compiled_event_predicate)
 let event_predicate_communication_layer_and_tag #cinvs higher_layer_preds =
   (event_communication_event.tag, compile_event_pred (event_predicate_communication_layer #cinvs higher_layer_preds))
 
 val has_communication_layer_event_predicates:
   {|protocol_invariants|} ->
-  comm_higher_layer_event_preds ->
+  #a:Type -> {| parseable_serializeable bytes a |} ->
+  comm_higher_layer_event_preds a ->
   prop
 let has_communication_layer_event_predicates #invs higher_layer_preds =
   has_event_pred (event_predicate_communication_layer #invs.crypto_invs higher_layer_preds)

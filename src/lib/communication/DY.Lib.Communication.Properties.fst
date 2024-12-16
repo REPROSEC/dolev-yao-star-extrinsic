@@ -25,8 +25,9 @@ open DY.Lib.Communication.RequestResponse.Invariants
 
 val sender_authentication:
   {|protocol_invariants|} ->
+  #a:Type -> {| parseable_serializeable bytes a |} ->
   tr:trace -> i:timestamp ->
-  higher_layer_preds:comm_higher_layer_event_preds ->
+  higher_layer_preds:comm_higher_layer_event_preds a ->
   sender:principal -> receiver:principal ->
   payload:bytes ->
   Lemma
@@ -39,15 +40,16 @@ val sender_authentication:
     event_triggered (prefix tr i) sender (CommAuthSendMsg sender payload) \/
     is_corrupt (prefix tr i) (long_term_key_label sender)
   )
-let sender_authentication tr i higher_layer_preds sender receiver secret = ()
+let sender_authentication #invs #a tr i higher_layer_preds sender receiver secret = ()
 
 
 (*** Confidential and Authenticated Messages Properties ***)
 
 val sender_confauth_authentication:
   {|protocol_invariants|} ->
+  #a:Type -> {| parseable_serializeable bytes a |} ->
   tr:trace -> i:timestamp ->
-  higher_layer_preds:comm_higher_layer_event_preds ->
+  higher_layer_preds:comm_higher_layer_event_preds a ->
   sender:principal -> receiver:principal ->
   payload:bytes ->
   Lemma
@@ -60,15 +62,16 @@ val sender_confauth_authentication:
     event_triggered tr sender (CommConfAuthSendMsg sender receiver payload) \/
     is_corrupt tr (long_term_key_label sender)
   )
-let sender_confauth_authentication tr i higher_layer_preds sender receiver secret = ()
+let sender_confauth_authentication #invs #a tr i higher_layer_preds sender receiver secret = ()
 
 
 (*** Request Response Pair Properties ***)
 
 val server_authentication:
   {|protocol_invariants|} ->
+  #a:Type -> {| parseable_serializeable bytes a |} ->
   tr:trace -> i:timestamp ->
-  higher_layer_resreq_preds:comm_reqres_higher_layer_event_preds ->
+  higher_layer_resreq_preds:comm_reqres_higher_layer_event_preds a ->
   client:principal -> server:principal -> payload:bytes -> key:bytes ->
   Lemma
   (requires
@@ -81,7 +84,7 @@ val server_authentication:
     is_corrupt (prefix tr i) (principal_label client) \/ 
     is_corrupt (prefix tr i) (principal_label server)
   )
-let server_authentication #invs tr i higher_layer_resreq_preds client server payload key = ()
+let server_authentication #invs #a tr i higher_layer_resreq_preds client server payload key = ()
 
 val key_secrecy_client:
   {|protocol_invariants|} ->
