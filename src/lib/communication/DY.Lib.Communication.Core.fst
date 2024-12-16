@@ -76,7 +76,7 @@ type communication_event =
 #pop-options
 
 instance event_communication_event: event communication_event = {
-  tag = "DY.Lib.Communication.Event";
+  tag = "DY.Lib.Communication.Event.Core";
   format = mk_parseable_serializeable ps_communication_event;
 }
 

@@ -60,7 +60,6 @@ let send_request_proof #invs #a tr comm_keys_ids higher_layer_preds client serve
   match send_request comm_keys_ids client server payload tr with
   | (None, tr_out) -> (
     let (key, tr') = mk_rand (AeadKey comm_layer_aead_tag empty) (comm_label client server) 32 tr in
-    let (id, tr') = mk_rand NoUsage (comm_label client server) 32 tr' in
     let (sid, tr') = new_session_id client tr' in
     let ((), tr') = set_state client sid (ClientSendRequest {server; payload=payload_bytes; key} <: communication_states) tr' in
     higher_layer_preds.send_request_later tr tr' client server payload (get_label tr' key);
@@ -68,8 +67,7 @@ let send_request_proof #invs #a tr comm_keys_ids higher_layer_preds client serve
     ()
   )
   | (Some _, tr_out) -> (
-    let (key, tr') = mk_rand (AeadKey comm_layer_aead_tag empty) (comm_label client server) 32 tr in
-    let (id, tr') = mk_rand NoUsage (comm_label client server) 32 tr' in    
+    let (key, tr') = mk_rand (AeadKey comm_layer_aead_tag empty) (comm_label client server) 32 tr in   
     let (sid, tr') = new_session_id client tr' in
     let ((), tr') = set_state client sid (ClientSendRequest {server; payload=payload_bytes; key} <: communication_states) tr' in
     higher_layer_preds.send_request_later tr tr' client server payload (get_label tr' key);
