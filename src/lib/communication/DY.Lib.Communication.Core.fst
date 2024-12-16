@@ -10,20 +10,32 @@ open DY.Lib.Event.Typed
 
 (*** Messages ***)
 
+/// The following type is meant to be used to send a single byte with a function
+/// of the communication layer. Since the communication layer always takes a
+/// serializable data object we need to encapsulate the byte in a data object.
 [@@with_bytes bytes]
-type communication_message = {
-  sender:principal;
-  receiver:principal;  
-  payload:bytes;
+type com_send_byte = {
+  b:bytes;
 }
 
-%splice [ps_communication_message] (gen_parser (`communication_message))
-%splice [ps_communication_message_is_well_formed] (gen_is_well_formed_lemma (`communication_message))
+%splice [ps_com_send_byte] (gen_parser (`com_send_byte))
+%splice [ps_com_send_byte_is_well_formed] (gen_is_well_formed_lemma (`com_send_byte))
+
+instance parseable_serializeable_bytes_com_send_byte: parseable_serializeable bytes com_send_byte
+  = mk_parseable_serializeable ps_com_send_byte
+
+
+/// Data structure to return data from communication layer functions
+type communication_message (a:Type) = {
+  sender:principal;
+  receiver:principal;  
+  payload:a;
+}
 
 [@@with_bytes bytes]
 type signature_input = 
-  | Plain: msg:communication_message -> signature_input
-  | Encrypted: pk:bytes -> msg:communication_message -> signature_input
+  | Plain: sender:principal -> receiver:principal -> payload:bytes -> signature_input
+  | Encrypted: sender:principal -> receiver:principal -> payload:bytes -> pk:bytes -> signature_input
 
 #push-options "--ifuel 1 --fuel 0"
 %splice [ps_signature_input] (gen_parser (`signature_input))
@@ -34,16 +46,16 @@ instance parseable_serializeable_bytes_signature_input: parseable_serializeable 
   = mk_parseable_serializeable ps_signature_input
 
 [@@with_bytes bytes]
-type communication_message_sign = {
+type signed_communication_message = {
   msg:bytes;
   signature:bytes;
 }
 
-%splice [ps_communication_message_sign] (gen_parser (`communication_message_sign))
-%splice [ps_communication_message_sign_is_well_formed] (gen_is_well_formed_lemma (`communication_message_sign))
+%splice [ps_signed_communication_message] (gen_parser (`signed_communication_message))
+%splice [ps_signed_communication_message_is_well_formed] (gen_is_well_formed_lemma (`signed_communication_message))
 
-instance parseable_serializeable_bytes_communication_message_sign: parseable_serializeable bytes communication_message_sign
-  = mk_parseable_serializeable ps_communication_message_sign
+instance parseable_serializeable_bytes_signed_communication_message: parseable_serializeable bytes signed_communication_message
+  = mk_parseable_serializeable ps_signed_communication_message
 
 
 (*** Events ***)
@@ -90,153 +102,173 @@ let comm_label sender receiver = join (principal_label sender) (principal_label 
 
 (**** Confidential Send and Receive Functions ****)
 
-val encrypt_message: bytes -> bytes -> bytes -> bytes
-let encrypt_message pk_receiver nonce payload =
-  pke_enc pk_receiver nonce payload
+val encrypt_message:
+  #a:Type -> {| parseable_serializeable bytes a |} ->
+  bytes -> bytes -> a -> bytes
+let encrypt_message #a pk_receiver nonce payload =
+  pke_enc pk_receiver nonce (serialize a payload)
 
 val send_confidential:
+  #a:Type -> {| parseable_serializeable bytes a |} ->
   communication_keys_sess_ids ->
-  principal -> principal -> bytes ->
+  principal -> principal -> a ->
   traceful (option timestamp)
-let send_confidential comm_keys_ids sender receiver payload =
+let send_confidential #a comm_keys_ids sender receiver payload =
   let*? pk_receiver = get_public_key sender comm_keys_ids.pki (LongTermPkeKey comm_layer_pkenc_tag) receiver in
   let* nonce = mk_rand PkeNonce (long_term_key_label sender) 32 in
-  trigger_event sender (CommConfSendMsg sender receiver payload);*
+  trigger_event sender (CommConfSendMsg sender receiver (serialize a payload));*
   let msg_encrypted = encrypt_message pk_receiver nonce payload in
   let* msg_id = send_msg msg_encrypted in
   return (Some msg_id)
 
 
-val decrypt_message: bytes -> bytes -> option bytes
-let decrypt_message sk_receiver msg_encrypted =
-  pke_dec sk_receiver msg_encrypted
+val decrypt_message:
+  #a:Type -> {| parseable_serializeable bytes a |} ->
+  bytes -> bytes -> option a
+let decrypt_message #a sk_receiver msg_encrypted =
+  let? plaintext = pke_dec sk_receiver msg_encrypted in
+  parse #bytes a plaintext
 
 val receive_confidential:
+  #a:Type -> {| parseable_serializeable bytes a |} ->
   communication_keys_sess_ids ->
   principal -> timestamp ->
-  traceful (option bytes)
-let receive_confidential comm_keys_ids receiver msg_id =
+  traceful (option a)
+let receive_confidential #a comm_keys_ids receiver msg_id =
   let*? sk_receiver = get_private_key receiver comm_keys_ids.private_keys (LongTermPkeKey comm_layer_pkenc_tag) in
   let*? msg_encrypted = recv_msg msg_id in
-  let*? payload = return (decrypt_message sk_receiver msg_encrypted) in
-  trigger_event receiver (CommConfReceiveMsg receiver payload);*
+  let*? payload = return (decrypt_message #a sk_receiver msg_encrypted) in
+  trigger_event receiver (CommConfReceiveMsg receiver (serialize a payload));*
   return (Some payload)
 
 
 (**** Authenticated Send and Receive Functions ****)
 
-val sign_message: principal -> principal -> bytes -> bytes -> bool -> bytes -> bytes -> bytes
-let sign_message sender receiver payload pk_receiver is_encrypted sk nonce =
-  let msg:communication_message = {sender; receiver; payload} in
-  if is_encrypted then (
-    let sig_input = Encrypted pk_receiver msg in
-    let sig_input_bytes = serialize signature_input sig_input in
-    let signature = sign sk nonce sig_input_bytes in
-    let signed_msg = {msg=sig_input_bytes; signature} in
-    serialize communication_message_sign signed_msg
-  ) else (
-    let sig_input = Plain msg in
-    let sig_input_bytes = serialize signature_input sig_input in
-    let signature = sign sk nonce sig_input_bytes in
-    let signed_msg = {msg=sig_input_bytes; signature} in
-    serialize communication_message_sign signed_msg
-  )
+#push-options "--ifuel 1"
+val sign_message: 
+  #a:Type -> {| parseable_serializeable bytes a |} ->
+  principal -> principal -> a -> option bytes -> bytes -> bytes -> bytes
+let sign_message #a sender receiver payload pk_receiver sk nonce =
+  let payload_bytes = serialize a payload in
+  let sig_input = (
+    match pk_receiver with
+    | None -> Plain sender receiver payload_bytes
+    | Some pk -> Encrypted sender receiver payload_bytes pk
+  ) in
+  let sig_input_bytes = serialize signature_input sig_input in
+  let signature = sign sk nonce sig_input_bytes in
+  let signed_msg = {msg=sig_input_bytes; signature} in
+  serialize signed_communication_message signed_msg
+#pop-options
 
 val send_authenticated:
+  #a:Type -> {| parseable_serializeable bytes a |} ->
   communication_keys_sess_ids ->
-  principal -> principal -> bytes ->
+  principal -> principal -> a ->
   traceful (option timestamp)
-let send_authenticated comm_keys_ids sender receiver payload =
+let send_authenticated #a comm_keys_ids sender receiver payload =
   let*? sk_sender = get_private_key sender comm_keys_ids.private_keys (LongTermSigKey comm_layer_sign_tag) in
   let* nonce = mk_rand SigNonce (long_term_key_label sender) 32 in
-  trigger_event sender (CommAuthSendMsg sender payload);*
-  let msg_signed = sign_message sender receiver payload empty false sk_sender nonce in
+  let payload_bytes = serialize a payload in
+  trigger_event sender (CommAuthSendMsg sender payload_bytes);*
+  let msg_signed = sign_message sender receiver payload None sk_sender nonce in
   let* msg_id = send_msg msg_signed in
   return (Some msg_id)
 
 #push-options "--ifuel 1 --fuel 0"
-val verify_message: principal -> bytes -> bool -> bytes -> bytes -> option communication_message
-let verify_message receiver sign_msg_bytes is_encrypted sk_receiver vk_sender =
-  let? msg_sign = parse communication_message_sign sign_msg_bytes in
+val verify_message:
+  #a:Type -> {| parseable_serializeable bytes a |} ->
+  principal -> bytes -> option bytes -> bytes -> option (communication_message a)
+let verify_message #a receiver sign_msg_bytes sk_receiver_opt vk_sender =
+  let? msg_sign = parse signed_communication_message sign_msg_bytes in
   let? sign_input = parse signature_input msg_sign.msg in
   guard (verify vk_sender msg_sign.msg msg_sign.signature);?
-  if not is_encrypted then (
-    guard (Plain? sign_input);?
-    let Plain cm = sign_input in
-    guard (cm.receiver = receiver);?
-    Some cm
-  ) else (
-    guard (Encrypted? sign_input);?
-    let Encrypted pk_receiver cm = sign_input in
-    guard (cm.receiver = receiver);?
-    guard (pk_receiver = pk sk_receiver);?
-    Some cm
-  )
+  let? (pk_receiver_opt, cm) = match sign_input with
+    | Plain sender receiver payload_bytes -> (
+      let? payload = parse a payload_bytes in
+      Some (None, {sender; receiver; payload})
+    )
+    | Encrypted sender receiver payload_bytes pk_receiver -> (
+      let? payload = parse a payload_bytes in
+      Some (Some pk_receiver, {sender; receiver; payload})
+    )
+  in
+  guard (cm.receiver = receiver);?
+  guard (pk_receiver_opt = FStar.Option.mapTot pk sk_receiver_opt);?
+  Some cm
 
 val get_sender: bytes -> option principal
 let get_sender msg_bytes =
-  let? msg_sign = parse communication_message_sign msg_bytes in
+  let? msg_sign = parse signed_communication_message msg_bytes in
   let? sign_input = parse signature_input msg_sign.msg in
   match sign_input with
-  | Plain cm -> Some cm.sender
-  | Encrypted pk_receiver cm -> Some cm.sender
+  | Plain sender receiver payload_bytes -> Some sender
+  | Encrypted sender receiver payload_bytes pk_receiver -> Some sender
 #pop-options
 
 val receive_authenticated:
+  #a:Type -> {| parseable_serializeable bytes a |} ->
   communication_keys_sess_ids ->
   principal -> timestamp ->
-  traceful (option communication_message)
-let receive_authenticated comm_keys_ids receiver msg_id =
+  traceful (option (communication_message a))
+let receive_authenticated #a comm_keys_ids receiver msg_id =
   let*? msg_signed_bytes = recv_msg msg_id in
   let*? sender = return (get_sender msg_signed_bytes) in
   let*? vk_sender = get_public_key receiver comm_keys_ids.pki (LongTermSigKey comm_layer_sign_tag) sender in
-  let*? cm = return (verify_message receiver msg_signed_bytes false empty vk_sender) in
-  trigger_event receiver (CommAuthReceiveMsg cm.sender receiver cm.payload);*
+  let*? cm = return (verify_message receiver msg_signed_bytes None vk_sender) in
+  trigger_event receiver (CommAuthReceiveMsg sender receiver (serialize a cm.payload));*
   return (Some cm)
+
 
 (**** Confidential and Authenticates Send and Receive Functions ****)
 
-val encrypt_and_sign_message: principal -> principal -> bytes -> bytes -> bytes -> bytes -> bytes -> bytes
-let encrypt_and_sign_message sender receiver payload pk_receiver sk_sender enc_nonce sign_nonce =
-  let enc_payload = encrypt_message pk_receiver enc_nonce payload in
-  sign_message sender receiver enc_payload pk_receiver true sk_sender sign_nonce
+val encrypt_and_sign_message:
+  #a:Type -> {| parseable_serializeable bytes a |} ->
+  principal -> principal -> a -> bytes -> bytes -> bytes -> bytes -> bytes
+let encrypt_and_sign_message #a sender receiver payload pk_receiver sk_sender enc_nonce sign_nonce =
+  let enc_payload = encrypt_message #a pk_receiver enc_nonce payload in
+  sign_message #com_send_byte sender receiver {b=enc_payload} (Some pk_receiver) sk_sender sign_nonce
 
 // We do not encrypt the sender and receiver because, in real-world settings,
 // they can also be identified by the IP addresses or certificates they use.
 // Having the sender and receiver as plaintext allows us to reuse the functions
 // to create and parse confidential and authenticated messages.
 val send_confidential_authenticated:
+  #a:Type -> {| parseable_serializeable bytes a |} ->
   communication_keys_sess_ids ->
-  principal -> principal -> bytes ->
+  principal -> principal -> a ->
   traceful (option timestamp)
-let send_confidential_authenticated comm_keys_ids sender receiver payload =
+let send_confidential_authenticated #a comm_keys_ids sender receiver payload =
   let*? pk_receiver = get_public_key sender comm_keys_ids.pki (LongTermPkeKey comm_layer_pkenc_tag) receiver in
   let*? sk_sender = get_private_key sender comm_keys_ids.private_keys (LongTermSigKey comm_layer_sign_tag) in
   let* enc_nonce = mk_rand PkeNonce (long_term_key_label sender) 32 in
   let* sign_nonce = mk_rand SigNonce (long_term_key_label sender) 32 in
-  trigger_event sender (CommConfSendMsg sender receiver payload);*
-  trigger_event sender (CommConfAuthSendMsg sender receiver payload);*
+  trigger_event sender (CommConfSendMsg sender receiver (serialize a payload));*
+  trigger_event sender (CommConfAuthSendMsg sender receiver (serialize a payload));*
   let msg_encrypted_signed_bytes = encrypt_and_sign_message sender receiver payload pk_receiver sk_sender enc_nonce sign_nonce in
   let* msg_id = send_msg msg_encrypted_signed_bytes in
   return (Some msg_id)
 
-val verify_and_decrypt_message: principal -> bytes -> bytes -> bytes -> option communication_message
-let verify_and_decrypt_message receiver sk_receiver vk_sender msg_encrypted_signed =
-  let? cm = verify_message receiver msg_encrypted_signed true sk_receiver vk_sender in
-  let? payload = decrypt_message sk_receiver cm.payload in
+val verify_and_decrypt_message:
+  #a:Type -> {| parseable_serializeable bytes a |} ->
+  principal -> bytes -> bytes -> bytes -> option (communication_message a)
+let verify_and_decrypt_message #a #ps receiver sk_receiver vk_sender msg_encrypted_signed =
+  let? cm = verify_message #com_send_byte receiver msg_encrypted_signed (Some sk_receiver) vk_sender in
+  let? payload = decrypt_message #a sk_receiver cm.payload.b in
   Some ({cm with payload})
 
 val receive_confidential_authenticated:
+  #a:Type -> {| parseable_serializeable bytes a |} ->
   communication_keys_sess_ids ->
   principal -> timestamp ->
-  traceful (option communication_message)
-let receive_confidential_authenticated comm_keys_ids receiver msg_id =
+  traceful (option (communication_message a))
+let receive_confidential_authenticated #a comm_keys_ids receiver msg_id =
   let*? msg_encrypted_signed = recv_msg msg_id in
   let*? sk_receiver = get_private_key receiver comm_keys_ids.private_keys (LongTermPkeKey comm_layer_pkenc_tag) in
   let*? sender = return (get_sender msg_encrypted_signed) in
   let*? vk_sender = get_public_key receiver comm_keys_ids.pki (LongTermSigKey comm_layer_sign_tag) sender in 
-  let*? cm:communication_message = return (verify_and_decrypt_message receiver sk_receiver vk_sender msg_encrypted_signed) in 
-  trigger_event receiver (CommConfAuthReceiveMsg cm.sender receiver cm.payload);*
+  let*? cm = return (verify_and_decrypt_message #a receiver sk_receiver vk_sender msg_encrypted_signed) in 
+  trigger_event receiver (CommConfAuthReceiveMsg sender receiver (serialize a cm.payload));*
   return (Some cm)
 
 
