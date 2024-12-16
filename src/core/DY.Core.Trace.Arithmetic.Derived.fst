@@ -49,6 +49,182 @@ let trace_subtract_concat_slices tr1 tr2 tr3 =
   trace_subtract_concat tr2 tr3
 
 
+/// Properties relating trace concatenation and subtraction to trace search
+
+#push-options "--z3rlimit 50"
+val trace_search_first_concat:
+  #label_t:Type ->
+  tr1:trace_ label_t -> tr2:trace_ label_t ->
+  p:(trace_entry_ label_t -> bool) ->
+  Lemma
+  (ensures
+    (trace_search_first (tr1 <++> tr2) p) == (
+      match trace_search_first tr1 p with
+      | None -> (
+        match trace_search_first tr2 p with
+        | None -> None
+        | Some ts -> Some (ts + trace_length tr1 <: timestamp)
+      )
+      | Some ts -> Some ts
+    )
+  )
+let trace_search_first_concat #label_t tr1 tr2 p =
+  match trace_search_first tr1 p with
+  | None -> (
+    match trace_search_first tr2 p with
+    | None -> introduce forall (ts:timestamp). ts `on_trace` (tr1 <++> tr2) ==> ~(p(get_entry_at (tr1 <++> tr2) ts))
+             with introduce _ ==> _
+             with _. trace_concat_get_entry tr1 tr2 ts
+    | Some ts -> (
+      trace_concat_get_entry tr1 tr2 (ts + trace_length tr1);
+      introduce forall (ts':timestamp). ts' `on_trace` (tr1 <++> tr2) /\ p(get_entry_at (tr1 <++> tr2) ts') ==> ts' >= ts + trace_length tr1
+      with introduce _ ==> _
+      with _. trace_concat_get_entry tr1 tr2 ts'
+    )
+  )
+  | Some ts -> assert(tr1 <$ (tr1 <++> tr2)) // Triggers trace_search_first_later
+#pop-options
+
+#push-options "--z3rlimit 50"
+val trace_search_last_concat:
+  #label_t:Type ->
+  tr1:trace_ label_t -> tr2:trace_ label_t ->
+  p:(trace_entry_ label_t -> bool) ->
+  Lemma
+  (ensures
+    (trace_search_last (tr1 <++> tr2) p) == (
+      match trace_search_last tr2 p with
+      | None -> (
+        match trace_search_last tr1 p with
+        | None -> None
+        | Some ts -> Some ts
+      )
+      | Some ts -> Some (ts + trace_length tr1 <: timestamp)
+    )
+  )
+let trace_search_last_concat #label_t tr1 tr2 p =
+  match trace_search_last tr2 p with
+  | None -> (
+    match trace_search_last tr1 p with
+    | None -> introduce forall (ts:timestamp). ts `on_trace` (tr1 <++> tr2) ==> ~(p(get_entry_at (tr1 <++> tr2) ts))
+             with introduce _ ==> _
+             with _. trace_concat_get_entry tr1 tr2 ts
+    | Some ts -> (
+      trace_concat_get_entry tr1 tr2 ts;
+      introduce forall (ts':timestamp). ts' `on_trace` (tr1 <++> tr2) /\ p(get_entry_at (tr1 <++> tr2) ts') ==> ts' <= ts
+      with introduce _ ==> _
+      with _. trace_concat_get_entry tr1 tr2 ts'
+    )
+  )
+  | Some ts -> (
+    trace_concat_get_entry tr1 tr2 (ts + trace_length tr1);
+    introduce forall (ts':timestamp). ts' `on_trace` (tr1 <++> tr2) /\ p(get_entry_at (tr1 <++> tr2) ts') ==> ts' <= ts + trace_length tr1
+    with introduce _ ==> _
+    with _. trace_concat_get_entry tr1 tr2 ts'
+  )
+#pop-options
+
+val trace_search_first_subtract:
+  #label_t:Type ->
+  tr1:trace_ label_t -> tr2:trace_ label_t ->
+  p:(trace_entry_ label_t -> bool) ->
+  Lemma
+  (requires tr1 <$ tr2)
+  (ensures
+    (trace_search_first tr2 p == (
+      match trace_search_first tr1 p with
+      | None -> (
+        match trace_search_first (tr2 <--> tr1) p with
+        | None -> None
+        | Some ts -> Some (ts + trace_length tr1 <: timestamp)
+      )
+      | Some ts -> Some ts
+    )
+  ))
+let trace_search_first_subtract tr1 tr2 p =
+  trace_search_first_concat tr1 (tr2 <--> tr1) p
+
+val trace_search_last_subtract:
+  #label_t:Type ->
+  tr1:trace_ label_t -> tr2:trace_ label_t ->
+  p:(trace_entry_ label_t -> bool) ->
+  Lemma
+  (requires tr1 <$ tr2)
+  (ensures
+    (trace_search_last tr2 p == (
+      match trace_search_last (tr2 <--> tr1) p with
+      | None -> (
+        match trace_search_last tr1 p with
+        | None -> None
+        | Some ts -> Some ts
+      )
+      | Some ts -> Some (ts + trace_length tr1 <: timestamp)
+    )
+  ))
+let trace_search_last_subtract tr1 tr2 p =
+  trace_search_last_concat tr1 (tr2 <--> tr1) p
+
+#push-options "--z3rlimit 50"
+val trace_find_first_concat:
+  #label_t:Type ->
+  tr1:trace_ label_t -> tr2:trace_ label_t ->
+  e:trace_entry_ label_t ->
+  Lemma
+  (requires equiv_entry_exists (tr1 <++> tr2) e)
+  (ensures (
+    (equiv_entry_exists tr1 e \/ equiv_entry_exists tr2 e) /\
+    (equiv_entry_exists tr1 e ==> (trace_find_first (tr1 <++> tr2) e == trace_find_first tr1 e)) /\
+    (~(equiv_entry_exists tr1 e) ==> (trace_find_first (tr1 <++> tr2) e == trace_find_first tr2 e + trace_length tr1))
+  ))
+let trace_find_first_concat tr1 tr2 e =
+  trace_search_first_concat tr1 tr2 (trace_entry_equiv e)
+#pop-options
+
+#push-options "--z3rlimit 50"
+val trace_find_last_concat:
+  #label_t:Type ->
+  tr1:trace_ label_t -> tr2:trace_ label_t ->
+  e:trace_entry_ label_t ->
+  Lemma
+  (requires equiv_entry_exists (tr1 <++> tr2) e)
+  (ensures (
+    (equiv_entry_exists tr1 e \/ equiv_entry_exists tr2 e) /\
+    (equiv_entry_exists tr2 e ==> (trace_find_last (tr1 <++> tr2) e == trace_find_last tr2 e + trace_length tr1)) /\
+    (~(equiv_entry_exists tr2 e) ==> (trace_find_last (tr1 <++> tr2) e == trace_find_last tr1 e))
+  ))
+let trace_find_last_concat tr1 tr2 e =
+  trace_search_last_concat tr1 tr2 (trace_entry_equiv e)
+#pop-options
+
+val trace_find_first_subtract:
+  #label_t:Type ->
+  tr1:trace_ label_t -> tr2:trace_ label_t ->
+  e:trace_entry_ label_t ->
+  Lemma
+  (requires equiv_entry_exists tr2 e /\ tr1 <$ tr2)
+  (ensures (
+    (equiv_entry_exists tr1 e \/ equiv_entry_exists (tr2 <--> tr1) e) /\
+    (equiv_entry_exists tr1 e ==> (trace_find_first tr2 e == trace_find_first tr1 e)) /\
+    (~(equiv_entry_exists tr1 e) ==> (trace_find_first tr2 e == trace_find_first (tr2 <--> tr1) e + trace_length tr1))
+  ))
+let trace_find_first_subtract tr1 tr2 e =
+  trace_find_first_concat tr1 (tr2 <--> tr1) e
+
+val trace_find_last_subtract:
+  #label_t:Type ->
+  tr1:trace_ label_t -> tr2:trace_ label_t ->
+  e:trace_entry_ label_t ->
+  Lemma
+  (requires equiv_entry_exists tr2 e /\ tr1 <$ tr2)
+  (ensures (
+    (equiv_entry_exists tr1 e \/ equiv_entry_exists (tr2 <--> tr1) e) /\
+    (equiv_entry_exists (tr2 <--> tr1) e ==> (trace_find_last tr2 e == trace_find_last (tr2 <--> tr1) e + trace_length tr1)) /\
+    (~(equiv_entry_exists (tr2 <--> tr1) e) ==> (trace_find_last tr2 e == trace_find_last tr1 e))
+  ))
+let trace_find_last_subtract tr1 tr2 e =
+  trace_find_last_concat tr1 (tr2 <--> tr1) e
+
+
 /// Splitting a trace at a particular timestamp, getting the entry at that timestamp,
 /// along with the prefix before and suffix after that timestamp.
 /// Derived from trace subtraction.

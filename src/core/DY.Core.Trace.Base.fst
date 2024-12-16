@@ -771,14 +771,41 @@ val trace_entry_equiv:
 let trace_entry_equiv e1 e2 =
   (fmap_trace_entry forget_label e1) = (fmap_trace_entry forget_label e2)
 
+/// Weak versions of entry_at, entry_at_grows, and entry_exists, using
+/// entry equivalence rather than strict equality ==
+val equiv_entry_at:
+  #label_t:Type ->
+  trace_ label_t -> timestamp -> trace_entry_ label_t ->
+  prop
+let equiv_entry_at tr ts e =
+  ts `on_trace` tr /\
+  trace_entry_equiv e (get_entry_at tr ts)
+
+val equiv_entry_at_grows:
+  #label_t:Type ->
+  tr1:trace_ label_t -> tr2:trace_ label_t ->
+  ts:timestamp -> e:trace_entry_ label_t ->
+  Lemma
+  (requires equiv_entry_at tr1 ts e /\ tr1 <$ tr2)
+  (ensures equiv_entry_at tr2 ts e)
+  [SMTPat (equiv_entry_at tr1 ts e); SMTPat (tr1 <$ tr2)]
+let equiv_entry_at_grows tr1 tr2 e ts = ()
+
+val equiv_entry_exists:
+  #label_t:Type ->
+  trace_ label_t -> trace_entry_ label_t ->
+  prop
+let equiv_entry_exists tr e =
+  exists ts. equiv_entry_at tr ts e
+
+
 /// The trace_find functions make use of trace_search to get the timestamp of a
 /// trace entry that is already known to exist on the trace. Since a given entry
 /// may in principle occur multiple times, we have two functions to give the first
 /// and last occurrence of such an entry.
-[@@"opaque_to_smt"]
 val trace_find_first: #label_t:Type -> tr:trace_ label_t -> e:trace_entry_ label_t ->
     Pure timestamp
-      (requires entry_exists tr e)
+      (requires equiv_entry_exists tr e)
       (ensures fun ts ->
         ts `on_trace` tr /\
         trace_entry_equiv e (get_entry_at tr ts) /\
@@ -787,10 +814,9 @@ val trace_find_first: #label_t:Type -> tr:trace_ label_t -> e:trace_entry_ label
 let trace_find_first tr e =
   Some?.v (trace_search_first tr (trace_entry_equiv e))
 
-[@@"opaque_to_smt"]
 val trace_find_last: #label_t:Type -> tr:trace_ label_t -> e:trace_entry_ label_t ->
     Pure timestamp
-      (requires entry_exists tr e)
+      (requires equiv_entry_exists tr e)
       (ensures fun ts ->
         ts `on_trace` tr /\
         trace_entry_equiv e (get_entry_at tr ts) /\
@@ -822,7 +848,7 @@ val trace_find_first_later:
   e:trace_entry_ label_t ->
   Lemma
   (requires
-    entry_exists tr1 e /\
+    equiv_entry_exists tr1 e /\
     tr1 <$ tr2
   )
   (ensures trace_find_first tr1 e == trace_find_first tr2 e)
