@@ -79,7 +79,7 @@ let rec trace_from_rev_list entries =
 val trace_from_list: #label_t:Type -> list (trace_entry_ label_t) -> trace_ label_t
 let trace_from_list ens = trace_from_rev_list (L.rev ens)
 
-
+val trace_to_rev_list : #label_t:Type -> trace_ label_t -> list (trace_entry_ label_t)
 let rec trace_to_rev_list tr =
   match tr with
   | Nil -> []
@@ -88,6 +88,7 @@ let rec trace_to_rev_list tr =
 /// generate a list from a trace,
 /// where the last trace entry
 /// is the last entry in the list
+val trace_to_list : #label_t:Type -> trace_ label_t -> list (trace_entry_ label_t)
 let trace_to_list tr =
   L.rev (trace_to_rev_list tr)
 
@@ -214,17 +215,24 @@ let prefix_grows #label_t tr i =
 /// empty_trace and append_entry, because this allows their SMTPats to
 /// trigger more robustly.
 
-let grows_nil (#label_t:Type) (tr:trace_ label_t)
-  : Lemma (ensures Nil <$ tr)
-    [SMTPat (Nil <$ tr)]
-  = reveal_opaque (`%grows) (grows #label_t)
+val grows_nil :
+  #label_t:Type ->
+  tr:trace_ label_t ->
+  Lemma
+  (ensures Nil <$ tr)
+  [SMTPat (Nil <$ tr)]
+let grows_nil #label_t tr =
+  reveal_opaque (`%grows) (grows #label_t)
 
-let grows_snoc (#label_t:Type) (tr:trace_ label_t) (e:trace_entry_ label_t)
-  : Lemma (ensures tr <$ (Snoc tr e))
-    [SMTPat (tr <$ (Snoc tr e))]
-  = reveal_opaque (`%grows) (grows #label_t);
-    reveal_opaque (`%prefix) (prefix #label_t)
-
+val grows_snoc :
+  #label_t:Type ->
+  tr:trace_ label_t -> e:trace_entry_ label_t ->
+  Lemma
+  (ensures tr <$ (Snoc tr e))
+  [SMTPat (tr <$ (Snoc tr e))]
+let grows_snoc #label_t tr e =
+  reveal_opaque (`%grows) (grows #label_t);
+  reveal_opaque (`%prefix) (prefix #label_t)
 
 val prefix_prefix_grows:
   #label_t:Type ->
@@ -272,32 +280,42 @@ let rec prefix_prefix_eq #label_t tr1 tr2 i =
 
 /// Every trace is equal to its full-length prefix
 
-let prefix_full_eq (#label_t:Type) (tr:trace_ label_t)
-  : Lemma (ensures (prefix tr (trace_length tr) == tr))
-    [SMTPat (prefix tr (trace_length tr))]
-  = reveal_opaque (`%prefix) (prefix #label_t);
+val prefix_full_eq :
+  #label_t:Type ->
+  tr:trace_ label_t ->
+  Lemma
+  (ensures (prefix tr (trace_length tr) == tr))
+  [SMTPat (prefix tr (trace_length tr))]
+let prefix_full_eq #label_t tr =
+    reveal_opaque (`%prefix) (prefix #label_t);
     reveal_opaque (`%prefix) (prefix #label_t)
 
 /// Two traces with the same length, where one is a prefix of the other, must be the same
 
-let grows_full_eq (#label_t:Type) (tr1 tr2:trace_ label_t)
-  : Lemma
-    (requires tr1 <$ tr2 /\ trace_length tr1 == trace_length tr2)
-    (ensures tr1 == tr2)
-  = prefix_prefix_eq tr1 tr2 (trace_length tr1)
+val grows_full_eq :
+  #label_t:Type ->
+  tr1:trace_ label_t -> tr2:trace_ label_t ->
+  Lemma
+  (requires tr1 <$ tr2 /\ trace_length tr1 == trace_length tr2)
+  (ensures tr1 == tr2)
+let grows_full_eq #label_t tr1 tr2 =
+  prefix_prefix_eq tr1 tr2 (trace_length tr1)
 
 /// The relation <$ is a non-strict partial order, and so if tr1 <$ tr2,
 /// we can split into the case where tr1 and tr2 are equal, and that in which
 /// tr1 is a strict prefix of tr2
 
-let grows_cases (#label_t:Type) (tr1 tr2:trace_ label_t)
-  : Lemma
-    (requires tr1 <$ tr2)
-    (ensures tr1 == tr2 \/ (
-      is_not_empty tr2 /\
-      tr1 <$ (init tr2)
-    ))
-  = if trace_length tr1 = trace_length tr2
+val grows_cases :
+  #label_t:Type ->
+  tr1:trace_ label_t -> tr2:trace_ label_t ->
+  Lemma
+  (requires tr1 <$ tr2)
+  (ensures tr1 == tr2 \/ (
+    is_not_empty tr2 /\
+    tr1 <$ (init tr2)
+  ))
+let grows_cases #label_t tr1 tr2 =
+  if trace_length tr1 = trace_length tr2
     then grows_full_eq tr1 tr2
     else begin
       let open FStar.Calc in
@@ -362,8 +380,6 @@ val trace_entry_just_occurred: #label_t:Type -> trace_ label_t -> trace_entry_ l
 let trace_entry_just_occurred tr en =
   is_not_empty tr /\
   last tr == en
-
-
 
 /// An entry in the trace stays here when the trace grows.
 
@@ -820,9 +836,12 @@ let rec trace_search_last tr p =
 /// to decide if a given entry is the one we are looking for, and so we use this
 /// label-ignoring equivalence. This is exactly == for non-RandGen trace entries,
 /// but treats two RandGen entries with the same non-label content as equivalent.
-let trace_entry_equiv (#label_t:Type) (e1 e2:trace_entry_ label_t)
-  : bool
-  = (fmap_trace_entry forget_label e1) = (fmap_trace_entry forget_label e2)
+val trace_entry_equiv:
+  #label_t:Type ->
+  e1:trace_entry_ label_t -> e2:trace_entry_ label_t ->
+  bool
+let trace_entry_equiv e1 e2 =
+  (fmap_trace_entry forget_label e1) = (fmap_trace_entry forget_label e2)
 
 /// The trace_find functions make use of trace_search to get the timestamp of a
 /// trace entry that is already known to exist on the trace. Since a given entry
