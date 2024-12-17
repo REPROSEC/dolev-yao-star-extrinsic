@@ -218,8 +218,7 @@ let prefix_grows #label_t tr i =
 val grows_nil :
   #label_t:Type ->
   tr:trace_ label_t ->
-  Lemma
-  (ensures Nil <$ tr)
+  Lemma (Nil <$ tr)
   [SMTPat (Nil <$ tr)]
 let grows_nil #label_t tr =
   reveal_opaque (`%grows) (grows #label_t)
@@ -227,8 +226,7 @@ let grows_nil #label_t tr =
 val grows_snoc :
   #label_t:Type ->
   tr:trace_ label_t -> e:trace_entry_ label_t ->
-  Lemma
-  (ensures tr <$ (Snoc tr e))
+  Lemma (tr <$ (Snoc tr e))
   [SMTPat (tr <$ (Snoc tr e))]
 let grows_snoc #label_t tr e =
   reveal_opaque (`%grows) (grows #label_t);
@@ -283,8 +281,7 @@ let rec prefix_prefix_eq #label_t tr1 tr2 i =
 val prefix_full_eq :
   #label_t:Type ->
   tr:trace_ label_t ->
-  Lemma
-  (ensures (prefix tr (trace_length tr) == tr))
+  Lemma (prefix tr (trace_length tr) == tr)
   [SMTPat (prefix tr (trace_length tr))]
 let prefix_full_eq #label_t tr =
   reveal_opaque (`%prefix) (prefix #label_t)
