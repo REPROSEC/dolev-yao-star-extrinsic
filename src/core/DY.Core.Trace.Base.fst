@@ -287,8 +287,7 @@ val prefix_full_eq :
   (ensures (prefix tr (trace_length tr) == tr))
   [SMTPat (prefix tr (trace_length tr))]
 let prefix_full_eq #label_t tr =
-    reveal_opaque (`%prefix) (prefix #label_t);
-    reveal_opaque (`%prefix) (prefix #label_t)
+  reveal_opaque (`%prefix) (prefix #label_t)
 
 /// Two traces with the same length, where one is a prefix of the other, must be the same
 
