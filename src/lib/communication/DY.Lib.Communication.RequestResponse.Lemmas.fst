@@ -33,6 +33,11 @@ val comm_meta_data_knowable: {|crypto_invariants|} -> trace -> principal -> comm
 let comm_meta_data_knowable #cinvs tr prin req_meta_data =
   is_knowable_by (principal_label prin) tr req_meta_data.key
 
+val apply_com_layer_lemmas: 
+  #a:Type -> {| parseable_serializeable bytes a |} -> 
+  comm_reqres_higher_layer_event_preds a -> prop
+let apply_com_layer_lemmas _ = True
+
 
 val send_request_proof:
   {|protocol_invariants|} ->
@@ -55,6 +60,9 @@ val send_request_proof:
     let (_, tr_out) = send_request comm_keys_ids client server payload tr in
     trace_invariant tr_out
   ))
+  [SMTPat (trace_invariant tr);
+  SMTPat (apply_com_layer_lemmas higher_layer_preds);
+  SMTPat (send_request comm_keys_ids client server payload tr)]
 let send_request_proof #invs #a tr comm_keys_ids higher_layer_preds client server payload =
   let payload_bytes = serialize #bytes a payload in
   match send_request comm_keys_ids client server payload tr with
@@ -115,6 +123,9 @@ val receive_request_proof:
       is_comm_response_payload tr_out server req_meta_data payload
     )
   ))
+  [SMTPat (trace_invariant tr); 
+  SMTPat (apply_com_layer_lemmas higher_layer_preds);
+  SMTPat (receive_request #a comm_keys_ids server msg_id tr)]
 let receive_request_proof #invs #a tr comm_keys_ids higher_layer_preds server msg_id =
   receive_confidential_proof #invs tr request_response_event_preconditions comm_keys_ids server msg_id;
   match receive_request #a comm_keys_ids server msg_id tr with
@@ -208,6 +219,9 @@ val send_response_proof:
     let (_, tr_out) = send_response #a comm_keys_ids server req_meta_data payload tr in
     trace_invariant tr_out
   ))
+  [SMTPat (trace_invariant tr);
+  SMTPat (apply_com_layer_lemmas higher_layer_preds);
+  SMTPat (send_response comm_keys_ids server req_meta_data payload tr)]
 let send_response_proof #invs #a tr comm_keys_ids higher_layer_preds server req_meta_data payload =
   match send_response comm_keys_ids server req_meta_data payload tr with
   | (None, tr_out) -> ()
@@ -288,6 +302,9 @@ val receive_response_proof:
       is_well_formed a (is_knowable_by (get_label tr req_meta_data.key) tr) payload
     )
   ))
+  [SMTPat (trace_invariant tr);
+  SMTPat (apply_com_layer_lemmas higher_layer_preds);
+  SMTPat (receive_response #a comm_keys_ids client req_meta_data msg_id tr)]
 let receive_response_proof #invs #a tr comm_keys_ids higher_layer_preds client req_meta_data msg_id =
   match receive_response #a comm_keys_ids client req_meta_data msg_id tr with
   | (None, tr_out) -> ()
