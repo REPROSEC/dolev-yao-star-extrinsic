@@ -837,7 +837,7 @@ let rec trace_search_last tr p =
 /// but treats two RandGen entries with the same non-label content as equivalent.
 val trace_entry_equiv:
   #label_t:Type ->
-  e1:trace_entry_ label_t -> e2:trace_entry_ label_t ->
+  trace_entry_ label_t -> trace_entry_ label_t ->
   bool
 let trace_entry_equiv e1 e2 =
   (fmap_trace_entry forget_label e1) = (fmap_trace_entry forget_label e2)
