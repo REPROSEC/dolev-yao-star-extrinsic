@@ -120,7 +120,7 @@ val receive_request_proof:
       (exists client. event_triggered tr_out client (CommClientSendRequest client server payload_bytes req_meta_data.key) \/
         is_well_formed a (is_publishable tr_out) payload) /\
       is_well_formed a (is_knowable_by (principal_label server) tr_out) payload /\
-      is_comm_response_payload tr_out server req_meta_data payload
+      is_well_formed a (is_knowable_by (get_response_label tr req_meta_data) tr) payload
     )
   ))
   [SMTPat (trace_invariant tr); 
