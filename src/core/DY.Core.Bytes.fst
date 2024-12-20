@@ -964,7 +964,7 @@ let rec bytes_invariant #cinvs tr b =
         exists sk_usg.
         // Honest case:
         // - the key has the usage of signature key
-        (Vk sk) `has_signkey_usage tr` sk_usg /\
+        sk `has_usage tr` sk_usg /\
         SigKey? sk_usg /\
         // - the custom (protocol-specific) invariant hold (authentication)
         sign_pred.pred tr sk_usg (Vk sk) msg /\
