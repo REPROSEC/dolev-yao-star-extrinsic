@@ -729,10 +729,10 @@ let has_kem_sk_usage #cusgs = mk_has_xxx_usage extract_kem_sk
 
 noeq
 type aead_crypto_predicate {|crypto_usages|} = {
-  pred: tr:trace -> key_usage:usage{AeadKey? key_usage} -> key:bytes{key `has_usage tr` key_usage} -> nonce:bytes -> msg:bytes -> ad:bytes -> prop;
+  pred: tr:trace -> key_usage:usage{AeadKey? key_usage} -> key:bytes -> nonce:bytes -> msg:bytes -> ad:bytes -> prop;
   pred_later:
     tr1:trace -> tr2:trace ->
-    key_usage:usage{AeadKey? key_usage} -> key:bytes{key `has_usage tr1` key_usage} -> nonce:bytes -> msg:bytes -> ad:bytes ->
+    key_usage:usage{AeadKey? key_usage} -> key:bytes -> nonce:bytes -> msg:bytes -> ad:bytes ->
     Lemma
     (requires
       pred tr1 key_usage key nonce msg ad /\
@@ -748,13 +748,12 @@ type aead_crypto_predicate {|crypto_usages|} = {
 
 noeq
 type pke_crypto_predicate {|crypto_usages|} = {
-  pred: tr:trace -> sk_usage:usage{PkeKey? sk_usage} -> pk:bytes{pk `has_sk_usage tr` sk_usage} -> msg:bytes -> prop;
+  pred: tr:trace -> sk_usage:usage{PkeKey? sk_usage} -> pk:bytes -> msg:bytes -> prop;
   pred_later:
     tr1:trace -> tr2:trace ->
     sk_usage:usage{PkeKey? sk_usage} -> pk:bytes -> msg:bytes ->
     Lemma
     (requires
-      pk `has_sk_usage tr1` sk_usage /\
       pred tr1 sk_usage pk msg /\
       bytes_well_formed tr1 pk /\
       bytes_well_formed tr1 msg /\
@@ -766,13 +765,12 @@ type pke_crypto_predicate {|crypto_usages|} = {
 
 noeq
 type sign_crypto_predicate {|crypto_usages|} = {
-  pred: tr:trace -> sk_usage:usage{SigKey? sk_usage} -> vk:bytes{vk `has_signkey_usage tr` sk_usage} -> msg:bytes -> prop;
+  pred: tr:trace -> sk_usage:usage{SigKey? sk_usage} -> vk:bytes -> msg:bytes -> prop;
   pred_later:
     tr1:trace -> tr2:trace ->
     sk_usage:usage{SigKey? sk_usage} -> vk:bytes -> msg:bytes ->
     Lemma
     (requires
-      vk `has_signkey_usage tr1` sk_usage /\
       pred tr1 sk_usage vk msg /\
       bytes_well_formed tr1 vk /\
       bytes_well_formed tr1 msg /\
@@ -1067,8 +1065,8 @@ let rec bytes_invariant_later #cinvs tr1 tr2 msg =
     bytes_invariant_later tr1 tr2 nonce;
     bytes_invariant_later tr1 tr2 msg;
     bytes_invariant_later tr1 tr2 ad;
-    introduce forall key_usg. key `has_usage tr1` key_usg /\ aead_pred.pred tr1 key_usg key nonce msg ad ==> aead_pred.pred tr2 key_usg key nonce msg ad with (
-      introduce key `has_usage tr1` key_usg /\ aead_pred.pred tr1 key_usg key nonce msg ad ==> aead_pred.pred tr2 key_usg key nonce msg ad with _. (
+    introduce forall key_usg. aead_pred.pred tr1 key_usg key nonce msg ad ==> aead_pred.pred tr2 key_usg key nonce msg ad with (
+      introduce aead_pred.pred tr1 key_usg key nonce msg ad ==> aead_pred.pred tr2 key_usg key nonce msg ad with _. (
         aead_pred.pred_later tr1 tr2 key_usg key nonce msg ad
       )
     )
@@ -1079,11 +1077,7 @@ let rec bytes_invariant_later #cinvs tr1 tr2 msg =
     bytes_invariant_later tr1 tr2 pk;
     bytes_invariant_later tr1 tr2 nonce;
     bytes_invariant_later tr1 tr2 msg;
-    introduce forall sk_usg. pk `has_sk_usage tr1` sk_usg /\ pke_pred.pred tr1 sk_usg pk msg ==> pke_pred.pred tr2 sk_usg pk msg with (
-      introduce pk `has_sk_usage tr1` sk_usg /\ pke_pred.pred tr1 sk_usg pk msg ==> pke_pred.pred tr2 sk_usg pk msg with _. (
-        pke_pred.pred_later tr1 tr2 sk_usg pk msg
-      )
-    )
+    FStar.Classical.forall_intro_3 (FStar.Classical.move_requires_3 (pke_pred.pred_later tr1 tr2))
   )
   | Vk sk ->
     bytes_invariant_later tr1 tr2 sk
@@ -1092,11 +1086,7 @@ let rec bytes_invariant_later #cinvs tr1 tr2 msg =
     bytes_invariant_later tr1 tr2 nonce;
     bytes_invariant_later tr1 tr2 msg;
     assert(bytes_invariant tr1 (Vk sk)); // to prove well-formedness
-    introduce forall sk_usg. (Vk sk) `has_signkey_usage tr1` sk_usg /\ sign_pred.pred tr1 sk_usg (Vk sk) msg ==> sign_pred.pred tr2 sk_usg (Vk sk) msg with (
-      introduce (Vk sk) `has_signkey_usage tr1` sk_usg /\ sign_pred.pred tr1 sk_usg (Vk sk) msg ==> sign_pred.pred tr2 sk_usg (Vk sk) msg with _. (
-        sign_pred.pred_later tr1 tr2 sk_usg (Vk sk) msg
-      )
-    )
+    FStar.Classical.forall_intro_3 (FStar.Classical.move_requires_3 (sign_pred.pred_later tr1 tr2))
   )
   | Hash msg ->
     bytes_invariant_later tr1 tr2 msg
