@@ -198,9 +198,8 @@ let compute_response_message #a server key nonce payload =
 
 val send_response:
   #a:Type -> {| parseable_serializeable bytes a |} ->
-  communication_keys_sess_ids ->
   principal -> comm_meta_data -> a -> traceful (option timestamp)
-let send_response #a comm_keys_ids server req_meta_data payload =
+let send_response #a server req_meta_data payload =
   let*? state = get_state server req_meta_data.sid in
   guard_tr (ServerReceiveRequest? state);*?
   let ServerReceiveRequest srr = state in
@@ -224,10 +223,9 @@ let decode_response_message #a server key msg_bytes =
 
 val receive_response:
   #a:Type -> {| parseable_serializeable bytes a |} ->
-  communication_keys_sess_ids ->
   principal -> comm_meta_data -> timestamp ->
   traceful (option (a & comm_meta_data))
-let receive_response #a comm_keys_ids client req_meta_data msg_id =
+let receive_response #a client req_meta_data msg_id =
   let*? state = get_state client req_meta_data.sid in
   guard_tr (ClientSendRequest? state);*?
   let ClientSendRequest csr = state in
