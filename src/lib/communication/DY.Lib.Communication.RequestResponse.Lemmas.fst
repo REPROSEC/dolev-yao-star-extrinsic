@@ -203,7 +203,6 @@ val send_response_proof:
   {|protocol_invariants|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
   tr:trace ->
-  comm_keys_ids:communication_keys_sess_ids ->
   higher_layer_preds:comm_reqres_higher_layer_event_preds a ->
   server:principal -> req_meta_data:comm_meta_data -> payload:a ->
   Lemma
@@ -213,17 +212,17 @@ val send_response_proof:
     has_communication_layer_reqres_event_predicates request_response_event_preconditions higher_layer_preds /\
     higher_layer_preds.send_response tr server payload /\
     has_communication_layer_state_predicates /\
-    is_comm_response_payload tr server req_meta_data payload
+    is_well_formed a (is_knowable_by (get_response_label tr req_meta_data) tr) payload
   )
   (ensures (
-    let (_, tr_out) = send_response #a comm_keys_ids server req_meta_data payload tr in
+    let (_, tr_out) = send_response #a server req_meta_data payload tr in
     trace_invariant tr_out
   ))
   [SMTPat (trace_invariant tr);
   SMTPat (apply_com_layer_lemmas higher_layer_preds);
-  SMTPat (send_response comm_keys_ids server req_meta_data payload tr)]
-let send_response_proof #invs #a tr comm_keys_ids higher_layer_preds server req_meta_data payload =
-  match send_response comm_keys_ids server req_meta_data payload tr with
+  SMTPat (send_response server req_meta_data payload tr)]
+let send_response_proof #invs #a tr higher_layer_preds server req_meta_data payload =
+  match send_response server req_meta_data payload tr with
   | (None, tr_out) -> ()
   | (Some msg_id, tr_out) -> (
     let (Some state, tr') = get_state server req_meta_data.sid tr in
@@ -281,7 +280,6 @@ val receive_response_proof:
   {|protocol_invariants|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
   tr:trace ->
-  comm_keys_ids:communication_keys_sess_ids ->
   higher_layer_preds:comm_reqres_higher_layer_event_preds a ->
   client:principal -> req_meta_data:comm_meta_data -> msg_id:timestamp ->
   Lemma
@@ -294,7 +292,7 @@ val receive_response_proof:
     has_communication_layer_state_predicates
   )
   (ensures (
-    match receive_response #a comm_keys_ids client req_meta_data msg_id tr with
+    match receive_response #a client req_meta_data msg_id tr with
     | (None, tr_out) -> trace_invariant tr_out
     | (Some (payload, _), tr_out) -> (
       trace_invariant tr_out /\
@@ -304,9 +302,9 @@ val receive_response_proof:
   ))
   [SMTPat (trace_invariant tr);
   SMTPat (apply_com_layer_lemmas higher_layer_preds);
-  SMTPat (receive_response #a comm_keys_ids client req_meta_data msg_id tr)]
-let receive_response_proof #invs #a tr comm_keys_ids higher_layer_preds client req_meta_data msg_id =
-  match receive_response #a comm_keys_ids client req_meta_data msg_id tr with
+  SMTPat (receive_response #a client req_meta_data msg_id tr)]
+let receive_response_proof #invs #a tr higher_layer_preds client req_meta_data msg_id =
+  match receive_response #a client req_meta_data msg_id tr with
   | (None, tr_out) -> ()
   | (Some (payload, _), tr_out) -> (
     let server = req_meta_data.server in
