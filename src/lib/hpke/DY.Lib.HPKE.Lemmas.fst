@@ -81,21 +81,19 @@ let has_hpke_sk_usage #cusages tr pk usg =
 
 noeq
 type hpke_crypto_predicate {|crypto_usages|} = {
-  pred: tr:trace -> usage:(string & bytes) -> pkR:bytes{pkR `has_hpke_sk_usage tr` (mk_hpke_sk_usage usage)} -> msg:bytes -> info:bytes -> ad:bytes -> prop;
+  pred: tr:trace -> string & bytes -> msg:bytes -> info:bytes -> ad:bytes -> prop;
   pred_later:
     tr1:trace -> tr2:trace ->
-    usage:(string & bytes) -> pkR:bytes -> msg:bytes -> info:bytes -> ad:bytes ->
+    usage:(string & bytes) -> msg:bytes -> info:bytes -> ad:bytes ->
     Lemma
     (requires
-      pkR `has_hpke_sk_usage tr1` (mk_hpke_sk_usage usage) /\
-      pred tr1 usage pkR msg info ad /\
-      bytes_well_formed tr1 pkR /\
+      pred tr1 usage msg info ad /\
       bytes_well_formed tr1 msg /\
       bytes_well_formed tr1 info /\
       bytes_well_formed tr1 ad /\
       tr1 <$ tr2
     )
-    (ensures pred tr2 usage pkR msg info ad)
+    (ensures pred tr2 usage msg info ad)
   ;
 }
 
@@ -152,13 +150,11 @@ val hpke_aead_pred: {|crypto_usages|} -> {|hpke_crypto_invariants|} -> aead_cryp
 let hpke_aead_pred #cusgs #hpke = {
   pred = (fun tr key_usage key nonce msg ad ->
     let AeadKey usg data = key_usage in
-    assert(key `has_usage tr` key_usage);
     match parse hpke_aead_usage_data data with
     | Some { hpke_usg; info; } ->
       bytes_well_formed tr info /\ (
         get_label tr msg `can_flow tr` public \/
-        (key `has_hpke_sk_usage tr` (mk_hpke_sk_usage (hpke_usg.usage_tag, hpke_usg.usage_data)) /\
-        hpke_pred.pred tr (hpke_usg.usage_tag, hpke_usg.usage_data) key msg info ad)
+        hpke_pred.pred tr (hpke_usg.usage_tag, hpke_usg.usage_data) msg info ad
       )
     | _ ->
       False
@@ -167,11 +163,7 @@ let hpke_aead_pred #cusgs #hpke = {
     let AeadKey usg data = key_usage in
     match parse hpke_aead_usage_data data with
     | Some { hpke_usg; info; } ->
-      introduce ~(get_label tr1 msg `can_flow tr1` public) ==>
-        hpke_pred.pred tr2 (hpke_usg.usage_tag, hpke_usg.usage_data) key msg info ad
-      with _. (
-        hpke_pred.pred_later tr1 tr2 (hpke_usg.usage_tag, hpke_usg.usage_data) key msg info ad
-      )
+      FStar.Classical.move_requires (hpke_pred.pred_later tr1 tr2 (hpke_usg.usage_tag, hpke_usg.usage_data) msg info) ad
     | _ -> ()
   );
 }
@@ -237,7 +229,7 @@ let get_hpke_sk_label_hpke_pk #cu tr sk = ()
 /// It is a bit more complex than `DY.Core.Bytes.bytes_invariant_pk_enc`,
 /// the additional complexity is explained in the comments.
 
-#push-options "--ifuel 2 --z3rlimit 50"
+#push-options "--ifuel 2 --z3rlimit 25"
 val bytes_invariant_hpke_enc:
   {|crypto_invariants|} -> {|hpke_crypto_invariants|} ->
   tr:trace ->
@@ -264,7 +256,7 @@ val bytes_invariant_hpke_enc:
     (
       (
         pkR `has_hpke_sk_usage tr` mk_hpke_sk_usage usg /\
-        hpke_pred.pred tr usg pkR msg info ad
+        hpke_pred.pred tr usg msg info ad
       ) \/ (
         get_label tr entropy `can_flow tr` public
       )
@@ -291,32 +283,7 @@ let bytes_invariant_hpke_enc #cinvs #hpke tr pkR entropy msg info ad (usage_tag,
 
   let ciphertext = aead_enc aead_key aead_nonce msg ad in
   assert((enc, ciphertext) == hpke_enc pkR entropy msg info ad);
-
-  //assert(hpke_pred.pred tr (usage_tag, usage_data) pkR msg info ad);
-  let key_usage = (AeadKey "DY.Lib.HPKE" (serialize _ {hpke_usg = {usage_tag; usage_data}; info})) in
-  assert(
-    get_label tr msg `can_flow tr` public \/
-    (
-      pkR `has_hpke_sk_usage tr` (mk_hpke_sk_usage (usage_tag, usage_data)) ///\
-      //hpke_pred.pred tr (usage_tag, usage_data) pkR msg info ad
-    )
-  );
-  assert(
-    let AeadKey usg data = key_usage in
-    assert(aead_key `has_usage tr` key_usage);
-    match parse hpke_aead_usage_data data with
-    | Some { hpke_usg; info; } ->
-      bytes_well_formed tr info /\ (
-        get_label tr msg `can_flow tr` public \/
-        (pkR `has_hpke_sk_usage tr` (mk_hpke_sk_usage (hpke_usg.usage_tag, hpke_usg.usage_data)) /\
-        hpke_pred.pred tr (hpke_usg.usage_tag, hpke_usg.usage_data) pkR msg info ad)
-      )
-    | _ ->
-      False
-  );
-  assume(
-    pkR `has_hpke_sk_usage tr` mk_hpke_sk_usage (usage_tag, usage_data) /\
-    hpke_pred.pred tr (usage_tag, usage_data) pkR msg info ad ==> aead_pred.pred tr (AeadKey "DY.Lib.HPKE" (serialize _ {hpke_usg = {usage_tag; usage_data}; info})) aead_key aead_nonce msg ad);
+  assert(hpke_pred.pred tr (usage_tag, usage_data) msg info ad ==> aead_pred.pred tr (AeadKey "DY.Lib.HPKE" (serialize _ {hpke_usg = {usage_tag; usage_data}; info})) aead_key aead_nonce msg ad);
   serialize_wf_lemma _ (bytes_invariant tr) { len = 32; label = "key"; info };
   serialize_wf_lemma _ (bytes_invariant tr) { len = 32; label = "base_nonce"; info };
   ()
@@ -348,7 +315,7 @@ val bytes_invariant_hpke_dec:
       is_knowable_by (get_label tr skR) tr plaintext /\
       (
         (
-          hpke_pred.pred tr usg (hpke_pk skR) plaintext info ad
+          hpke_pred.pred tr usg plaintext info ad
         ) \/ (
           is_publishable tr plaintext
         )
@@ -385,7 +352,8 @@ let bytes_invariant_hpke_dec #cinvs #hpke tr skR enc ciphertext info ad (usage_t
     match aead_dec aead_key aead_nonce ciphertext ad with
     | None -> ()
     | Some plaintext -> (
-      assume((aead_pred.pred tr (AeadKey "DY.Lib.HPKE" (serialize _ {hpke_usg = {usage_tag; usage_data}; info})) aead_key aead_nonce plaintext ad ==> (hpke_pred.pred tr (usage_tag, usage_data) (hpke_pk skR) plaintext info ad \/ is_publishable tr plaintext)))
+      assert((aead_pred.pred tr (AeadKey "DY.Lib.HPKE" (serialize _ {hpke_usg = {usage_tag; usage_data}; info})) aead_key aead_nonce plaintext ad ==> (hpke_pred.pred tr (usage_tag, usage_data) plaintext info ad \/ is_publishable tr plaintext)));
+      ()
     )
   )
 #pop-options
