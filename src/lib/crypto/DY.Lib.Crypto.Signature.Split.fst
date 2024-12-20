@@ -5,51 +5,40 @@ open DY.Core
 open DY.Lib.Crypto.SplitPredicate
 
 let split_sign_predicate_params {|crypto_usages|}: split_crypto_predicate_parameters = {
-  key_t = bytes;
   key_usage_t = sk_usage:usage{SigKey? sk_usage};
-  data_t = bytes;
+  data_t = (bytes & bytes);
   get_usage = (fun vk_usg ->
     let SigKey tag _ = vk_usg in
     tag
   );
 
-  key_well_formed = bytes_well_formed;
-  has_usage_split = has_signkey_usage;
-  has_usage_split_later = (fun tr1 tr2 vk sk_usage ->
-    normalize_term_spec bytes_well_formed;
-    match vk with
-    | Vk sk -> (
-      get_usage_later tr1 tr2 sk
-    )
-    | _ -> ()
-  );
-
   local_pred_t = sign_crypto_predicate;
-  global_pred_t = tr:trace -> sk_usage:usage{SigKey? sk_usage} -> vk:bytes{vk `has_signkey_usage tr` sk_usage} -> msg:bytes -> prop;
+  global_pred_t = tr:trace -> sk_usage:usage{SigKey? sk_usage} -> vk:bytes -> msg:bytes -> prop;
 
-  apply_local_pred = (fun pred (|tr, sk_usage, sk, msg|) ->
-    pred.pred tr sk_usage sk msg
+  apply_local_pred = (fun pred (tr, sk_usage, (vk, msg)) ->
+    pred.pred tr sk_usage vk msg
   );
-  apply_global_pred = (fun pred (|tr, sk_usage, sk, msg|) ->
-    pred tr sk_usage sk msg
+  apply_global_pred = (fun pred (tr, sk_usage, (vk, msg)) ->
+    pred tr sk_usage vk msg
   );
-  mk_global_pred = (fun pred tr sk_usage sk msg ->
-    pred (|tr, sk_usage, sk, msg|)
+  mk_global_pred = (fun pred tr sk_usage vk msg ->
+    pred (tr, sk_usage, (vk, msg))
   );
 
-  data_well_formed = (fun tr msg ->
+  data_well_formed = (fun tr (vk, msg) ->
+    bytes_well_formed tr vk /\
     bytes_well_formed tr msg
   );
 
   apply_mk_global_pred = (fun bare x -> ());
-  apply_local_pred_later = (fun lpred tr1 tr2 sk_usage msg ->
-    lpred.pred_later tr1 tr2 sk_usage msg
+  apply_local_pred_later = (fun lpred tr1 tr2 sk_usage (vk, msg) ->
+    lpred.pred_later tr1 tr2 sk_usage vk msg
   );
 }
 
 val has_sign_predicate: {|crypto_invariants|} -> (string & sign_crypto_predicate) -> prop
 let has_sign_predicate #cinvs (tag, local_pred) =
-  forall (tr:trace) (sk_usage:usage) (vk:bytes{vk `has_signkey_usage tr` sk_usage}) (msg:bytes).
+  forall (tr:trace) (sk_usage:usage) (vk:bytes) (msg:bytes).
     {:pattern sign_pred.pred tr sk_usage vk msg}
     match sk_usage with
     | SigKey sign_tag _ ->
@@ -71,7 +60,7 @@ let intro_has_sign_predicate #cinvs (tag, local_pred) =
   with (
     match sk_usage with
     | SigKey sign_tag _ ->
-      has_local_crypto_predicate_elim (split_sign_predicate_params) sign_pred.pred tag local_pred tr sk_usage vk msg
+      has_local_crypto_predicate_elim (split_sign_predicate_params) sign_pred.pred tag local_pred tr sk_usage (vk, msg)
     | _ -> ()
   )
 
@@ -84,7 +73,7 @@ val mk_sign_predicate:
 let mk_sign_predicate #cusgs l = {
   pred = mk_global_crypto_predicate split_sign_predicate_params l;
   pred_later = (fun tr1 tr2 sk_usage vk msg ->
-    mk_global_crypto_predicate_later split_sign_predicate_params l tr1 tr2 sk_usage vk msg
+    mk_global_crypto_predicate_later split_sign_predicate_params l tr1 tr2 sk_usage (vk, msg)
   );
 }
 
