@@ -16,9 +16,8 @@
     pkgs = import nixpkgs { inherit system; };
     z3 = fstar-flake.packages.${system}.z3;
     fstar = fstar-flake.packages.${system}.fstar;
-    fstar-dune = fstar-flake.packages.${system}.fstar-dune;
     comparse = comparse-flake.packages.${system}.comparse;
-    dolev-yao-star = pkgs.callPackage ./default.nix {inherit fstar fstar-dune z3 comparse; ocamlPackages = pkgs.ocaml-ng.ocamlPackages_4_14;};
+    dolev-yao-star = pkgs.callPackage ./default.nix {inherit fstar z3 comparse; ocamlPackages = pkgs.ocaml-ng.ocamlPackages_4_14;};
   in {
     packages.${system} = {
       default = dolev-yao-star;
