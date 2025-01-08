@@ -180,10 +180,17 @@ let receive_request #a comm_keys_ids server msg_id =
   let req_meta_data = {key=req_msg.key; server; sid} in
   return (Some (payload, req_meta_data))
 
-val mk_comm_layer_response_nonce: principal -> comm_meta_data -> usage -> traceful (option bytes)
-let mk_comm_layer_response_nonce server req_meta_data usg =
+val mk_comm_layer_response_nonce: comm_meta_data -> usage -> traceful (option bytes)
+let mk_comm_layer_response_nonce req_meta_data usg =
   let* tr = get_trace in
   let* nonce = mk_rand usg (get_label #default_crypto_usages tr req_meta_data.key) 32 in
+  return (Some nonce)
+
+val mk_comm_layer_response_nonce_labeled: comm_meta_data -> usage -> label -> traceful (option bytes)
+let mk_comm_layer_response_nonce_labeled req_meta_data usg lab =
+  let* tr = get_trace in
+  let lab_join = join lab (get_label #default_crypto_usages tr req_meta_data.key) in
+  let* nonce = mk_rand usg lab_join 32 in
   return (Some nonce)
 
 val compute_response_message:
