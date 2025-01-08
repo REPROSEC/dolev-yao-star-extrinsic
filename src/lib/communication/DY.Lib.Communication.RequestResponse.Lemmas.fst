@@ -149,7 +149,7 @@ let receive_request_proof #invs #a tr comm_keys_ids higher_layer_preds server ms
 val mk_comm_layer_response_nonce_proof:
   {|protocol_invariants|} ->
   tr:trace ->
-  server:principal -> req_meta_data:comm_meta_data -> usg:usage ->
+  req_meta_data:comm_meta_data -> usg:usage ->
   Lemma
   (requires
     trace_invariant tr /\
@@ -158,13 +158,13 @@ val mk_comm_layer_response_nonce_proof:
     bytes_well_formed tr req_meta_data.key
   )
   (ensures (
-    match mk_comm_layer_response_nonce server req_meta_data usg tr with
+    match mk_comm_layer_response_nonce req_meta_data usg tr with
     | (None, tr_out) -> trace_invariant tr_out
     | (Some nonce, tr_out) -> (
       is_knowable_by (get_response_label tr_out req_meta_data) tr_out nonce
     )
   ))
-let mk_comm_layer_response_nonce_proof #invs tr server req_meta_data usg = ()
+let mk_comm_layer_response_nonce_proof #invs tr req_meta_data usg = ()
 
 
 val compute_response_message_proof:
