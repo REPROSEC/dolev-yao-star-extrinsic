@@ -29,7 +29,7 @@ Two choices are possible:
 - either [Comparse](https://github.com/TWal/comparse) is cloned in `../comparse`
   and `fstar.exe` is in the `PATH`
 - or [Comparse](https://github.com/TWal/comparse) is cloned in `COMPARSE_HOME`
-  and F\* in `FSTAR_HOME`,
+  and `FSTAR_EXE` is set to the location of `fstar.exe`,
   in that case using [direnv](https://direnv.net/) is a advisable.
 
 ### Compiling
