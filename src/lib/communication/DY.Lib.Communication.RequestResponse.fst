@@ -25,16 +25,6 @@ type request_message = {
 instance parseable_serializeable_bytes_request_message: parseable_serializeable bytes request_message
   = mk_parseable_serializeable ps_request_message
 
-[@@with_bytes bytes]
-type response_message = {
-  payload:bytes
-}
-
-%splice [ps_response_message] (gen_parser (`response_message))
-%splice [ps_response_message_is_well_formed] (gen_is_well_formed_lemma (`response_message))
-
-instance parseable_serializeable_bytes_response_message: parseable_serializeable bytes response_message
-  = mk_parseable_serializeable ps_response_message
 
 [@@with_bytes bytes]
 type response_envelope = {

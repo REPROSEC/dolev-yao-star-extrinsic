@@ -30,7 +30,6 @@ let aead_crypto_predicate_communication_layer #cusages = {
     )
   );
   pred_later = (fun tr1 tr2 key_usage key nonce msg ad -> (
-    parse_wf_lemma response_message (bytes_well_formed tr1) msg;
     parse_wf_lemma authenticated_data (bytes_well_formed tr1) ad;
     ()
   ))

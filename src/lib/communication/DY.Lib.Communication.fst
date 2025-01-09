@@ -17,3 +17,5 @@ include DY.Lib.Communication.RequestResponse
 include DY.Lib.Communication.RequestResponse.Invariants
 
 include DY.Lib.Communication.RequestResponse.Lemmas
+
+include DY.Lib.Communication.Printing
