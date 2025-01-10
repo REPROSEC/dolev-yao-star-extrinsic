@@ -9,6 +9,7 @@ open DY.Lib.State.PrivateKeys
 open DY.Lib.Event.Typed
 open DY.Lib.State.Typed
 
+open DY.Lib.Communication.Data
 open DY.Lib.Communication.Core
 open DY.Lib.Communication.Core.Invariants
 open DY.Lib.Communication.Core.Lemmas
@@ -81,10 +82,10 @@ let send_request_proof #invs #a tr comm_keys_ids higher_layer_preds client serve
     higher_layer_preds.send_request_later tr tr' client server payload (get_label tr' key);
     let ((), tr') = trigger_event client (CommClientSendRequest client server payload_bytes key) tr' in
     assert(trace_invariant tr');
-    let req_payload:request_message = {payload=(serialize a payload); key} in
-    let req_payload_bytes = serialize #bytes request_message req_payload in
-    send_confidential_proof #invs #request_message tr' request_response_event_preconditions comm_keys_ids client server req_payload;   
-    let (Some msg_id, tr') = send_confidential #request_message comm_keys_ids client server req_payload tr' in
+    let req_payload:com_message_t = RequestMessage {payload=(serialize a payload); key} in
+    let req_payload_bytes = serialize #bytes com_message_t req_payload in
+    send_confidential_proof tr' request_response_event_preconditions comm_keys_ids client server req_payload;   
+    let (Some msg_id, tr') = send_confidential comm_keys_ids client server req_payload tr' in
 
     assert(tr_out == tr');
     assert(trace_invariant tr_out);
@@ -92,7 +93,7 @@ let send_request_proof #invs #a tr comm_keys_ids higher_layer_preds client serve
   )
 
 
-#push-options "--z3rlimit 50"
+#push-options "--ifuel 2 --z3rlimit 50"
 val receive_request_proof:
   {|protocol_invariants|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
@@ -131,7 +132,8 @@ let receive_request_proof #invs #a tr comm_keys_ids higher_layer_preds server ms
   match receive_request #a comm_keys_ids server msg_id tr with
   | (None, tr_out) -> ()
   | (Some (payload, req_meta_data), tr_out) -> (
-    let (Some req_msg, tr') = receive_confidential #request_message comm_keys_ids server msg_id tr in
+    let (Some req_msg_t, tr') = receive_confidential #com_message_t comm_keys_ids server msg_id tr in
+    let RequestMessage req_msg = req_msg_t in
 
     serialize_parse_inv_lemma #bytes a req_msg.payload;
     assert(is_comm_response_payload tr_out server req_meta_data payload);
@@ -196,7 +198,7 @@ let compute_response_message_proof #cinvs #a tr server key nonce payload =
   let ciphertext = aead_enc key nonce res_bytes ad_bytes in  
   // Needed for the case that the key is publishable
   FStar.Classical.move_requires (aead_enc_preserves_publishability tr key nonce res_bytes) ad_bytes;
-  serialize_wf_lemma response_envelope (is_publishable tr) {nonce; ciphertext};
+  serialize_wf_lemma com_message_t (is_publishable tr) (ResponseMessage {nonce; ciphertext});
   ()
 
 val send_response_proof:
@@ -266,8 +268,8 @@ let decode_response_proof #cinvs #a #ps tr client server key msg_bytes =
   match decode_response_message #a server key msg_bytes with
   | None -> ()
   | Some payload -> (
-    parse_wf_lemma response_envelope (is_publishable tr) msg_bytes;
-    let Some {nonce; ciphertext} = parse response_envelope msg_bytes in
+    parse_wf_lemma com_message_t (is_publishable tr) msg_bytes;
+    let Some (ResponseMessage {nonce; ciphertext}) = parse com_message_t msg_bytes in
     serialize_wf_lemma authenticated_data (is_publishable tr) {server};
     let ad_bytes = serialize authenticated_data {server} in
     let Some res_bytes = aead_dec key nonce ciphertext ad_bytes in

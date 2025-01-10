@@ -8,6 +8,7 @@ open DY.Lib.State.PKI
 open DY.Lib.State.PrivateKeys
 open DY.Lib.Event.Typed
 
+open DY.Lib.Communication.Data
 open DY.Lib.Communication.Core
 open DY.Lib.Communication.Core.Invariants
 
@@ -203,9 +204,9 @@ let sign_message_proof #cinvs #a tr sender receiver payload pk_receiver sk_sende
     let sig_input_bytes = serialize signature_input sig_input in
     serialize_wf_lemma signature_input (is_publishable tr) sig_input;
     let signature = sign sk_sender nonce sig_input_bytes in
-    let msg_signed = {msg=sig_input_bytes; signature} in
+    let msg_signed = SigMessage {msg=sig_input_bytes; signature} in
     assert(bytes_invariant tr signature);
-    serialize_wf_lemma signed_communication_message (is_publishable tr) msg_signed;
+    serialize_wf_lemma com_message_t (is_publishable tr) msg_signed;
     ()
   )
   | Some pk -> (
@@ -213,9 +214,9 @@ let sign_message_proof #cinvs #a tr sender receiver payload pk_receiver sk_sende
     let sig_input_bytes = serialize signature_input sig_input in
     serialize_wf_lemma signature_input (is_publishable tr) sig_input;
     let signature = sign sk_sender nonce sig_input_bytes in
-    let msg_signed = {msg=sig_input_bytes; signature} in
+    let msg_signed = SigMessage {msg=sig_input_bytes; signature} in
     assert(bytes_invariant tr signature);
-    serialize_wf_lemma signed_communication_message (is_publishable tr) msg_signed;
+    serialize_wf_lemma com_message_t (is_publishable tr) msg_signed;
     ()
   )
 
@@ -275,7 +276,8 @@ val verify_message_proof:
   (ensures (
     match verify_message #a receiver msg_bytes sk_receiver_opt vk_sender with
     | Some cm -> (
-      let Some msg_signed = parse signed_communication_message #parseable_serializeable_bytes_signed_communication_message msg_bytes in
+      let Some msg_signed_t = parse com_message_t msg_bytes in
+      let SigMessage msg_signed = msg_signed_t in
       let Some sign_input = parse signature_input #parseable_serializeable_bytes_signature_input msg_signed.msg in
       let payload_bytes = serialize a cm.payload in
       
@@ -311,8 +313,9 @@ let verify_message_proof #cinvs #a #ps tr sender receiver msg_bytes sk_receiver_
   match verify_message #a receiver msg_bytes sk_receiver_opt vk_sender with
   | None -> ()
   | Some cm -> (
-    parse_wf_lemma signed_communication_message #parseable_serializeable_bytes_signed_communication_message (is_publishable tr) msg_bytes;
-    let Some msg_signed = parse signed_communication_message #parseable_serializeable_bytes_signed_communication_message msg_bytes in
+    parse_wf_lemma com_message_t (is_publishable tr) msg_bytes;
+    let Some msg_signed_t = parse com_message_t msg_bytes in
+    let SigMessage msg_signed = msg_signed_t in
     parse_wf_lemma signature_input #parseable_serializeable_bytes_signature_input (is_publishable tr) msg_signed.msg;
     let Some sign_input = parse signature_input #parseable_serializeable_bytes_signature_input msg_signed.msg in
 
@@ -481,7 +484,8 @@ let verify_and_decrypt_message_proof #cinvs #a tr sender receiver msg_encrypted_
     verify_message_proof #cinvs #com_send_byte tr sender receiver msg_encrypted_signed (Some sk_receiver) vk_sender;
     let Some cm' = verify_message #com_send_byte receiver msg_encrypted_signed (Some sk_receiver) vk_sender in
 
-    let Some msg_signed = parse signed_communication_message msg_encrypted_signed in
+    let Some msg_signed_t = parse com_message_t msg_encrypted_signed in
+    let SigMessage msg_signed = msg_signed_t in
     let Some sign_input = parse signature_input msg_signed.msg in
     let Encrypted _ _ _ pk_receiver = sign_input in
     assert(pk_receiver == pk sk_receiver);

@@ -9,6 +9,7 @@ open DY.Lib.Event.Typed
 open DY.Lib.State.PrivateKeys
 open DY.Lib.State.Tagged
 
+open DY.Lib.Communication.Data
 open DY.Lib.Communication.Core
 
 #set-options "--fuel 0 --ifuel 0 --z3cliopt 'smt.qi.eager_threshold=100'"
