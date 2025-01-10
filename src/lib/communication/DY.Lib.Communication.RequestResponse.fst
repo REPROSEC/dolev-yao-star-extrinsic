@@ -7,48 +7,10 @@ open DY.Lib.State.PrivateKeys
 open DY.Lib.Event.Typed
 open DY.Lib.State.Typed
 
+open DY.Lib.Communication.Data
 open DY.Lib.Communication.Core
 
 #set-options "--fuel 0 --ifuel 0 --z3cliopt 'smt.qi.eager_threshold=100'"
-
-(*** Messages ***)
-
-[@@with_bytes bytes]
-type request_message = {
-  payload:bytes;
-  key:bytes
-}
-
-%splice [ps_request_message] (gen_parser (`request_message))
-%splice [ps_request_message_is_well_formed] (gen_is_well_formed_lemma (`request_message))
-
-instance parseable_serializeable_bytes_request_message: parseable_serializeable bytes request_message
-  = mk_parseable_serializeable ps_request_message
-
-
-[@@with_bytes bytes]
-type response_envelope = {
-  nonce:bytes;
-  ciphertext:bytes
-}
-
-%splice [ps_response_envelope] (gen_parser (`response_envelope))
-%splice [ps_response_envelope_is_well_formed] (gen_is_well_formed_lemma (`response_envelope))
-
-instance parseable_serializeable_bytes_response_envelope: parseable_serializeable bytes response_envelope
-  = mk_parseable_serializeable ps_response_envelope
-
-[@@with_bytes bytes]
-type authenticated_data = {
-  server:principal
-}
-
-%splice [ps_authenticated_data] (gen_parser (`authenticated_data))
-%splice [ps_authenticated_data_is_well_formed] (gen_is_well_formed_lemma (`authenticated_data))
-
-instance parseable_serializeable_bytes_authenticated_data: parseable_serializeable bytes authenticated_data
-  = mk_parseable_serializeable ps_authenticated_data
-
 
 (*** States ***)
 
@@ -142,19 +104,14 @@ val send_request:
   traceful (option (timestamp & comm_meta_data))
 let send_request #a comm_keys_ids client server payload =
   let* key = mk_rand (AeadKey comm_layer_aead_tag empty) (comm_label client server) 32 in
-  
   let payload_bytes = serialize #bytes a payload in
   let* sid = new_session_id client in
   set_state client sid (ClientSendRequest {server; payload=payload_bytes; key} <: communication_states);*
   trigger_event client (CommClientSendRequest client server payload_bytes key);*
-  let req_payload:request_message = {payload=payload_bytes; key} in
-  let*? msg_id = send_confidential #request_message comm_keys_ids client server req_payload in
+  let req_payload:com_message_t = RequestMessage {payload=payload_bytes; key} in
+  let*? msg_id = send_confidential #com_message_t comm_keys_ids client server req_payload in
   let req_meta_data = {key; server; sid} in
   return (Some (msg_id, req_meta_data))
-
-(*val decode_request_message: bytes -> option request_message
-let decode_request_message msg_bytes =
-  parse request_message msg_bytes*)
 
 val receive_request:
   #a:Type -> {| parseable_serializeable bytes a |} ->
@@ -162,7 +119,9 @@ val receive_request:
   principal -> timestamp ->
   traceful (option (a & comm_meta_data))
 let receive_request #a comm_keys_ids server msg_id =
-  let*? req_msg:request_message = receive_confidential #request_message comm_keys_ids server msg_id in  
+  let*? req_msg_t:com_message_t = receive_confidential #com_message_t comm_keys_ids server msg_id in  
+  guard_tr (RequestMessage? req_msg_t);*?
+  let RequestMessage req_msg = req_msg_t in
   trigger_event server (CommServerReceiveRequest server req_msg.payload req_msg.key);*
   let* sid = new_session_id server in
   set_state server sid (ServerReceiveRequest {payload=req_msg.payload; key=req_msg.key} <: communication_states);*
@@ -191,7 +150,7 @@ let compute_response_message #a server key nonce payload =
   let ad:authenticated_data = {server} in
   let ad_bytes = serialize authenticated_data ad in
   let ciphertext = aead_enc key nonce res_bytes ad_bytes in
-  serialize response_envelope {nonce; ciphertext}
+  serialize com_message_t (ResponseMessage {nonce; ciphertext})
 
 val send_response:
   #a:Type -> {| parseable_serializeable bytes a |} ->
@@ -211,7 +170,9 @@ val decode_response_message:
   #a:Type -> {| parseable_serializeable bytes a |} ->
   principal -> bytes -> bytes -> option a
 let decode_response_message #a server key msg_bytes =
-  let? resp_env:response_envelope = parse response_envelope msg_bytes in
+  let? resp_env_t:com_message_t = parse com_message_t msg_bytes in
+  guard (ResponseMessage? resp_env_t);?
+  let ResponseMessage resp_env = resp_env_t in
   let ad:authenticated_data = {server} in
   let ad_bytes = serialize authenticated_data ad in
   let? resp_bytes = aead_dec key resp_env.nonce resp_env.ciphertext ad_bytes in
