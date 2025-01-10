@@ -1,5 +1,7 @@
 module DY.Lib.Communication
 
+include DY.Lib.Communication.Data
+
 // Functions for user to send and receive
 // confidential and/or authenticated messages
 include DY.Lib.Communication.Core

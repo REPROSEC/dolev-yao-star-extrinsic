@@ -6,57 +6,9 @@ open DY.Lib.State.PKI
 open DY.Lib.State.PrivateKeys
 open DY.Lib.Event.Typed
 
+open DY.Lib.Communication.Data
+
 #set-options "--fuel 0 --ifuel 0 --z3cliopt 'smt.qi.eager_threshold=100'"
-
-(*** Messages ***)
-
-/// The following type is meant to be used to send a single byte with a function
-/// of the communication layer. Since the communication layer always takes a
-/// serializable data object we need to encapsulate the byte in a data object.
-[@@with_bytes bytes]
-type com_send_byte = {
-  b:bytes;
-}
-
-%splice [ps_com_send_byte] (gen_parser (`com_send_byte))
-%splice [ps_com_send_byte_is_well_formed] (gen_is_well_formed_lemma (`com_send_byte))
-
-instance parseable_serializeable_bytes_com_send_byte: parseable_serializeable bytes com_send_byte
-  = mk_parseable_serializeable ps_com_send_byte
-
-
-/// Data structure to return data from communication layer functions
-type communication_message (a:Type) = {
-  sender:principal;
-  receiver:principal;  
-  payload:a;
-}
-
-[@@with_bytes bytes]
-type signature_input = 
-  | Plain: sender:principal -> receiver:principal -> payload:bytes -> signature_input
-  | Encrypted: sender:principal -> receiver:principal -> payload:bytes -> pk:bytes -> signature_input
-
-#push-options "--ifuel 1 --fuel 0"
-%splice [ps_signature_input] (gen_parser (`signature_input))
-%splice [ps_signature_input_is_well_formed] (gen_is_well_formed_lemma (`signature_input))
-#pop-options
-
-instance parseable_serializeable_bytes_signature_input: parseable_serializeable bytes signature_input
-  = mk_parseable_serializeable ps_signature_input
-
-[@@with_bytes bytes]
-type signed_communication_message = {
-  msg:bytes;
-  signature:bytes;
-}
-
-%splice [ps_signed_communication_message] (gen_parser (`signed_communication_message))
-%splice [ps_signed_communication_message_is_well_formed] (gen_is_well_formed_lemma (`signed_communication_message))
-
-instance parseable_serializeable_bytes_signed_communication_message: parseable_serializeable bytes signed_communication_message
-  = mk_parseable_serializeable ps_signed_communication_message
-
 
 (*** Events ***)
 
@@ -157,8 +109,8 @@ let sign_message #a sender receiver payload pk_receiver sk nonce =
   ) in
   let sig_input_bytes = serialize signature_input sig_input in
   let signature = sign sk nonce sig_input_bytes in
-  let signed_msg = {msg=sig_input_bytes; signature} in
-  serialize signed_communication_message signed_msg
+  let signed_msg = SigMessage {msg=sig_input_bytes; signature} in
+  serialize com_message_t signed_msg
 #pop-options
 
 val send_authenticated:
@@ -180,7 +132,9 @@ val verify_message:
   #a:Type -> {| parseable_serializeable bytes a |} ->
   principal -> bytes -> option bytes -> bytes -> option (communication_message a)
 let verify_message #a receiver sign_msg_bytes sk_receiver_opt vk_sender =
-  let? msg_sign = parse signed_communication_message sign_msg_bytes in
+  let? msg_sign_t = parse com_message_t sign_msg_bytes in
+  guard (SigMessage? msg_sign_t);?
+  let SigMessage msg_sign = msg_sign_t in
   let? sign_input = parse signature_input msg_sign.msg in
   guard (verify vk_sender msg_sign.msg msg_sign.signature);?
   let? (pk_receiver_opt, cm) = match sign_input with
@@ -198,8 +152,10 @@ let verify_message #a receiver sign_msg_bytes sk_receiver_opt vk_sender =
   Some cm
 
 val get_sender: bytes -> option principal
-let get_sender msg_bytes =
-  let? msg_sign = parse signed_communication_message msg_bytes in
+let get_sender sign_msg_bytes =
+  let? msg_sign_t = parse com_message_t sign_msg_bytes in
+  guard (SigMessage? msg_sign_t);?
+  let SigMessage msg_sign = msg_sign_t in
   let? sign_input = parse signature_input msg_sign.msg in
   match sign_input with
   | Plain sender receiver payload_bytes -> Some sender
@@ -215,7 +171,7 @@ let receive_authenticated #a comm_keys_ids receiver msg_id =
   let*? msg_signed_bytes = recv_msg msg_id in
   let*? sender = return (get_sender msg_signed_bytes) in
   let*? vk_sender = get_public_key receiver comm_keys_ids.pki (LongTermSigKey comm_layer_sign_tag) sender in
-  let*? cm = return (verify_message receiver msg_signed_bytes None vk_sender) in
+  let*? cm:communication_message a = return (verify_message receiver msg_signed_bytes None vk_sender) in
   trigger_event receiver (CommAuthReceiveMsg sender receiver (serialize a cm.payload));*
   return (Some cm)
 
@@ -253,9 +209,9 @@ val verify_and_decrypt_message:
   #a:Type -> {| parseable_serializeable bytes a |} ->
   principal -> bytes -> bytes -> bytes -> option (communication_message a)
 let verify_and_decrypt_message #a #ps receiver sk_receiver vk_sender msg_encrypted_signed =
-  let? cm = verify_message #com_send_byte receiver msg_encrypted_signed (Some sk_receiver) vk_sender in
-  let? payload = decrypt_message #a sk_receiver cm.payload.b in
-  Some ({cm with payload})
+  let? cm:communication_message com_send_byte = verify_message #com_send_byte receiver msg_encrypted_signed (Some sk_receiver) vk_sender in
+  let? payload:a = decrypt_message #a sk_receiver cm.payload.b in
+  Some {sender=cm.sender; receiver=cm.receiver; payload}
 
 val receive_confidential_authenticated:
   #a:Type -> {| parseable_serializeable bytes a |} ->
@@ -267,7 +223,7 @@ let receive_confidential_authenticated #a comm_keys_ids receiver msg_id =
   let*? sk_receiver = get_private_key receiver comm_keys_ids.private_keys (LongTermPkeKey comm_layer_pkenc_tag) in
   let*? sender = return (get_sender msg_encrypted_signed) in
   let*? vk_sender = get_public_key receiver comm_keys_ids.pki (LongTermSigKey comm_layer_sign_tag) sender in 
-  let*? cm = return (verify_and_decrypt_message #a receiver sk_receiver vk_sender msg_encrypted_signed) in 
+  let*? cm:communication_message a = return (verify_and_decrypt_message #a receiver sk_receiver vk_sender msg_encrypted_signed) in 
   trigger_event receiver (CommConfAuthReceiveMsg sender receiver (serialize a cm.payload));*
   return (Some cm)
 

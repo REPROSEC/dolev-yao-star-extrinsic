@@ -10,6 +10,7 @@ open DY.Lib.State.PrivateKeys
 open DY.Lib.State.Tagged
 open DY.Lib.State.Typed
 
+open DY.Lib.Communication.Data
 open DY.Lib.Communication.Core
 open DY.Lib.Communication.RequestResponse
 open DY.Lib.Communication.Core.Invariants
@@ -172,12 +173,16 @@ let event_predicate_communication_layer_reqres
 #pop-options
 
 // Additional event preconditions for the events from the core communication layer
-#push-options "--fuel 0 --ifuel 1"
-val request_response_event_preconditions: {|cinvs:crypto_invariants|} -> comm_higher_layer_event_preds request_message
+#push-options "--fuel 0 --ifuel 2"
+val request_response_event_preconditions: {|cinvs:crypto_invariants|} -> comm_higher_layer_event_preds com_message_t
 let request_response_event_preconditions #cinvs = {
-  (default_comm_higher_layer_event_preds request_message) with
-  send_conf = (fun tr client server (req_payload:request_message) ->
-    event_triggered tr client (CommClientSendRequest client server req_payload.payload req_payload.key)
+  (default_comm_higher_layer_event_preds com_message_t) with
+  send_conf = (fun tr client server (com_msg_t:com_message_t) ->
+    match com_msg_t with
+    | RequestMessage {payload; key} -> (
+      event_triggered tr client (CommClientSendRequest client server payload key)
+    )
+    | _ -> False
   );
   send_conf_later = (fun tr1 tr2 client server req_payload -> ()
   )
@@ -198,7 +203,7 @@ let event_predicate_communication_layer_reqres_and_tag #cinvs #a higher_layer_re
 val has_communication_layer_reqres_event_predicates:
   {|protocol_invariants|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
-  comm_higher_layer_event_preds request_message ->
+  comm_higher_layer_event_preds com_message_t ->
   comm_reqres_higher_layer_event_preds a ->
   prop
 let has_communication_layer_reqres_event_predicates #invs #a higher_layer_preds higher_layer_resreq_preds =

@@ -4,6 +4,7 @@ open Comparse
 open DY.Core
 
 open DY.Lib.Printing
+open DY.Lib.Communication.Data
 open DY.Lib.Communication.Core
 open DY.Lib.Communication.RequestResponse
 
@@ -11,46 +12,45 @@ open DY.Lib.Communication.RequestResponse
 
 val com_message_to_string: (bytes -> option string) -> (bytes -> option string) -> bytes -> option string
 let com_message_to_string core_payload_to_string reqres_payload_to_string b =
-  match parse signed_communication_message b with
-  | Some scm -> (
-    match parse signature_input scm.msg with
-    | Some si -> (
-      let sender, receiver, payload = (
-        match si with
-        | Plain sender receiver payload -> sender, receiver, payload
-        | Encrypted sender receiver payload _ -> sender, receiver, (
-          match payload with
-          | PkeEnc pk nonce msg -> msg
-          | _ -> empty
-        )
-      ) in
-      Some (Printf.sprintf "msg = (%s, %s, (%s)), signature = sig(sk_{%s}, msg)" sender receiver (option_to_string core_payload_to_string payload) sender)
-    )
-    | None -> Some "Error: signed_communication_message does not contain a signature_input"
+  match b with
+  | PkeEnc pk nonce msg -> (
+    match parse com_message_t b with
+    | Some (SigMessage _) -> Some "Error: SigMessage cannot be inside a PkeEnc encryption"
+    | Some (RequestMessage {payload; key}) ->
+      Some (Printf.sprintf "Request payload = (%s), key = %s" 
+        (option_to_string reqres_payload_to_string payload) (bytes_to_string key))
+    | Some (ResponseMessage _) -> Some "Error: ResponseMessage cannot be inside a PkeEnc encryption"
+    | None -> Some (option_to_string core_payload_to_string b)
   )
-  | None -> (
-    match b with
-    | PkeEnc pk nonce msg -> (
-      match parse request_message b with
-      | Some {payload; key} ->
-        Some (Printf.sprintf "Request payload = (%s), key = %s" 
-          (option_to_string reqres_payload_to_string payload) (bytes_to_string key))
-      | None -> Some (option_to_string core_payload_to_string b)
-    )
-    | _ -> (
-      match parse response_envelope b with
-        | Some {nonce; ciphertext} -> (
-          match ciphertext with
-          | AeadEnc key nonce msg ad -> (
-            Some (Printf.sprintf "Response payload = (%s)"
-              (option_to_string reqres_payload_to_string msg))
+  | _ -> (
+    match parse com_message_t b with
+    | Some (SigMessage {msg; signature}) -> (
+      match parse signature_input msg with
+      | Some si -> (
+        let sender, receiver, payload = (
+          match si with
+          | Plain sender receiver payload -> sender, receiver, payload
+          | Encrypted sender receiver payload _ -> sender, receiver, (
+            match payload with
+            | PkeEnc pk nonce msg -> msg
+            | _ -> empty
           )
-          | _ -> Some "Error: response_envelope does not contain an AEAD ciphertext"
-        )
-        | None -> Some "Error not a communication layer message"
+        ) in
+        Some (Printf.sprintf "msg = (%s, %s, (%s)), signature = sig(sk_{%s}, msg)" sender receiver (option_to_string core_payload_to_string payload) sender)
+      )
+      | None -> Some "Error: signed_communication_message does not contain a signature_input"
     )
+    | Some (RequestMessage _) -> Some "Error: RequestMessage cannot be send in plaintext"
+    | Some (ResponseMessage {nonce; ciphertext}) -> (
+      match ciphertext with
+      | AeadEnc key nonce msg ad -> (
+        Some (Printf.sprintf "Response payload = (%s)"
+          (option_to_string reqres_payload_to_string msg))
+      )
+      | _ -> Some "Error: response_envelope does not contain an AEAD ciphertext"
+    )
+    | None -> Some "Error not a communication layer message"
   )
-
 
 val com_core_event_to_string: (bytes -> option string) -> (string & (bytes -> option string))
 let com_core_event_to_string payload_to_string =
