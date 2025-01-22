@@ -21,7 +21,7 @@ let pke_crypto_predicates_communication_layer #cusages = {
   pred = (fun tr sk_usage pk msg ->
     (exists sender receiver.
       sk_usage == long_term_key_type_to_usage (LongTermPkeKey comm_layer_pkenc_tag)  receiver /\
-      (get_label tr msg) `can_flow tr` (join (principal_label sender) (principal_label receiver)) /\
+      (get_label tr msg) `can_flow tr` (comm_label sender receiver) /\
       event_triggered tr sender (CommConfSendMsg sender receiver msg)
     )
     );
@@ -136,15 +136,15 @@ let event_predicate_communication_layer
   fun tr prin e ->
     (match e with
     | CommConfSendMsg sender receiver payload -> (
-      is_knowable_by (join (principal_label sender) (principal_label receiver)) tr payload /\
+      is_knowable_by (comm_label sender receiver) tr payload /\
       (match parse a payload with
       | None -> False
       | Some payload_p -> higher_layer_preds.send_conf tr sender receiver payload_p
-      )      
+      )
     )
     | CommConfReceiveMsg receiver payload -> (
       exists sender.
-        is_knowable_by (join (principal_label sender) (principal_label receiver)) tr payload /\
+        //is_knowable_by (comm_label sender receiver) tr payload /\
         (
           event_triggered tr sender (CommConfSendMsg sender receiver payload) \/
           is_publishable tr payload
@@ -164,7 +164,7 @@ let event_predicate_communication_layer
       )
     )
     | CommConfAuthSendMsg sender receiver payload -> (
-      is_knowable_by (join (principal_label sender) (principal_label receiver)) tr payload /\
+      is_knowable_by (comm_label sender receiver) tr payload /\
       (match parse a payload with
       | None -> False
       | Some payload_p -> higher_layer_preds.send_conf_auth tr sender receiver payload_p
@@ -172,7 +172,7 @@ let event_predicate_communication_layer
     )
     | CommConfAuthReceiveMsg sender receiver payload -> (
       // We can only show the following about the decrypted ciphertext (payload):
-      // is_knowable_by (join (principal_label sender) (principal_label receiver)) tr payload \/
+      // is_knowable_by (comm_label sender receiver) tr payload \/
       // is_corrupt tr (principal_label sender)
       // There are two cases how the ciphertext is created:
       // 1. The corrupted sender created the ciphertext. This means that the
