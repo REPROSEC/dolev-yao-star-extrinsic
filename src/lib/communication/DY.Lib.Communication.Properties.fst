@@ -59,8 +59,8 @@ val sender_confauth_authentication:
     event_triggered_at tr i receiver (CommConfAuthReceiveMsg sender receiver payload)
   )
   (ensures
-    event_triggered tr sender (CommConfAuthSendMsg sender receiver payload) \/
-    is_corrupt tr (long_term_key_label sender)
+    event_triggered (prefix tr i) sender (CommConfAuthSendMsg sender receiver payload) \/
+    is_corrupt (prefix tr i) (long_term_key_label sender)
   )
 let sender_confauth_authentication #invs #a tr i higher_layer_preds sender receiver secret = ()
 

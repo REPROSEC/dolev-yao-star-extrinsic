@@ -133,16 +133,20 @@ val receive_confidential_proof:
     | (None, tr_out) -> trace_invariant tr_out
     | (Some payload, tr_out) -> ( 
       trace_invariant tr_out /\
-      (exists sender. is_well_formed a (is_knowable_by (comm_label sender receiver) tr) payload /\
-      // We explicitly do not use `event_triggered tr receiver
-      // (CommConfReceiveMsg receiver (serialize a payload))` as a
-      // post-condition here. The reason for the following form of the
-      // post-condition is that it allows us on the higher layer to assert a
-      // statement `b` contained in the `higher_layer_preds` that depends on
-      // some field `field1` of the payload in the following way: `b
-      // payload.field1 \/ is_publishable tr payload.field1`.
-      (event_triggered tr sender (CommConfSendMsg sender receiver (serialize a payload)) \/ 
-        is_well_formed a (is_publishable tr) payload)
+      (
+        (exists sender.
+          is_well_formed a (is_knowable_by (comm_label sender receiver) tr) payload /\
+          // We explicitly do not use `event_triggered tr receiver
+          // (CommConfReceiveMsg receiver (serialize a payload))` as a
+          // post-condition here. The reason for the following form of the
+          // post-condition is that it allows us on the higher layer to assert a
+          // statement `b` contained in the `higher_layer_preds` that depends on
+          // some field `field1` of the payload in the following way: `b
+          // payload.field1 \/ is_publishable tr payload.field1`.
+          event_triggered tr sender (CommConfSendMsg sender receiver (serialize a payload))
+        ) \/ (
+          is_well_formed a (is_publishable tr) payload
+        )
       )
     )
   ))
