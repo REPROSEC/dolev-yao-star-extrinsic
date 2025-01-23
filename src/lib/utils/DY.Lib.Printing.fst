@@ -163,15 +163,15 @@ let option_to_string parse_fn elem =
   | Some str -> str
   | None -> bytes_to_string elem // Parse bytes with the default method as a fallback
 
-val state_to_string: list (string & (bytes -> option string)) -> bytes -> string
+val state_to_string: list (string & (bytes -> option string)) -> bytes -> (string & string)
 let state_to_string printer_list full_content_bytes =
   let full_content = parse tagged_state full_content_bytes in
   match full_content with
   | Some ({tag; content}) -> (
     let parser = find_printer printer_list tag in
-    option_to_string parser content
+    tag, option_to_string parser content
   )
-  | None -> bytes_to_string full_content_bytes
+  | None -> "Unknown Tag", bytes_to_string full_content_bytes
 
 
 (*** Record to Combine All Printer Functions ***)
@@ -202,9 +202,9 @@ let trace_entry_to_string printers tr_entry i =
   )
   | Corrupt time -> ""
   | SetState prin sess_id full_content -> (
-    let content_str = state_to_string printers.state_to_string full_content in
-    Printf.sprintf "{\"TraceID\": %d, \"Type\": \"Session\", \"SessionID\": %d, \"Principal\": \"%s\", \"Content\": \"%s\"}\n"
-      (i-1) sess_id.the_id prin content_str
+    let tag, content_str = state_to_string printers.state_to_string full_content in
+    Printf.sprintf "{\"TraceID\": %d, \"Type\": \"Session\", \"SessionID\": %d, \"Principal\": \"%s\", \"Tag\": \"%s\", \"Content\": \"%s\"}\n"
+      (i-1) sess_id.the_id prin tag content_str
   )
   | Event prin tag content -> (
     let printer = find_printer printers.event_to_string tag in
