@@ -27,28 +27,6 @@ let lemma_union_empty s =
   assert(equal (union s empty) s);
   assert(equal (union empty s) s)
 
-// TODO: The next three lemmas may be unneeded here
-val lemma_add_is_union_singleton :
-  #a:eqtype -> x:a ->
-  s:set a ->
-  Lemma (add x s == union (singleton x) s)
-let lemma_add_is_union_singleton x s =
-  assert(equal (add x s) (union (singleton x) s))
-
-val lemma_union_assoc :
-  #a:eqtype ->
-  s1:set a -> s2:set a -> s3:set a ->
-  Lemma (union (union s1 s2) s3 == union s1 (union s2 s3))
-let lemma_union_assoc s1 s2 s3 =
-  assert(equal (union (union s1 s2) s3) (union s1 (union s2 s3)))
-
-val lemma_union_comm :
-  #a:eqtype ->
-  s1:set a -> s2:set a ->
-  Lemma (union s1 s2 == union s2 s1)
-let lemma_union_comm s1 s2 =
-  assert(equal (union s1 s2) (union s2 s1))
-
 /// Modifies functions
 
 val trace_modifies :
@@ -294,50 +272,6 @@ let traceful_unmodified_same_state (#a:Type) (prin:principal) (sid:state_id) (f:
     assert(~((prin, sid) `mem` (trace_modifies (tr_out <--> tr))));
     ()
 
-/// TODO
-/// The next three functions seem like they belong in DY.Core.Trace.Manipulation
-val get_trace_same_trace (tr:trace)
-  : Lemma
-    (ensures (
-      let (res, tr_out) = get_trace tr in
-      tr_out == tr /\
-      tr == res
-    ))
-    [SMTPat (get_trace tr);]
-let get_trace_same_trace tr = ()
-
-val get_state_same_trace (prin:principal) (sid:state_id) (tr:trace)
-  : Lemma
-    (ensures (
-      let (_, tr_out) = get_state prin sid tr in
-      tr_out == tr
-    ))
-    [SMTPat (get_state prin sid tr);]
-let get_state_same_trace prin sid tr = ()
-
-val set_state_get_state_aux:
-  prin:principal -> sess_id:state_id -> content:bytes ->
-  tr:trace ->
-  Lemma
-  (ensures (
-    let (_, tr_out) = set_state prin sess_id content tr in
-    get_state_aux prin sess_id tr_out == (Some content)
-  ))
-  [SMTPat (set_state prin sess_id content tr)]
-let set_state_get_state_aux prin sess_id content tr =
-  reveal_opaque (`%set_state) (set_state)
-
-val get_state_get_state_aux:
-  prin:principal -> sess_id:state_id -> tr:trace ->
-  Lemma
-  (ensures (
-    let (content_opt, _) = get_state prin sess_id tr in
-    content_opt == get_state_aux prin sess_id tr
-  ))
-  [SMTPat (get_state prin sess_id tr)]
-let get_state_get_state_aux prin sess_id tr =
-  reveal_opaque (`%get_state) (get_state)
-
 /// TODO: Some simple testing of the analysis
 /// Should we put this in an example file? Remove it? Add some kind of test suite?
 
@@ -360,3 +294,4 @@ let unmodified_test_proof (prin:principal) (sid:state_id) (tr_in:trace)
   = assert(traceful_modifies (unmodified_test prin sid) tr_in == empty);
     traceful_unmodified_same_state_aux prin sid (unmodified_test prin sid) tr_in;
     ()
+#pop-options

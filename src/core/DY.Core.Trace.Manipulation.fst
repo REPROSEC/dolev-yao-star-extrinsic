@@ -477,6 +477,18 @@ val set_state_state_was_set:
 let set_state_state_was_set prin sess_id content tr =
   normalize_term_spec set_state
 
+val set_state_get_state_aux:
+  prin:principal -> sess_id:state_id -> content:bytes ->
+  tr:trace ->
+  Lemma
+  (ensures (
+    let (_, tr_out) = set_state prin sess_id content tr in
+    get_state_aux prin sess_id tr_out == (Some content)
+  ))
+  [SMTPat (set_state prin sess_id content tr)]
+let set_state_get_state_aux prin sess_id content tr =
+  reveal_opaque (`%set_state) (set_state)
+
 
 /// Storing a state preserves the trace invariant
 /// when the state satisfy the state predicate.
@@ -537,6 +549,18 @@ val get_state_state_was_set:
 let get_state_state_was_set prin sess_id tr =
   reveal_opaque (`%get_state) get_state;
   get_state_aux_state_was_set prin sess_id tr
+
+val get_state_get_state_aux:
+  prin:principal -> sess_id:state_id -> tr:trace ->
+  Lemma
+  (ensures (
+    let (content_opt, _) = get_state prin sess_id tr in
+    content_opt == get_state_aux prin sess_id tr
+  ))
+  [SMTPat (get_state prin sess_id tr)]
+let get_state_get_state_aux prin sess_id tr =
+  reveal_opaque (`%get_state) (get_state)
+
 
 (*** Event triggering ***)
 
