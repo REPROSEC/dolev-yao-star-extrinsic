@@ -58,7 +58,7 @@ type signed_communication_message = {
 
 [@@with_bytes bytes]
 type request_message = {
-  payload:bytes;
+  request:bytes;
   key:bytes
 }
 

@@ -144,7 +144,6 @@ let event_predicate_communication_layer
     )
     | CommConfReceiveMsg receiver payload -> (
       exists sender.
-        //is_knowable_by (comm_label sender receiver) tr payload /\
         (
           event_triggered tr sender (CommConfSendMsg sender receiver payload) \/
           is_publishable tr payload
