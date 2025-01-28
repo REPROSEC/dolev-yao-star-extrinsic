@@ -10,6 +10,27 @@ open DY.Lib.Communication.Data
 
 #set-options "--fuel 0 --ifuel 0 --z3cliopt 'smt.qi.eager_threshold=100'"
 
+
+(*** Layer Setup ***)
+
+val comm_layer_pkenc_tag: string
+let comm_layer_pkenc_tag = "DY.Lib.Communication.PkEnc.PublicKey"
+
+val comm_layer_sign_tag: string
+let comm_layer_sign_tag = "DY.Lib.Communication.Sign.PublicKey"
+
+val comm_layer_event_tag: string
+let comm_layer_event_tag = "DY.Lib.Communication.Event.Core"
+
+type communication_keys_sess_ids = {
+  pki: state_id;
+  private_keys: state_id;
+}
+
+val comm_label: principal -> principal -> label
+let comm_label sender receiver = join (principal_label sender) (principal_label receiver)
+
+
 (*** Events ***)
 
 [@@with_bytes bytes]
@@ -28,26 +49,9 @@ type communication_event =
 #pop-options
 
 instance event_communication_event: event communication_event = {
-  tag = "DY.Lib.Communication.Event.Core";
+  tag = comm_layer_event_tag;
   format = mk_parseable_serializeable ps_communication_event;
 }
-
-
-(*** Layer Setup ***)
-
-val comm_layer_pkenc_tag: string
-let comm_layer_pkenc_tag = "DY.Lib.Communication.PkEnc.PublicKey"
-
-val comm_layer_sign_tag: string
-let comm_layer_sign_tag = "DY.Lib.Communication.Sign.PublicKey"
-
-type communication_keys_sess_ids = {
-  pki: state_id;
-  private_keys: state_id;
-}
-
-val comm_label: principal -> principal -> label
-let comm_label sender receiver = join (principal_label sender) (principal_label receiver)
 
 
 (*** Communication Layer ***)

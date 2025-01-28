@@ -4,7 +4,7 @@ This layer provides functions to send and receive confidential and/or
 authenticated messages. For each function the layer provides proofs of certain
 predicates that are guaranteed by the respective cryptographic primitive. The
 preconditions for the functions can be extended via the
-`comm_higher_layer_event_preds` type for the core functions an via the
+`comm_higher_layer_event_preds` type for the core functions and via the
 `comm_reqres_higher_layer_event_preds` type for the request-response pair
 functions. This layer provides the following functionalities:
 

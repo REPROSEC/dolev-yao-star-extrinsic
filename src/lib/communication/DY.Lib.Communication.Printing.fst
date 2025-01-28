@@ -16,7 +16,7 @@ let com_message_to_string msg_to_string reqres_payload_to_string b =
   | PkeEnc pk nonce msg -> (
     match parse com_message_t msg with
     | Some (SigMessage _) -> Some "Error: SigMessage cannot be inside a PkeEnc encryption"
-    | Some (RequestMessage {payload; key}) -> reqres_payload_to_string payload
+    | Some (RequestMessage {request; key}) -> reqres_payload_to_string request
     | Some (ResponseMessage _) -> Some "Error: ResponseMessage cannot be inside a PkeEnc encryption"
     | None -> Some (option_to_string msg_to_string b)
   )
@@ -83,18 +83,18 @@ let com_reqres_event_to_string payload_to_string =
   (event_communication_reqres_event.tag, (fun b -> (
     let? cre = parse communication_reqres_event b in
     match cre with
-    | CommClientSendRequest client server payload key -> 
-      Some (Printf.sprintf "CommClientSendRequest client = %s, server = %s, payload = (%s)"
-        client server (option_to_string payload_to_string payload))
-    | CommServerReceiveRequest server payload key -> 
-      Some (Printf.sprintf "CommServerReceiveRequest server = %s, payload = (%s), key = %s"
-        server (option_to_string payload_to_string payload) (bytes_to_string key))
-    | CommServerSendResponse server payload -> 
-      Some (Printf.sprintf "CommServerSendResponse server = %s, payload = (%s)"
-        server (option_to_string payload_to_string payload))
-    | CommClientReceiveResponse client server payload key -> 
-      Some (Printf.sprintf "CommClientReceiveResponse client = %s, server = %s, payload = (%s), key = %s" 
-        client server (option_to_string payload_to_string payload) (bytes_to_string key))
+    | CommClientSendRequest client server request key -> 
+      Some (Printf.sprintf "CommClientSendRequest client = %s, server = %s, request = (%s)"
+        client server (option_to_string payload_to_string request))
+    | CommServerReceiveRequest server request key -> 
+      Some (Printf.sprintf "CommServerReceiveRequest server = %s, request = (%s), key = %s"
+        server (option_to_string payload_to_string request) (bytes_to_string key))
+    | CommServerSendResponse server request response -> 
+      Some (Printf.sprintf "CommServerSendResponse server = %s, request = %s, response = (%s)"
+        server (option_to_string payload_to_string request) (option_to_string payload_to_string response))
+    | CommClientReceiveResponse client server response key -> 
+      Some (Printf.sprintf "CommClientReceiveResponse client = %s, server = %s, response = (%s), key = %s" 
+        client server (option_to_string payload_to_string response) (bytes_to_string key))
   )))
 
 val com_event_to_string:
@@ -109,13 +109,13 @@ let com_state_to_string payload_to_string =
   (local_state_communication_layer_session.tag, (fun b -> (
     let? cs = parse communication_states b in
     match cs with
-    | ClientSendRequest {server; payload; key} -> 
+    | ClientSendRequest {server; request; key} -> 
       Some (Printf.sprintf "ClientSendRequest server = %s, payload = (%s), key = %s" 
-        server (option_to_string payload_to_string payload) (bytes_to_string key))
-    | ServerReceiveRequest {payload; key} -> 
+        server (option_to_string payload_to_string request) (bytes_to_string key))
+    | ServerReceiveRequest {request; key} -> 
       Some (Printf.sprintf "ServerReceiveRequest payload = (%s), key = %s"
-        (option_to_string payload_to_string payload) (bytes_to_string key)) 
-    | ClientReceiveResponse {server; payload; key} -> 
+        (option_to_string payload_to_string request) (bytes_to_string key)) 
+    | ClientReceiveResponse {server; response; key} -> 
       Some (Printf.sprintf "ClientReceiveResponse server = %s, payload = (%s), key = %s"
-        server (option_to_string payload_to_string payload) (bytes_to_string key))
+        server (option_to_string payload_to_string response) (bytes_to_string key))
   )))
