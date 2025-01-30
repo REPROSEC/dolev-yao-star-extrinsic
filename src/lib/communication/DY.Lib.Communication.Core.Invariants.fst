@@ -119,11 +119,11 @@ type comm_higher_layer_event_preds (a:Type) {| parseable_serializeable bytes a |
 }
 
 let default_comm_higher_layer_event_preds (a:Type) {| parseable_serializeable bytes a |} : comm_higher_layer_event_preds a = {
-  send_conf = (fun tr sender receiver payload -> True);
+  send_conf = (fun tr sender receiver payload -> False);
   send_conf_later = (fun tr1 tr2 sender receiver payload -> ());
-  send_auth = (fun tr sender payload -> True);
+  send_auth = (fun tr sender payload -> False);
   send_auth_later = (fun tr1 tr2 sender payload -> ());
-  send_conf_auth = (fun tr sender receiver payload -> True);
+  send_conf_auth = (fun tr sender receiver payload -> False);
   send_conf_auth_later = (fun tr1 tr2 sender receiver payload -> ())
 }
 
