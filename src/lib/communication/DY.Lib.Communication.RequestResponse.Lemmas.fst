@@ -32,7 +32,8 @@ let is_comm_response_payload #cusg #a tr server req_meta_data payload =
 
 val comm_meta_data_knowable: {|crypto_invariants|} -> trace -> principal -> comm_meta_data -> prop
 let comm_meta_data_knowable #cinvs tr prin req_meta_data =
-  is_knowable_by (principal_label prin) tr req_meta_data.key
+  is_knowable_by (principal_label prin) tr req_meta_data.key /\
+  is_knowable_by (principal_label prin) tr req_meta_data.request
 
 val apply_com_layer_lemmas: 
   #a:Type -> {| parseable_serializeable bytes a |} -> 

@@ -9,6 +9,9 @@ preconditions for the functions can be extended via the
 functions. This layer provides the following functionalities:
 
 - Confidential send and receive functions
+
+![Confidential message sequence diagram](docs/confidential-message.png)
+
 - Authenticated send and receive functions
 - Confidential and authenticated send and receive functions
 - Response-request pair send and receive functions
@@ -29,6 +32,8 @@ methodology](../utils/DY.Lib.SplitFunction.fst) used in DY*. The invariants are
 proven for every function in the `DY.Lib.Communication.Core.Lemmas` module.
 These proofs are used by the user to prove security properties about the send
 and receive functions.
+Example security properties that can be proven from the invariants in `DY.Lib.Communication.Core.Invariants`
+can be found in `DY.Lib.Communication.Core.Properties` module.
 
 The request-response pairs are implemented with the same structure in the
 `DY.Lib.Communication.RequstResponse.*` namespace.
