@@ -39,4 +39,4 @@ The request-response pairs are implemented with the same structure in the
 `DY.Lib.Communication.RequstResponse.*` namespace.
 
 Examples for how to use the communication layer functions
-in a higher layer protocol can be found in this [repository](https://github.com/fabian-hk/dolev-yao-star-communication-layer-examples).
+in a higher layer protocol can be found in this [repository](https://github.com/REPROSEC/dolev-yao-star-communication-layer-examples).
