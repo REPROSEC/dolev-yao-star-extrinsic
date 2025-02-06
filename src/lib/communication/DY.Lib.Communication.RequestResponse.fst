@@ -120,13 +120,13 @@ val receive_request:
   principal -> timestamp ->
   traceful (option (a & comm_meta_data))
 let receive_request #a comm_keys_ids server msg_id =
-  let*? req_msg_t:com_message_t = receive_confidential #com_message_t comm_keys_ids server msg_id in  
+  let*? req_msg_t:com_message_t = receive_confidential #com_message_t comm_keys_ids server msg_id in
   guard_tr (RequestMessage? req_msg_t);*?
   let RequestMessage req_msg = req_msg_t in
+  let*? request = return (parse a req_msg.request) in
   trigger_event server (CommServerReceiveRequest server req_msg.request req_msg.key);*
   let* sid = new_session_id server in
   set_state server sid (ServerReceiveRequest {request=req_msg.request; key=req_msg.key} <: communication_states);*
-  let*? request = return (parse a req_msg.request) in
   let req_meta_data = {key=req_msg.key; server; sid; request=req_msg.request} in
   return (Some (request, req_meta_data))
 

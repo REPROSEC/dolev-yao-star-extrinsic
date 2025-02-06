@@ -123,7 +123,7 @@ val receive_confidential_proof:
   receiver:principal -> msg_id:timestamp ->
   Lemma
   (requires
-    trace_invariant tr /\ 
+    trace_invariant tr /\
     has_private_keys_invariant /\
     has_communication_layer_crypto_predicates /\
     has_communication_layer_event_predicates higher_layer_preds

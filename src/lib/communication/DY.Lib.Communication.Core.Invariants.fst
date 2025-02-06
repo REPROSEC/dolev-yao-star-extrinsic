@@ -128,10 +128,10 @@ let default_comm_higher_layer_event_preds (a:Type) {| parseable_serializeable by
 }
 
 #push-options "--ifuel 1 --fuel 0"
-let event_predicate_communication_layer 
+let event_predicate_communication_layer
   {|cinvs:crypto_invariants|}
   (#a:Type) {| parseable_serializeable bytes a |}
-  (higher_layer_preds:comm_higher_layer_event_preds a) : 
+  (higher_layer_preds:comm_higher_layer_event_preds a) :
   event_predicate communication_event =
   fun tr prin e ->
     (match e with
@@ -186,7 +186,7 @@ let event_predicate_communication_layer
     )
 #pop-options
 
-val event_predicate_communication_layer_and_tag: 
+val event_predicate_communication_layer_and_tag:
   {|cinvs:crypto_invariants|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
   comm_higher_layer_event_preds a ->

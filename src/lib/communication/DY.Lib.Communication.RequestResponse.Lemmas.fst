@@ -125,7 +125,7 @@ val receive_request_proof:
       is_well_formed a (is_knowable_by (get_response_label tr req_meta_data) tr) payload
     )
   ))
-  [SMTPat (trace_invariant tr); 
+  [SMTPat (trace_invariant tr);
   SMTPat (apply_com_layer_lemmas higher_layer_preds);
   SMTPat (receive_request #a comm_keys_ids server msg_id tr)]
 let receive_request_proof #invs #a tr comm_keys_ids higher_layer_preds server msg_id =
@@ -142,7 +142,7 @@ let receive_request_proof #invs #a tr comm_keys_ids higher_layer_preds server ms
     let ((), tr') = trigger_event server (CommServerReceiveRequest server req_msg.request req_msg.key) tr' in
     let (sid', tr') = new_session_id server tr' in
     let ((), tr') = set_state server sid' (ServerReceiveRequest {request=req_msg.request; key=req_msg.key} <: communication_states) tr' in
-    assert(tr' == tr_out);    
+    assert(tr' == tr_out);
     assert(trace_invariant tr_out);
     ()
   )
