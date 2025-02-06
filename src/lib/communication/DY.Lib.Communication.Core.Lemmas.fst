@@ -133,7 +133,8 @@ val receive_confidential_proof:
     | (None, tr_out) -> trace_invariant tr_out
     | (Some payload, tr_out) ->
       trace_invariant tr_out /\
-      event_triggered tr_out receiver (CommConfReceiveMsg receiver (serialize a payload))
+      event_triggered tr_out receiver (CommConfReceiveMsg receiver (serialize a payload)) /\
+      is_well_formed a (is_knowable_by (principal_label receiver) tr) payload
   ))
 let receive_confidential_proof #invs #a tr higher_layer_preds comm_keys_ids receiver msg_id =
   match receive_confidential #a comm_keys_ids receiver msg_id tr with

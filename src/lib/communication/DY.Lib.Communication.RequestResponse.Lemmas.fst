@@ -141,18 +141,6 @@ let receive_request_proof #invs #a tr comm_keys_ids higher_layer_preds server ms
     conf_message_secrecy tr' i request_response_event_preconditions server req_msg_bytes;
 
     // Properties that can be proved uniformly in both the honest and corrupt case
-    assert(is_well_formed com_message_t (is_knowable_by (principal_label server) tr') req_msg_t);
-    assert(is_knowable_by (principal_label server) tr' req_msg.request); // needed for ServerReceiveRequest
-    assert(is_knowable_by (principal_label server) tr' req_msg.key); // needed for ServerReceiveRequest
-
-    // Properties that require separate proof in the honest and corrupt case
-    eliminate (exists client. event_triggered tr' client (req_send_event client)) \/
-              is_publishable tr' (serialize com_message_t req_msg_t)
-    returns (exists client. event_triggered tr' client (req_send_event client)) \/
-            (is_publishable tr' req_msg.request /\ is_publishable tr' req_msg.key)
-    with _. ()
-    and _. assert(is_well_formed com_message_t (is_publishable tr') req_msg_t);
-
     eliminate (exists client. event_triggered tr' client (req_send_event client)) \/
               (is_publishable tr' req_msg.request /\ is_publishable tr' req_msg.key)
     returns (

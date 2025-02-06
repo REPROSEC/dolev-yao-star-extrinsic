@@ -9,6 +9,7 @@ open DY.Lib.Event.Typed
 open DY.Lib.State.PrivateKeys
 open DY.Lib.State.Tagged
 open DY.Lib.State.Typed
+open DY.Lib.Comparse.DYUtils
 
 open DY.Lib.Communication.Data
 open DY.Lib.Communication.Core
@@ -149,9 +150,7 @@ let event_predicate_communication_layer_reqres
       is_knowable_by (get_label tr key) tr request /\
       is_secret (comm_label client server) tr key /\
       key `has_usage tr` (AeadKey comm_layer_aead_tag empty) /\
-      (match parse a request with
-      | None -> False
-      | Some request -> higher_layer_resreq_preds.send_request tr client server request (get_label tr key))
+      parse_and_pred (fun request -> higher_layer_resreq_preds.send_request tr client server request (get_label tr key)) request
     )
     | CommServerReceiveRequest server request key -> (
       is_knowable_by (principal_label server) tr key /\
@@ -163,13 +162,9 @@ let event_predicate_communication_layer_reqres
       )
     )
     | CommServerSendResponse server request response -> (
-      (match parse a response with
-      | None -> False
-      | Some response -> (
-        match parse a request with
-        | None -> False
-        | Some request -> higher_layer_resreq_preds.send_response tr server request response)
-      )
+      match parse a request, parse a response with
+      | Some request, Some response -> higher_layer_resreq_preds.send_response tr server request response
+      | _ -> False
     )
     | CommClientReceiveResponse client server response key -> (
       (exists request. event_triggered tr server (CommServerSendResponse server request response)) \/

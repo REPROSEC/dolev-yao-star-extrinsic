@@ -8,6 +8,7 @@ open DY.Lib.Event.Typed
 open DY.Lib.State.PKI
 open DY.Lib.State.PrivateKeys
 open DY.Lib.State.Typed
+open DY.Lib.Comparse.DYUtils
 
 open DY.Lib.Communication.Core
 open DY.Lib.Communication.Core.Invariants
@@ -35,11 +36,11 @@ val conf_message_secrecy:
   )
   (ensures
     is_knowable_by (principal_label receiver) (prefix tr i) payload /\
-    (exists sender.
-      Some? (parse a payload) /\
-      higher_layer_preds.send_conf (prefix tr i) sender receiver (Some?.v (parse a payload))
-    ) \/
-    is_publishable (prefix tr i) payload
+
+    parse_and_pred (fun payload_parsed ->
+      (exists sender. higher_layer_preds.send_conf (prefix tr i) sender receiver payload_parsed) \/
+      is_well_formed a (is_publishable (prefix tr i)) payload_parsed
+    ) payload
   )
 let conf_message_secrecy #invs #a tr i higher_layer_preds receiver payload =
   let send_event sender = CommConfSendMsg sender receiver payload in
@@ -48,11 +49,10 @@ let conf_message_secrecy #invs #a tr i higher_layer_preds receiver payload =
             is_publishable tr_i payload
   returns
     is_knowable_by (principal_label receiver) tr_i payload /\
-    (exists sender.
-      Some? (parse a payload) /\
-      higher_layer_preds.send_conf tr_i sender receiver (Some?.v (parse a payload))
-    ) \/
-    is_publishable tr_i payload
+    parse_and_pred (fun payload_parsed ->
+      (exists sender. higher_layer_preds.send_conf (prefix tr i) sender receiver payload_parsed) \/
+      is_well_formed a (is_publishable (prefix tr i)) payload_parsed
+    ) payload
   with _. eliminate exists sender. event_triggered tr_i sender (send_event sender)
     returns _
     with _. (
@@ -62,7 +62,7 @@ let conf_message_secrecy #invs #a tr i higher_layer_preds receiver payload =
       serialize_parse_inv_lemma a payload;
       higher_layer_preds.send_conf_later (prefix tr j) tr_i sender receiver (Some?.v (parse a payload))
     )
-  and _. ()
+  and _. parse_wf_lemma a (is_publishable (prefix tr i)) payload
 
 
 (*** Authenticated Messages Properties ***)
