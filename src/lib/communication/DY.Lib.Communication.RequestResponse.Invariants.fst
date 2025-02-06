@@ -70,10 +70,7 @@ let state_predicates_communication_layer {|crypto_invariants|}: local_state_pred
       let server = prin in
       is_knowable_by (principal_label server) tr key /\
       is_knowable_by (get_label tr key) tr request /\
-      (
-        key `has_usage tr` (AeadKey comm_layer_aead_tag empty) \/
-        is_publishable tr key
-      )
+      key `has_usage tr` (AeadKey comm_layer_aead_tag empty)
     )
     | ClientReceiveResponse {server; response; key} -> (
       let client = prin in
@@ -157,9 +154,13 @@ let event_predicate_communication_layer_reqres
       | Some request -> higher_layer_resreq_preds.send_request tr client server request (get_label tr key))
     )
     | CommServerReceiveRequest server request key -> (
-      is_knowable_by (principal_label server) tr request /\
-      (exists client. event_triggered tr client (CommClientSendRequest client server request key) \/
-        is_publishable tr request)
+      is_knowable_by (principal_label server) tr key /\
+      is_knowable_by (get_label tr key) tr request /\
+      key `has_usage tr` (AeadKey comm_layer_aead_tag empty) /\
+      (
+        (exists client. event_triggered tr client (CommClientSendRequest client server request key)) \/
+        is_publishable tr key
+      )
     )
     | CommServerSendResponse server request response -> (
       (match parse a response with

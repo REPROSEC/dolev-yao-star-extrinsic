@@ -13,6 +13,7 @@ open DY.Lib.Communication.Data
 open DY.Lib.Communication.Core
 open DY.Lib.Communication.Core.Invariants
 open DY.Lib.Communication.Core.Lemmas
+open DY.Lib.Communication.Core.Properties
 open DY.Lib.Communication.RequestResponse
 open DY.Lib.Communication.RequestResponse.Invariants
 
@@ -117,12 +118,9 @@ val receive_request_proof:
     | (Some (payload, req_meta_data), tr_out) -> (
       let payload_bytes = serialize a payload in
       trace_invariant tr_out /\
-      // See comment on `receive_confidential_proof` for the reason of this form
-      // of the post-condition.
-      (exists client. event_triggered tr_out client (CommClientSendRequest client server payload_bytes req_meta_data.key) \/
-        is_well_formed a (is_publishable tr_out) payload) /\
+      event_triggered tr_out server (CommServerReceiveRequest server payload_bytes req_meta_data.key) /\
       is_well_formed a (is_knowable_by (principal_label server) tr_out) payload /\
-      is_well_formed a (is_knowable_by (get_response_label tr req_meta_data) tr) payload
+      is_well_formed a (is_knowable_by (get_response_label tr_out req_meta_data) tr_out) payload
     )
   ))
   [SMTPat (trace_invariant tr);
@@ -136,8 +134,43 @@ let receive_request_proof #invs #a tr comm_keys_ids higher_layer_preds server ms
     let (Some req_msg_t, tr') = receive_confidential #com_message_t comm_keys_ids server msg_id tr in
     let RequestMessage req_msg = req_msg_t in
 
+    let req_msg_bytes = serialize com_message_t req_msg_t in
+    let req_send_event client = CommClientSendRequest client server req_msg.request req_msg.key in
+
+    let i = find_event_triggered_at_timestamp tr' server (CommConfReceiveMsg server req_msg_bytes) in
+    conf_message_secrecy tr' i request_response_event_preconditions server req_msg_bytes;
+
+    // Properties that can be proved uniformly in both the honest and corrupt case
+    assert(is_well_formed com_message_t (is_knowable_by (principal_label server) tr') req_msg_t);
+    assert(is_knowable_by (principal_label server) tr' req_msg.request); // needed for ServerReceiveRequest
+    assert(is_knowable_by (principal_label server) tr' req_msg.key); // needed for ServerReceiveRequest
+
+    // Properties that require separate proof in the honest and corrupt case
+    eliminate (exists client. event_triggered tr' client (req_send_event client)) \/
+              is_publishable tr' (serialize com_message_t req_msg_t)
+    returns (exists client. event_triggered tr' client (req_send_event client)) \/
+            (is_publishable tr' req_msg.request /\ is_publishable tr' req_msg.key)
+    with _. ()
+    and _. assert(is_well_formed com_message_t (is_publishable tr') req_msg_t);
+
+    eliminate (exists client. event_triggered tr' client (req_send_event client)) \/
+              (is_publishable tr' req_msg.request /\ is_publishable tr' req_msg.key)
+    returns (
+      is_knowable_by (get_response_label tr' req_meta_data) tr' req_msg.request /\
+      req_msg.key `has_usage tr'` (AeadKey comm_layer_aead_tag empty)
+    )
+    with _. eliminate exists client. event_triggered tr' client (req_send_event client)
+      returns _
+      with _. (
+        let i = find_event_triggered_at_timestamp tr' client (req_send_event client) in
+        // Triggers event_triggered_at_implies_pred
+        assert(event_triggered_at tr' i client (req_send_event client))
+      )
+    and _. has_usage_publishable tr' req_msg.key (AeadKey comm_layer_aead_tag empty);
+
+    // Relating knowledge of the request to knowledge of its fields
     serialize_parse_inv_lemma #bytes a req_msg.request;
-    assert(is_comm_response_payload tr_out server req_meta_data payload);
+    assert(is_comm_response_payload tr' server req_meta_data payload);
 
     let ((), tr') = trigger_event server (CommServerReceiveRequest server req_msg.request req_msg.key) tr' in
     let (sid', tr') = new_session_id server tr' in
@@ -182,9 +215,7 @@ val compute_response_message_proof:
     is_knowable_by (principal_label server) tr key /\
     is_well_formed a (is_knowable_by (get_label tr key) tr) response /\    
     is_publishable tr nonce /\
-    (key `has_usage tr` (AeadKey comm_layer_aead_tag empty) \/
-      is_publishable tr key    
-    ) /\
+    key `has_usage tr` (AeadKey comm_layer_aead_tag empty) /\
     event_triggered tr server (CommServerSendResponse server request (serialize a response))
   )
   (ensures

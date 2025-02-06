@@ -143,11 +143,8 @@ let event_predicate_communication_layer
       )
     )
     | CommConfReceiveMsg receiver payload -> (
-      exists sender.
-        (
-          event_triggered tr sender (CommConfSendMsg sender receiver payload) \/
-          is_publishable tr payload
-        )
+      (exists sender. event_triggered tr sender (CommConfSendMsg sender receiver payload)) \/
+      is_publishable tr payload
     )
     | CommAuthSendMsg sender payload -> (
       (match parse a payload with
