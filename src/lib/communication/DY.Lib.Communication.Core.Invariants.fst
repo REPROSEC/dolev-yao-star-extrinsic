@@ -8,6 +8,7 @@ open DY.Lib.Crypto.AEAD.Split
 open DY.Lib.Event.Typed
 open DY.Lib.State.PrivateKeys
 open DY.Lib.State.Tagged
+open DY.Lib.Comparse.DYUtils
 
 open DY.Lib.Communication.Data
 open DY.Lib.Communication.Core
@@ -128,34 +129,29 @@ let default_comm_higher_layer_event_preds (a:Type) {| parseable_serializeable by
 }
 
 #push-options "--ifuel 1 --fuel 0"
-let event_predicate_communication_layer 
+let event_predicate_communication_layer
   {|cinvs:crypto_invariants|}
   (#a:Type) {| parseable_serializeable bytes a |}
-  (higher_layer_preds:comm_higher_layer_event_preds a) : 
+  (higher_layer_preds:comm_higher_layer_event_preds a) :
   event_predicate communication_event =
   fun tr prin e ->
     (match e with
     | CommConfSendMsg sender receiver payload -> (
       is_knowable_by (comm_label sender receiver) tr payload /\
-      (match parse a payload with
-      | None -> False
-      | Some payload_p -> higher_layer_preds.send_conf tr sender receiver payload_p
-      )
+      parse_and_pred (higher_layer_preds.send_conf tr sender receiver) payload
     )
     | CommConfReceiveMsg receiver payload -> (
-      exists sender.
-        (
-          event_triggered tr sender (CommConfSendMsg sender receiver payload) \/
-          is_publishable tr payload
-        )
-    )
-    | CommAuthSendMsg sender payload -> (
-      (match parse a payload with
-      | None -> False
-      | Some payload_p -> higher_layer_preds.send_auth tr sender payload_p
+      Some? (parse a payload) /\
+      (
+        (exists sender. event_triggered tr sender (CommConfSendMsg sender receiver payload)) \/
+        is_publishable tr payload
       )
     )
+    | CommAuthSendMsg sender payload -> (
+      parse_and_pred (higher_layer_preds.send_auth tr sender) payload
+    )
     | CommAuthReceiveMsg sender receiver payload -> (
+      Some? (parse a payload) /\
       is_publishable tr payload /\
       (
         event_triggered tr sender (CommAuthSendMsg sender payload) \/
@@ -164,10 +160,7 @@ let event_predicate_communication_layer
     )
     | CommConfAuthSendMsg sender receiver payload -> (
       is_knowable_by (comm_label sender receiver) tr payload /\
-      (match parse a payload with
-      | None -> False
-      | Some payload_p -> higher_layer_preds.send_conf_auth tr sender receiver payload_p
-      )
+      parse_and_pred (higher_layer_preds.send_conf_auth tr sender receiver) payload
     )
     | CommConfAuthReceiveMsg sender receiver payload -> (
       // We can only show the following about the decrypted ciphertext (payload):
@@ -180,13 +173,16 @@ let event_predicate_communication_layer
       // 2. The corrupted sender takes a ciphertext from an honest principal.
       //    Since the crypto predicates apply to this ciphertext, the
       //    decrypted payload flows to the receiver and some unknown sender'.
-      event_triggered tr sender (CommConfAuthSendMsg sender receiver payload) \/
-      is_corrupt tr (long_term_key_label sender)
+      Some? (parse a payload) /\
+      (
+        event_triggered tr sender (CommConfAuthSendMsg sender receiver payload) \/
+        is_corrupt tr (long_term_key_label sender)
+      )
     )
     )
 #pop-options
 
-val event_predicate_communication_layer_and_tag: 
+val event_predicate_communication_layer_and_tag:
   {|cinvs:crypto_invariants|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
   comm_higher_layer_event_preds a ->
