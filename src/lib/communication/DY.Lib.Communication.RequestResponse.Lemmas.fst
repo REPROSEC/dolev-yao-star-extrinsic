@@ -68,13 +68,13 @@ val send_request_proof:
   SMTPat (send_request comm_keys_ids client server request tr)]
 let send_request_proof #invs #a tr comm_keys_ids higher_layer_preds client server request =
   let request_bytes = serialize #bytes a request in
+  assert(apply_core_comm_layer_lemmas request_response_event_preconditions);
   match send_request comm_keys_ids client server request tr with
   | (None, tr_out) -> (
     let (key, tr') = mk_rand (AeadKey comm_layer_aead_tag empty) (comm_label client server) 32 tr in
     let (sid, tr') = new_session_id client tr' in
     let ((), tr') = set_state client sid (ClientSendRequest {server; request=request_bytes; key} <: communication_states) tr' in
     higher_layer_preds.send_request_later tr tr' client server request (get_label tr' key);
-    let ((), tr') = trigger_event client (CommClientSendRequest client server request_bytes key) tr' in
     ()
   )
   | (Some _, tr_out) -> (
@@ -86,7 +86,6 @@ let send_request_proof #invs #a tr comm_keys_ids higher_layer_preds client serve
     assert(trace_invariant tr');
     let req_payload:com_message_t = RequestMessage {request=(serialize a request); key} in
     let req_payload_bytes = serialize #bytes com_message_t req_payload in
-    send_confidential_proof tr' request_response_event_preconditions comm_keys_ids client server req_payload;   
     let (Some msg_id, tr') = send_confidential comm_keys_ids client server req_payload tr' in
 
     assert(tr_out == tr');
