@@ -60,8 +60,12 @@ val send_request_proof:
     is_well_formed a (is_knowable_by (comm_label client server) tr) request
   )
   (ensures (
-    let (_, tr_out) = send_request comm_keys_ids client server request tr in
-    trace_invariant tr_out
+    match send_request comm_keys_ids client server request tr with
+    | (None, tr_out) -> trace_invariant tr_out
+    | (Some (_, cmeta_data), tr_out) -> (
+      trace_invariant tr_out /\
+      comm_meta_data_knowable tr_out client cmeta_data
+    )
   ))
   [SMTPat (trace_invariant tr);
   SMTPat (apply_reqres_comm_layer_lemmas higher_layer_preds);
@@ -120,7 +124,8 @@ val receive_request_proof:
       trace_invariant tr_out /\
       event_triggered tr_out server (CommServerReceiveRequest server payload_bytes req_meta_data.key) /\
       is_well_formed a (is_knowable_by (principal_label server) tr_out) payload /\
-      is_well_formed a (is_knowable_by (get_response_label tr_out req_meta_data) tr_out) payload
+      is_well_formed a (is_knowable_by (get_response_label tr_out req_meta_data) tr_out) payload /\
+      payload_bytes == req_meta_data.request
     )
   ))
   [SMTPat (trace_invariant tr);
