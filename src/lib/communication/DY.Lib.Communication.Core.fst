@@ -58,12 +58,14 @@ instance event_communication_event: event communication_event = {
 
 (**** Confidential Send and Receive Functions ****)
 
+[@@ "opaque_to_smt"]
 val encrypt_message:
   #a:Type -> {| parseable_serializeable bytes a |} ->
   bytes -> bytes -> a -> bytes
 let encrypt_message #a pk_receiver nonce payload =
   pke_enc pk_receiver nonce (serialize a payload)
 
+[@@ "opaque_to_smt"]
 val send_confidential:
   #a:Type -> {| parseable_serializeable bytes a |} ->
   communication_keys_sess_ids ->
@@ -77,7 +79,7 @@ let send_confidential #a comm_keys_ids sender receiver payload =
   let* msg_id = send_msg msg_encrypted in
   return (Some msg_id)
 
-
+[@@ "opaque_to_smt"]
 val decrypt_message:
   #a:Type -> {| parseable_serializeable bytes a |} ->
   bytes -> bytes -> option a
@@ -85,6 +87,7 @@ let decrypt_message #a sk_receiver msg_encrypted =
   let? plaintext = pke_dec sk_receiver msg_encrypted in
   parse #bytes a plaintext
 
+[@@ "opaque_to_smt"]
 val receive_confidential:
   #a:Type -> {| parseable_serializeable bytes a |} ->
   communication_keys_sess_ids ->
@@ -101,7 +104,8 @@ let receive_confidential #a comm_keys_ids receiver msg_id =
 (**** Authenticated Send and Receive Functions ****)
 
 #push-options "--ifuel 1"
-val sign_message: 
+[@@ "opaque_to_smt"]
+val sign_message:
   #a:Type -> {| parseable_serializeable bytes a |} ->
   principal -> principal -> a -> option bytes -> bytes -> bytes -> bytes
 let sign_message #a sender receiver payload pk_receiver sk nonce =
@@ -117,6 +121,7 @@ let sign_message #a sender receiver payload pk_receiver sk nonce =
   serialize com_message_t signed_msg
 #pop-options
 
+[@@ "opaque_to_smt"]
 val send_authenticated:
   #a:Type -> {| parseable_serializeable bytes a |} ->
   communication_keys_sess_ids ->
@@ -132,6 +137,7 @@ let send_authenticated #a comm_keys_ids sender receiver payload =
   return (Some msg_id)
 
 #push-options "--ifuel 1 --fuel 0"
+//[@@ "opaque_to_smt"]
 val verify_message:
   #a:Type -> {| parseable_serializeable bytes a |} ->
   principal -> bytes -> option bytes -> bytes -> option (communication_message a)
@@ -166,6 +172,7 @@ let get_sender sign_msg_bytes =
   | Encrypted sender receiver payload_bytes pk_receiver -> Some sender
 #pop-options
 
+[@@ "opaque_to_smt"]
 val receive_authenticated:
   #a:Type -> {| parseable_serializeable bytes a |} ->
   communication_keys_sess_ids ->
@@ -182,6 +189,7 @@ let receive_authenticated #a comm_keys_ids receiver msg_id =
 
 (**** Confidential and Authenticates Send and Receive Functions ****)
 
+[@@ "opaque_to_smt"]
 val encrypt_and_sign_message:
   #a:Type -> {| parseable_serializeable bytes a |} ->
   principal -> principal -> a -> bytes -> bytes -> bytes -> bytes -> bytes
@@ -193,6 +201,7 @@ let encrypt_and_sign_message #a sender receiver payload pk_receiver sk_sender en
 // they can also be identified by the IP addresses or certificates they use.
 // Having the sender and receiver as plaintext allows us to reuse the functions
 // to create and parse confidential and authenticated messages.
+[@@ "opaque_to_smt"]
 val send_confidential_authenticated:
   #a:Type -> {| parseable_serializeable bytes a |} ->
   communication_keys_sess_ids ->
@@ -209,6 +218,7 @@ let send_confidential_authenticated #a comm_keys_ids sender receiver payload =
   let* msg_id = send_msg msg_encrypted_signed_bytes in
   return (Some msg_id)
 
+[@@ "opaque_to_smt"]
 val verify_and_decrypt_message:
   #a:Type -> {| parseable_serializeable bytes a |} ->
   principal -> bytes -> bytes -> bytes -> option (communication_message a)
@@ -217,6 +227,7 @@ let verify_and_decrypt_message #a #ps receiver sk_receiver vk_sender msg_encrypt
   let? payload:a = decrypt_message #a sk_receiver cm.payload.b in
   Some {sender=cm.sender; receiver=cm.receiver; payload}
 
+[@@ "opaque_to_smt"]
 val receive_confidential_authenticated:
   #a:Type -> {| parseable_serializeable bytes a |} ->
   communication_keys_sess_ids ->

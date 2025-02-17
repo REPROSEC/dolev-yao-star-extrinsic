@@ -98,6 +98,7 @@ type comm_meta_data = {
 
 (*** API ***)
 
+[@@ "opaque_to_smt"]
 val send_request:
   #a:Type -> {| parseable_serializeable bytes a |} ->
   communication_keys_sess_ids ->
@@ -114,6 +115,7 @@ let send_request #a comm_keys_ids client server request =
   let req_meta_data = {key; server; sid; request=payload_bytes} in
   return (Some (msg_id, req_meta_data))
 
+[@@ "opaque_to_smt"]
 val receive_request:
   #a:Type -> {| parseable_serializeable bytes a |} ->
   communication_keys_sess_ids ->
@@ -130,12 +132,14 @@ let receive_request #a comm_keys_ids server msg_id =
   let req_meta_data = {key=req_msg.key; server; sid; request=req_msg.request} in
   return (Some (request, req_meta_data))
 
+[@@ "opaque_to_smt"]
 val mk_comm_layer_response_nonce: comm_meta_data -> usage -> traceful (option bytes)
 let mk_comm_layer_response_nonce req_meta_data usg =
   let* tr = get_trace in
   let* nonce = mk_rand usg (get_label #default_crypto_usages tr req_meta_data.key) 32 in
   return (Some nonce)
 
+[@@ "opaque_to_smt"]
 val mk_comm_layer_response_nonce_labeled: comm_meta_data -> usage -> label -> traceful (option bytes)
 let mk_comm_layer_response_nonce_labeled req_meta_data usg lab =
   let* tr = get_trace in
@@ -143,6 +147,7 @@ let mk_comm_layer_response_nonce_labeled req_meta_data usg lab =
   let* nonce = mk_rand usg lab_join 32 in
   return (Some nonce)
 
+[@@ "opaque_to_smt"]
 val compute_response_message:
   #a:Type -> {| parseable_serializeable bytes a |} ->
   principal -> bytes -> bytes -> a -> bytes
@@ -153,6 +158,7 @@ let compute_response_message #a server key nonce response =
   let ciphertext = aead_enc key nonce res_bytes ad_bytes in
   serialize com_message_t (ResponseMessage {nonce; ciphertext})
 
+[@@ "opaque_to_smt"]
 val send_response:
   #a:Type -> {| parseable_serializeable bytes a |} ->
   principal -> comm_meta_data -> a -> traceful (option timestamp)
@@ -168,6 +174,7 @@ let send_response #a server req_meta_data response =
   let* msg_id = send_msg resp_msg in
   return (Some msg_id)
 
+[@@ "opaque_to_smt"]
 val decode_response_message:
   #a:Type -> {| parseable_serializeable bytes a |} ->
   principal -> bytes -> bytes -> option a
@@ -181,6 +188,7 @@ let decode_response_message #a server key msg_bytes =
   let? resp = parse a resp_bytes in
   Some resp
 
+[@@ "opaque_to_smt"]
 val receive_response:
   #a:Type -> {| parseable_serializeable bytes a |} ->
   principal -> comm_meta_data -> timestamp ->
