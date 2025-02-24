@@ -337,27 +337,3 @@ let traceful_unmodified_same_state (#a:Type) (prin:principal) (sid:state_id) (f:
     // Triggers trace_grows_same_state
     assert(trace_does_not_modify_addr prin sid (tr_out <--> tr));
     ()
-
-/// TODO: Some simple testing of the analysis
-/// Should we put this in an example file? Remove it? Add some kind of test suite?
-
-let unmodified_test (prin:principal) (sid:state_id)
-  : traceful (option bytes & option bytes)
-  = let* st_opt1 = get_state prin sid in
-    let* new_rand = mk_rand NoUsage (DY.Core.Label.principal_label prin) 32 in
-    let* msg_ts = send_msg new_rand in
-    trigger_event prin "test_event" (Literal (Seq.Base.empty));*
-    let* _ = recv_msg msg_ts in
-    let* st_opt2 = get_state prin sid in
-    return (st_opt1, st_opt2)
-
-#push-options "--z3rlimit 100"
-let unmodified_test_proof (prin:principal) (sid:state_id) (tr_in:trace)
-  : Lemma
-    (let ((st_opt1, st_opt2), _) = unmodified_test prin sid tr_in in
-     st_opt1 == st_opt2
-    )
-  = assert(traceful_modifies (unmodified_test prin sid) tr_in == empty);
-    traceful_unmodified_same_state_aux prin sid (unmodified_test prin sid) tr_in;
-    ()
-#pop-options
