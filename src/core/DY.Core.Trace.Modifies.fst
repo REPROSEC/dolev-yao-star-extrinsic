@@ -78,6 +78,32 @@ let traceful_modifies f tr_in =
   trace_modifies (tr_out <--> tr_in)
 
 
+/// These predicates are shorthand for the commonly useful
+/// statement that a given address is not modified by a given
+/// trace or traceful function.
+
+val trace_does_not_modify_addr :
+  #label_t:Type -> principal -> state_id ->
+  tr:trace_ label_t -> prop
+let trace_does_not_modify_addr prin sid tr =
+  ~((prin, sid) `mem` (trace_modifies tr))
+
+val traceful_does_not_modify_addr :
+  #a:Type -> principal -> state_id ->
+  f:traceful a -> tr:trace -> prop
+let traceful_does_not_modify_addr prin sid f tr =
+  ~((prin, sid) `mem` (traceful_modifies f tr))
+
+// TODO: Which of this and the previous definition is more useful?
+// Simple cases can usually guarantee the stronger forall traces
+// property, but that may be more difficult to work with in general.
+val traceful_never_modifies_addr:
+  #a:Type -> principal -> state_id ->
+  f:traceful a -> prop
+let traceful_never_modifies_addr prin sid f =
+  forall tr. ~((prin, sid) `mem` (traceful_modifies f tr))
+
+
 /// Lemmas to automate modifies analysis
 
 val traceful_modifies_bind :
@@ -96,6 +122,30 @@ let traceful_modifies_bind x f tr_in =
   let (_, tr_out) = f y tr_mid in
   // Triggers trace_subtract_concat_slices
   assert(((tr_mid <--> tr_in) <++> (tr_out <--> tr_mid)) == (tr_out <--> tr_in))
+
+val traceful_modifies_option_bind :
+  #a:Type -> #b:Type ->
+  x:traceful (option a) -> f:(a -> traceful (option b)) ->
+  tr_in:trace ->
+  Lemma
+  (ensures (
+    let (y, tr_mid) = x tr_in in
+    traceful_modifies ((let*?) x f) tr_in ==
+    (match y with
+    | None -> traceful_modifies x tr_in
+    | Some y -> (union (traceful_modifies x tr_in) (traceful_modifies (f y) tr_mid))
+    )
+  ))
+  [SMTPat (traceful_modifies ((let*?) x f) tr_in)]
+let traceful_modifies_option_bind x f tr_in =
+  let (y, tr_mid) = x tr_in in
+  match y with
+  | None -> ()
+  | Some y -> (
+    let (_, tr_out) = f y tr_mid in
+    // Triggers trace_subtract_concat_slices
+    assert(((tr_mid <--> tr_in) <++> (tr_out <--> tr_mid)) == (tr_out <--> tr_in))
+  )
 
 #push-options "--fuel 1"
 val traceful_modifies_return :
@@ -203,7 +253,7 @@ val trace_concat_same_state_aux :
   prin:principal -> sid:state_id ->
   tr1:trace -> tr2:trace ->
   Lemma
-  (requires ~((prin, sid) `mem` (trace_modifies tr2)))
+  (requires trace_does_not_modify_addr prin sid tr2)
   (ensures get_state_aux prin sid tr1 == get_state_aux prin sid (tr1 <++> tr2))
 let trace_concat_same_state_aux prin sid tr1 tr2 =
   let is_state_for prin sess_id e =
@@ -228,7 +278,7 @@ val trace_grows_same_state_aux :
   prin:principal -> sid:state_id ->
   tr1:trace -> tr2:trace ->
   Lemma
-  (requires tr1 <$ tr2 /\ ~((prin, sid) `mem` (trace_modifies (tr2 <--> tr1))))
+  (requires tr1 <$ tr2 /\ trace_does_not_modify_addr prin sid (tr2 <--> tr1))
   (ensures (get_state_aux prin sid tr1) == (get_state_aux prin sid tr2))
 let trace_grows_same_state_aux prin sid tr1 tr2 =
   trace_concat_same_state_aux prin sid tr1 (tr2 <--> tr1)
@@ -239,7 +289,7 @@ val traceful_unmodified_same_state_aux:
   f:traceful a ->
   tr_in:trace ->
   Lemma
-  (requires ~((prin, sid) `mem` (traceful_modifies f tr_in)))
+  (requires traceful_does_not_modify_addr prin sid f tr_in)
   (ensures (
     let (_, tr_out) = f tr_in in
     get_state_aux prin sid tr_in == get_state_aux prin sid tr_out
@@ -251,7 +301,7 @@ let traceful_unmodified_same_state_aux prin sid f tr_in =
 
 let trace_concat_same_state (prin:principal) (sid:state_id) (tr1 tr2:trace)
   : Lemma
-    (requires ~((prin, sid) `mem` (trace_modifies tr2)))
+    (requires trace_does_not_modify_addr prin sid tr2)
     (ensures (
       let (st_opt1, _) = get_state prin sid tr1 in
       let (st_opt2, _) = get_state prin sid (tr1 <++> tr2) in
@@ -262,7 +312,7 @@ let trace_concat_same_state (prin:principal) (sid:state_id) (tr1 tr2:trace)
 
 let trace_grows_same_state (prin:principal) (sid:state_id) (tr1 tr2:trace)
   : Lemma
-    (requires tr1 <$ tr2 /\ ~((prin, sid) `mem` (trace_modifies (tr2 <--> tr1))))
+    (requires tr1 <$ tr2 /\ trace_does_not_modify_addr prin sid (tr2 <--> tr1))
     (ensures (
       let (st_opt1, _) = get_state prin sid tr1 in
       let (st_opt2, _) = get_state prin sid tr2 in
@@ -270,13 +320,13 @@ let trace_grows_same_state (prin:principal) (sid:state_id) (tr1 tr2:trace)
     ))
     [SMTPat (get_state prin sid tr1);
      SMTPat (get_state prin sid tr2);
-     SMTPat (~((prin, sid) `mem` (trace_modifies (tr2 <--> tr1))));
+     SMTPat (trace_does_not_modify_addr prin sid (tr2 <--> tr1));
     ]
   = trace_concat_same_state prin sid tr1 (tr2 <--> tr1)
 
 let traceful_unmodified_same_state (#a:Type) (prin:principal) (sid:state_id) (f:traceful a) (tr:trace)
   : Lemma
-    (requires ~((prin, sid) `mem` (traceful_modifies f tr)))
+    (requires traceful_does_not_modify_addr prin sid f tr)
     (ensures (
       let (st_opt1, _) = get_state prin sid tr in
       let (_, tr_out) = f tr in
@@ -284,7 +334,8 @@ let traceful_unmodified_same_state (#a:Type) (prin:principal) (sid:state_id) (f:
       st_opt1 == st_opt2
     ))
   = let (_, tr_out) = f tr in
-    assert(~((prin, sid) `mem` (trace_modifies (tr_out <--> tr))));
+    // Triggers trace_grows_same_state
+    assert(trace_does_not_modify_addr prin sid (tr_out <--> tr));
     ()
 
 /// TODO: Some simple testing of the analysis
