@@ -10,6 +10,8 @@ open DY.Core.Label.Type
 
 open FStar.Set
 
+#set-options "--fuel 0 --ifuel 1"
+
 type address = principal & state_id
 
 type modifies_set = set address
@@ -38,6 +40,7 @@ let rec trace_modifies tr =
   | Snoc hd (SetState p sid _) -> Set.add (p, sid) (trace_modifies hd)
   | Snoc hd _ -> trace_modifies hd
 
+#push-options "--fuel 1"
 val trace_modifies_spec :
   #label_t:Type -> tr:trace_ label_t -> prin:principal -> sid:state_id ->
   Lemma ((prin, sid) `mem` (trace_modifies tr) <==> exists b. state_was_set tr prin sid b)
@@ -49,7 +52,9 @@ let rec trace_modifies_spec tr prin sid =
     else trace_modifies_spec hd prin sid
   end
   | Snoc hd _ -> trace_modifies_spec hd prin sid
+#pop-options
 
+#push-options "--fuel 1"
 val trace_modifies_concat  :
   #label_t:Type ->
   tr1:trace_ label_t -> tr2:trace_ label_t ->
@@ -63,6 +68,7 @@ let rec trace_modifies_concat tr1 tr2 =
     // triggers lemma_equal_elim and lemma_equal_intro
     assert(equal (trace_modifies (tr1 <++> tr2)) (union (trace_modifies tr1) (trace_modifies tr2)))
   end
+#pop-options
 
 val traceful_modifies :
   #a:Type -> traceful a -> trace ->
@@ -91,6 +97,7 @@ let traceful_modifies_bind x f tr_in =
   // Triggers trace_subtract_concat_slices
   assert(((tr_mid <--> tr_in) <++> (tr_out <--> tr_mid)) == (tr_out <--> tr_in))
 
+#push-options "--fuel 1"
 val traceful_modifies_return :
   #a:Type ->
   x:a -> tr:trace ->
@@ -103,6 +110,7 @@ val traceful_modifies_get_trace :
   Lemma (traceful_modifies get_trace tr == empty)
   [SMTPat (traceful_modifies get_trace tr)]
 let traceful_modifies_get_trace tr = ()
+#pop-options
 
 val traceful_modifies_guard_tr :
   b:bool -> tr:trace ->
@@ -110,6 +118,7 @@ val traceful_modifies_guard_tr :
   [SMTPat (traceful_modifies (guard_tr b) tr)]
 let traceful_modifies_guard_tr b tr = ()
 
+#push-options "--fuel 2"
 val traceful_modifies_add_entry :
   e:trace_entry ->
   tr:trace ->
@@ -128,6 +137,7 @@ let traceful_modifies_add_entry e tr =
   match e with
   | SetState prin sid _ -> assert(equal (add (prin, sid) empty) (singleton (prin, sid)))
   | _ -> ()
+#pop-options
 
 val traceful_modifies_get_time :
   tr:trace ->
@@ -142,11 +152,13 @@ val traceful_modifies_send_msg :
 let traceful_modifies_send_msg b tr =
   reveal_opaque (`%send_msg) (send_msg)
 
+#push-options "--fuel 1"
 val traceful_modifies_recv_msg :
   ts:timestamp -> tr:trace ->
   Lemma (traceful_modifies (recv_msg ts) tr == empty)
   [SMTPat (traceful_modifies (recv_msg ts) tr)]
 let traceful_modifies_recv_msg ts tr = ()
+#pop-options
 
 val traceful_modifies_mk_rand :
   usg:usage -> lab:label -> len:nat{len <> 0} -> tr:trace ->
@@ -162,6 +174,7 @@ val traceful_modifies_set_state :
 let traceful_modifies_set_state prin sid b tr =
   reveal_opaque (`%set_state) (set_state)
 
+#push-options "--fuel 1"
 val traceful_modifies_new_session_id :
   prin:principal -> tr:trace ->
   Lemma (traceful_modifies (new_session_id prin) tr == empty)
@@ -173,6 +186,7 @@ val traceful_modifies_get_state :
   Lemma (traceful_modifies (get_state prin sid) tr == empty)
   [SMTPat (traceful_modifies (get_state prin sid) tr)]
 let traceful_modifies_get_state prin sid tr = ()
+#pop-options
 
 val traceful_modifies_trigger_event :
   prin:principal -> tag:string -> b:bytes -> tr:trace ->
@@ -180,6 +194,7 @@ val traceful_modifies_trigger_event :
   [SMTPat (traceful_modifies (trigger_event prin tag b) tr)]
 let traceful_modifies_trigger_event prin tag b tr =
   reveal_opaque (`%trigger_event) (trigger_event)
+
 
 /// The core properties --- if a trace (or traceful function) does not modify a given address,
 /// the result of looking up the state at the start and end of that trace (traceful) is the same.
