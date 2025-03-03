@@ -301,6 +301,20 @@ let join_flow_to_public_eq tr x1 x2 =
 /// It can for example be used to depict any state of a principal
 /// (e.g. as done by `principal_label`)
 
+
+// SOME KIND OF INTUITION LIKE THIS
+val dynamic_label :
+  nat ->
+  label
+let dynamic_label placeholder_id = mk_label {
+  is_corrupt = (fun tr ->
+    exists prin sess_id content.
+      state_was_corrupt tr prin sess_id content /\
+      entry_exists tr (UpdateLabel placeholder prin)
+    )
+
+}
+
 val state_pred_label_input: Type u#1
 let state_pred_label_input =
   principal -> state_id -> bytes -> prop

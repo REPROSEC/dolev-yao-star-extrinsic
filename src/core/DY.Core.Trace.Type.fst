@@ -56,6 +56,8 @@ type trace_entry_ (label_t:Type) =
   | SetState: prin:principal -> sess_id:state_id -> content:bytes -> trace_entry_ label_t
   // A custom and protocol-specific event has been triggered by a principal.
   | Event: prin:principal -> tag:string -> content:bytes -> trace_entry_ label_t
+  // An UpdateLabel event for a placeholder label
+  | RevealLabel : prin:principal -> timestamp:nat -> trace_entry_ label_t
 
 /// The trace is a list of trace entries.
 /// Because the trace grows with time and the time is often represented going from left to right,
