@@ -36,7 +36,7 @@ let dh_crypto_preds = {
   default_crypto_predicates with
 
   sign_pred = {
-    pred = (fun tr sk_usage sig_msg ->
+    pred = (fun tr sk_usage vk sig_msg ->
       (exists prin. sk_usage == long_term_key_type_to_usage (LongTermSigKey "DH.SigningKey") prin /\ (
         match parse sig_message sig_msg with
         | Some (SigMsg2 sig_msg2) -> (
@@ -48,7 +48,7 @@ let dh_crypto_preds = {
         | None -> False
       ))
     );
-    pred_later = (fun tr1 tr2 vk msg -> ());
+    pred_later = (fun tr1 tr2 sk_usage vk msg -> ());
   };
 }
 #pop-options

@@ -729,51 +729,54 @@ let has_kem_sk_usage #cusgs = mk_has_xxx_usage extract_kem_sk
 
 noeq
 type aead_crypto_predicate {|crypto_usages|} = {
-  pred: tr:trace -> key_usage:usage{AeadKey? key_usage} -> nonce:bytes -> msg:bytes -> ad:bytes -> prop;
+  pred: tr:trace -> key_usage:usage{AeadKey? key_usage} -> key:bytes -> nonce:bytes -> msg:bytes -> ad:bytes -> prop;
   pred_later:
     tr1:trace -> tr2:trace ->
-    key_usage:usage{AeadKey? key_usage} -> nonce:bytes -> msg:bytes -> ad:bytes ->
+    key_usage:usage{AeadKey? key_usage} -> key:bytes -> nonce:bytes -> msg:bytes -> ad:bytes ->
     Lemma
     (requires
-      pred tr1 key_usage nonce msg ad /\
+      pred tr1 key_usage key nonce msg ad /\
+      bytes_well_formed tr1 key /\
       bytes_well_formed tr1 nonce /\
       bytes_well_formed tr1 msg /\
       bytes_well_formed tr1 ad /\
       tr1 <$ tr2
     )
-    (ensures pred tr2 key_usage nonce msg ad)
+    (ensures pred tr2 key_usage key nonce msg ad)
   ;
 }
 
 noeq
 type pke_crypto_predicate {|crypto_usages|} = {
-  pred: tr:trace -> sk_usage:usage{PkeKey? sk_usage} -> msg:bytes -> prop;
+  pred: tr:trace -> sk_usage:usage{PkeKey? sk_usage} -> pk:bytes -> msg:bytes -> prop;
   pred_later:
     tr1:trace -> tr2:trace ->
-    sk_usage:usage{PkeKey? sk_usage} -> msg:bytes ->
+    sk_usage:usage{PkeKey? sk_usage} -> pk:bytes -> msg:bytes ->
     Lemma
     (requires
-      pred tr1 sk_usage msg /\
+      pred tr1 sk_usage pk msg /\
+      bytes_well_formed tr1 pk /\
       bytes_well_formed tr1 msg /\
       tr1 <$ tr2
     )
-    (ensures pred tr2 sk_usage msg)
+    (ensures pred tr2 sk_usage pk msg)
   ;
 }
 
 noeq
 type sign_crypto_predicate {|crypto_usages|} = {
-  pred: tr:trace -> sk_usage:usage{SigKey? sk_usage} -> msg:bytes -> prop;
+  pred: tr:trace -> sk_usage:usage{SigKey? sk_usage} -> vk:bytes -> msg:bytes -> prop;
   pred_later:
     tr1:trace -> tr2:trace ->
-    sk_usage:usage{SigKey? sk_usage} -> msg:bytes ->
+    sk_usage:usage{SigKey? sk_usage} -> vk:bytes -> msg:bytes ->
     Lemma
     (requires
-      pred tr1 sk_usage msg /\
+      pred tr1 sk_usage vk msg /\
+      bytes_well_formed tr1 vk /\
       bytes_well_formed tr1 msg /\
       tr1 <$ tr2
     )
-    (ensures pred tr2 sk_usage msg)
+    (ensures pred tr2 sk_usage vk msg)
   ;
 }
 
@@ -791,20 +794,20 @@ type crypto_predicates {|crypto_usages|} = {
 
 val default_aead_predicate: {|crypto_usages|} -> aead_crypto_predicate
 let default_aead_predicate #cusages = {
-  pred = (fun tr key nonce msg ad -> False);
-  pred_later = (fun tr1 tr2 key nonce msg ad -> ());
+  pred = (fun tr key_usage key nonce msg ad -> False);
+  pred_later = (fun tr1 tr2 key_usage key nonce msg ad -> ());
 }
 
 val default_pke_predicate: {|crypto_usages|} -> pke_crypto_predicate
 let default_pke_predicate #cusages = {
-  pred = (fun tr pk msg -> False);
-  pred_later = (fun tr1 tr2 pk msg -> ());
+  pred = (fun tr sk_usage pk msg -> False);
+  pred_later = (fun tr1 tr2 sk_usage pk msg -> ());
 }
 
 val default_sign_predicate: {|crypto_usages|} -> sign_crypto_predicate
 let default_sign_predicate #cusages = {
-  pred = (fun tr vk msg -> False);
-  pred_later = (fun tr1 tr2 vk msg -> ());
+  pred = (fun tr sk_usage sk msg -> False);
+  pred_later = (fun tr1 tr2 sk_usage sk msg -> ());
 }
 
 val default_crypto_predicates:
@@ -871,7 +874,7 @@ let rec bytes_invariant #cinvs tr b =
         key `has_usage tr` key_usg /\
         AeadKey? key_usg /\
         // - the custom (protocol-specific) invariant hold (authentication)
-        aead_pred.pred tr key_usg nonce msg ad /\
+        aead_pred.pred tr key_usg key nonce msg ad /\
         // - the message is less secret than the key
         //   (this is crucial so that decryption preserve publishability)
         (get_label tr msg) `can_flow tr` (get_label tr key)
@@ -896,7 +899,7 @@ let rec bytes_invariant #cinvs tr b =
         pk `has_sk_usage tr` sk_usg /\
         PkeKey? sk_usg /\
         // - the custom (protocol-specific) invariant hold (authentication)
-        pke_pred.pred tr sk_usg msg /\
+        pke_pred.pred tr sk_usg pk msg /\
         // - the message is less secret than the decryption key
         //   (this is crucial so that decryption preserve publishability)
         (get_label tr msg) `can_flow tr` (get_sk_label tr pk) /\
@@ -927,7 +930,7 @@ let rec bytes_invariant #cinvs tr b =
         sk `has_usage tr` sk_usg /\
         SigKey? sk_usg /\
         // - the custom (protocol-specific) invariant hold (authentication)
-        sign_pred.pred tr sk_usg msg /\
+        sign_pred.pred tr sk_usg (Vk sk) msg /\
         // - the nonce is more secret than the signature key
         //   (this is because the standard EUF-CMA security assumption on signatures
         //   do not have any guarantees when the nonce is leaked to the attacker,
@@ -1062,7 +1065,11 @@ let rec bytes_invariant_later #cinvs tr1 tr2 msg =
     bytes_invariant_later tr1 tr2 nonce;
     bytes_invariant_later tr1 tr2 msg;
     bytes_invariant_later tr1 tr2 ad;
-    FStar.Classical.forall_intro_4 (FStar.Classical.move_requires_4 (aead_pred.pred_later tr1 tr2))
+    introduce forall key_usg. aead_pred.pred tr1 key_usg key nonce msg ad ==> aead_pred.pred tr2 key_usg key nonce msg ad with (
+      introduce aead_pred.pred tr1 key_usg key nonce msg ad ==> aead_pred.pred tr2 key_usg key nonce msg ad with _. (
+        aead_pred.pred_later tr1 tr2 key_usg key nonce msg ad
+      )
+    )
   )
   | Pk sk ->
     bytes_invariant_later tr1 tr2 sk
@@ -1070,7 +1077,7 @@ let rec bytes_invariant_later #cinvs tr1 tr2 msg =
     bytes_invariant_later tr1 tr2 pk;
     bytes_invariant_later tr1 tr2 nonce;
     bytes_invariant_later tr1 tr2 msg;
-    FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (pke_pred.pred_later tr1 tr2))
+    FStar.Classical.forall_intro_3 (FStar.Classical.move_requires_3 (pke_pred.pred_later tr1 tr2))
   )
   | Vk sk ->
     bytes_invariant_later tr1 tr2 sk
@@ -1079,7 +1086,7 @@ let rec bytes_invariant_later #cinvs tr1 tr2 msg =
     bytes_invariant_later tr1 tr2 nonce;
     bytes_invariant_later tr1 tr2 msg;
     assert(bytes_invariant tr1 (Vk sk)); // to prove well-formedness
-    FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (sign_pred.pred_later tr1 tr2))
+    FStar.Classical.forall_intro_3 (FStar.Classical.move_requires_3 (sign_pred.pred_later tr1 tr2))
   )
   | Hash msg ->
     bytes_invariant_later tr1 tr2 msg
@@ -1601,7 +1608,7 @@ val bytes_invariant_aead_enc:
     (
       (
         AeadKey? key_usg /\
-        aead_pred.pred tr key_usg nonce msg ad
+        aead_pred.pred tr key_usg key nonce msg ad
       ) \/ (
         get_label tr key `can_flow tr` public
       )
@@ -1650,7 +1657,7 @@ val bytes_invariant_aead_dec:
           forall key_usg.
           key `has_usage tr` key_usg /\
           AeadKey? key_usg ==>
-          aead_pred.pred tr key_usg nonce plaintext ad
+          aead_pred.pred tr key_usg key nonce plaintext ad
         ) \/ (
           is_publishable tr key
         )
@@ -1885,7 +1892,7 @@ val bytes_invariant_pke_enc:
     (
       (
         PkeKey? sk_usg /\
-        pke_pred.pred tr sk_usg msg
+        pke_pred.pred tr sk_usg pk msg
       ) \/ (
         (get_label tr msg) `can_flow tr` public
       )
@@ -1931,7 +1938,7 @@ val bytes_invariant_pke_dec:
       (
         (
           PkeKey? sk_usg /\
-          pke_pred.pred tr sk_usg plaintext
+          pke_pred.pred tr sk_usg (pk sk) plaintext
         ) \/ (
           (get_label tr plaintext) `can_flow tr` public
         )
@@ -2116,7 +2123,7 @@ val bytes_invariant_sign:
     (
       (
         SigKey? sk_usg /\
-        sign_pred.pred tr sk_usg msg
+        sign_pred.pred tr sk_usg (vk sk) msg
       ) \/ (
         get_label tr sk `can_flow tr` public
       )
@@ -2159,7 +2166,7 @@ val bytes_invariant_verify:
   (ensures
     (
       SigKey? sk_usg ==>
-      sign_pred.pred tr sk_usg msg
+      sign_pred.pred tr sk_usg vk msg
     ) \/ (
       (get_signkey_label tr vk) `can_flow tr` public
     )
@@ -2175,7 +2182,7 @@ let bytes_invariant_verify #cinvs tr vkey sk_usg msg signature =
   normalize_term_spec get_label;
   normalize_term_spec vk;
   FStar.Classical.forall_intro_3 (FStar.Classical.move_requires_3 (has_usage_inj tr));
-  assert(forall sk sk_usg. sk `has_usage tr` sk_usg == (vk sk) `has_signkey_usage tr` sk_usg)
+  assert(forall sk. Vk sk == vk sk)
 
 (*** Hash ***)
 

@@ -1,4 +1,4 @@
-{lib, stdenv, which, fstar, fstar-dune, z3, ocamlPackages, comparse, fetchFromGitHub}:
+{lib, stdenv, which, fstar, z3, ocamlPackages, comparse, fetchFromGitHub}:
 
 let
   dolev-yao-star = stdenv.mkDerivation {
@@ -35,7 +35,7 @@ let
       ++ (with ocamlPackages; [
         ocaml dune_3 findlib
       ])
-      ++ (fstar-dune.buildInputs);
+      ++ (fstar.buildInputs);
     COMPARSE_HOME = comparse;
     # pre-patch uses build output from dolev-yao-star, to avoid building things twice
     prePatch = ''
