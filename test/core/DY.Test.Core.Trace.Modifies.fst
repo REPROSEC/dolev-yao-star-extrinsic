@@ -6,20 +6,78 @@ open FStar.Set
 
 #set-options "--ifuel 0 --fuel 0"
 
-let unmodified_test (prin:principal) (sid:state_id)
-  : traceful (option bytes & option bytes)
-  = let* st_opt1 = get_state prin sid in
-    let* new_rand = mk_rand NoUsage (DY.Core.Label.principal_label prin) 32 in
+/// This generally validates that the modifies analysis is working reasonably
+/// automatically on simple programs, even if they make use of a variety of
+/// trace-modifying features.
+let broad_unmodified_test (prin:principal)
+  : traceful state_id
+  = let* new_rand = mk_rand NoUsage (DY.Core.Label.principal_label prin) 32 in
     let* msg_ts = send_msg new_rand in
     trigger_event prin "test_event" (Literal (Seq.Base.empty));*
     let* _ = recv_msg msg_ts in
-    let* st_opt2 = get_state prin sid in
-    return (st_opt1, st_opt2)
+    let* new_sid = new_session_id prin in
+    let* _ = set_state prin new_sid new_rand in
+    return new_sid
 
-let unmodified_test_proof (prin:principal) (sid:state_id) (tr_in:trace)
+let broad_unmodified_proof (prin:principal) (tr_in:trace)
   : Lemma
-    (let ((st_opt1, st_opt2), _) = unmodified_test prin sid tr_in in
-     st_opt1 == st_opt2
+    (let (new_sid, tr_out) = broad_unmodified_test prin tr_in in
+     forall (sid:state_id). (
+       sid == new_sid \/
+       get_state_aux prin sid tr_in == get_state_aux prin sid tr_out
+     )
     )
-  = traceful_unmodified_same_state_aux prin sid (unmodified_test prin sid) tr_in;
+  = let (new_sid, tr_out) = broad_unmodified_test prin tr_in in
+    assert(traceful_modifies (broad_unmodified_test prin) tr_in == singleton (prin, new_sid))
+
+let optional_unmodified_test (prin:principal)
+  : traceful (option state_id)
+  = let* new_rand = mk_rand NoUsage (DY.Core.Label.principal_label prin) 32 in
+    let* msg_ts = send_msg new_rand in
+    trigger_event prin "test_event" (Literal (Seq.Base.empty));*
+    let*? _ = recv_msg msg_ts in
+    let* new_sid = new_session_id prin in
+    let* _ = get_state prin new_sid in
+    return (Some new_sid)
+
+let optional_unmodified_proof (prin:principal) (tr_in:trace)
+  : Lemma
+    (let (new_sid_opt, tr_out) = optional_unmodified_test prin tr_in in
+     forall (sid:state_id). (
+       (Some sid) == new_sid_opt \/
+       get_state_aux prin sid tr_in == get_state_aux prin sid tr_out
+     )
+    )
+  = let (new_sid_opt, tr_out) = optional_unmodified_test prin tr_in in
+    match new_sid_opt with
+    | None -> assert(traceful_modifies (optional_unmodified_test prin) tr_in == empty)
+    | Some new_sid -> assert(traceful_modifies (optional_unmodified_test prin) tr_in `subset` singleton (prin, new_sid))
+
+assume val test_branch : bool
+
+let branch_unmodified_test (prin:principal)
+  : traceful (state_id & state_id)
+  = let* new_rand = mk_rand NoUsage (DY.Core.Label.principal_label prin) 32 in
+    let* msg_ts = send_msg new_rand in
+    trigger_event prin "test_event" (Literal (Seq.Base.empty));*
+//  Adding this next line back in causes the automation below to fail.
+//  Something to do with needing to search too deep?
+//    let* _ = recv_msg msg_ts in
+    let* new_sid1 = new_session_id prin in
+    let* new_sid2 = new_session_id prin in
+    let modify_sid = if test_branch then new_sid1 else new_sid2 in
+    let* _ = set_state prin modify_sid new_rand in
+    return (new_sid1, new_sid2)
+
+let branch_unmodified_proof (prin:principal) (tr_in:trace)
+  : Lemma
+    (let ((new_sid1, new_sid2), tr_out) = branch_unmodified_test prin tr_in in
+     forall (sid:state_id). (
+       sid == new_sid1 \/
+       sid == new_sid2 \/
+       get_state_aux prin sid tr_in == get_state_aux prin sid tr_out
+     )
+    )
+  = let ((new_sid1, new_sid2), tr_out) = branch_unmodified_test prin tr_in in
+    assert(traceful_modifies (branch_unmodified_test prin) tr_in `subset` (as_set [(prin, new_sid1); (prin, new_sid2)]));
     ()

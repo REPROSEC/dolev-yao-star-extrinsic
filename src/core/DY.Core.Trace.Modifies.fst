@@ -82,12 +82,14 @@ let traceful_modifies f tr_in =
 /// statement that a given address is not modified by a given
 /// trace or traceful function.
 
+unfold
 val trace_does_not_modify_addr :
   #label_t:Type -> principal -> state_id ->
   tr:trace_ label_t -> prop
 let trace_does_not_modify_addr prin sid tr =
   ~((prin, sid) `mem` (trace_modifies tr))
 
+unfold
 val traceful_does_not_modify_addr :
   #a:Type -> principal -> state_id ->
   f:traceful a -> tr:trace -> prop
@@ -280,6 +282,10 @@ val trace_grows_same_state_aux :
   Lemma
   (requires tr1 <$ tr2 /\ trace_does_not_modify_addr prin sid (tr2 <--> tr1))
   (ensures (get_state_aux prin sid tr1) == (get_state_aux prin sid tr2))
+  [SMTPat (tr1 <$ tr2);
+   SMTPat (get_state_aux prin sid tr2);
+   SMTPat (get_state_aux prin sid tr1);
+  ]
 let trace_grows_same_state_aux prin sid tr1 tr2 =
   trace_concat_same_state_aux prin sid tr1 (tr2 <--> tr1)
 
@@ -294,6 +300,7 @@ val traceful_unmodified_same_state_aux:
     let (_, tr_out) = f tr_in in
     get_state_aux prin sid tr_in == get_state_aux prin sid tr_out
   ))
+  // Can we find a good pattern for this?
 let traceful_unmodified_same_state_aux prin sid f tr_in =
   let (_, tr_out) = f tr_in in
   trace_grows_same_state_aux prin sid tr_in tr_out
