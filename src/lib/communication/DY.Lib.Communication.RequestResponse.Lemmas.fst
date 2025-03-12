@@ -36,11 +36,28 @@ let comm_meta_data_knowable #cinvs tr prin req_meta_data =
   is_knowable_by (principal_label prin) tr req_meta_data.key /\
   is_knowable_by (principal_label prin) tr req_meta_data.request
 
-val apply_reqres_comm_layer_lemmas:
+/// The communication layer makes use of many lemmas with SMT patterns.
+/// These lemmas depend, however, on the communication layer predicates
+/// in use for the current analysis.
+/// To enable these lemmas for an analysis, which requires specifying which
+/// predicates they shouild be used for, one can use the line
+/// `enable_reqres_comm_layer_lemmas preds`, where `preds` is the relevant
+/// `comm_reqres_higher_layer_event_preds` for the protocol.
+/// See https://github.com/FStarLang/FStar/wiki/Quantifiers-and-patterns
+/// for more information on this technique.
+
+[@@"opaque_to_smt"]
+val reqres_comm_layer_lemmas_enabled:
   #a:Type -> {| parseable_serializeable bytes a |} ->
   comm_reqres_higher_layer_event_preds a -> prop
-let apply_reqres_comm_layer_lemmas _ = True
+let reqres_comm_layer_lemmas_enabled _ = True
 
+val enable_reqres_comm_layer_lemmas:
+  #a:Type -> {| parseable_serializeable bytes a |} ->
+  preds:comm_reqres_higher_layer_event_preds a ->
+  Lemma (reqres_comm_layer_lemmas_enabled preds)
+let enable_reqres_comm_layer_lemmas preds =
+  normalize_term_spec (reqres_comm_layer_lemmas_enabled preds)
 
 val send_request_proof:
   {|protocol_invariants|} ->
@@ -68,11 +85,11 @@ val send_request_proof:
     )
   ))
   [SMTPat (trace_invariant tr);
-  SMTPat (apply_reqres_comm_layer_lemmas higher_layer_preds);
+  SMTPat (reqres_comm_layer_lemmas_enabled higher_layer_preds);
   SMTPat (send_request comm_keys_ids client server request tr)]
 let send_request_proof #invs #a tr comm_keys_ids higher_layer_preds client server request =
   reveal_opaque (`%send_request) (send_request #a);
-  assert(apply_core_comm_layer_lemmas request_response_event_preconditions);
+  enable_core_comm_layer_lemmas request_response_event_preconditions;
   let request_bytes = serialize #bytes a request in
   match send_request comm_keys_ids client server request tr with
   | (None, tr_out) -> (
@@ -129,11 +146,11 @@ val receive_request_proof:
     )
   ))
   [SMTPat (trace_invariant tr);
-  SMTPat (apply_reqres_comm_layer_lemmas higher_layer_preds);
+  SMTPat (reqres_comm_layer_lemmas_enabled higher_layer_preds);
   SMTPat (receive_request #a comm_keys_ids server msg_id tr)]
 let receive_request_proof #invs #a tr comm_keys_ids higher_layer_preds server msg_id =
   reveal_opaque (`%receive_request) (receive_request #a);
-  assert(apply_core_comm_layer_lemmas request_response_event_preconditions);
+  enable_core_comm_layer_lemmas request_response_event_preconditions;
   match receive_request #a comm_keys_ids server msg_id tr with
   | (None, tr_out) -> ()
   | (Some (payload, req_meta_data), tr_out) -> (
@@ -251,7 +268,7 @@ val send_response_proof:
     trace_invariant tr_out
   ))
   [SMTPat (trace_invariant tr);
-  SMTPat (apply_reqres_comm_layer_lemmas higher_layer_preds);
+  SMTPat (reqres_comm_layer_lemmas_enabled higher_layer_preds);
   SMTPat (send_response server req_meta_data response tr)]
 let send_response_proof #invs #a tr higher_layer_preds server req_meta_data response =
   reveal_opaque (`%send_response) (send_response #a);
@@ -335,7 +352,7 @@ val receive_response_proof:
     )
   ))
   [SMTPat (trace_invariant tr);
-  SMTPat (apply_reqres_comm_layer_lemmas higher_layer_preds);
+  SMTPat (reqres_comm_layer_lemmas_enabled higher_layer_preds);
   SMTPat (receive_response #a client req_meta_data msg_id tr)]
 let receive_response_proof #invs #a tr higher_layer_preds client req_meta_data msg_id =
   reveal_opaque (`%receive_response) (receive_response #a);

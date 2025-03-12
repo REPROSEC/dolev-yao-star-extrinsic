@@ -59,7 +59,7 @@ let has_communication_layer_reqres_crypto_predicates #cinvs =
 
 #push-options "--ifuel 2 --z3rlimit 25"
 let state_predicates_communication_layer {|crypto_invariants|}: local_state_predicate communication_states = {
-  pred = (fun tr prin sess_id st -> 
+  pred = (fun tr prin sess_id st ->
     match st with
     | ClientSendRequest {server; request; key} -> (
       let client = prin in
@@ -84,7 +84,7 @@ let state_predicates_communication_layer {|crypto_invariants|}: local_state_pred
 }
 #pop-options
 
-val state_predicates_communication_layer_and_tag: 
+val state_predicates_communication_layer_and_tag:
   {|crypto_invariants|} ->
   dtuple2 string local_bytes_state_predicate
 let state_predicates_communication_layer_and_tag #cinvs =
@@ -108,7 +108,7 @@ type comm_reqres_higher_layer_event_preds (a:Type) {| parseable_serializeable by
     Lemma
     (requires
       send_request tr1 client server request key_label /\
-      bytes_well_formed tr1 (serialize a request) /\
+      is_well_formed a (bytes_well_formed tr1) request /\
       tr1 <$ tr2
     )
     (ensures
@@ -122,8 +122,8 @@ type comm_reqres_higher_layer_event_preds (a:Type) {| parseable_serializeable by
     Lemma
     (requires
       send_response tr1 server request response /\
-      bytes_well_formed tr1 (serialize a request) /\
-      bytes_well_formed tr1 (serialize a response) /\
+      is_well_formed a (bytes_well_formed tr1) request /\
+      is_well_formed a (bytes_well_formed tr1) response /\
       tr1 <$ tr2
     )
     (ensures
@@ -142,7 +142,7 @@ let default_comm_reqres_higher_layer_event_preds (a:Type) {| parseable_serialize
 let event_predicate_communication_layer_reqres
   {|cinvs:crypto_invariants|}
   (#a:Type) {| parseable_serializeable bytes a |}
-  (higher_layer_resreq_preds:comm_reqres_higher_layer_event_preds a) : 
+  (higher_layer_resreq_preds:comm_reqres_higher_layer_event_preds a) :
   event_predicate communication_reqres_event =
   fun tr prin e ->
     (match e with
@@ -190,7 +190,7 @@ let request_response_event_preconditions #cinvs = {
 }
 #pop-options
 
-val event_predicate_communication_layer_reqres_and_tag: 
+val event_predicate_communication_layer_reqres_and_tag:
   {|cinvs:crypto_invariants|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
   comm_reqres_higher_layer_event_preds a ->

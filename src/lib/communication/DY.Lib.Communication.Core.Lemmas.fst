@@ -14,10 +14,29 @@ open DY.Lib.Communication.Core.Invariants
 
 #set-options "--fuel 0 --ifuel 0 --z3cliopt 'smt.qi.eager_threshold=100'"
 
-val apply_core_comm_layer_lemmas:
+
+/// The communication layer makes use of many lemmas with SMT patterns.
+/// These lemmas depend, however, on the communication layer predicates
+/// in use for the current analysis.
+/// To enable these core lemmas for an analysis, which requires specifying which
+/// predicates they shouild be used for, one can use the line
+/// `enable_core_comm_layer_lemmas preds`, where `preds` is the relevant
+/// `comm_higher_layer_event_preds` for the protocol.
+/// See https://github.com/FStarLang/FStar/wiki/Quantifiers-and-patterns
+/// for more information on this technique.
+
+[@@"opaque_to_smt"]
+val core_comm_layer_lemmas_enabled:
   #a:Type -> {| parseable_serializeable bytes a |} ->
   comm_higher_layer_event_preds a -> prop
-let apply_core_comm_layer_lemmas _ = True
+let core_comm_layer_lemmas_enabled _ = True
+
+val enable_core_comm_layer_lemmas:
+  #a:Type -> {| parseable_serializeable bytes a |} ->
+  preds:comm_higher_layer_event_preds a ->
+  Lemma (core_comm_layer_lemmas_enabled preds)
+let enable_core_comm_layer_lemmas preds =
+  normalize_term_spec (core_comm_layer_lemmas_enabled preds)
 
 (**** Confidential Send and Receive Lemmas ****)
 
@@ -70,7 +89,7 @@ val send_confidential_proof:
   ))
   [SMTPat (trace_invariant #invs tr);
    SMTPat (send_confidential keys_sess_ids sender receiver payload tr);
-   SMTPat (apply_core_comm_layer_lemmas higher_layer_preds)]
+   SMTPat (core_comm_layer_lemmas_enabled higher_layer_preds)]
 let send_confidential_proof #invs #a tr higher_layer_preds keys_sess_ids sender receiver payload =
   reveal_opaque (`%send_confidential) (send_confidential #a);
   match send_confidential keys_sess_ids sender receiver payload tr with
@@ -148,7 +167,7 @@ val receive_confidential_proof:
   ))
   [SMTPat (trace_invariant tr);
    SMTPat (receive_confidential #a comm_keys_ids receiver msg_id tr);
-   SMTPat (apply_core_comm_layer_lemmas higher_layer_preds)]
+   SMTPat (core_comm_layer_lemmas_enabled higher_layer_preds)]
 let receive_confidential_proof #invs #a tr higher_layer_preds comm_keys_ids receiver msg_id =
   reveal_opaque (`%receive_confidential) (receive_confidential #a);
   match receive_confidential #a comm_keys_ids receiver msg_id tr with
@@ -237,7 +256,7 @@ val send_authenticated_proof:
   ))
   [SMTPat (trace_invariant #invs tr);
    SMTPat (send_authenticated comm_keys_ids sender receiver payload tr);
-   SMTPat (apply_core_comm_layer_lemmas higher_layer_preds)]
+   SMTPat (core_comm_layer_lemmas_enabled higher_layer_preds)]
 let send_authenticated_proof #invs #a tr higher_layer_preds comm_keys_ids sender receiver payload =
     reveal_opaque (`%send_authenticated) (send_authenticated #a);
     match send_authenticated comm_keys_ids sender receiver payload tr with
@@ -273,14 +292,12 @@ val verify_message_proof:
     is_public_key_for tr vk_sender (LongTermSigKey comm_layer_sign_tag) sender
   )
   (ensures (
-    reveal_opaque (`%verify_message) (verify_message #a);
     match verify_message #a receiver msg_bytes sk_receiver_opt vk_sender with
     | Some cm -> (
       let Some msg_signed_t = parse com_message_t msg_bytes in
       let SigMessage msg_signed = msg_signed_t in
       let Some sign_input = parse signature_input #parseable_serializeable_bytes_signature_input msg_signed.msg in
       let payload_bytes = serialize a cm.payload in
-      is_publishable tr payload_bytes /\
       is_well_formed a (is_publishable tr) cm.payload /\
       (
         (
@@ -308,7 +325,6 @@ val verify_message_proof:
     | _ -> True
   ))
 let verify_message_proof #cinvs #a #ps tr sender receiver msg_bytes sk_receiver_opt vk_sender =
-  reveal_opaque (`%verify_message) (verify_message #a);
   assert(get_signkey_label tr vk_sender == long_term_key_label sender);
   match verify_message #a receiver msg_bytes sk_receiver_opt vk_sender with
   | None -> ()
@@ -357,10 +373,9 @@ val receive_authenticated_proof:
   ))
   [SMTPat (trace_invariant #invs tr);
    SMTPat (receive_authenticated #a comm_keys_ids receiver msg_id tr);
-   SMTPat (apply_core_comm_layer_lemmas higher_layer_preds)]
+   SMTPat (core_comm_layer_lemmas_enabled higher_layer_preds)]
 let receive_authenticated_proof #invs #a tr higher_layer_preds comm_keys_ids receiver msg_id =
   reveal_opaque (`%receive_authenticated) (receive_authenticated #a);
-  reveal_opaque (`%verify_message) (verify_message #a); // TODO This should be removeable with a stronger verify_message_proof
   match receive_authenticated #a comm_keys_ids receiver msg_id tr with
   | (None, tr_out) -> ()
   | (Some cm', tr_out) -> (
@@ -433,7 +448,7 @@ val send_confidential_authenticated_proof:
   ))
   [SMTPat (trace_invariant #invs tr);
    SMTPat (send_confidential_authenticated #a comm_keys_ids sender receiver payload tr);
-   SMTPat (apply_core_comm_layer_lemmas higher_layer_preds)]
+   SMTPat (core_comm_layer_lemmas_enabled higher_layer_preds)]
 let send_confidential_authenticated_proof #invs #a tr higher_layer_preds comm_keys_ids sender receiver payload =
   reveal_opaque (`%send_confidential_authenticated) (send_confidential_authenticated #a);
   match send_confidential_authenticated comm_keys_ids sender receiver payload tr with
@@ -490,7 +505,6 @@ val verify_and_decrypt_message_proof:
   ))
 let verify_and_decrypt_message_proof #cinvs #a tr sender receiver msg_encrypted_signed sk_receiver vk_sender =
   reveal_opaque (`%verify_and_decrypt_message) (verify_and_decrypt_message #a);
-  reveal_opaque (`%verify_message) (verify_message #a); // TODO: This should be removeable
   reveal_opaque (`%decrypt_message) (decrypt_message #a);
   match verify_and_decrypt_message #a receiver sk_receiver vk_sender msg_encrypted_signed with
   | None -> ()
@@ -551,11 +565,10 @@ val receive_confidential_authenticated_proof:
   )
   [SMTPat (trace_invariant #invs tr);
    SMTPat (receive_confidential_authenticated #a comm_keys_ids receiver msg_id tr);
-   SMTPat (apply_core_comm_layer_lemmas higher_layer_preds)]
+   SMTPat (core_comm_layer_lemmas_enabled higher_layer_preds)]
 let receive_confidential_authenticated_proof #invs #a tr higher_layer_preds comm_keys_ids receiver msg_id =
   reveal_opaque (`%receive_confidential_authenticated) (receive_confidential_authenticated #a);
   reveal_opaque (`%verify_and_decrypt_message) (verify_and_decrypt_message #a); // TODO: These reveals should be removeable.
-  reveal_opaque (`%verify_message) (verify_message #a);
   match receive_confidential_authenticated #a comm_keys_ids receiver msg_id tr with
   | (None, tr_out) -> ()
   | (Some cm, tr_out) -> (

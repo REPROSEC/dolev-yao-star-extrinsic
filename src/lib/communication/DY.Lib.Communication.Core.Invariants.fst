@@ -29,10 +29,10 @@ let pke_crypto_predicates_communication_layer #cusages = {
   pred_later = (fun tr1 tr2 sk_usage pk msg -> ());
 }
 
-val pke_crypto_predicates_communication_layer_and_tag: 
+val pke_crypto_predicates_communication_layer_and_tag:
   {|cusages:crypto_usages|} ->
   (string & pke_crypto_predicate)
-let pke_crypto_predicates_communication_layer_and_tag #cusages = 
+let pke_crypto_predicates_communication_layer_and_tag #cusages =
   (comm_layer_pkenc_tag, pke_crypto_predicates_communication_layer)
 
 (*** Sign Predicates ***)
@@ -65,7 +65,7 @@ let sign_crypto_predicates_communication_layer #cusages = {
 }
 #pop-options
 
-val sign_crypto_predicates_communication_layer_and_tag: 
+val sign_crypto_predicates_communication_layer_and_tag:
   {|cusages:crypto_usages|} ->
   (string & sign_crypto_predicate)
 let sign_crypto_predicates_communication_layer_and_tag #cusages =
@@ -83,37 +83,37 @@ let has_communication_layer_crypto_predicates #cinvs =
 noeq
 type comm_higher_layer_event_preds (a:Type) {| parseable_serializeable bytes a |} = {
   send_conf: tr:trace -> sender:principal -> receiver:principal -> payload:a -> prop;
-  send_conf_later: 
+  send_conf_later:
     tr1:trace -> tr2:trace ->
     sender:principal -> receiver:principal -> payload:a ->
     Lemma
     (requires
       send_conf tr1 sender receiver payload /\
-      bytes_well_formed tr1 (serialize a payload) /\
+      is_well_formed a (bytes_well_formed tr1) payload /\
       tr1 <$ tr2
     )
     (ensures send_conf tr2 sender receiver payload)
   ;
   send_auth: tr:trace -> sender:principal -> payload:a -> prop;
-  send_auth_later: 
+  send_auth_later:
     tr1:trace -> tr2:trace ->
     sender:principal -> payload:a ->
     Lemma
     (requires
       send_auth tr1 sender payload /\
-      bytes_well_formed tr1 (serialize a payload) /\
+      is_well_formed a (bytes_well_formed tr1) payload /\
       tr1 <$ tr2
     )
     (ensures send_auth tr2 sender payload)
   ;
   send_conf_auth: tr:trace -> sender:principal -> receiver:principal -> payload:a -> prop;
-  send_conf_auth_later: 
+  send_conf_auth_later:
     tr1:trace -> tr2:trace ->
     sender:principal -> receiver:principal -> payload:a ->
     Lemma
     (requires
       send_conf_auth tr1 sender receiver payload /\
-      bytes_well_formed tr1 (serialize a payload) /\
+      is_well_formed a (bytes_well_formed tr1) payload /\
       tr1 <$ tr2
     )
     (ensures send_conf_auth tr2 sender receiver payload)
