@@ -29,11 +29,11 @@ val server_authentication:
   (requires
     trace_invariant tr /\
     has_communication_layer_reqres_event_predicates request_response_event_preconditions higher_layer_resreq_preds /\
-    event_triggered_at tr i client (CommClientReceiveResponse client server  response key)    
+    event_triggered_at tr i client (CommClientReceiveResponse client server  response key)
   )
   (ensures
     (exists request. event_triggered (prefix tr i) server (CommServerSendResponse server request response)) \/
-    is_corrupt (prefix tr i) (principal_label client) \/ 
+    is_corrupt (prefix tr i) (principal_label client) \/
     is_corrupt (prefix tr i) (principal_label server)
   )
 let server_authentication #invs #a tr i higher_layer_resreq_preds client server response key = ()
