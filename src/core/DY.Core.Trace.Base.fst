@@ -435,6 +435,13 @@ val state_was_set:
 let state_was_set #label_t tr prin sess_id content =
   entry_exists tr (SetState prin sess_id content)
 
+val state_was_set_at:
+  #label_t:Type ->
+  trace_ label_t -> timestamp -> principal -> state_id -> bytes ->
+  prop
+let state_was_set_at #label_t tr ts prin sess_id content =
+  entry_at tr ts (SetState prin sess_id content)
+
 /// A state being set at some time stays on the trace as the trace grows.
 
 val state_was_set_grows:
