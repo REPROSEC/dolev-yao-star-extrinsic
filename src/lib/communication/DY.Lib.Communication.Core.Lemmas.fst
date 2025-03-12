@@ -477,7 +477,7 @@ let send_confidential_authenticated_proof #invs #a tr higher_layer_preds comm_ke
   )
 
 
-#push-options "--ifuel 1"
+#push-options "--ifuel 1 --z3rlimit 40"
 val verify_and_decrypt_message_proof:
   {|cinvs:crypto_invariants|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
