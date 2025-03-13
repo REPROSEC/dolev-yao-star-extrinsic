@@ -91,6 +91,8 @@ let rec length b =
     32
   | KemSecretShared nonce ->
     32
+  | Mac key msg ->
+    32
 
 /// The well-formedness invariant preserved by any protocol using the DY* API,
 /// whether it is proved secure or not.
@@ -149,6 +151,9 @@ let rec bytes_well_formed tr b =
     bytes_well_formed tr nonce
   | KemSecretShared nonce ->
     bytes_well_formed tr nonce
+  | Mac key msg ->
+    bytes_well_formed tr key /\
+    bytes_well_formed tr msg
 
 val bytes_well_formed_later:
   tr1:trace -> tr2:trace ->
@@ -188,6 +193,7 @@ let rec bytes_well_formed_later tr1 tr2 b =
   | KemPub sk -> ()
   | KemEncap pk nonce -> ()
   | KemSecretShared nonce -> ()
+  | Mac key msg -> ()
 
 /// Many lemmas with SMT patterns can help proving `bytes_well_formed`.
 /// These lemmas are not expected to be useful in most situations:
@@ -416,6 +422,8 @@ let rec get_label #cusages tr b =
     public
   | KemSecretShared nonce ->
     get_label tr nonce
+  | Mac key msg ->
+    get_label tr msg
 #pop-options
 
 val get_label_later:
@@ -462,6 +470,8 @@ let rec get_label_later #cusgs tr1 tr2 b =
   | KemEncap pk nonce -> ()
   | KemSecretShared nonce ->
     get_label_later tr1 tr2 nonce
+  | Mac key msg ->
+    get_label_later tr1 tr2 msg
 
 /// Is it safe to use a bytestring as if it had some given usage?
 ///
@@ -780,11 +790,30 @@ type sign_crypto_predicate {|crypto_usages|} = {
   ;
 }
 
+
+noeq
+type mac_crypto_predicate {|crypto_usages|} = {
+  pred: tr:trace -> key_usage:usage{MacKey? key_usage} -> key:bytes -> msg:bytes -> prop;
+  pred_later:
+    tr1:trace -> tr2:trace ->
+    key_usage:usage{MacKey? key_usage} -> key:bytes -> msg:bytes ->
+    Lemma
+    (requires
+      pred tr1 key_usage key msg /\
+      bytes_well_formed tr1 key /\
+      bytes_well_formed tr1 msg /\
+      tr1 <$ tr2
+    )
+    (ensures pred tr2 key_usage key msg)
+  ;
+}
+
 noeq
 type crypto_predicates {|crypto_usages|} = {
   aead_pred: aead_crypto_predicate;
   pke_pred: pke_crypto_predicate;
   sign_pred: sign_crypto_predicate;
+  mac_pred: mac_crypto_predicate;
 }
 
 /// Default (empty) cryptographic predicates, that can be used like this:
@@ -810,6 +839,12 @@ let default_sign_predicate #cusages = {
   pred_later = (fun tr1 tr2 sk_usage sk msg -> ());
 }
 
+val default_mac_predicate: {|crypto_usages|} -> mac_crypto_predicate
+let default_mac_predicate #cusages = {
+  pred = (fun tr sk_usage sk msg -> False);
+  pred_later = (fun tr1 tr2 sk_usage sk msg -> ());
+}
+
 val default_crypto_predicates:
   {|crypto_usages|} ->
   crypto_predicates
@@ -817,6 +852,7 @@ let default_crypto_predicates #cusages = {
   aead_pred = default_aead_predicate;
   pke_pred = default_pke_predicate;
   sign_pred = default_sign_predicate;
+  mac_pred = default_mac_predicate;
 }
 
 /// Gather the usage functions and the cryptographic predicates
@@ -836,6 +872,7 @@ class crypto_invariants = {
 let aead_pred {|cinvs:crypto_invariants|} = cinvs.preds.aead_pred
 let pke_pred {|cinvs:crypto_invariants|} = cinvs.preds.pke_pred
 let sign_pred {|cinvs:crypto_invariants|} = cinvs.preds.sign_pred
+let mac_pred {|cinvs:crypto_invariants|} = cinvs.preds.mac_pred
 
 /// The invariants on every bytestring used in a protocol execution.
 /// - it is preserved by every honest participant
@@ -1024,6 +1061,25 @@ let rec bytes_invariant #cinvs tr b =
     )
   | KemSecretShared nonce ->
     bytes_invariant tr nonce
+  | Mac key msg -> (
+    bytes_invariant tr key /\
+    bytes_invariant tr msg /\
+    (
+      (
+        // Honest case:
+        exists key_usg.
+        // - the key has the usage of mac key
+        key `has_usage tr` key_usg /\
+        MacKey? key_usg /\
+        // - the custom (protocol-specific) invariant hold (authentication)
+        mac_pred.pred tr key_usg key msg
+      ) \/ (
+        // Attacker case:
+        // the attacker knows the key
+        get_label tr key `can_flow tr` public
+      )
+    )
+  )
 
 val bytes_invariant_implies_well_formed:
   {|crypto_invariants|} ->
@@ -1111,6 +1167,10 @@ let rec bytes_invariant_later #cinvs tr1 tr2 msg =
     bytes_invariant_later tr1 tr2 nonce
   | KemSecretShared nonce ->
     bytes_invariant_later tr1 tr2 nonce
+  | Mac key msg ->
+    bytes_invariant_later tr1 tr2 key;
+    bytes_invariant_later tr1 tr2 msg;
+    FStar.Classical.forall_intro_3 (FStar.Classical.move_requires_3 (mac_pred.pred_later tr1 tr2))
 #pop-options
 
 (*** Various predicates ***)
@@ -3065,3 +3125,127 @@ let bytes_invariant_kem_decap #ci tr sk encap =
     else ()
   | _ -> ()
 #pop-options
+
+(*** MAC ***)
+
+/// Constructor.
+
+[@@"opaque_to_smt"]
+val mac_auth: bytes -> bytes -> bytes
+let mac_auth key msg =
+  Mac key msg
+
+/// Destructor.
+
+[@@"opaque_to_smt"]
+val mac_verify: bytes -> bytes -> bytes -> bool
+let mac_verify key msg tag =
+  match tag with
+  | Mac key' msg' ->
+    key = key' && msg = msg'
+  | _ -> false
+
+/// Symbolic reduction rule.
+
+val mac_verify_auth:
+  key:bytes -> msg:bytes ->
+  Lemma
+  (mac_verify key msg (mac_auth key msg))
+let mac_verify_auth key msg =
+  reveal_opaque (`%mac_auth) (mac_auth);
+  reveal_opaque (`%mac_verify) (mac_verify)
+
+/// Lemma for attacker knowledge theorem.
+
+val mac_auth_preserves_publishability:
+  {|crypto_invariants|} -> tr:trace ->
+  key:bytes -> msg:bytes ->
+  Lemma
+  (requires
+    is_publishable tr key /\
+    is_publishable tr msg
+  )
+  (ensures is_publishable tr (mac_auth key msg))
+let mac_auth_preserves_publishability #cinvs tr key msg =
+  reveal_opaque (`%mac_auth) (mac_auth);
+  normalize_term_spec bytes_invariant;
+  normalize_term_spec get_label
+
+// User lemma (mac authentication well-formedness)
+
+val bytes_well_formed_mac_auth:
+  tr:trace ->
+  key:bytes -> msg:bytes ->
+  Lemma (
+    bytes_well_formed tr (mac_auth key msg) == (
+      bytes_well_formed tr key /\
+      bytes_well_formed tr msg
+    )
+  )
+  [SMTPat (bytes_well_formed tr (mac_auth key msg));
+   SMTPat (bytes_well_formed_smtpats_enabled tr)]
+let bytes_well_formed_mac_auth tr key msg =
+  reveal_opaque (`%mac_auth) (mac_auth);
+  normalize_term_spec bytes_well_formed
+
+val bytes_invariant_mac_auth:
+  {|crypto_invariants|} -> tr:trace ->
+  key:bytes -> key_usg:usage -> msg:bytes ->
+  Lemma
+  (requires
+    bytes_invariant tr key /\
+    bytes_invariant tr msg /\
+    key `has_usage tr` key_usg /\
+    (
+      (
+        MacKey? key_usg /\
+        mac_pred.pred tr key_usg key msg
+      ) \/ (
+        get_label tr key `can_flow tr` public
+      )
+    )
+  )
+  (ensures bytes_invariant tr (mac_auth key msg))
+  [SMTPat (bytes_invariant tr (mac_auth key msg));
+   SMTPat (key `has_usage tr` key_usg)]
+let bytes_invariant_mac_auth #cinvs tr key key_usg msg =
+  reveal_opaque (`%mac_auth) (mac_auth);
+  normalize_term_spec bytes_invariant
+
+val get_label_mac_auth:
+  {|crypto_usages|} -> tr:trace ->
+  key:bytes -> msg:bytes ->
+  Lemma
+  (ensures get_label tr (mac_auth key msg) == get_label tr msg)
+  [SMTPat (get_label tr (mac_auth key msg))]
+let get_label_mac_auth #cusgs tr key msg =
+  reveal_opaque (`%mac_auth) (mac_auth);
+  normalize_term_spec get_label
+
+val bytes_invariant_mac_verify:
+  {|crypto_invariants|} -> tr:trace ->
+  key:bytes -> key_usg:usage -> msg:bytes -> tag:bytes ->
+  Lemma
+  (requires
+    bytes_invariant tr key /\
+    bytes_invariant tr msg /\
+    bytes_invariant tr tag /\
+    key `has_usage tr` key_usg /\
+    mac_verify key msg tag
+  )
+  (ensures
+    (
+      MacKey? key_usg ==>
+      mac_pred.pred tr key_usg key msg
+    ) \/ (
+      (get_label tr key) `can_flow tr` public
+    )
+  )
+  [SMTPat (mac_verify key msg tag);
+   SMTPat (bytes_invariant tr key);
+   SMTPat (key `has_usage tr` key_usg)]
+let bytes_invariant_mac_verify #cinvs tr key key_usg msg tag =
+  reveal_opaque (`%mac_verify) (mac_verify);
+  normalize_term_spec bytes_invariant;
+  normalize_term_spec get_label;
+  FStar.Classical.forall_intro_3 (FStar.Classical.move_requires_3 (has_usage_inj tr))
