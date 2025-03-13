@@ -3188,6 +3188,8 @@ let bytes_well_formed_mac_auth tr key msg =
   reveal_opaque (`%mac_auth) (mac_auth);
   normalize_term_spec bytes_well_formed
 
+// User lemma (mac authentication bytes invariant)
+
 val bytes_invariant_mac_auth:
   {|crypto_invariants|} -> tr:trace ->
   key:bytes -> key_usg:usage -> msg:bytes ->
@@ -3212,6 +3214,8 @@ let bytes_invariant_mac_auth #cinvs tr key key_usg msg =
   reveal_opaque (`%mac_auth) (mac_auth);
   normalize_term_spec bytes_invariant
 
+// User lemma (mac authentication label)
+
 val get_label_mac_auth:
   {|crypto_usages|} -> tr:trace ->
   key:bytes -> msg:bytes ->
@@ -3221,6 +3225,8 @@ val get_label_mac_auth:
 let get_label_mac_auth #cusgs tr key msg =
   reveal_opaque (`%mac_auth) (mac_auth);
   normalize_term_spec get_label
+
+// User lemma (mac verification bytes invariant)
 
 val bytes_invariant_mac_verify:
   {|crypto_invariants|} -> tr:trace ->
