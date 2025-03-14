@@ -161,6 +161,13 @@ let rec attacker_knows_aux step tr msg =
         Some msg == kem_decap sk encap /\
         attacker_knows_aux (step-1) tr sk /\
         attacker_knows_aux (step-1) tr encap
+    ) \/
+    // MAC
+    (
+      exists key buf.
+        msg == mac_compute key buf /\
+        attacker_knows_aux (step-1) tr key /\
+        attacker_knows_aux (step-1) tr buf
     )
   )
 
@@ -227,6 +234,7 @@ let rec attacker_only_knows_publishable_values_aux #invs step tr msg =
     FStar.Classical.forall_intro   (FStar.Classical.move_requires   (kem_pk_preserves_publishability tr));
     FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (kem_encap_preserves_publishability tr));
     FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (kem_decap_preserves_publishability tr));
+    FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (mac_compute_preserves_publishability tr));
     ()
   )
 #pop-options
