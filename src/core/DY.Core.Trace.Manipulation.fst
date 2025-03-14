@@ -433,18 +433,16 @@ let new_session_id prin =
   let* tr = get_trace in
   return (compute_new_session_id prin tr)
 
-val get_state_aux: principal -> state_id -> trace -> option bytes
-let rec get_state_aux prin sess_id tr =
-  match tr with
-  | Nil -> None
-  | Snoc tr_init (SetState prin' sess_id' content) -> (
-    if prin = prin' && sess_id = sess_id' then
-      Some content
-    else
-      get_state_aux prin sess_id tr_init
-  )
-  | Snoc tr_init _ ->
-      get_state_aux prin sess_id tr_init
+val get_state_aux: principal -> state_id -> tr:trace -> option bytes
+let get_state_aux prin sess_id tr =
+  let is_state_for prin sess_id e =
+    match e with
+    | SetState prin' sess_id' content -> prin = prin' && sess_id = sess_id'
+    | _ -> false
+  in
+  let? state_ts = trace_search_last tr (is_state_for prin sess_id) in
+  let SetState _ _ content = get_entry_at tr state_ts in
+  Some content
 
 /// Retrieve the state stored by a principal at some state identifier.
 
@@ -512,25 +510,18 @@ let get_state_same_trace prin sess_id tr =
   reveal_opaque (`%get_state) get_state
 
 
+#push-options "--ifuel 1"
 val get_state_aux_state_was_set:
   prin:principal -> sess_id:state_id -> tr:trace ->
   Lemma
   (ensures (
     match get_state_aux prin sess_id tr with
     | None -> True
-    | Some content -> 
+    | Some content ->
         state_was_set tr prin sess_id content
   ))
-let rec get_state_aux_state_was_set prin sess_id tr =
-   match tr with
-  | Nil -> ()
-  | Snoc tr_init (SetState prin' sess_id' content) -> (
-    if prin = prin' && sess_id = sess_id' 
-    then ()
-    else get_state_aux_state_was_set prin sess_id tr_init
-  )
-  | Snoc tr_init _ ->
-         get_state_aux_state_was_set prin sess_id tr_init
+let get_state_aux_state_was_set prin sess_id tr = ()
+#pop-options
 
 val get_state_state_was_set:
   prin:principal -> sess_id:state_id -> tr:trace ->
@@ -556,7 +547,7 @@ val trigger_event: principal -> string -> bytes -> traceful unit
 let trigger_event prin tag content =
   add_entry (Event prin tag content)
 
-#push-options "--z3rlimit 25 --ifuel 2"
+#push-options "--z3rlimit 30"
 val trigger_event_event_triggered:
   prin:principal -> tag:string -> content:bytes -> tr:trace ->
   Lemma
