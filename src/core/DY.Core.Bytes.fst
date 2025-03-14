@@ -3131,8 +3131,8 @@ let bytes_invariant_kem_decap #ci tr sk encap =
 /// Constructor.
 
 [@@"opaque_to_smt"]
-val mac_auth: bytes -> bytes -> bytes
-let mac_auth key msg =
+val mac_compute: bytes -> bytes -> bytes
+let mac_compute key msg =
   Mac key msg
 
 /// Destructor.
@@ -3150,14 +3150,14 @@ let mac_verify key msg tag =
 val mac_verify_auth:
   key:bytes -> msg:bytes ->
   Lemma
-  (mac_verify key msg (mac_auth key msg))
+  (mac_verify key msg (mac_compute key msg))
 let mac_verify_auth key msg =
-  reveal_opaque (`%mac_auth) (mac_auth);
+  reveal_opaque (`%mac_compute) (mac_compute);
   reveal_opaque (`%mac_verify) (mac_verify)
 
 /// Lemma for attacker knowledge theorem.
 
-val mac_auth_preserves_publishability:
+val mac_compute_preserves_publishability:
   {|crypto_invariants|} -> tr:trace ->
   key:bytes -> msg:bytes ->
   Lemma
@@ -3165,32 +3165,32 @@ val mac_auth_preserves_publishability:
     is_publishable tr key /\
     is_publishable tr msg
   )
-  (ensures is_publishable tr (mac_auth key msg))
-let mac_auth_preserves_publishability #cinvs tr key msg =
-  reveal_opaque (`%mac_auth) (mac_auth);
+  (ensures is_publishable tr (mac_compute key msg))
+let mac_compute_preserves_publishability #cinvs tr key msg =
+  reveal_opaque (`%mac_compute) (mac_compute);
   normalize_term_spec bytes_invariant;
   normalize_term_spec get_label
 
 // User lemma (mac authentication well-formedness)
 
-val bytes_well_formed_mac_auth:
+val bytes_well_formed_mac_compute:
   tr:trace ->
   key:bytes -> msg:bytes ->
   Lemma (
-    bytes_well_formed tr (mac_auth key msg) == (
+    bytes_well_formed tr (mac_compute key msg) == (
       bytes_well_formed tr key /\
       bytes_well_formed tr msg
     )
   )
-  [SMTPat (bytes_well_formed tr (mac_auth key msg));
+  [SMTPat (bytes_well_formed tr (mac_compute key msg));
    SMTPat (bytes_well_formed_smtpats_enabled tr)]
-let bytes_well_formed_mac_auth tr key msg =
-  reveal_opaque (`%mac_auth) (mac_auth);
+let bytes_well_formed_mac_compute tr key msg =
+  reveal_opaque (`%mac_compute) (mac_compute);
   normalize_term_spec bytes_well_formed
 
 // User lemma (mac authentication bytes invariant)
 
-val bytes_invariant_mac_auth:
+val bytes_invariant_mac_compute:
   {|crypto_invariants|} -> tr:trace ->
   key:bytes -> key_usg:usage -> msg:bytes ->
   Lemma
@@ -3207,23 +3207,23 @@ val bytes_invariant_mac_auth:
       )
     )
   )
-  (ensures bytes_invariant tr (mac_auth key msg))
-  [SMTPat (bytes_invariant tr (mac_auth key msg));
+  (ensures bytes_invariant tr (mac_compute key msg))
+  [SMTPat (bytes_invariant tr (mac_compute key msg));
    SMTPat (key `has_usage tr` key_usg)]
-let bytes_invariant_mac_auth #cinvs tr key key_usg msg =
-  reveal_opaque (`%mac_auth) (mac_auth);
+let bytes_invariant_mac_compute #cinvs tr key key_usg msg =
+  reveal_opaque (`%mac_compute) (mac_compute);
   normalize_term_spec bytes_invariant
 
 // User lemma (mac authentication label)
 
-val get_label_mac_auth:
+val get_label_mac_compute:
   {|crypto_usages|} -> tr:trace ->
   key:bytes -> msg:bytes ->
   Lemma
-  (ensures get_label tr (mac_auth key msg) == get_label tr msg)
-  [SMTPat (get_label tr (mac_auth key msg))]
-let get_label_mac_auth #cusgs tr key msg =
-  reveal_opaque (`%mac_auth) (mac_auth);
+  (ensures get_label tr (mac_compute key msg) == get_label tr msg)
+  [SMTPat (get_label tr (mac_compute key msg))]
+let get_label_mac_compute #cusgs tr key msg =
+  reveal_opaque (`%mac_compute) (mac_compute);
   normalize_term_spec get_label
 
 // User lemma (mac verification bytes invariant)
