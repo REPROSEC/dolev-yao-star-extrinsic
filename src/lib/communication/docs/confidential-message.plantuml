@@ -1,0 +1,8 @@
+@startuml Confidential Message
+
+participant "<math>\text{Alice }\hat{k}_A|k_A</math>" as a
+participant "<math>k_B|\hat{k}_B\text{ Bob}</math>" as b
+
+a -> b: <math>enc_{k_B}^a(payload)</math>
+
+@enduml
