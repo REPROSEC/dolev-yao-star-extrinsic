@@ -75,6 +75,8 @@ let rec bytes_to_string b =
     Printf.sprintf "KemEncap(pk=(%s), nonce=(%s))" (bytes_to_string pk) (bytes_to_string nonce)
   | KemSecretShared nonce ->
     Printf.sprintf "KemSecretShared(nonce=(%s))" (bytes_to_string nonce)
+  | Mac key msg ->
+    Printf.sprintf "Mac(key=(%s), msg=(%s))" (bytes_to_string key) (bytes_to_string msg)
 
 val usage_to_string: (u:usage) -> string
 let rec usage_to_string u =
@@ -101,6 +103,9 @@ let rec usage_to_string u =
     Printf.sprintf "{\"Type\": \"KemKey\", \"Usage\": \"%s\"}" (usage_to_string usg)
   | KemNonce usg ->
     Printf.sprintf "{\"Type\": \"KemNonce\", \"Usage\": \"%s\"}" (usage_to_string usg)
+  | MacKey tag data ->
+    Printf.sprintf "{\"Type\": \"MacKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}"
+      tag (bytes_to_string data)
 
 
 (*** State Parsing Helper Functions ***)

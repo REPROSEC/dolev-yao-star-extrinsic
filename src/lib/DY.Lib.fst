@@ -15,6 +15,7 @@ include DY.Lib.Crypto.AEAD.Split
 include DY.Lib.Crypto.KdfExpand.Split
 include DY.Lib.Crypto.PKE.Split
 include DY.Lib.Crypto.Signature.Split
+include DY.Lib.Crypto.MAC.Split
 
 /// User-friendly event API
 include DY.Lib.Event.Typed

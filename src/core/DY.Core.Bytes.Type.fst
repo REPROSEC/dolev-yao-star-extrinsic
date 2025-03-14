@@ -52,6 +52,9 @@ type bytes =
   | KemPub: sk:bytes -> bytes
   | KemEncap: pk:bytes -> ss:bytes -> bytes
   | KemSecretShared: ss:bytes -> bytes
+
+  | Mac: key:bytes -> msg:bytes -> bytes
+
   // ...
 
 /// Usages depict how a given bytestring will be cryptographically used.
@@ -90,6 +93,7 @@ type usage =
   | KdfExpandKey: tag:string -> data:bytes -> usage
   | KemKey: usg:usage -> usage
   | KemNonce: usg:usage -> usage
+  | MacKey: tag:string -> data:bytes -> usage
 
 open DY.Core.Internal.Ord
 
@@ -112,6 +116,7 @@ let rec encode_bytes b =
   | KemPub sk -> 13::(encode_list [encode_bytes sk])
   | KemEncap pk ss -> 14::(encode_list [encode_bytes pk; encode_bytes ss])
   | KemSecretShared ss -> 15::(encode_list [encode_bytes ss])
+  | Mac key msg -> 16::(encode_list [encode_bytes key; encode_bytes msg])
 
 #push-options "--z3rlimit 25 --fuel 3 --ifuel 3"
 val encode_bytes_inj: b1:bytes -> b2:bytes -> Lemma (requires encode_bytes b1 == encode_bytes b2) (ensures b1 == b2)
@@ -131,12 +136,14 @@ let rec encode_bytes_inj b1 b2 =
   | DhPub x1, DhPub y1
   | KemPub x1, KemPub y1
   | KemSecretShared x1, KemSecretShared y1 ->
+    encode_list_inj [encode_bytes x1] [encode_bytes y1];
     encode_bytes_inj x1 y1
   | Concat x1 x2, Concat y1 y2
   | Dh x1 x2, Dh y1 y2
   | KdfExtract x1 x2, KdfExtract y1 y2
   | KdfExpand x1 x2 _, KdfExpand y1 y2 _
-  | KemEncap x1 x2, KemEncap y1 y2 ->
+  | KemEncap x1 x2, KemEncap y1 y2
+  | Mac x1 x2, Mac y1 y2 ->
     encode_bytes_inj x1 y1;
     encode_bytes_inj x2 y2
   | PkeEnc x1 x2 x3, PkeEnc y1 y2 y3
