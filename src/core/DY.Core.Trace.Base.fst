@@ -603,7 +603,6 @@ val fmap_trace_later:
   (requires tr1 <$ tr2)
   (ensures (fmap_trace f tr1) <$ (fmap_trace f tr2))
   [SMTPat (fmap_trace f tr1);
-   SMTPat (fmap_trace f tr2);
    SMTPat (tr1 <$ tr2)
   ]
 let fmap_trace_later #a #b f tr1 tr2 =
@@ -839,7 +838,6 @@ val trace_search_first_later:
   (ensures opt_less_defined (trace_search_first tr1 p) (trace_search_first tr2 p))
   [SMTPat (tr1 <$ tr2);
    SMTPat (trace_search_first tr1 p);
-   SMTPat (trace_search_first tr2 p);
   ]
 let trace_search_first_later tr1 tr2 p = ()
 
@@ -855,7 +853,6 @@ val trace_find_first_later:
   (ensures trace_find_first tr1 e == trace_find_first tr2 e)
   [SMTPat (tr1 <$ tr2);
    SMTPat (trace_find_first tr1 e);
-   SMTPat (trace_find_first tr2 e);
   ]
 let trace_find_first_later tr1 tr2 e = ()
 
@@ -887,7 +884,6 @@ val find_event_triggered_at_timestamp_later:
   )
   (ensures find_event_triggered_at_timestamp tr1 prin tag content == find_event_triggered_at_timestamp tr2 prin tag content)
   [SMTPat (find_event_triggered_at_timestamp tr1 prin tag content);
-   SMTPat (find_event_triggered_at_timestamp tr2 prin tag content);
    SMTPat (tr1 <$ tr2)
   ]
 let find_event_triggered_at_timestamp_later #label_t tr1 tr2 prin tag content = ()
