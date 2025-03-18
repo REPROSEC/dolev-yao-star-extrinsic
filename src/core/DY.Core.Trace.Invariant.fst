@@ -94,6 +94,10 @@ let trace_entry_invariant #invs tr entry =
     // Triggered protocol events satisfy the custom event predicate
     invs.trace_invs.event_pred tr prin tag content
   )
+  | RevealLabel prin time ->
+    exists b. rand_generated_at tr time b
+    // There exists some bytes generated at this timestamp
+
   // No restriction on other trace events (e.g. random generation or corruption)
   | _ -> True
 

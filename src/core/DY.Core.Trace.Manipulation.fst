@@ -142,6 +142,14 @@ val add_entry_invariant:
 let add_entry_invariant #invs e tr =
   norm_spec [zeta; delta_only [`%trace_invariant]] (trace_invariant)
 
+val add_entry_increases_trace_length :
+  e:trace_entry -> tr:trace ->
+  Lemma(
+    let ((), tr_out) = add_entry e tr in
+    trace_length tr_out = trace_length tr + 1
+  )
+let add_entry_increases_trace_length e tr = ()
+
 /// Get the current time (i.e. trace length).
 
 val get_time: traceful timestamp
@@ -281,7 +289,6 @@ let mk_rand usg lab len =
   add_entry (RandGen usg lab len);*
   return (Rand len time)
 
-
 val mk_rand_rand_gen_at_end:
   usg:usage -> lab:label -> len:nat{len <> 0} -> tr:trace ->
   Lemma
@@ -291,6 +298,16 @@ val mk_rand_rand_gen_at_end:
   ))
   [SMTPat (mk_rand usg lab len tr);]
 let mk_rand_rand_gen_at_end usg lab len tr =
+  reveal_opaque (`%mk_rand) (mk_rand)
+
+val mk_rand_increases_trace_length :
+  {|protocol_invariants|} ->
+  usg:usage -> lab:label -> len:nat{len <> 0} -> tr:trace ->
+  Lemma(
+    let (b, tr_out) = mk_rand usg lab len tr in
+    trace_length tr_out = trace_length tr + 1
+  )
+let mk_rand_increases_trace_length #invs usg lab len tr =
   reveal_opaque (`%mk_rand) (mk_rand)
 
 
@@ -373,6 +390,37 @@ let mk_rand_get_usage #invs usg lab len tr =
   normalize_term_spec get_usage
 
 
+(*** Reveal Event ***)
+
+[@@ "opaque_to_smt"]
+val reveal_event: principal -> timestamp -> traceful unit
+let reveal_event prin time =
+  add_entry (RevealLabel prin time);*
+  return ()
+
+val reveal_event_event_triggered :
+  prin:principal -> time:timestamp -> tr:trace ->
+  Lemma
+  (ensures (
+    let (b, tr_out) = reveal_event prin time tr in
+    reveal_event_triggered tr_out prin time
+  ))
+let reveal_event_event_triggered prin ts tr =
+  reveal_opaque (`%reveal_event) (reveal_event)
+
+val reveal_event_trace_invariant:
+  {|protocol_invariants|} ->
+  prin:principal -> ts:timestamp -> tr:trace ->
+  Lemma
+  (requires trace_invariant tr /\ exists b. rand_generated_at tr ts b)
+  (ensures (
+    let (_, tr_out) = reveal_event prin ts tr in
+    trace_invariant tr_out
+  ))
+let reveal_event_trace_invariant #invs prin ts tr =
+  add_entry_invariant (RevealLabel prin ts) tr;
+  reveal_opaque (`%reveal_event) (reveal_event)
+
 (*** State ***)
 
 /// Set the state of a principal at a given state identifier.
@@ -398,7 +446,7 @@ let rec compute_new_session_id prin tr =
     match entry with
     | SetState prin' sess_id _ ->
       if prin = prin' then
-        {the_id = 
+        {the_id =
              max (sess_id.the_id + 1) (compute_new_session_id prin tr_init).the_id}
       else
         compute_new_session_id prin tr_init
@@ -518,14 +566,14 @@ val get_state_aux_state_was_set:
   (ensures (
     match get_state_aux prin sess_id tr with
     | None -> True
-    | Some content -> 
+    | Some content ->
         state_was_set tr prin sess_id content
   ))
 let rec get_state_aux_state_was_set prin sess_id tr =
    match tr with
   | Nil -> ()
   | Snoc tr_init (SetState prin' sess_id' content) -> (
-    if prin = prin' && sess_id = sess_id' 
+    if prin = prin' && sess_id = sess_id'
     then ()
     else get_state_aux_state_was_set prin sess_id tr_init
   )
