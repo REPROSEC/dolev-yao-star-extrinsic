@@ -398,3 +398,28 @@ let rec memP_mk_dependent_tagged_local_funs #tag_set_t #local_fun_t l tag_set lo
   | [] -> ()
   | (x,y)::t ->
     memP_mk_dependent_tagged_local_funs t tag_set local_fun
+
+/// Normalize pre-condition and post-conditions from correctness lemmas derived from `mk_global_fun_correct`
+/// to save some boilerplate when using this framework
+
+val get_fv_name: FStar.Tactics.term -> FStar.Tactics.Tac unit
+let get_fv_name t =
+  let open FStar.Tactics in
+  match t with
+  | Tv_FVar fv -> (
+    exact (Tv_Const (C_String (implode_qn (inspect_fv fv))))
+  )
+  | _ -> fail ("get_fv_name: not a free variable: " ^ (term_to_string t))
+
+val do_boilerplate:
+  #a:Type ->
+  #p:(a -> Type) -> #q:(a -> Type) ->
+  ($lem: (x: a -> Lemma (requires (p x)) (ensures (q x)))) ->
+  x:a ->
+  #[get_fv_name (quote x)] x_s:string ->
+  #_:squash (norm [delta_only [x_s; `%List.Tot.no_repeats_p; `%List.Tot.memP; `%List.Tot.map; `%fst; `%dfst]; iota; zeta] (p x)) ->
+  squash (norm [delta_only [x_s; `%for_allP]; iota; zeta] (q x))
+let do_boilerplate #a #p #q $lem x #x_s #_ =
+  norm_spec [delta_only [x_s; `%List.Tot.no_repeats_p; `%List.Tot.memP; `%List.Tot.map; `%fst; `%dfst]; iota; zeta] (p x);
+  lem x;
+  norm_spec [delta_only [x_s; `%for_allP]; iota; zeta] (q x)

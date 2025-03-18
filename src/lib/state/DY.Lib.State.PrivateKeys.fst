@@ -102,12 +102,13 @@ let private_keys_pred #cinvs = {
 }
 #pop-options
 
+val private_keys_tag_and_invariant: {|crypto_invariants|} -> dtuple2 string local_bytes_state_predicate
+let private_keys_tag_and_invariant #ci = mk_map_state_tag_and_pred private_keys_pred
+
+unfold
 val has_private_keys_invariant: {|protocol_invariants|} -> prop
 let has_private_keys_invariant #invs =
-  has_map_session_invariant private_keys_pred
-
-val private_keys_tag_and_invariant: {|crypto_invariants|} -> dtuple2 string local_bytes_state_predicate
-let private_keys_tag_and_invariant #ci = (|map_types_private_keys.tag, local_state_predicate_to_local_bytes_state_predicate (map_session_invariant private_keys_pred)|)
+  has_local_bytes_state_predicate private_keys_tag_and_invariant
 
 (*** Private Keys API ***)
 
