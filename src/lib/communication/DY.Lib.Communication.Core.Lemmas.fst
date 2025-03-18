@@ -38,6 +38,30 @@ val enable_core_comm_layer_lemmas:
 let enable_core_comm_layer_lemmas preds =
   normalize_term_spec (core_comm_layer_lemmas_enabled preds)
 
+(**** Initialization Satisfies the Trace Invariants ****)
+
+#push-options "--ifuel 2"
+val initialize_communication_proof:
+  {|invs:protocol_invariants|} ->
+  tr:trace ->
+  sender:principal -> receiver:principal ->
+  Lemma
+  (requires
+    trace_invariant tr /\
+    has_private_keys_invariant /\
+    has_pki_invariant
+  )
+  (ensures (
+    let (_, tr_out) = initialize_communication sender receiver tr in
+    trace_invariant tr_out
+  ))
+  [SMTPat (trace_invariant #invs tr);
+   SMTPat (initialize_communication sender receiver tr);
+  ]
+let initialize_communication_proof tr sender receiver =
+  reveal_opaque (`%initialize_communication) (initialize_communication sender receiver)
+#pop-options
+
 (**** Confidential Send and Receive Lemmas ****)
 
 val encrypt_message_proof:
