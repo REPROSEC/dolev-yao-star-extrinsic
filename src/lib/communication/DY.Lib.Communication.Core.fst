@@ -245,6 +245,7 @@ let receive_confidential_authenticated #a comm_keys_ids receiver msg_id =
 
 (**** Layer Initialization ****)
 
+[@@ "opaque_to_smt"]
 val initialize_communication: principal -> principal -> traceful (option (communication_keys_sess_ids & communication_keys_sess_ids))
 let initialize_communication sender receiver =
   // Initialize keys for public key encryption
