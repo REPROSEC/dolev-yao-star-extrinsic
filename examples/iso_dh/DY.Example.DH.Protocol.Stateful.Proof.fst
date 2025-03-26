@@ -113,8 +113,8 @@ instance dh_protocol_invs: protocol_invariants = {
 
 /// Lemmas that the global state predicate contains all the local ones
 
-let _ = do_boilerplate mk_state_pred_correct all_sessions
-let _ = do_boilerplate mk_event_pred_correct all_events
+let _ = do_split_boilerplate mk_state_pred_correct all_sessions
+let _ = do_split_boilerplate mk_event_pred_correct all_events
 
 (*** Proofs ****)
 
