@@ -121,3 +121,41 @@ val parse_serialize_inv_lemma_smtpat:
   [SMTPat ((serialize #bytes a #ps_a x))]
 let parse_serialize_inv_lemma_smtpat #bytes #bl a #ps_a x =
   parse_serialize_inv_lemma #bytes a #ps_a x
+
+/// Extra SMT patterns, with a switch to enable them
+
+[@@"opaque_to_smt"]
+let comparse_wf_lemmas_smtpats_enabled (dummy:unit) = True
+
+val enable_comparse_wf_lemmas_smtpats:
+  dummy:unit ->
+  squash (comparse_wf_lemmas_smtpats_enabled dummy)
+let enable_comparse_wf_lemmas_smtpats dummy =
+  normalize_term_spec (comparse_wf_lemmas_smtpats_enabled dummy)
+
+val serialize_wf_lemma_smtpat:
+  a:Type -> {|parseable_serializeable bytes a|} -> pre:bytes_compatible_pre bytes -> x:a -> dummy:unit ->
+  Lemma
+  (requires is_well_formed a pre x)
+  (ensures pre (serialize a x))
+  [SMTPat (pre (serialize a x));
+   SMTPat (comparse_wf_lemmas_smtpats_enabled dummy);
+  ]
+let serialize_wf_lemma_smtpat a #ps pre x dummy =
+  serialize_wf_lemma a pre x
+
+val parse_wf_lemma_smtpat:
+  a:Type -> {|parseable_serializeable bytes a|} -> pre:bytes_compatible_pre bytes -> buf:bytes -> dummy:unit ->
+  Lemma
+  (requires pre buf)
+  (ensures (
+    match parse a buf with
+    | Some x -> is_well_formed a pre x
+    | None -> True
+  ))
+  [SMTPat (pre buf);
+   SMTPat (parse a buf);
+   SMTPat (comparse_wf_lemmas_smtpats_enabled dummy);
+  ]
+let parse_wf_lemma_smtpat a #ps pre x dummy =
+  parse_wf_lemma a pre x
