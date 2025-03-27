@@ -141,12 +141,20 @@ let local_state_predicate_to_local_bytes_state_predicate #cinvs #a #ps_a tspred 
     );
   }
 
+val mk_local_state_tag_and_pred:
+  #a:Type -> {|local_state a|} ->
+  {|crypto_invariants|} -> local_state_predicate a ->
+  dtuple2 string local_bytes_state_predicate
+let mk_local_state_tag_and_pred #a #ls_a #cinvs spred =
+  (|ls_a.tag, (local_state_predicate_to_local_bytes_state_predicate spred)|)
+
+unfold
 val has_local_state_predicate:
   #a:Type -> {|local_state a|} ->
   {|protocol_invariants|} -> local_state_predicate a ->
   prop
 let has_local_state_predicate #a #ls #invs spred =
-  has_local_bytes_state_predicate (|ls.tag, (local_state_predicate_to_local_bytes_state_predicate spred)|)
+  has_local_bytes_state_predicate (mk_local_state_tag_and_pred spred)
 
 [@@ "opaque_to_smt"]
 val state_was_set:

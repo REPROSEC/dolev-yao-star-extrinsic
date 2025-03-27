@@ -80,17 +80,25 @@ let compile_event_pred #a #ev epred tr prin content_bytes =
   | None -> False
   | Some(content) -> epred tr prin content
 
+val mk_event_tag_and_pred:
+  #a:Type0 -> {|event a|} ->
+  event_predicate a ->
+  string & compiled_event_predicate
+let mk_event_tag_and_pred #a #ev_a epred =
+  (ev_a.tag, compile_event_pred epred)
+
 [@@ "opaque_to_smt"]
 val has_compiled_event_pred:
   {|protocol_invariants|} -> (string & compiled_event_predicate) -> prop
 let has_compiled_event_pred #invs (tag, epred) =
   has_local_fun split_event_pred_params event_pred (|tag, epred|)
 
+unfold
 val has_event_pred:
   #a:Type0 -> {|event a|} ->
   {|protocol_invariants|} -> event_predicate a -> prop
 let has_event_pred #a #ev #invs epred =
-  has_compiled_event_pred (ev.tag, compile_event_pred epred)
+  has_compiled_event_pred (mk_event_tag_and_pred epred)
 
 (*** Global event predicate builder ***)
 
