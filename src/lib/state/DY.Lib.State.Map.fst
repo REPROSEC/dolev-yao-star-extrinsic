@@ -122,11 +122,19 @@ let map_session_invariant #cinvs #key_t #value_t #mt mpred = {
   );
 }
 
+val mk_map_state_tag_and_pred:
+  #key_t:eqtype -> #value_t:Type0 -> {|map_types key_t value_t|} ->
+  {|crypto_invariants|} -> map_predicate key_t value_t ->
+  dtuple2 string local_bytes_state_predicate
+let mk_map_state_tag_and_pred #key_t #value_t #mt #cinvs mpred =
+  mk_local_state_tag_and_pred (map_session_invariant mpred)
+
+unfold
 val has_map_session_invariant:
   #key_t:eqtype -> #value_t:Type0 -> {|map_types key_t value_t|} ->
   {|protocol_invariants|} -> map_predicate key_t value_t -> prop
 let has_map_session_invariant #key_t #value_t #mt #invs mpred =
-  has_local_state_predicate (map_session_invariant mpred)
+  has_local_bytes_state_predicate (mk_map_state_tag_and_pred mpred)
 
 (*** Map API ***)
 
