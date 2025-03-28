@@ -300,17 +300,6 @@ val mk_rand_rand_gen_at_end:
 let mk_rand_rand_gen_at_end usg lab len tr =
   reveal_opaque (`%mk_rand) (mk_rand)
 
-val mk_rand_increases_trace_length :
-  {|protocol_invariants|} ->
-  usg:usage -> lab:label -> len:nat{len <> 0} -> tr:trace ->
-  Lemma(
-    let (b, tr_out) = mk_rand usg lab len tr in
-    trace_length tr_out = trace_length tr + 1
-  )
-let mk_rand_increases_trace_length #invs usg lab len tr =
-  reveal_opaque (`%mk_rand) (mk_rand)
-
-
 /// Generating a random bytestrings always preserve the trace invariant.
 
 val mk_rand_trace_invariant:

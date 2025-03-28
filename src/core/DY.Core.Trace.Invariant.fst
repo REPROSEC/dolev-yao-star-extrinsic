@@ -97,6 +97,9 @@ let trace_entry_invariant #invs tr entry =
   | RevealLabel prin time ->
     exists b. rand_generated_at tr time b
     // There exists some bytes generated at this timestamp
+    // potential for custom predicates here i.e:
+    // invs.trace_invs.reveal_pred tr prin time
+
 
   // No restriction on other trace events (e.g. random generation or corruption)
   | _ -> True
