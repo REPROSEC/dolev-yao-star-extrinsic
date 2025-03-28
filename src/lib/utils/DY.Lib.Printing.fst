@@ -208,7 +208,6 @@ let trace_entry_to_string printers tr_entry i =
   | RevealLabel prin ts -> (
     // TODO : fix printer
     Printf.sprintf "TODO: Printer for reveal label"
-      (i-1) msg_str
   )
   | Corrupt time -> ""
   | SetState prin sess_id full_content -> (
