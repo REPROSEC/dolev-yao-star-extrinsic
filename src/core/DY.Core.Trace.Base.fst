@@ -559,6 +559,7 @@ let fmap_trace_entry #a #b f entry =
   | RandGen usg lab len -> RandGen usg (f lab) len
   | Corrupt time -> Corrupt time
   | SetState prin sess_id content -> SetState prin sess_id content
+  | RevealLabel prin i -> RevealLabel prin i
   | Event prin tag content -> Event prin tag content
 
 val fmap_trace:
