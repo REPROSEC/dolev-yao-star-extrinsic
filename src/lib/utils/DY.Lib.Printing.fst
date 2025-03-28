@@ -30,32 +30,32 @@ val bytes_to_string: (b:bytes) -> string
 let rec bytes_to_string b =
   match b with
   | Literal s -> uint_list_to_string (FStar.Seq.seq_to_list s)
-  
+
   | Rand len time -> Printf.sprintf "Nonce #%d" time
-  
+
   | Concat (Literal s) right -> (
-      Printf.sprintf "%s%s" 
+      Printf.sprintf "%s%s"
         (uint_list_to_string (FStar.Seq.seq_to_list s)) (bytes_to_string right)
   )
   | Concat left right -> (
     Printf.sprintf "[%s,%s]" (bytes_to_string left) (bytes_to_string right)
   )
-  
+
   | AeadEnc key nonce msg ad -> (
-    Printf.sprintf "AeadEnc(key=(%s), nonce=(%s), msg=(%s), ad=(%s))" 
+    Printf.sprintf "AeadEnc(key=(%s), nonce=(%s), msg=(%s), ad=(%s))"
       (bytes_to_string key) (bytes_to_string nonce) (bytes_to_string msg)
       (bytes_to_string ad)
   )
-  
+
   | Pk sk -> Printf.sprintf "Pk(sk=(%s))" (bytes_to_string sk)
   | PkeEnc pk nonce msg -> (
-    Printf.sprintf "PkeEnc(pk=(%s), nonce=(%s), msg=(%s))" 
+    Printf.sprintf "PkeEnc(pk=(%s), nonce=(%s), msg=(%s))"
       (bytes_to_string pk) (bytes_to_string nonce) (bytes_to_string msg)
   )
-  
+
   | Vk sk -> Printf.sprintf "Public Key (%s)" (bytes_to_string sk)
   | Sign sk nonce msg -> (
-    Printf.sprintf "sig(sk=(%s), nonce=(%s), msg=(%s))" 
+    Printf.sprintf "sig(sk=(%s), nonce=(%s), msg=(%s))"
       (bytes_to_string sk) (bytes_to_string nonce) (bytes_to_string msg)
   )
 
@@ -97,7 +97,7 @@ let rec usage_to_string u =
     Printf.sprintf "{\"Type\": \"DhKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}"
       tag (bytes_to_string data)
   | KdfExpandKey tag data ->
-    Printf.sprintf "{\"Type\": \"KdfExpandKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}" 
+    Printf.sprintf "{\"Type\": \"KdfExpandKey\", \"Tag\": \"%s\", \"Data\": \"%s\"}"
       tag (bytes_to_string data)
   | KemKey usg ->
     Printf.sprintf "{\"Type\": \"KemKey\", \"Usage\": \"%s\"}" (usage_to_string usg)
@@ -126,7 +126,7 @@ let rec private_keys_types_to_string m =
   match m with
   | [] -> ""
   | hd :: tl -> (
-    (private_keys_types_to_string tl) ^ 
+    (private_keys_types_to_string tl) ^
     Printf.sprintf "%s = (%s)," (long_term_key_type_to_string hd.key.ty) (bytes_to_string hd.value.private_key)
   )
 
@@ -135,7 +135,7 @@ let rec pki_types_to_string m =
   match m with
   | [] -> ""
   | hd :: tl -> (
-    (pki_types_to_string tl) ^ 
+    (pki_types_to_string tl) ^
     Printf.sprintf "%s [%s] = (%s)," (long_term_key_type_to_string hd.key.ty) hd.key.who (bytes_to_string hd.value.public_key)
   )
 
@@ -190,9 +190,9 @@ noeq type trace_to_string_printers = {
 
 (*** Functions to Print the Trace ***)
 
-val trace_entry_to_string: 
-  trace_to_string_printers -> 
-  trace_entry -> timestamp -> 
+val trace_entry_to_string:
+  trace_to_string_printers ->
+  trace_entry -> timestamp ->
   string
 let trace_entry_to_string printers tr_entry i =
   match tr_entry with
@@ -202,8 +202,13 @@ let trace_entry_to_string printers tr_entry i =
       (i-1) msg_str
   )
   | RandGen usg lab len -> (
-    Printf.sprintf "{\"TraceID\": %d, \"Type\": \"Nonce\", \"Usage\": %s}\n" 
+    Printf.sprintf "{\"TraceID\": %d, \"Type\": \"Nonce\", \"Usage\": %s}\n"
       (i-1) (usage_to_string usg)
+  )
+  | RevealLabel prin ts -> (
+    // TODO : fix printer
+    Printf.sprintf "TODO: Printer for reveal label"
+      (i-1) msg_str
   )
   | Corrupt time -> ""
   | SetState prin sess_id full_content -> (
@@ -214,7 +219,7 @@ let trace_entry_to_string printers tr_entry i =
   | Event prin tag content -> (
     let printer = find_printer printers.event_to_string tag in
     let content_str = option_to_string printer content in
-    Printf.sprintf "{\"TraceID\": %d, \"Type\": \"Event\", \"Principal\": \"%s\", \"Tag\": \"%s\", \"Content\": \"%s\"}\n" 
+    Printf.sprintf "{\"TraceID\": %d, \"Type\": \"Event\", \"Principal\": \"%s\", \"Tag\": \"%s\", \"Content\": \"%s\"}\n"
       (i-1) prin tag content_str
   )
 
@@ -281,5 +286,5 @@ let trace_to_string_printers_builder message_to_string state_to_string event_to_
   }
 
 val default_trace_to_string_printers: trace_to_string_printers
-let default_trace_to_string_printers = 
+let default_trace_to_string_printers =
   trace_to_string_printers_builder default_message_to_string default_state_to_string default_event_to_string
