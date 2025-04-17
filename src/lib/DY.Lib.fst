@@ -34,3 +34,9 @@ include DY.Lib.Printing
 
 /// Functions and lemmas for HPKE, built on top of kem, kdf and aead
 include DY.Lib.HPKE
+
+///User-friendly dynamic label implementation
+include DY.Lib.Labels.Event
+include DY.Lib.Labels.Big
+include DY.Lib.Labels.DynamicLabel
+include DY.Lib.Labels.DynamicLabelEvent

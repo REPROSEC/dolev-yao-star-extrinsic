@@ -242,17 +242,16 @@ let is_corrupt_reveal_event_triggered_label tr ts revealed_to =
 open DY.Lib.Labels.Big
 
 val reveal_principal_label_meet :
-  principal -> timestamp ->
+  timestamp ->
   principal -> label
-let reveal_principal_label_meet revealer ts = fun prin -> meet (principal_label prin) (reveal_event_triggered_label ts prin)
+let reveal_principal_label_meet ts = fun prin -> meet (principal_label prin) (reveal_event_triggered_label ts prin)
 
 // this label is corrupt if reveal_event is triggered then the principal_label is corrupt
 val reveal_principal_label :
-  principal ->
   timestamp ->
   label
 // let reveal_principal_label ts = ordered_ex_guard (reveal_event_triggered_label ts) principal_label
-let reveal_principal_label revealer ts = big_join (reveal_principal_label_meet revealer ts)
+let reveal_principal_label ts = big_join (reveal_principal_label_meet ts)
 
 val reveal_principal_label_can_flow_to_principal_label :
   tr:trace ->
@@ -262,8 +261,8 @@ val reveal_principal_label_can_flow_to_principal_label :
   Lemma
   (requires reveal_event_triggered tr prin revealed_to ts)
   (ensures (
-    reveal_principal_label prin ts `can_flow tr` (principal_label revealed_to)
+    reveal_principal_label ts `can_flow tr` (principal_label revealed_to)
   ))
 let reveal_principal_label_can_flow_to_principal_label tr revealer revealed_to ts =
   is_corrupt_reveal_event_triggered_label tr ts revealed_to;
-  big_join_flow_to_component tr (reveal_principal_label_meet revealer ts) revealed_to
+  big_join_flow_to_component tr (reveal_principal_label_meet ts) revealed_to
