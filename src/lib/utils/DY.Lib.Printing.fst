@@ -205,10 +205,6 @@ let trace_entry_to_string printers tr_entry i =
     Printf.sprintf "{\"TraceID\": %d, \"Type\": \"Nonce\", \"Usage\": %s}\n"
       (i-1) (usage_to_string usg)
   )
-  | RevealLabel prin ts -> (
-    // TODO : fix printer
-    Printf.sprintf "TODO: Printer for reveal label"
-  )
   | Corrupt time -> ""
   | SetState prin sess_id full_content -> (
     let tag, content_str = state_to_string printers.state_to_string full_content in

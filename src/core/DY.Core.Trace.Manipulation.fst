@@ -378,38 +378,6 @@ let mk_rand_get_usage #invs usg lab len tr =
   reveal_opaque (`%mk_rand) (mk_rand);
   normalize_term_spec get_usage
 
-
-(*** Reveal Event ***)
-
-[@@ "opaque_to_smt"]
-val reveal_event: principal -> timestamp -> traceful unit
-let reveal_event prin time =
-  add_entry (RevealLabel prin time);*
-  return ()
-
-val reveal_event_event_triggered :
-  prin:principal -> time:timestamp -> tr:trace ->
-  Lemma
-  (ensures (
-    let (b, tr_out) = reveal_event prin time tr in
-    reveal_event_triggered tr_out prin time
-  ))
-let reveal_event_event_triggered prin ts tr =
-  reveal_opaque (`%reveal_event) (reveal_event)
-
-val reveal_event_trace_invariant:
-  {|protocol_invariants|} ->
-  prin:principal -> ts:timestamp -> tr:trace ->
-  Lemma
-  (requires trace_invariant tr /\ exists b. rand_generated_at tr ts b)
-  (ensures (
-    let (_, tr_out) = reveal_event prin ts tr in
-    trace_invariant tr_out
-  ))
-let reveal_event_trace_invariant #invs prin ts tr =
-  add_entry_invariant (RevealLabel prin ts) tr;
-  reveal_opaque (`%reveal_event) (reveal_event)
-
 (*** State ***)
 
 /// Set the state of a principal at a given state identifier.

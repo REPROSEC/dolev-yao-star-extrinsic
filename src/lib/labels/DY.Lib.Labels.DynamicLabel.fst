@@ -213,52 +213,57 @@ let ordered_ex_guard_can_flow tr l1 l2 g1 g2 =
 
 (*** Reveal event triggered label ***)
 
+open DY.Lib.Labels.DynamicLabelEvent
+open DY.Lib.Labels.Event
+
 val reveal_event_triggered_label :
   timestamp -> principal -> label
-let reveal_event_triggered_label ts prin = mk_label {
-  is_corrupt = (fun tr ->
-    reveal_event_triggered tr prin ts
-  );
-  is_corrupt_later = (fun tr1 tr2 -> ());
-}
+let reveal_event_triggered_label ts revealed_to = event_triggered_by_anyone_label {to=revealed_to; point=ts;}
 
 #push-options "--fuel 0 --ifuel 1"
 val is_corrupt_reveal_event_triggered_label:
   tr:trace ->
-  ts:timestamp -> prin:principal ->
+  // prin:principal ->
+  ts:timestamp -> revealed_to:principal ->
   Lemma (
-    is_corrupt tr (reveal_event_triggered_label ts prin)
+    is_corrupt tr (reveal_event_triggered_label ts revealed_to)
     <==>
-    reveal_event_triggered tr prin ts
+    exists prin. reveal_event_triggered tr prin revealed_to ts
   )
-  [SMTPat (is_corrupt tr (reveal_event_triggered_label ts prin))]
-let is_corrupt_reveal_event_triggered_label tr ts prin =
+  [SMTPat (is_corrupt tr (reveal_event_triggered_label ts revealed_to))]
+let is_corrupt_reveal_event_triggered_label tr ts revealed_to =
   reveal_opaque (`%is_corrupt) (is_corrupt);
-  FStar.Classical.forall_intro (get_entry_at_fmap_trace forget_label tr);
-  assert(reveal_event_triggered tr prin ts <==> reveal_event_triggered (trace_forget_labels tr) prin ts)
+  reveal_opaque (`%reveal_event_triggered_at) (reveal_event_triggered_at);
+  is_corrupt_event_triggered_by_anyone_label tr {to=revealed_to; point=ts;}
 #pop-options
 
 (*** Reveal principal label ***)
 
+open DY.Lib.Labels.Big
+
+val reveal_principal_label_meet :
+  principal -> timestamp ->
+  principal -> label
+let reveal_principal_label_meet revealer ts = fun prin -> meet (principal_label prin) (reveal_event_triggered_label ts prin)
+
 // this label is corrupt if reveal_event is triggered then the principal_label is corrupt
 val reveal_principal_label :
+  principal ->
   timestamp ->
   label
-let reveal_principal_label ts = ordered_ex_guard (reveal_event_triggered_label ts) principal_label
-
+// let reveal_principal_label ts = ordered_ex_guard (reveal_event_triggered_label ts) principal_label
+let reveal_principal_label revealer ts = big_join (reveal_principal_label_meet revealer ts)
 
 val reveal_principal_label_can_flow_to_principal_label :
   tr:trace ->
   prin:principal ->
+  revealed_to:principal ->
   ts:timestamp ->
   Lemma
-  (requires reveal_event_triggered tr prin ts)
+  (requires reveal_event_triggered tr prin revealed_to ts)
   (ensures (
-    reveal_principal_label ts `can_flow tr` (principal_label prin)
+    reveal_principal_label prin ts `can_flow tr` (principal_label revealed_to)
   ))
-let reveal_principal_label_can_flow_to_principal_label tr prin ts =
-  ordered_ex_guard_eq_ordered_guard tr (reveal_event_triggered_label ts) (principal_label) (reveal_principal_label ts);
-
-  is_corrupt_reveal_event_triggered_label tr ts prin;
-
-  ordered_guard_l_is_corrupt_can_flow_to_g tr (reveal_event_triggered_label ts prin) (principal_label prin)
+let reveal_principal_label_can_flow_to_principal_label tr revealer revealed_to ts =
+  is_corrupt_reveal_event_triggered_label tr ts revealed_to;
+  big_join_flow_to_component tr (reveal_principal_label_meet revealer ts) revealed_to

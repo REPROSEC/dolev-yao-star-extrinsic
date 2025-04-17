@@ -456,33 +456,6 @@ let state_was_corrupt tr prin sess_id content =
     entry_exists tr (Corrupt time) /\
     entry_at tr time (SetState prin sess_id content)
 
-
-// Reveal label event triggered?
-val reveal_event_triggered_at:
-  #label_t:Type ->
-  trace_ label_t -> timestamp -> principal -> timestamp ->
-  prop
-let reveal_event_triggered_at #label_t tr i prin ts =
-  entry_at tr i (RevealLabel prin ts)
-
-
-val reveal_event_triggered:
-  #label_t:Type ->
-  trace_ label_t -> principal -> timestamp ->
-  prop
-let reveal_event_triggered #label_t tr prin ts =
-  exists i. reveal_event_triggered_at tr i prin ts
-
-val reveal_event_triggered_grows :
-  #label_t:Type ->
-  tr1:trace_ label_t -> tr2:trace_ label_t ->
-  prin:principal -> ts:timestamp ->
-  Lemma
-  (requires reveal_event_triggered tr1 prin ts /\ tr1 <$ tr2)
-  (ensures reveal_event_triggered tr2 prin ts)
-  [SMTPat (reveal_event_triggered tr1 prin ts); SMTPat (tr1 <$ tr2)]
-let reveal_event_triggered_grows tr1 tr2 prin ts = ()
-
 /// Has a (custom, protocol-specific) event been triggered at some timestamp?
 
 val event_triggered_at:
@@ -559,7 +532,6 @@ let fmap_trace_entry #a #b f entry =
   | RandGen usg lab len -> RandGen usg (f lab) len
   | Corrupt time -> Corrupt time
   | SetState prin sess_id content -> SetState prin sess_id content
-  | RevealLabel prin i -> RevealLabel prin i
   | Event prin tag content -> Event prin tag content
 
 val fmap_trace:
