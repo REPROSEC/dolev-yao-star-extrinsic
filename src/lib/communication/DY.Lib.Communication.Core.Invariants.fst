@@ -188,7 +188,7 @@ val event_predicate_communication_layer_and_tag:
   comm_higher_layer_event_preds a ->
   (string & compiled_event_predicate)
 let event_predicate_communication_layer_and_tag #cinvs higher_layer_preds =
-  (event_communication_event.tag, compile_event_pred (event_predicate_communication_layer #cinvs higher_layer_preds))
+  mk_event_tag_and_pred (event_predicate_communication_layer higher_layer_preds)
 
 val has_communication_layer_event_predicates:
   {|protocol_invariants|} ->

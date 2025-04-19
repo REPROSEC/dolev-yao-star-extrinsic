@@ -88,7 +88,7 @@ val state_predicates_communication_layer_and_tag:
   {|crypto_invariants|} ->
   dtuple2 string local_bytes_state_predicate
 let state_predicates_communication_layer_and_tag #cinvs =
-  (|local_state_communication_layer_session.tag, local_state_predicate_to_local_bytes_state_predicate (state_predicates_communication_layer #cinvs)|)
+  mk_local_state_tag_and_pred state_predicates_communication_layer
 
 val has_communication_layer_state_predicates:
   {|protocol_invariants|} ->
@@ -198,7 +198,7 @@ val event_predicate_communication_layer_reqres_and_tag:
 let event_predicate_communication_layer_reqres_and_tag #cinvs #a higher_layer_resreq_preds =
   [
     event_predicate_communication_layer_and_tag request_response_event_preconditions;
-    event_communication_reqres_event.tag, compile_event_pred (event_predicate_communication_layer_reqres #cinvs higher_layer_resreq_preds)
+    mk_event_tag_and_pred (event_predicate_communication_layer_reqres higher_layer_resreq_preds)
   ]
 
 val has_communication_layer_reqres_event_predicates:
