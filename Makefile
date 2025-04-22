@@ -3,7 +3,7 @@ FSTAR_EXE 	?= $(shell which fstar.exe)
 Z3 		?= $(shell which z3)
 COMPARSE_HOME 	?= $(DY_HOME)/../comparse
 
-INNER_SOURCE_DIRS = core lib lib/comparse lib/crypto lib/event lib/hpke lib/state lib/utils lib/labels
+INNER_SOURCE_DIRS = core lib lib/comparse lib/crypto lib/event lib/hpke lib/state lib/utils lib/communication lib/labels
 SOURCE_DIRS = $(addprefix $(DY_HOME)/src/, $(INNER_SOURCE_DIRS))
 INNER_EXAMPLE_DIRS = nsl_pk iso_dh
 EXAMPLE_DIRS ?= $(addprefix $(DY_HOME)/examples/, $(INNER_EXAMPLE_DIRS))

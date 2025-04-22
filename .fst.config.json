@@ -10,6 +10,7 @@
     "src/lib/hpke",
     "src/lib/state",
     "src/lib/utils",
+    "src/lib/communication",
     "examples/nsl_pk",
     "examples/iso_dh"
   ]
