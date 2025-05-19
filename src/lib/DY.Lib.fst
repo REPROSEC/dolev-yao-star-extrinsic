@@ -29,6 +29,13 @@ include DY.Lib.State.Map
 include DY.Lib.State.PKI
 include DY.Lib.State.PrivateKeys
 
+/// More labels
+include DY.Lib.Label.Prop
+include DY.Lib.Label.BigJoin
+include DY.Lib.Label.BigMeet
+include DY.Lib.Label.Event
+include DY.Lib.Label.Guarded
+
 /// Provide functions to print the trace
 include DY.Lib.Printing
 
