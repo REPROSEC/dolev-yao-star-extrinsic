@@ -68,20 +68,20 @@ let tagged_state_pred_label_input_allow_inversion p1 p2 =
   allow_inversion (option tagged_state);
   allow_inversion (tagged_state)
 
-val tagged_state_pred_label_can_flow_public:
+val is_corrupt_tagged_state_pred_label:
   tr:trace ->
   p:tagged_state_pred_label_input ->
   Lemma (
-    tagged_state_pred_label p `can_flow tr` public
+    is_corrupt tr (tagged_state_pred_label p)
     <==> (
       exists prin tag sid content.
         tagged_state_was_corrupt tr prin tag sid content /\
         p prin tag sid content
     )
   )
-let tagged_state_pred_label_can_flow_public tr p =
+let is_corrupt_tagged_state_pred_label tr p =
   FStar.Classical.forall_intro (FStar.Classical.move_requires (serialize_parse_inv_lemma #bytes tagged_state));
-  state_pred_label_can_flow_public tr (compile_tagged_state_pred_label_input p)
+  is_corrupt_state_pred_label tr (compile_tagged_state_pred_label_input p)
 
 val principal_tag_state_content_label_input:
   principal -> string -> state_id -> bytes ->
