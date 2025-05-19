@@ -571,7 +571,7 @@ val trigger_event: principal -> string -> bytes -> traceful unit
 let trigger_event prin tag content =
   add_entry (Event prin tag content)
 
-#push-options "--z3rlimit 30"
+#push-options "--z3rlimit 25 --ifuel 2"
 val trigger_event_event_triggered:
   prin:principal -> tag:string -> content:bytes -> tr:trace ->
   Lemma
