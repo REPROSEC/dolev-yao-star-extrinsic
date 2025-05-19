@@ -7,6 +7,8 @@ open DY.Core.Bytes
 open DY.Core.Label.Type
 open DY.Core.Label
 
+#set-options "--fuel 1 --ifuel 1"
+
 /// This module contains the definition of the trace invariant `trace_invariant`.
 /// The trace invariant is at the heart of DY* methodology for protocol security proofs.
 /// Indeed, security proofs in DY* proceed in two steps:
@@ -110,6 +112,26 @@ let rec trace_invariant #invs tr =
     trace_invariant tr_init
 
 (*** Lemmas on the trace invariant ***)
+
+/// If the trace invariant holds on a trace,
+/// then it must hold on the trace's prefixes.
+
+val trace_invariant_before:
+  {|protocol_invariants|} ->
+  tr1:trace -> tr2:trace ->
+  Lemma
+  (requires trace_invariant tr2 /\ tr1 <$ tr2)
+  (ensures trace_invariant tr1)
+  (decreases tr2)
+let rec trace_invariant_before #invs tr1 tr2 =
+  reveal_opaque (`%trace_invariant) (trace_invariant);
+  reveal_opaque (`%prefix) (prefix #label);
+  reveal_opaque (`%grows) (grows #label);
+  if trace_length tr1 = trace_length tr2 then ()
+  else (
+    let Snoc init2 last2 = tr2 in
+    trace_invariant_before tr1 init2
+  )
 
 /// If there is an entry in the trace satisfying the invariants,
 /// then this entry satisfy the trace entry invariant.

@@ -6,61 +6,6 @@ open DY.Lib.Label.Event
 
 #set-options "--fuel 0 --ifuel 0"
 
-#push-options "--fuel 1 --ifuel 1"
-val trace_invariant_before:
-  {|protocol_invariants|} ->
-  tr1:trace -> tr2:trace ->
-  Lemma
-  (requires trace_invariant tr2 /\ tr1 <$ tr2)
-  (ensures trace_invariant tr1)
-  (decreases tr2)
-let rec trace_invariant_before #invs tr1 tr2 =
-  reveal_opaque (`%trace_invariant) (trace_invariant);
-  reveal_opaque (`%prefix) (prefix #label);
-  reveal_opaque (`%grows) (grows #label);
-  if trace_length tr1 = trace_length tr2 then ()
-  else (
-    let Snoc init2 last2 = tr2 in
-    trace_invariant_before tr1 init2
-  )
-#pop-options
-
-val is_minimum_corrupt_trace_for_label:
-  l:label -> tr:trace ->
-  prop
-let is_minimum_corrupt_trace_for_label l tr =
-  is_corrupt tr l /\
-  forall tr_smaller. (
-    tr_smaller <$ tr /\
-    is_corrupt tr_smaller l ==>
-    tr_smaller == tr
-  )
-
-#push-options "--fuel 1 --ifuel 1"
-val exists_minimum_trace:
-  tr:trace -> l:label ->
-  Lemma
-  (requires is_corrupt tr l)
-  (ensures exists tr_min.
-    tr_min <$ tr /\
-    is_minimum_corrupt_trace_for_label l tr_min
-  )
-let rec exists_minimum_trace tr l =
-  reveal_opaque (`%prefix) (prefix #label);
-  reveal_opaque (`%grows) (grows #label);
-  match tr with
-  | Nil -> ()
-  | Snoc init last -> (
-    eliminate is_corrupt init l \/ ~(is_corrupt init l)
-    returns exists tr_min. tr_min <$ tr /\ is_minimum_corrupt_trace_for_label l tr_min
-    with _. (
-      exists_minimum_trace init l
-    ) and _. (
-      assert(tr <$ tr /\ is_minimum_corrupt_trace_for_label l tr)
-    )
-  )
-#pop-options
-
 /// `guarded l g` is corrupt when `l` was corrupt before `g` was corrupt.
 
 [@@"opaque_to_smt"]
@@ -200,7 +145,7 @@ val guarded_authentication_lemma:
   )
 let guarded_authentication_lemma tr l g event_pred event_pred_lemma auth_pred auth_pred_lemma =
   introduce ~(is_corrupt tr (guarded l g)) ==> exists tr_before_ev. ~(is_corrupt tr_before_ev g) /\ tr_before_ev <$ tr /\ auth_pred tr_before_ev with _. (
-    exists_minimum_trace tr g;
+    exists_minimum_corrupt_trace_for_label tr g;
     eliminate exists tr_ev. tr_ev <$ tr /\ is_minimum_corrupt_trace_for_label g tr_ev
     returns _
     with _. (
