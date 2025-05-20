@@ -65,7 +65,7 @@ val typed_state_pred_label_input_allow_inversion:
 let typed_state_pred_label_input_allow_inversion #a #ps_a p1 p2 =
   allow_inversion (option a)
 
-val typed_state_pred_label_can_flow_public:
+val is_corrupt_typed_state_pred_label:
   #a:Type0 -> {|parseable_serializeable bytes a|} ->
   tr:trace ->
   p:typed_state_pred_label_input a ->
@@ -78,9 +78,9 @@ val typed_state_pred_label_can_flow_public:
     )
   )
   [SMTPat (typed_state_pred_label p `can_flow tr` public)]
-let typed_state_pred_label_can_flow_public #a #ps tr p =
+let is_corrupt_typed_state_pred_label #a #ps tr p =
   FStar.Classical.forall_intro (FStar.Classical.move_requires (serialize_parse_inv_lemma #bytes a));
-  tagged_state_pred_label_can_flow_public tr (compile_typed_state_pred_label_input p)
+  is_corrupt_tagged_state_pred_label tr (compile_typed_state_pred_label_input p)
 
 val principal_typed_state_content_label_input:
   #a:Type0 -> {|parseable_serializeable bytes a|} ->
