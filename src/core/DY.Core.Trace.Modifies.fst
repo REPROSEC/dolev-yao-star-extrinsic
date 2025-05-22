@@ -248,8 +248,105 @@ let traceful_modifies_trigger_event prin tag b tr =
   reveal_opaque (`%trigger_event) (trigger_event)
 
 
-/// The core properties --- if a trace (or traceful function) does not modify a given address,
-/// the result of looking up the state at the start and end of that trace (traceful) is the same.
+/// This predicate captures a key notion, that a given address has the specified contents (or
+/// lack of contents) as its most recently stored value.
+
+[@@ "opaque_to_smt"]
+val get_state_would_return :
+  prin:principal -> sid:state_id ->
+  st_opt: option bytes -> tr:trace ->
+  prop
+let get_state_would_return prin sid st_opt tr =
+  get_state_aux prin sid tr == st_opt
+
+
+/// The following lemmas provide ways to prove, propagate, and use the get_state_would_return predicate.
+
+val set_state_get_state_would_return :
+  prin:principal -> sid:state_id ->
+  content:bytes -> tr:trace ->
+  Lemma
+  (requires True)
+  (ensures (
+    let (_, tr_out) = set_state prin sid content tr in
+    get_state_would_return prin sid (Some content) tr_out
+  ))
+  [SMTPat (set_state prin sid content tr)]
+let set_state_get_state_would_return prin sid content tr =
+  reveal_opaque (`%get_state_would_return) get_state_would_return
+
+val get_state_would_return_later :
+  prin:principal -> sid:state_id ->
+  content_opt:option bytes ->
+  tr1:trace -> tr2:trace ->
+  Lemma
+  (requires tr1 <$ tr2 /\
+    get_state_would_return prin sid content_opt tr1 /\
+    trace_does_not_modify_addr prin sid (tr2 <--> tr1)
+  )
+  (ensures get_state_would_return prin sid content_opt tr2)
+  [SMTPat (tr1 <$ tr2);
+   SMTPat (get_state_would_return prin sid content_opt tr2);
+   SMTPat (trace_does_not_modify_addr prin sid (tr2 <--> tr1));
+  ]
+let get_state_would_return_later prin sid content_opt tr1 tr2 =
+  reveal_opaque (`%get_state_would_return) get_state_would_return;
+  let is_state_for prin sess_id e =
+    match e with
+    | SetState prin' sess_id' content -> prin = prin' && sess_id = sess_id'
+    | _ -> false
+  in
+  let ts_opt = trace_search_last (tr2 <--> tr1) (is_state_for prin sid) in
+  introduce Some? ts_opt ==> False
+  with _. begin
+    let SetState _ _ _ = get_entry_at (tr2 <--> tr1) (Some?.v ts_opt) in
+    trace_modifies_spec (tr2 <--> tr1) prin sid
+  end;
+  trace_search_last_subtract tr1 tr2 (is_state_for prin sid);
+  ()
+
+val traceful_get_state_would_return_later :
+  (#a:Type) -> prin:principal -> sid:state_id ->
+  content_opt:option bytes ->
+  f:traceful a -> tr:trace ->
+  Lemma
+  (requires get_state_would_return prin sid content_opt tr /\
+    traceful_does_not_modify_addr prin sid f tr
+  )
+  (ensures (
+    let (_, tr_out) = f tr in
+    get_state_would_return prin sid content_opt tr_out
+  ))
+  [SMTPat (f tr);
+   SMTPat (get_state_would_return prin sid content_opt tr);
+   SMTPat (traceful_does_not_modify_addr prin sid f tr);
+  ]
+let traceful_get_state_would_return_later prin sid content_opt f tr =
+  let (_, tr_out) = f tr in
+  // Triggers get_state_would_return_later
+  assert(trace_does_not_modify_addr prin sid (tr_out <--> tr));
+  ()
+
+val get_state_would_return_get_state :
+  prin:principal -> sid:state_id ->
+  content_opt:option bytes -> tr:trace ->
+  Lemma
+  (requires get_state_would_return prin sid content_opt tr)
+  (ensures (
+    let (content_opt', _) = get_state prin sid tr in
+    content_opt == content_opt'
+  ))
+  [SMTPat (get_state prin sid tr);
+   SMTPat (get_state_would_return prin sid content_opt tr);
+  ]
+let get_state_would_return_get_state prin sid content_opt tr =
+  reveal_opaque (`%get_state_would_return) get_state_would_return;
+  ()
+
+
+/// The following lemmas refer directly to the equivalence of
+/// get_state(_aux) on different traces, when the target address
+/// is unmodified.
 
 val trace_concat_same_state_aux :
   prin:principal -> sid:state_id ->
@@ -258,23 +355,9 @@ val trace_concat_same_state_aux :
   (requires trace_does_not_modify_addr prin sid tr2)
   (ensures get_state_aux prin sid tr1 == get_state_aux prin sid (tr1 <++> tr2))
 let trace_concat_same_state_aux prin sid tr1 tr2 =
-  let is_state_for prin sess_id e =
-    match e with
-    | SetState prin' sess_id' content -> prin = prin' && sess_id = sess_id'
-    | _ -> false
-  in
-  trace_modifies_spec tr2 prin sid;
-  introduce forall ts. ts `on_trace` tr2 ==> (~(is_state_for prin sid (get_entry_at tr2 ts)))
-  with introduce _ ==> _
-  with _. begin
-    match get_entry_at tr2 ts with
-    | SetState prin' sid' b -> ()
-    | _ -> ()
-  end;
-  trace_search_last_concat tr1 tr2 (is_state_for prin sid);
-  match trace_search_last tr1 (is_state_for prin sid) with
-  | None -> ()
-  | Some ts -> trace_concat_get_entry tr1 tr2 ts
+  let content = get_state_aux prin sid tr1 in
+  reveal_opaque (`%get_state_would_return) get_state_would_return;
+  get_state_would_return_later prin sid content tr1 (tr1 <++> tr2)
 
 val trace_grows_same_state_aux :
   prin:principal -> sid:state_id ->
@@ -300,7 +383,6 @@ val traceful_unmodified_same_state_aux:
     let (_, tr_out) = f tr_in in
     get_state_aux prin sid tr_in == get_state_aux prin sid tr_out
   ))
-  // Can we find a good pattern for this?
 let traceful_unmodified_same_state_aux prin sid f tr_in =
   let (_, tr_out) = f tr_in in
   trace_grows_same_state_aux prin sid tr_in tr_out
@@ -325,10 +407,6 @@ let trace_grows_same_state (prin:principal) (sid:state_id) (tr1 tr2:trace)
       let (st_opt2, _) = get_state prin sid tr2 in
       st_opt1 == st_opt2
     ))
-    [SMTPat (get_state prin sid tr1);
-     SMTPat (get_state prin sid tr2);
-     SMTPat (trace_does_not_modify_addr prin sid (tr2 <--> tr1));
-    ]
   = trace_concat_same_state prin sid tr1 (tr2 <--> tr1)
 
 let traceful_unmodified_same_state (#a:Type) (prin:principal) (sid:state_id) (f:traceful a) (tr:trace)
@@ -341,6 +419,5 @@ let traceful_unmodified_same_state (#a:Type) (prin:principal) (sid:state_id) (f:
       st_opt1 == st_opt2
     ))
   = let (_, tr_out) = f tr in
-    // Triggers trace_grows_same_state
     assert(trace_does_not_modify_addr prin sid (tr_out <--> tr));
     ()
