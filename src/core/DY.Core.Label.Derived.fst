@@ -14,6 +14,18 @@ let equivalent tr l1 l2 =
   l1 `can_flow tr` l2 /\
   l2 `can_flow tr` l1
 
+val intro_equivalent:
+  tr:trace -> l1:label -> l2:label -> (
+    tr_extended:trace ->
+    Lemma
+    (requires tr <$ tr_extended)
+    (ensures is_corrupt tr_extended l1 <==> is_corrupt tr_extended l2)
+  ) ->
+  Lemma (l1 `equivalent tr` l2)
+let intro_equivalent tr l1 l2 pf =
+  intro_can_flow tr l1 l2 pf;
+  intro_can_flow tr l2 l1 pf
+
 (*** Join flows to its operands ***)
 
 val join_flows_to_left:
