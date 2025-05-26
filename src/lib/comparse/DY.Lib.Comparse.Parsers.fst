@@ -1,5 +1,6 @@
 module DY.Lib.Comparse.Parsers
 
+open FStar.List.Tot { for_allP, for_allP_eq }
 open DY.Core
 open Comparse
 
