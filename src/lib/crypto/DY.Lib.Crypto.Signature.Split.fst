@@ -1,6 +1,6 @@
 module DY.Lib.Crypto.Signature.Split
 
-open Comparse // for_allP, for_allP_eq
+open FStar.List.Tot { for_allP, for_allP_eq }
 open DY.Core
 open DY.Lib.Crypto.SplitPredicate
 
