@@ -142,13 +142,13 @@ val add_entry_invariant:
 let add_entry_invariant #invs e tr =
   norm_spec [zeta; delta_only [`%trace_invariant]] (trace_invariant)
 
-val add_entry_increases_trace_length :
-  e:trace_entry -> tr:trace ->
-  Lemma(
-    let ((), tr_out) = add_entry e tr in
-    trace_length tr_out = trace_length tr + 1
-  )
-let add_entry_increases_trace_length e tr = ()
+// val add_entry_increases_trace_length :
+//   e:trace_entry -> tr:trace ->
+//   Lemma(
+//     let ((), tr_out) = add_entry e tr in
+//     trace_length tr_out = trace_length tr + 1
+//   )
+// let add_entry_increases_trace_length e tr = ()
 
 /// Get the current time (i.e. trace length).
 
