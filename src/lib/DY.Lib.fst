@@ -35,6 +35,9 @@ include DY.Lib.Label.BigJoin
 include DY.Lib.Label.BigMeet
 include DY.Lib.Label.Event
 include DY.Lib.Label.Guarded
+/// Dynamic labels
+// include DY.Lib.Label.DynamicLabel
+// include DY.Lib.Label.DynamicLabelEvent
 
 /// Provide functions to print the trace
 include DY.Lib.Printing
@@ -44,9 +47,3 @@ include DY.Lib.HPKE
 
 /// Functions and lemmas to securely send messages over the network
 include DY.Lib.Communication
-
-/// User-friendly dynamic label implementation
-include DY.Lib.Labels.Event
-include DY.Lib.Labels.Big
-include DY.Lib.Labels.DynamicLabel
-include DY.Lib.Labels.DynamicLabelEvent
