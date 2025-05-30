@@ -47,7 +47,7 @@ val reveal_principal_label_can_flow_to_principal_label :
   tr:trace ->
   prin:principal ->
   revealed_to:principal ->
-  ts:timestamp ->
+  secret:bytes ->
   Lemma
   (requires reveal_event_triggered tr prin revealed_to ts)
   (ensures (
@@ -70,6 +70,7 @@ val is_corrupt_reveal_principal_label :
 let is_corrupt_reveal_principal_label tr ts =
   ()
 
+// not sure if this is useful, can't see how you can enforce this forall clause.
 val certain_corruption :
   {| pi: protocol_invariants |} ->
   {| cusages: crypto_usages |} ->

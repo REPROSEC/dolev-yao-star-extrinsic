@@ -24,9 +24,10 @@ instance reveal_event : event reveal_event_format = mk_event_instance "Reveal"
 
 let reveal_event_predicate = event_predicate reveal_event_format
 
-// let default_reveal_event_predicate : reveal_event_predicate =
-//   fun tr prin a ->
-//     is_knowable tr 
+let default_reveal_event_predicate (#crypto_invs:crypto_invariants) : reveal_event_predicate =
+  fun tr prin a ->
+    on_trace a.point tr /\
+    RandGen? (get_entry_at tr a.point)
 
 [@@ "opaque_to_smt"]
 val trigger_reveal_event :
@@ -172,3 +173,16 @@ let find_reveal_event_triggered_at_timestamp_later tr1 tr2 prin reveal_to nonce_
   reveal_opaque (`%find_reveal_event_triggered_at_timestamp) (find_reveal_event_triggered_at_timestamp);
   reveal_opaque (`%reveal_event_triggered_at) (reveal_event_triggered_at);
   find_event_triggered_at_timestamp_later tr1 tr2 prin {to=reveal_to; point=nonce_at;}
+
+(*** Bytes Reveal ***)
+val trigger_reveal_bytes_event :
+  principal -> principal -> bytes ->
+  traceful unit
+let rec trigger_reveal_bytes_event from to secret_data =
+  match secret_data with
+  | Rand _ nonce_at -> trigger_reveal_event from to nonce_at
+  | Concat left right -> 
+    trigger_reveal_bytes_event from to left;*
+    trigger_reveal_bytes_event from to right
+  | _ -> return () // do nothing
+
