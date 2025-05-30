@@ -497,6 +497,11 @@ val set_state_invariant:
   Lemma
   (requires
     state_pred.pred tr prin sess_id content /\
+    (
+      let content_old_opt = get_state_aux prin sess_id tr in
+      Some? content_old_opt ==>
+      state_update_pred.update_pred tr prin sess_id (Some?.v content_old_opt) content
+    ) /\
     trace_invariant tr
   )
   (ensures (
