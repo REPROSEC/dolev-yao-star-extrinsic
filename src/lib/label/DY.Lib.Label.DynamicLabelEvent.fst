@@ -186,3 +186,38 @@ let rec trigger_reveal_bytes_event from to secret_data =
     trigger_reveal_bytes_event from to right
   | _ -> return () // do nothing
 
+val trigger_reveal_bytes_event_lemma :
+  tr:trace ->
+  from:principal -> to:principal -> secret_data:bytes{Rand? secret_data} ->
+  Lemma
+  (ensures (
+    let (_, tr_out) = trigger_reveal_bytes_event from to secret_data tr in
+    let Rand _ time = secret_data in
+    reveal_event_triggered tr_out from to time
+  ))
+let trigger_reveal_bytes_event_lemma tr from to secret_data =
+  let Rand _ time = secret_data in
+  trigger_reveal_event_reveal_event_triggered from to time tr
+
+val trigger_reveal_bytes_event_trace_invariant :
+  {|protocol_invariants|} ->
+  epred:reveal_event_predicate ->
+  prin:principal -> reveal_to:principal -> secret_data:bytes{Rand? secret_data} -> tr:trace ->
+  Lemma
+  (requires (
+    let Rand _ nonce_at = secret_data in
+    epred tr prin {to=reveal_to; point=nonce_at} /\
+    has_event_pred epred /\
+    trace_invariant tr
+  ))
+  (ensures (
+    let ((), tr_out) = trigger_reveal_bytes_event prin reveal_to secret_data tr in
+    trace_invariant tr_out
+  ))
+  [SMTPat (trigger_reveal_bytes_event prin reveal_to secret_data);
+   SMTPat (has_event_pred epred);
+   SMTPat (trace_invariant tr)]
+let trigger_reveal_bytes_event_trace_invariant epred from to secret_data tr =
+  ()
+  // trigger_reveal_bytes_event_lemma tr from to secret_data;
+  // trigger_reveal_event_trace_invariant

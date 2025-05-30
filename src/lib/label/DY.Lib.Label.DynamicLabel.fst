@@ -47,7 +47,7 @@ val reveal_principal_label_can_flow_to_principal_label :
   tr:trace ->
   prin:principal ->
   revealed_to:principal ->
-  secret:bytes ->
+  ts:timestamp ->
   Lemma
   (requires reveal_event_triggered tr prin revealed_to ts)
   (ensures (
