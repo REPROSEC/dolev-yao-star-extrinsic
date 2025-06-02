@@ -72,7 +72,10 @@ type state_update_predicate {|crypto_invariants|} = {
     prin:principal -> sess_id:state_id ->
     b1:bytes -> b2:bytes ->
     Lemma
-    (requires update_pred tr1 prin sess_id b1 b2)
+    (requires
+      update_pred tr1 prin sess_id b1 b2 /\
+      tr1 <$ tr2
+    )
     (ensures update_pred tr2 prin sess_id b1 b2)
   ;
   // Do we want transitivity?
