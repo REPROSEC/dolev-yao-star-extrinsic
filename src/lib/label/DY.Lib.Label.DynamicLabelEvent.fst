@@ -26,11 +26,14 @@ let reveal_event_predicate = event_predicate reveal_event_format
 
 let default_reveal_event_predicate (#crypto_invs:crypto_invariants) : reveal_event_predicate =
   fun tr prin a ->
-    on_trace a.point tr /\
-    RandGen? (get_entry_at tr a.point) /\
     exists (b:bytes) (l:pos).
-      is_knowable_by (principal_label prin) tr b /\
+      (
+        is_knowable_by (principal_label prin) tr b \/
+        a.to = prin // this is for the initial reveal (creator of a secret must reveal it to themselves initially (and they can't 'know' it at this point))
+      ) /\
       b == Rand l a.point
+
+(*** Reveal Event Functions ***)
 
 [@@ "opaque_to_smt"]
 val trigger_reveal_event :
