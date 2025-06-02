@@ -27,7 +27,10 @@ let reveal_event_predicate = event_predicate reveal_event_format
 let default_reveal_event_predicate (#crypto_invs:crypto_invariants) : reveal_event_predicate =
   fun tr prin a ->
     on_trace a.point tr /\
-    RandGen? (get_entry_at tr a.point)
+    RandGen? (get_entry_at tr a.point) /\
+    exists (b:bytes) (l:pos).
+      is_knowable_by (principal_label prin) tr b /\
+      b == Rand l a.point
 
 [@@ "opaque_to_smt"]
 val trigger_reveal_event :
@@ -49,10 +52,6 @@ val reveal_event_triggered :
 let reveal_event_triggered tr prin reveal_to nonce_at =
   exists i. reveal_event_triggered_at tr i prin reveal_to nonce_at
 
-(**
-    The below definitions here may be redundant.
-    They all require just a reveal_opaque of reveal_event and then the lemmas in DY.Lib.Event.Typed trigger to prove the required facts.
-**)
 
 val trigger_reveal_event_reveal_event_triggered :
   prin:principal -> reveal_to:principal -> nonce_at:timestamp -> tr:trace ->
@@ -174,7 +173,7 @@ let find_reveal_event_triggered_at_timestamp_later tr1 tr2 prin reveal_to nonce_
   reveal_opaque (`%reveal_event_triggered_at) (reveal_event_triggered_at);
   find_event_triggered_at_timestamp_later tr1 tr2 prin {to=reveal_to; point=nonce_at;}
 
-(*** Bytes Reveal ***)
+(*** Bytes Reveal - need to make a decision regarding what we do with composite objects. ***)
 val trigger_reveal_bytes_event :
   principal -> principal -> bytes ->
   traceful unit
@@ -219,5 +218,3 @@ val trigger_reveal_bytes_event_trace_invariant :
    SMTPat (trace_invariant tr)]
 let trigger_reveal_bytes_event_trace_invariant epred from to secret_data tr =
   ()
-  // trigger_reveal_bytes_event_lemma tr from to secret_data;
-  // trigger_reveal_event_trace_invariant
