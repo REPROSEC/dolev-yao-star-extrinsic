@@ -142,14 +142,6 @@ val add_entry_invariant:
 let add_entry_invariant #invs e tr =
   norm_spec [zeta; delta_only [`%trace_invariant]] (trace_invariant)
 
-// val add_entry_increases_trace_length :
-//   e:trace_entry -> tr:trace ->
-//   Lemma(
-//     let ((), tr_out) = add_entry e tr in
-//     trace_length tr_out = trace_length tr + 1
-//   )
-// let add_entry_increases_trace_length e tr = ()
-
 /// Get the current time (i.e. trace length).
 
 val get_time: traceful timestamp
@@ -552,7 +544,7 @@ val trigger_event: principal -> string -> bytes -> traceful unit
 let trigger_event prin tag content =
   add_entry (Event prin tag content)
 
-#push-options "--z3rlimit 25 --ifuel 2"
+#push-options "--z3rlimit 30"
 val trigger_event_event_triggered:
   prin:principal -> tag:string -> content:bytes -> tr:trace ->
   Lemma
