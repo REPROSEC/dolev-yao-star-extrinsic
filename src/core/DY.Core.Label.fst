@@ -206,6 +206,43 @@ let intro_label_equal l1 l2 pf =
   assert(l1.is_corrupt_later == l2.is_corrupt_later);
   ()
 
+/// Exhibiting the shortest prefix where a label is corrupt.
+
+val is_minimal_corrupt_trace_for_label:
+  l:label -> tr:trace ->
+  prop
+let is_minimal_corrupt_trace_for_label l tr =
+  is_corrupt tr l /\
+  forall tr_smaller. (
+    tr_smaller <$ tr /\
+    is_corrupt tr_smaller l ==>
+    tr_smaller == tr
+  )
+
+#push-options "--fuel 1 --ifuel 1"
+val exists_minimal_corrupt_trace_for_label:
+  tr:trace -> l:label ->
+  Lemma
+  (requires is_corrupt tr l)
+  (ensures exists tr_min.
+    tr_min <$ tr /\
+    is_minimal_corrupt_trace_for_label l tr_min
+  )
+let rec exists_minimal_corrupt_trace_for_label tr l =
+  reveal_opaque (`%prefix) (prefix #label);
+  reveal_opaque (`%grows) (grows #label);
+  match tr with
+  | Nil -> ()
+  | Snoc init last -> (
+    eliminate is_corrupt init l \/ ~(is_corrupt init l)
+    returns exists tr_min. tr_min <$ tr /\ is_minimal_corrupt_trace_for_label l tr_min
+    with _. (
+      exists_minimal_corrupt_trace_for_label init l
+    ) and _. (
+      assert(tr <$ tr /\ is_minimal_corrupt_trace_for_label l tr)
+    )
+  )
+#pop-options
 
 /// Secret label, the minimum of the label lattice.
 
