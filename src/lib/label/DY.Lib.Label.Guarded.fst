@@ -125,6 +125,11 @@ let is_corrupt_guarded_event #a #ev_a tr l prin content =
 /// either `l` has been corrupt in `tr_before_ev`
 /// (in that case, `guarded l g` is corrupt),
 /// or that an authentication predicate holds on `tr_before_ev`.
+///
+/// To prove `event_pred_lemma` and `auth_pred_lemma`,
+/// if you know that `trace_invariant tr`,
+/// you can deduce `trace_invariant tr_ev`
+/// using the lemma `trace_invariant_before tr_ev tr`.
 
 val guarded_authentication_lemma:
   tr:trace ->
