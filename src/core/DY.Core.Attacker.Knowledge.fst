@@ -196,7 +196,7 @@ val corrupted_state_is_publishable:
   (ensures is_publishable tr content)
 let corrupted_state_is_publishable #invs tr prin sess_id content =
   state_is_knowable_by tr prin sess_id content;
-  state_pred_label_can_flow_public tr (principal_state_content_label_input prin sess_id content)
+  is_corrupt_state_pred_label tr (principal_state_content_label_input prin sess_id content)
 
 #push-options "--z3rlimit 25"
 val attacker_only_knows_publishable_values_aux:

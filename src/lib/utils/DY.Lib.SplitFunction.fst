@@ -1,7 +1,6 @@
 module DY.Lib.SplitFunction
 
 open FStar.List.Tot
-open Comparse //for_allP, for_allP_eq
 
 #set-options "--fuel 1 --ifuel 1"
 

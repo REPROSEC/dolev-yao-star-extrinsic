@@ -1,5 +1,6 @@
 module DY.Lib.State.Map
 
+open FStar.List.Tot { for_allP, for_allP_eq }
 open Comparse
 open DY.Core
 open DY.Lib.Comparse.Glue

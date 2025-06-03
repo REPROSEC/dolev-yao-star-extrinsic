@@ -123,67 +123,31 @@ let can_flow tr l1 l2 =
   forall tr_extended. tr <$ tr_extended ==>
     (is_corrupt tr_extended l2 ==> is_corrupt tr_extended l1)
 
-/// Extensionality theorems for labels
+val intro_can_flow:
+  tr:trace -> l1:label -> l2:label -> (
+    tr_extended:trace ->
+    Lemma
+    (requires tr <$ tr_extended /\ is_corrupt tr_extended l2)
+    (ensures is_corrupt tr_extended l1)
+  ) ->
+  Lemma (l1 `can_flow tr` l2)
+let intro_can_flow tr l1 l2 pf =
+  reveal_opaque (`%can_flow) (l1 `can_flow tr` l2);
+  FStar.Classical.forall_intro (FStar.Classical.move_requires pf)
 
-val intro_label_equal:
-  l1:label -> l2:label ->
-  (tr:trace -> Lemma (l1 `can_flow tr` l2 /\ l2 `can_flow tr` l1)) ->
-  Lemma (l1 == l2)
-let intro_label_equal l1 l2 pf =
-  let open DY.Core.Label.Unknown in
-  reveal_opaque (`%can_flow) can_flow;
-  reveal_opaque (`%is_corrupt) is_corrupt;
-  introduce forall tr. l1.is_corrupt tr == l2.is_corrupt tr with (
-    pf (fmap_trace (replace_label unknown_label) tr);
-    // These two lines prove surjectivity of `trace_forget_labels`
-    // by showing that fmap_trace (forget_label public) is a right-inverse
-    // (we could replace `unknown_label` with anything)
-    fmap_trace_compose (replace_label unknown_label) forget_label forget_label tr;
-    fmap_trace_identity forget_label tr;
-    FStar.PropositionalExtensionality.apply (l1.is_corrupt tr) (l2.is_corrupt tr)
-  );
-  assert(l1.is_corrupt `FStar.FunctionalExtensionality.feq` l2.is_corrupt);
-  assert(l1.is_corrupt == l2.is_corrupt);
-  assert(l1.is_corrupt_later == l2.is_corrupt_later);
-  ()
-
-
-/// Functions to create labels.
-/// They are useful so that the label type can remain abstract to the user.
-
-[@@"opaque_to_smt"]
-val secret: label
-let secret = mk_label {
-  is_corrupt = (fun tr -> False);
-  is_corrupt_later = (fun tr1 tr2 -> ());
-}
-
-[@@"opaque_to_smt"]
-val public: label
-let public = mk_label {
-  is_corrupt = (fun tr -> True);
-  is_corrupt_later = (fun tr1 tr2 -> ());
-}
-
-[@@"opaque_to_smt"]
-val meet: label -> label -> label
-let meet l1 l2 = mk_label {
-  is_corrupt = (fun tr -> l1.is_corrupt tr /\ l2.is_corrupt tr);
-  is_corrupt_later = (fun tr1 tr2 ->
-    label_is_corrupt_later l1 tr1 tr2;
-    label_is_corrupt_later l2 tr1 tr2
-  );
-}
-
-[@@"opaque_to_smt"]
-val join: label -> label -> label
-let join l1 l2 = mk_label {
-  is_corrupt = (fun tr -> l1.is_corrupt tr \/ l2.is_corrupt tr);
-  is_corrupt_later = (fun tr1 tr2 ->
-    FStar.Classical.move_requires_3 label_is_corrupt_later l1 tr1 tr2;
-    FStar.Classical.move_requires_3 label_is_corrupt_later l2 tr1 tr2
-  );
-}
+val elim_can_flow:
+  tr:trace -> l1:label -> l2:label ->
+  Lemma
+  (requires
+    l1 `can_flow tr` l2 /\
+    is_corrupt tr l2
+  )
+  (ensures is_corrupt tr l1)
+  [SMTPat (l1 `can_flow tr` l2);
+   SMTPat (is_corrupt tr l2);
+  ]
+let elim_can_flow tr l1 l2 =
+  reveal_opaque (`%can_flow) (l1 `can_flow tr` l2)
 
 /// `can_flow tr` is reflexive.
 
@@ -218,7 +182,85 @@ val can_flow_later:
 let can_flow_later tr1 tr2 l1 l2 =
   reveal_opaque (`%can_flow) (can_flow)
 
-/// `secret` is the minimum of the label lattice.
+/// Extensionality theorems for labels
+
+val intro_label_equal:
+  l1:label -> l2:label ->
+  (tr:trace -> Lemma (is_corrupt tr l1 <==> is_corrupt tr l2)) ->
+  Lemma (l1 == l2)
+let intro_label_equal l1 l2 pf =
+  let open DY.Core.Label.Unknown in
+  reveal_opaque (`%can_flow) can_flow;
+  reveal_opaque (`%is_corrupt) is_corrupt;
+  introduce forall tr. l1.is_corrupt tr == l2.is_corrupt tr with (
+    pf (fmap_trace (replace_label unknown_label) tr);
+    // These two lines prove surjectivity of `trace_forget_labels`
+    // by showing that fmap_trace (forget_label public) is a right-inverse
+    // (we could replace `unknown_label` with anything)
+    fmap_trace_compose (replace_label unknown_label) forget_label forget_label tr;
+    fmap_trace_identity forget_label tr;
+    FStar.PropositionalExtensionality.apply (l1.is_corrupt tr) (l2.is_corrupt tr)
+  );
+  assert(l1.is_corrupt `FStar.FunctionalExtensionality.feq` l2.is_corrupt);
+  assert(l1.is_corrupt == l2.is_corrupt);
+  assert(l1.is_corrupt_later == l2.is_corrupt_later);
+  ()
+
+/// Exhibiting the shortest prefix where a label is corrupt.
+
+val is_minimal_corrupt_trace_for_label:
+  l:label -> tr:trace ->
+  prop
+let is_minimal_corrupt_trace_for_label l tr =
+  is_corrupt tr l /\
+  forall tr_smaller. (
+    tr_smaller <$ tr /\
+    is_corrupt tr_smaller l ==>
+    tr_smaller == tr
+  )
+
+#push-options "--fuel 1 --ifuel 1"
+val exists_minimal_corrupt_trace_for_label:
+  tr:trace -> l:label ->
+  Lemma
+  (requires is_corrupt tr l)
+  (ensures exists tr_min.
+    tr_min <$ tr /\
+    is_minimal_corrupt_trace_for_label l tr_min
+  )
+let rec exists_minimal_corrupt_trace_for_label tr l =
+  reveal_opaque (`%prefix) (prefix #label);
+  reveal_opaque (`%grows) (grows #label);
+  match tr with
+  | Nil -> ()
+  | Snoc init last -> (
+    eliminate is_corrupt init l \/ ~(is_corrupt init l)
+    returns exists tr_min. tr_min <$ tr /\ is_minimal_corrupt_trace_for_label l tr_min
+    with _. (
+      exists_minimal_corrupt_trace_for_label init l
+    ) and _. (
+      assert(tr <$ tr /\ is_minimal_corrupt_trace_for_label l tr)
+    )
+  )
+#pop-options
+
+/// Secret label, the minimum of the label lattice.
+
+[@@"opaque_to_smt"]
+val secret: label
+let secret = mk_label {
+  is_corrupt = (fun tr -> False);
+  is_corrupt_later = (fun tr1 tr2 -> ());
+}
+
+val is_corrupt_secret:
+  tr:trace ->
+  Lemma
+  (ensures ~(is_corrupt tr secret))
+  [SMTPat (is_corrupt tr secret)]
+let is_corrupt_secret tr =
+  reveal_opaque (`%secret) secret;
+  reveal_opaque (`%is_corrupt) is_corrupt
 
 val secret_is_bottom:
   tr:trace -> l:label ->
@@ -226,11 +268,26 @@ val secret_is_bottom:
   (ensures l `can_flow tr` secret)
   [SMTPat (l `can_flow tr` secret)]
 let secret_is_bottom tr l =
-  reveal_opaque (`%can_flow) can_flow;
-  reveal_opaque (`%secret) secret;
-  reveal_opaque (`%is_corrupt) is_corrupt
+  intro_can_flow tr l secret
+    (fun tr' -> is_corrupt_secret tr')
 
-/// `public` is the maximum of the label lattice.
+/// Public label, the maximum of the label lattice.
+
+[@@"opaque_to_smt"]
+val public: label
+let public = mk_label {
+  is_corrupt = (fun tr -> True);
+  is_corrupt_later = (fun tr1 tr2 -> ());
+}
+
+val is_corrupt_public:
+  tr:trace ->
+  Lemma
+  (ensures is_corrupt tr public)
+  [SMTPat (is_corrupt tr public)]
+let is_corrupt_public tr =
+  reveal_opaque (`%public) public;
+  reveal_opaque (`%is_corrupt) is_corrupt
 
 val public_is_top:
   tr:trace -> l:label ->
@@ -238,11 +295,41 @@ val public_is_top:
   (ensures public `can_flow tr` l)
   [SMTPat (public `can_flow tr` l)]
 let public_is_top tr l =
-  reveal_opaque (`%can_flow) can_flow;
-  reveal_opaque (`%public) public;
-  reveal_opaque (`%is_corrupt) is_corrupt
+  intro_can_flow tr public l
+    (fun tr' -> is_corrupt_public tr')
 
-/// `meet` satisfy the lower bound property.
+/// A label flows to `public` iff. it is corrupt.
+
+val flow_to_public_eq:
+  tr:trace -> l:label ->
+  Lemma
+  (ensures l `can_flow tr` public <==> is_corrupt tr l)
+  [SMTPat (l `can_flow tr` public)]
+let flow_to_public_eq tr prin =
+  reveal_opaque (`%is_corrupt) (is_corrupt);
+  reveal_opaque (`%can_flow) (can_flow);
+  reveal_opaque (`%public) (public)
+
+/// Meet label, the lower bound of the label lattice.
+
+[@@"opaque_to_smt"]
+val meet: label -> label -> label
+let meet l1 l2 = mk_label {
+  is_corrupt = (fun tr -> l1.is_corrupt tr /\ l2.is_corrupt tr);
+  is_corrupt_later = (fun tr1 tr2 ->
+    label_is_corrupt_later l1 tr1 tr2;
+    label_is_corrupt_later l2 tr1 tr2
+  );
+}
+
+val is_corrupt_meet:
+  tr:trace -> l1:label -> l2:label ->
+  Lemma
+  (ensures is_corrupt tr (meet l1 l2) <==> is_corrupt tr l1 /\ is_corrupt tr l2)
+  [SMTPat (is_corrupt tr (meet l1 l2))]
+let is_corrupt_meet tr l1 l2 =
+  reveal_opaque (`%is_corrupt) (is_corrupt);
+  reveal_opaque (`%meet) (meet)
 
 val meet_eq:
   tr:trace -> x:label -> y1:label -> y2:label ->
@@ -254,7 +341,26 @@ let meet_eq tr x y1 y2 =
   reveal_opaque (`%can_flow) (can_flow);
   reveal_opaque (`%meet) (meet)
 
-/// `join` satisfy the upper bound property.
+/// Join label, the upper bound of the label lattice.
+
+[@@"opaque_to_smt"]
+val join: label -> label -> label
+let join l1 l2 = mk_label {
+  is_corrupt = (fun tr -> l1.is_corrupt tr \/ l2.is_corrupt tr);
+  is_corrupt_later = (fun tr1 tr2 ->
+    FStar.Classical.move_requires_3 label_is_corrupt_later l1 tr1 tr2;
+    FStar.Classical.move_requires_3 label_is_corrupt_later l2 tr1 tr2
+  );
+}
+
+val is_corrupt_join:
+  tr:trace -> x1:label -> x2:label ->
+  Lemma
+  (ensures is_corrupt tr (join x1 x2) <==> is_corrupt tr x1 \/ is_corrupt tr x2)
+  [SMTPat (is_corrupt tr (join x1 x2))]
+let is_corrupt_join tr x1 x2 =
+  reveal_opaque (`%is_corrupt) is_corrupt;
+  reveal_opaque (`%join) (join)
 
 val join_eq:
   tr:trace -> x1:label -> x2:label -> y:label ->
@@ -265,35 +371,6 @@ let join_eq tr x1 x2 y =
   reveal_opaque (`%is_corrupt) (is_corrupt);
   reveal_opaque (`%can_flow) (can_flow);
   reveal_opaque (`%join) (join)
-
-/// A label flows to `public` iff. it is corrupt.
-
-val flow_to_public_eq:
-  tr:trace -> l:label ->
-  Lemma
-  (ensures l `can_flow tr` public <==> is_corrupt tr l)
-  [SMTPat (is_corrupt tr l)]
-let flow_to_public_eq tr prin =
-  reveal_opaque (`%is_corrupt) (is_corrupt);
-  reveal_opaque (`%can_flow) (can_flow);
-  reveal_opaque (`%public) (public)
-
-/// A `join` flows to `public` iff. one of its operands flows to `public`.
-/// This is a property specific to labels,
-/// that is not implied by the standard lattice properties.
-
-val join_flow_to_public_eq:
-  tr:trace -> x1:label -> x2:label ->
-  Lemma
-  (ensures (join x1 x2) `can_flow tr` public <==> x1 `can_flow tr` public \/ x2 `can_flow tr` public)
-  [SMTPat ((join x1 x2) `can_flow tr` public)]
-let join_flow_to_public_eq tr x1 x2 =
-  flow_to_public_eq tr x1;
-  flow_to_public_eq tr x2;
-  reveal_opaque (`%is_corrupt) is_corrupt;
-  reveal_opaque (`%can_flow) (can_flow);
-  reveal_opaque (`%join) (join);
-  reveal_opaque (`%public) (public)
 
 /// Generic label for states:
 /// `state_pred_label p` is corrupt when
@@ -337,19 +414,18 @@ let state_pred_label_can_flow_state_pred_label tr p1 p2 =
   reveal_opaque (`%can_flow) (can_flow);
   reveal_opaque (`%state_pred_label) (state_pred_label)
 
-val state_pred_label_can_flow_public:
+val is_corrupt_state_pred_label:
   tr:trace ->
   p:state_pred_label_input ->
   Lemma (
-    (state_pred_label p) `can_flow tr` public
+    is_corrupt tr (state_pred_label p)
     <==> (
       exists prin sess_id content.
         state_was_corrupt tr prin sess_id content /\
         p prin sess_id content
     )
   )
-let state_pred_label_can_flow_public tr p =
-  flow_to_public_eq tr (state_pred_label p);
+let is_corrupt_state_pred_label tr p =
   reveal_opaque (`%is_corrupt) is_corrupt;
   reveal_opaque (`%state_pred_label) (state_pred_label);
   FStar.Classical.forall_intro (FStar.Classical.move_requires (entry_exists_fmap_trace_eq forget_label tr));
