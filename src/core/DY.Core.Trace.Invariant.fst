@@ -93,13 +93,6 @@ type state_update_predicate {|crypto_invariants|} = {
   // Reflexivity too?
 }
 
-// Transitivity:
-// - Pred transitive for any given trace?
-//   - Would also need a later pred saying that the update pred is stable.
-//   - Do these two hold? Probably easier to use than a single mixed transitivity pred.
-// - Pred transitive as in later pred above?
-//
-
 /// The parameters of the trace invariant.
 
 noeq
