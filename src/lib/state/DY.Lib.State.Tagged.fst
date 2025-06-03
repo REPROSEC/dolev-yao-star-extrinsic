@@ -141,6 +141,31 @@ type local_bytes_state_predicate {|crypto_invariants|} (tag:string) = {
   ;
 }
 
+noeq
+type local_bytes_state_update_predicate {|crypto_invariants|} (tag:string) = {
+  update_pred: trace -> principal -> state_id -> bytes -> bytes -> prop;
+  update_pred_later:
+    tr1:trace -> tr2:trace ->
+    prin:principal -> sess_id:state_id ->
+    b1:bytes -> b2:bytes ->
+    Lemma
+    (requires update_pred tr1 prin sess_id b1 b2)
+    (ensures update_pred tr2 prin sess_id b1 b2)
+  ;
+
+  update_pred_trans:
+    tr:trace ->
+    prin:principal -> sess_id:state_id ->
+    b1:bytes -> b2:bytes -> b3:bytes ->
+    Lemma
+    (requires
+      update_pred tr prin sess_id b1 b2 /\
+      update_pred tr prin sess_id b2 b3
+    )
+    (ensures update_pred tr prin sess_id b1 b3)
+  ;
+}
+
 let split_local_bytes_state_predicate_params {|crypto_invariants|} : split_function_parameters = {
   singleton_split_function_parameters string with
 
@@ -171,16 +196,64 @@ let split_local_bytes_state_predicate_params {|crypto_invariants|} : split_funct
   apply_mk_global_fun = (fun bare x -> ());
 }
 
+let split_local_bytes_state_update_predicate_params {|crypto_invariants|} : split_function_parameters = {
+  singleton_split_function_parameters string with
+
+  tagged_data_t = trace & principal & state_id & bytes & bytes;
+  raw_data_t = trace & principal & state_id & bytes & bytes;
+  output_t = prop;
+
+  decode_tagged_data = (fun (tr, prin, sess_id, sess_content1, sess_content2) -> (
+    match (parse tagged_state sess_content1, parse tagged_state sess_content2) with
+    | (Some ({tag=tag1; content=content1}),
+       Some ({tag=tag2; content=content2})) -> (
+      // We only allow updates within a single tag for now.
+      // This can be changed later if needed, by using a (string & string) as the tag,
+      // but that complicates the user-end definition of the local predicate/tag pair.
+      if tag1 = tag2
+      then Some (tag1, (tr, prin, sess_id, content1, content2))
+      else None
+    )
+    | _ -> None
+  ));
+
+  local_fun_t = local_bytes_state_update_predicate;
+  global_fun_t = trace -> principal -> state_id -> bytes -> bytes -> prop;
+
+  default_global_fun = (fun tr prin sess_id sess_content1 sess_content2 -> False);
+
+  apply_local_fun = (fun lpred (tr, prin, sess_id, content1, content2) ->
+    lpred.update_pred tr prin sess_id content1 content2
+  );
+  apply_global_fun = (fun gpred (tr, prin, sess_id, content1, content2) ->
+    gpred tr prin sess_id content1 content2
+  );
+  mk_global_fun = (fun bare -> fun tr prin sess_id content1 content2 ->
+    bare (tr, prin, sess_id, content1, content2)
+  );
+  apply_mk_global_fun = (fun bare x -> ());
+}
+
 [@@ "opaque_to_smt"]
 val has_local_bytes_state_predicate: {|protocol_invariants|} -> (dtuple2 string local_bytes_state_predicate) -> prop
 let has_local_bytes_state_predicate #invs (|tag, spred|) =
   has_local_fun split_local_bytes_state_predicate_params state_pred.pred (|tag, spred|)
+
+[@@ "opaque_to_smt"]
+val has_local_bytes_state_update_predicate: {|protocol_invariants|} -> (dtuple2 string local_bytes_state_update_predicate) -> prop
+let has_local_bytes_state_update_predicate #invs (|tag, spred|) =
+  has_local_fun split_local_bytes_state_update_predicate_params state_update_pred.update_pred (|tag, spred|)
 
 (*** Global tagged state predicate builder ***)
 
 val mk_global_local_bytes_state_predicate: {|crypto_invariants|} -> list (dtuple2 string local_bytes_state_predicate) -> trace -> principal -> state_id -> bytes -> prop
 let mk_global_local_bytes_state_predicate #cinvs tagged_local_preds =
   mk_global_fun split_local_bytes_state_predicate_params tagged_local_preds
+
+val mk_global_local_bytes_state_update_predicate: {|crypto_invariants|} -> list (dtuple2 string local_bytes_state_update_predicate) -> trace -> principal -> state_id -> bytes -> bytes -> prop
+let mk_global_local_bytes_state_update_predicate #cinvs tagged_local_preds =
+  mk_global_fun split_local_bytes_state_update_predicate_params tagged_local_preds
+
 
 #push-options "--ifuel 2" // to deconstruct nested tuples
 val mk_global_local_bytes_state_predicate_later:
@@ -217,6 +290,45 @@ let mk_global_local_bytes_state_predicate_knowable #cinvs tagged_local_preds tr 
   )
   | None -> ()
 
+#push-options "--ifuel 2" // to deconstruct nested tuples
+val mk_global_local_bytes_state_update_predicate_later:
+  {|crypto_invariants|} -> tagged_local_preds:list (dtuple2 string local_bytes_state_update_predicate) ->
+  tr1:trace -> tr2:trace -> prin:principal -> sess_id:state_id -> full_content1:bytes -> full_content2:bytes -> Lemma
+  (requires
+    mk_global_local_bytes_state_update_predicate tagged_local_preds tr1 prin sess_id full_content1 full_content2 /\
+    tr1 <$ tr2
+  )
+  (ensures mk_global_local_bytes_state_update_predicate tagged_local_preds tr2 prin sess_id full_content1 full_content2)
+let mk_global_local_bytes_state_update_predicate_later #cinvs tagged_local_preds tr1 tr2 prin sess_id full_content1 full_content2 =
+  mk_global_fun_eq split_local_bytes_state_update_predicate_params tagged_local_preds (tr1, prin, sess_id, full_content1, full_content2);
+  mk_global_fun_eq split_local_bytes_state_update_predicate_params tagged_local_preds (tr2, prin, sess_id, full_content1, full_content2);
+  introduce forall tag_set lpred content1 content2. split_local_bytes_state_update_predicate_params.apply_local_fun #tag_set lpred (tr1, prin, sess_id, content1, content2) ==> split_local_bytes_state_update_predicate_params.apply_local_fun lpred (tr2, prin, sess_id, content1, content2) with (
+    introduce _ ==> _ with _. lpred.update_pred_later tr1 tr2 prin sess_id content1 content2
+  )
+#pop-options
+
+#push-options "--ifuel 2" // to deconstruct nested tuples
+val mk_global_local_bytes_state_update_predicate_trans:
+  {|crypto_invariants|} -> tagged_local_preds:list (dtuple2 string local_bytes_state_update_predicate) ->
+  tr:trace -> prin:principal -> sess_id:state_id -> full_content1:bytes -> full_content2:bytes -> full_content3:bytes ->
+  Lemma
+  (requires
+    mk_global_local_bytes_state_update_predicate tagged_local_preds tr prin sess_id full_content1 full_content2 /\
+    mk_global_local_bytes_state_update_predicate tagged_local_preds tr prin sess_id full_content2 full_content3
+  )
+  (ensures mk_global_local_bytes_state_update_predicate tagged_local_preds tr prin sess_id full_content1 full_content3)
+let mk_global_local_bytes_state_update_predicate_trans #cinvs tagged_local_preds tr prin sess_id full_content1 full_content2 full_content3 =
+  mk_global_fun_eq split_local_bytes_state_update_predicate_params tagged_local_preds (tr, prin, sess_id, full_content1, full_content2);
+  mk_global_fun_eq split_local_bytes_state_update_predicate_params tagged_local_preds (tr, prin, sess_id, full_content2, full_content3);
+  mk_global_fun_eq split_local_bytes_state_update_predicate_params tagged_local_preds (tr, prin, sess_id, full_content1, full_content3);
+  introduce forall tag_set lpred content1 content2 content3.
+    (split_local_bytes_state_update_predicate_params.apply_local_fun #tag_set lpred (tr, prin, sess_id, content1, content2) /\
+    split_local_bytes_state_update_predicate_params.apply_local_fun #tag_set lpred (tr, prin, sess_id, content2, content3)) ==>
+      split_local_bytes_state_update_predicate_params.apply_local_fun lpred (tr, prin, sess_id, content1, content3) with (
+    introduce _ ==> _ with _. lpred.update_pred_trans tr prin sess_id content1 content2 content3
+  )
+#pop-options
+
 val mk_state_pred: {|crypto_invariants|} -> list (dtuple2 string local_bytes_state_predicate) -> state_predicate
 let mk_state_pred #cinvs tagged_local_preds =
   {
@@ -237,6 +349,27 @@ let mk_state_pred_correct #invs tagged_local_preds =
   for_allP_eq has_local_bytes_state_predicate tagged_local_preds;
   FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (mk_global_fun_correct split_local_bytes_state_predicate_params tagged_local_preds))
 
+
+val mk_state_update_pred: {|crypto_invariants|} -> list (dtuple2 string local_bytes_state_update_predicate) -> state_update_predicate
+let mk_state_update_pred #cinvs tagged_local_preds =
+  {
+    update_pred = mk_global_local_bytes_state_update_predicate tagged_local_preds;
+    update_pred_later = mk_global_local_bytes_state_update_predicate_later tagged_local_preds;
+    update_pred_trans = mk_global_local_bytes_state_update_predicate_trans tagged_local_preds;
+  }
+
+val mk_state_update_pred_correct: {|protocol_invariants|} -> tagged_local_preds:list (dtuple2 string local_bytes_state_update_predicate) -> Lemma
+  (requires
+    state_update_pred == mk_state_update_pred tagged_local_preds /\
+    List.Tot.no_repeats_p (List.Tot.map dfst tagged_local_preds)
+  )
+  (ensures for_allP has_local_bytes_state_update_predicate tagged_local_preds)
+let mk_state_update_pred_correct #invs tagged_local_preds =
+  reveal_opaque (`%has_local_bytes_state_update_predicate) (has_local_bytes_state_update_predicate);
+  no_repeats_p_implies_for_all_pairsP_unequal (List.Tot.map dfst tagged_local_preds);
+  for_allP_eq has_local_bytes_state_update_predicate tagged_local_preds;
+  FStar.Classical.forall_intro_2 (FStar.Classical.move_requires_2 (mk_global_fun_correct split_local_bytes_state_update_predicate_params tagged_local_preds))
+
 (*** Predicates on trace ***)
 
 [@@ "opaque_to_smt"]
@@ -245,6 +378,13 @@ let tagged_state_was_set tr tag prin sess_id content =
   let full_content = {tag; content;} in
   let full_content_bytes = serialize tagged_state full_content in
   state_was_set tr prin sess_id full_content_bytes
+
+[@@ "opaque_to_smt"]
+val tagged_state_was_set_at: trace -> timestamp -> string -> principal -> state_id -> bytes -> prop
+let tagged_state_was_set_at tr ts tag prin sess_id content =
+  let full_content = {tag; content;} in
+  let full_content_bytes = serialize tagged_state full_content in
+  state_was_set_at tr ts prin sess_id full_content_bytes
 
 val tagged_state_was_set_grows:
   tr1:trace -> tr2:trace ->
@@ -255,6 +395,24 @@ val tagged_state_was_set_grows:
   [SMTPat (tagged_state_was_set tr1 tag prin sid content); SMTPat (tr1 <$ tr2)]
 let tagged_state_was_set_grows tr1 tr2 tag prin sid content =
   reveal_opaque (`%tagged_state_was_set) (tagged_state_was_set)
+
+val tagged_state_was_set_at_grows:
+  tr1:trace -> tr2:trace -> ts:timestamp ->
+  tag:string -> prin:principal -> sid:state_id -> content:bytes  ->
+  Lemma
+  (requires tagged_state_was_set_at tr1 ts tag prin sid content /\ tr1 <$ tr2)
+  (ensures tagged_state_was_set_at tr2 ts tag prin sid content)
+  [SMTPat (tagged_state_was_set_at tr1 ts tag prin sid content); SMTPat (tr1 <$ tr2)]
+let tagged_state_was_set_at_grows tr1 tr2 ts tag prin sid content =
+  reveal_opaque (`%tagged_state_was_set_at) (tagged_state_was_set_at)
+
+val tagged_state_was_set_was_set_at:
+  tr:trace -> tag:string -> prin:principal -> sid:state_id -> content:bytes ->
+  Lemma
+  (tagged_state_was_set tr tag prin sid content <==> exists ts. tagged_state_was_set_at tr ts tag prin sid content)
+let tagged_state_was_set_was_set_at tr tag prin sid content =
+  reveal_opaque (`%tagged_state_was_set) (tagged_state_was_set);
+  reveal_opaque (`%tagged_state_was_set_at) (tagged_state_was_set_at)
 
 (*** API for tagged sessions ***)
 
@@ -440,13 +598,25 @@ let set_tagged_state_state_was_set tag prin sess_id content tr =
 
 val set_tagged_state_invariant:
   {|protocol_invariants|} ->
-  tag:string -> spred:local_bytes_state_predicate tag ->
+  tag:string -> spred:local_bytes_state_predicate tag -> supred:local_bytes_state_update_predicate tag ->
   prin:principal -> sess_id:state_id -> content:bytes -> tr:trace ->
   Lemma
   (requires
     spred.pred tr prin sess_id content /\
+    (
+      let old_full_content_opt = get_state_aux prin sess_id tr in
+      match old_full_content_opt with
+      | None -> True
+      | Some old_full_content ->
+        match parse tagged_state old_full_content with
+        | None -> False
+        | Some {tag=old_tag; content=old_content;} ->
+          old_tag == tag /\
+          supred.update_pred tr prin sess_id old_content content
+    ) /\
     trace_invariant tr /\
-    has_local_bytes_state_predicate (|tag, spred|)
+    has_local_bytes_state_predicate (|tag, spred|) /\
+    has_local_bytes_state_update_predicate (|tag, supred|)
   )
   (ensures (
     let ((), tr_out) = set_tagged_state tag prin sess_id content tr in
@@ -454,12 +624,27 @@ val set_tagged_state_invariant:
   ))
   [SMTPat (set_tagged_state tag prin sess_id content tr);
    SMTPat (trace_invariant tr);
-   SMTPat (has_local_bytes_state_predicate (|tag, spred|))]
-let set_tagged_state_invariant #invs tag spred prin sess_id content tr =
+   SMTPat (has_local_bytes_state_predicate (|tag, spred|));
+   SMTPat (has_local_bytes_state_update_predicate (|tag, supred|));
+  ]
+let set_tagged_state_invariant #invs tag spred supred prin sess_id content tr =
   reveal_opaque (`%has_local_bytes_state_predicate) (has_local_bytes_state_predicate);
   reveal_opaque (`%set_tagged_state) (set_tagged_state);
   let full_content = {tag; content;} in
-  local_eq_global_lemma split_local_bytes_state_predicate_params state_pred.pred tag spred (tr, prin, sess_id, serialize _ full_content) tag (tr, prin, sess_id, content)
+  local_eq_global_lemma split_local_bytes_state_predicate_params state_pred.pred tag spred (tr, prin, sess_id, serialize _ full_content) tag (tr, prin, sess_id, content);
+  // Handle update predicate if applicable
+  reveal_opaque (`%has_local_bytes_state_update_predicate) (has_local_bytes_state_update_predicate);
+  let old_full_content_opt = get_state_aux prin sess_id tr in
+  match old_full_content_opt with
+  | None -> ()
+  | Some old_full_content ->
+    match parse tagged_state old_full_content with
+    | None -> ()
+    | Some {tag=old_tag; content=old_content;} -> (
+      if tag <> old_tag
+      then ()
+      else local_eq_global_lemma split_local_bytes_state_update_predicate_params state_update_pred.update_pred tag supred (tr, prin, sess_id, old_full_content, serialize _ full_content) tag (tr, prin, sess_id, old_content, content)
+    )
 
 val get_tagged_state_same_trace:
   tag:string ->
@@ -520,3 +705,31 @@ let tagged_state_was_set_implies_pred #invs tr tag spred prin sess_id content =
   parse_serialize_inv_lemma #bytes tagged_state full_content;
   let full_content_bytes: bytes = serialize tagged_state full_content in
   local_eq_global_lemma split_local_bytes_state_predicate_params state_pred.pred tag spred (tr, prin, sess_id, full_content_bytes) tag (tr, prin, sess_id, content)
+
+val tagged_state_was_set_twice_implies_update_pred:
+  {|protocol_invariants|} -> tr:trace ->
+  ts1:timestamp -> ts2:timestamp ->
+  tag:string -> supred:local_bytes_state_update_predicate tag ->
+  prin:principal -> sess_id:state_id ->
+  content1:bytes -> content2:bytes ->
+  Lemma
+  (requires
+    tagged_state_was_set_at tr ts1 tag prin sess_id content1 /\
+    tagged_state_was_set_at tr ts2 tag prin sess_id content2 /\
+    ts1 < ts2 /\
+    trace_invariant tr /\
+    has_local_bytes_state_update_predicate (|tag, supred|)
+  )
+  (ensures
+    supred.update_pred tr prin sess_id content1 content2
+  )
+let tagged_state_was_set_twice_implies_update_pred tr ts1 ts2 tag supred prin sess_id content1 content2 =
+  reveal_opaque (`%has_local_bytes_state_update_predicate) (has_local_bytes_state_update_predicate);
+  reveal_opaque (`%tagged_state_was_set_at) (tagged_state_was_set_at);
+  let full_content1 = {tag; content=content1;} in
+  let full_content2 = {tag; content=content2;} in
+  parse_serialize_inv_lemma #bytes tagged_state full_content1;
+  parse_serialize_inv_lemma #bytes tagged_state full_content2;
+  let full_content1_bytes: bytes = serialize tagged_state full_content1 in
+  let full_content2_bytes: bytes = serialize tagged_state full_content2 in
+  local_eq_global_lemma split_local_bytes_state_update_predicate_params state_update_pred.update_pred tag supred (tr, prin, sess_id, full_content1_bytes, full_content2_bytes) tag (tr, prin, sess_id, content1, content2)
