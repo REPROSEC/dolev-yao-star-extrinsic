@@ -295,6 +295,10 @@ val state_was_set_twice_implies_update_pred:
   (ensures
     state_update_pred.update_pred tr prin sess_id content1 content2
   )
+  [SMTPat (state_was_set_at tr ts1 prin sess_id content1);
+   SMTPat (state_was_set_at tr ts2 prin sess_id content2);
+   SMTPat (trace_invariant tr);
+  ]
 let rec state_was_set_twice_implies_update_pred tr ts1 ts2 prin sess_id content1 content2 =
   let is_state_for prin sess_id e =
     match e with
