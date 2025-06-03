@@ -212,43 +212,7 @@ let prepare_msg3_proof tr global_sess_id alice alice_si bob msg_id =
       | (Some pk_b, tr) -> (
         match decode_and_verify_message2 msg_bytes alice x pk_b with
         | Some res -> (
-          decode_and_verify_message2_proof tr msg_bytes alice alice_si bob x pk_b;
-          
-          let k = dh x res.gy in
-
-          assert((exists x. res.gx == dh_pk x /\ k == dh x res.gy /\ is_secret (ephemeral_dh_key_label alice alice_si) tr x));
-
-          assert(is_publishable tr res.gx);
-          assert(is_publishable tr res.gy);
-          assert(is_knowable_by (ephemeral_dh_key_label alice alice_si) tr k);
-
-          assert((exists x sess_id. is_secret (ephemeral_dh_key_label alice sess_id) tr x /\
-            res.gx = dh_pk x));
-          assert(k `has_usage tr` AeadKey "DH.aead_key" empty);
-          assert(exists si. is_knowable_by (ephemeral_dh_key_label alice si) tr k);
-
-          let bob_not_corrupt = (~(is_corrupt tr (long_term_key_label bob))) in
-          let dh_key_and_event_respond1 = (exists y. k == dh y res.gx /\ is_dh_shared_key tr alice bob k /\ event_triggered tr bob (Respond1 alice bob res.gx res.gy y)) in
-          introduce bob_not_corrupt ==> dh_key_and_event_respond1
-          with _. (
-            assert(exists y k'. k' == dh y res.gx /\ res.gy == dh_pk y /\ event_triggered tr bob (Respond1 alice bob res.gx res.gy y));
-            eliminate exists y k'. k' == dh y res.gx /\ event_triggered tr bob (Respond1 alice bob res.gx res.gy y)
-            returns dh_key_and_event_respond1
-            with _. (
-              assert(event_triggered tr bob (Respond1 alice bob res.gx res.gy y));
-              
-              assert(dh_pk y == res.gy);
-              assert(dh_pk x = res.gx);              
-              dh_shared_secret_lemma x y;
-              assert(dh y res.gx == dh x res.gy);
-              assert(k == k');
-              
-              assert(exists si sj. get_label tr k == join (ephemeral_dh_key_label alice si) (ephemeral_dh_key_label bob sj));
-
-              assert(dh_key_and_event_respond1);
-              ()
-            )
-          )
+          decode_and_verify_message2_proof tr msg_bytes alice alice_si bob x pk_b
         )
         | None -> ()
       )
@@ -321,25 +285,6 @@ let verify_msg3_proof tr global_sess_id alice bob msg_id bob_si =
             // for our concrete k.
             assert(exists x. gx == dh_pk x /\ event_triggered tr alice (Initiate2 alice bob gx gy (dh x gy)) \/ 
               is_corrupt tr (long_term_key_label alice)  \/ is_corrupt tr (ephemeral_dh_key_label bob bob_si));
-
-            // Proof strategy: We want to work without the corruption case
-            // so we introduce this implication.
-            let alice_not_corrupt = ~(is_corrupt tr (long_term_key_label alice)) in
-            let event_initiate2 = event_triggered tr alice (Initiate2 alice bob gx gy res.k) in
-            introduce alice_not_corrupt ==> event_initiate2
-            with _. (
-              // We can now assert that there exists a x such that the event Initiate2 has been triggered
-              // without the corruption case.
-              assert(exists x. gx == dh_pk x /\ event_triggered tr alice (Initiate2 alice bob gx gy (dh x gy)));
-              // We now introduce x to concretely reason about it.
-              eliminate exists x. gx == dh_pk x /\ event_triggered tr alice (Initiate2 alice bob gx gy (dh x gy))
-              returns event_initiate2
-              with _. (
-                // We use commutativity of DH to reconcile the (dh x gy) in our hypothesis,
-                // and the (dh y gx) in event_initiate2
-                dh_shared_secret_lemma x y
-              )
-            );
 
             assert(is_corrupt tr (long_term_key_label alice) \/
               (exists si. get_label tr res.k == join (ephemeral_dh_key_label alice si) (ephemeral_dh_key_label bob bob_si)));
