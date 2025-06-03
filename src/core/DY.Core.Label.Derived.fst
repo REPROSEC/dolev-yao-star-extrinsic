@@ -14,6 +14,18 @@ let equivalent tr l1 l2 =
   l1 `can_flow tr` l2 /\
   l2 `can_flow tr` l1
 
+val intro_equivalent:
+  tr:trace -> l1:label -> l2:label -> (
+    tr_extended:trace ->
+    Lemma
+    (requires tr <$ tr_extended)
+    (ensures is_corrupt tr_extended l1 <==> is_corrupt tr_extended l2)
+  ) ->
+  Lemma (l1 `equivalent tr` l2)
+let intro_equivalent tr l1 l2 pf =
+  intro_can_flow tr l1 l2 pf;
+  intro_can_flow tr l2 l1 pf
+
 (*** Join flows to its operands ***)
 
 val join_flows_to_left:
@@ -98,12 +110,7 @@ val join_associative:
   (((l1 `join` l2) `join` l3) == (l1 `join` (l2 `join` l3)))
   [SMTPat ((l1 `join` l2) `join` l3); SMTPat (l1 `join` (l2 `join` l3))]
 let join_associative l1 l2 l3 =
-  intro_label_equal ((l1 `join` l2) `join` l3) (l1 `join` (l2 `join` l3)) (fun tr ->
-    join_flows_to_left tr (l1 `join` l2) l3;
-    join_eq tr l1 (l2 `join` l3) ((l1 `join` l2) `join` l3);
-    join_flows_to_right tr l1 (l2 `join` l3);
-    join_eq tr (l1 `join` l2) l3 (l1 `join` (l2 `join` l3))
-  )
+  intro_label_equal ((l1 `join` l2) `join` l3) (l1 `join` (l2 `join` l3)) (fun tr -> ())
 
 val join_commutes:
   l1:label -> l2:label ->
@@ -149,12 +156,7 @@ val meet_associative:
   (((l1 `meet` l2) `meet` l3) == (l1 `meet` (l2 `meet` l3)))
   [SMTPat ((l1 `meet` l2) `meet` l3); SMTPat (l1 `meet` (l2 `meet` l3))]
 let meet_associative l1 l2 l3 =
-  intro_label_equal ((l1 `meet` l2) `meet` l3) (l1 `meet` (l2 `meet` l3)) (fun tr ->
-    left_flows_to_meet tr (l1 `meet` l2) l3;
-    meet_eq tr ((l1 `meet` l2) `meet` l3) l1 (l2 `meet` l3);
-    right_flows_to_meet tr l1 (l2 `meet` l3);
-    meet_eq tr (l1 `meet` (l2 `meet` l3)) (l1 `meet` l2) l3
-  )
+  intro_label_equal ((l1 `meet` l2) `meet` l3) (l1 `meet` (l2 `meet` l3)) (fun tr -> ())
 
 val meet_commutes:
   l1:label -> l2:label ->
