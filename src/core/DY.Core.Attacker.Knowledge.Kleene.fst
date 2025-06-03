@@ -14,6 +14,14 @@ val is_subset:
 let is_subset #a set1 set2 =
   forall x. set1 x ==> set2 x
 
+val is_equal:
+  #a:Type ->
+  set_t a -> set_t a ->
+  prop
+let is_equal #a set1 set2 =
+  is_subset set1 set2 /\
+  is_subset set2 set1
+
 noeq
 type directed_chain_t (a:Type) = {
   sets: nat -> set_t a;
@@ -108,19 +116,18 @@ val mk_weakest_fixpoint_is_fixpoint:
   #a:Type ->
   f:(set_t a -> set_t a) ->
   f_properties f ->
-  Lemma
-  (is_subset (f (mk_weakest_fixpoint f)) (mk_weakest_fixpoint f))
+  Lemma (
+    is_subset (f (mk_weakest_fixpoint f)) (mk_weakest_fixpoint f) /\
+    is_subset (mk_weakest_fixpoint f) (f (mk_weakest_fixpoint f))
+  )
 let mk_weakest_fixpoint_is_fixpoint #a f f_props =
-  introduce forall x. f (mk_weakest_fixpoint f) x ==> mk_weakest_fixpoint f x
-  with introduce _ ==> _ with _. (
-    assert(f (mk_weakest_fixpoint f) x);
-    assert(f (union_set (mk_weakest_fixpoint_aux f)) x);
+  introduce forall x. f (mk_weakest_fixpoint f) x <==> mk_weakest_fixpoint f x
+  with (
     f_props.is_scott_continuous {
       sets = mk_weakest_fixpoint_aux f;
       sets_monotonic = mk_weakest_fixpoint_aux_is_monotonic f f_props;
     } x;
-    assert(forall n. f (mk_weakest_fixpoint_aux f n) x ==> mk_weakest_fixpoint_aux f (n+1) x);
-    assert(mk_weakest_fixpoint f x)
+    assert(forall n. f (mk_weakest_fixpoint_aux f n) x <==> mk_weakest_fixpoint_aux f (n+1) x)
   )
 
 val mk_weakest_fixpoint_is_weakest_aux:
