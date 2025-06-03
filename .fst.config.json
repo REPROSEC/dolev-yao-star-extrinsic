@@ -8,6 +8,7 @@
     "src/lib/crypto",
     "src/lib/event",
     "src/lib/hpke",
+    "src/lib/label",
     "src/lib/state",
     "src/lib/utils",
     "src/lib/communication",
