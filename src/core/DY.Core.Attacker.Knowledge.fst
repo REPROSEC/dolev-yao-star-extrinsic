@@ -166,7 +166,7 @@ let attacker_knows tr =
 
 /// Before proving that the attacker knowledge obeys the attacker rules
 /// (i.e. forall b. attacker_rules attacker_knows b ==> attacker_knows b)
-/// we need to prove that the tatacker rules is Scott-continuous.
+/// we need to prove that attacker_rules is Scott-continuous.
 
 #push-options "--fuel 1 --ifuel 1"
 val scott_continuous_for_allP_lemma:
