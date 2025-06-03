@@ -426,7 +426,7 @@ let traceful_modifies_get_tagged_state tag prin sess_id tr =
   reveal_opaque (`%get_tagged_state) (get_tagged_state)
 
 val set_tagged_state_state_was_set:
-  tag:string -> 
+  tag:string ->
   prin:principal -> sess_id:state_id -> content:bytes -> tr:trace ->
   Lemma
   (ensures (
@@ -462,12 +462,12 @@ let set_tagged_state_invariant #invs tag spred prin sess_id content tr =
   local_eq_global_lemma split_local_bytes_state_predicate_params state_pred.pred tag spred (tr, prin, sess_id, serialize _ full_content) tag (tr, prin, sess_id, content)
 
 val get_tagged_state_same_trace:
-  tag:string -> 
+  tag:string ->
   prin:principal -> sess_id:state_id -> tr:trace ->
   Lemma
   (ensures (
     let (opt_content, tr_out) = get_tagged_state tag prin sess_id tr in
-    tr == tr_out 
+    tr == tr_out
   ))
   [SMTPat (get_tagged_state tag prin sess_id tr);]
 let get_tagged_state_same_trace tag prin sess_id tr =
@@ -475,7 +475,7 @@ let get_tagged_state_same_trace tag prin sess_id tr =
 
 
 val get_tagged_state_state_was_set:
-  tag:string -> 
+  tag:string ->
   prin:principal -> sess_id:state_id -> tr:trace ->
   Lemma
   (ensures (
@@ -493,7 +493,7 @@ let get_tagged_state_state_was_set tag prin sess_id tr =
   | (None, _) -> ()
   | (Some _, _) -> (
     let (Some full_cont_bytes, _) = get_state prin sess_id tr in
-    serialize_parse_inv_lemma #bytes tagged_state full_cont_bytes    
+    serialize_parse_inv_lemma #bytes tagged_state full_cont_bytes
   )
 
 (*** Theorem ***)
