@@ -193,15 +193,10 @@ let rec scott_continuous_for_allP_lemma chain l =
   )
 #pop-options
 
-#push-options "--z3rlimit 25"
 val attacker_rules_properties: tr:trace -> f_properties (attacker_rules tr)
 let attacker_rules_properties tr = {
   is_scott_continuous = (fun chain x ->
-    introduce forall (p:prop). p ==> (exists (n:nat). p) with (
-      introduce _ ==> _ with _. (
-        introduce exists (n:nat). p with 0 and ()
-      )
-    );
+    introduce exists (n:nat). True with 0 and ();
     introduce forall l. for_allP (union_set chain.sets) l <==> (exists n. for_allP (chain.sets n) l) with (
       FStar.Classical.move_requires (scott_continuous_for_allP_lemma chain) l;
       introduce (exists n. for_allP (chain.sets n) l) ==> for_allP (union_set chain.sets) l with _. (
@@ -222,7 +217,6 @@ let attacker_rules_properties tr = {
     )
   );
 }
-#pop-options
 
 /// As advertised above,
 /// we can now prove that the attacker knowledge predicate
