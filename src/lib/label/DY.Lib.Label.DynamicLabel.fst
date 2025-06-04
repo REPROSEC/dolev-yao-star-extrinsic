@@ -9,9 +9,12 @@ open DY.Lib.Label.DynamicLabelEvent
 
 (*** Reveal event triggered label ***)
 
+val reveal_event_label : timestamp -> principal -> principal -> label
+let reveal_event_label ts revealed_to prin = event_triggered_label prin {to=revealed_to; point=ts;}
+
 val reveal_event_triggered_label :
   timestamp -> principal -> label
-let reveal_event_triggered_label ts revealed_to = event_triggered_by_anyone_label {to=revealed_to; point=ts;}
+let reveal_event_triggered_label ts revealed_to = big_join (reveal_event_label ts revealed_to)
 
 #push-options "--fuel 0 --ifuel 1"
 val is_corrupt_reveal_event_triggered_label:
@@ -25,8 +28,7 @@ val is_corrupt_reveal_event_triggered_label:
   [SMTPat (is_corrupt tr (reveal_event_triggered_label ts revealed_to))]
 let is_corrupt_reveal_event_triggered_label tr ts revealed_to =
   reveal_opaque (`%is_corrupt) (is_corrupt);
-  reveal_opaque (`%reveal_event_triggered_at) (reveal_event_triggered_at);
-  is_corrupt_event_triggered_by_anyone_label tr {to=revealed_to; point=ts;}
+  reveal_opaque (`%reveal_event_triggered_at) (reveal_event_triggered_at)
 #pop-options
 
 (*** Reveal principal label ***)
