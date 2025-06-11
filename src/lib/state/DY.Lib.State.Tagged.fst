@@ -147,22 +147,22 @@ type local_bytes_state_update_predicate {|crypto_invariants|} (tag:string) = {
   update_pred_later:
     tr1:trace -> tr2:trace ->
     prin:principal -> sess_id:state_id ->
-    b1:bytes -> b2:bytes ->
+    content1:bytes -> content2:bytes ->
     Lemma
-    (requires update_pred tr1 prin sess_id b1 b2)
-    (ensures update_pred tr2 prin sess_id b1 b2)
+    (requires update_pred tr1 prin sess_id content1 content2 /\ tr1 <$ tr2)
+    (ensures update_pred tr2 prin sess_id content1 content2)
   ;
 
   update_pred_trans:
     tr:trace ->
     prin:principal -> sess_id:state_id ->
-    b1:bytes -> b2:bytes -> b3:bytes ->
+    content1:bytes -> content2:bytes -> content3:bytes ->
     Lemma
     (requires
-      update_pred tr prin sess_id b1 b2 /\
-      update_pred tr prin sess_id b2 b3
+      update_pred tr prin sess_id content1 content2 /\
+      update_pred tr prin sess_id content2 content3
     )
-    (ensures update_pred tr prin sess_id b1 b3)
+    (ensures update_pred tr prin sess_id content1 content3)
   ;
 }
 
@@ -433,6 +433,27 @@ let get_tagged_state the_tag prin sess_id =
       if tag = the_tag then return (Some content)
       else return None
 
+val get_tagged_state_is_most_recent_state_for:
+  tag:string -> prin:principal -> sess_id:state_id ->
+  tr:trace ->
+  Lemma (
+    match get_tagged_state tag prin sess_id tr with
+    | (None, _) -> True
+    | (Some content, _) -> (
+      let full_content = {tag; content;} in
+      is_most_recent_state_for prin sess_id (Some (serialize tagged_state full_content)) tr
+    )
+  )
+  [SMTPat (get_tagged_state tag prin sess_id tr)]
+let get_tagged_state_is_most_recent_state_for tag prin sess_id tr =
+  reveal_opaque (`%get_tagged_state) (get_tagged_state);
+  match get_state prin sess_id tr with
+  | (None, _) -> ()
+  | (Some full_content_bytes, _) -> (
+    serialize_parse_inv_lemma #bytes tagged_state full_content_bytes;
+    ()
+  )
+
 val set_tagged_state_state_was_set:
   tag:string ->
   prin:principal -> sess_id:state_id -> content:bytes -> tr:trace ->
@@ -454,15 +475,9 @@ val set_tagged_state_invariant:
   (requires
     spred.pred tr prin sess_id content /\
     (
-      let old_full_content_opt = get_state_aux prin sess_id tr in
-      match old_full_content_opt with
-      | None -> True
-      | Some old_full_content ->
-        match parse tagged_state old_full_content with
-        | None -> False
-        | Some {tag=old_tag; content=old_content;} ->
-          old_tag == tag /\
-          supred.update_pred tr prin sess_id old_content content
+      match get_tagged_state tag prin sess_id tr with
+      | (None, _) -> is_most_recent_state_for prin sess_id None tr
+      | (Some old_content, _) -> supred.update_pred tr prin sess_id old_content content
     ) /\
     trace_invariant tr /\
     has_local_bytes_state_predicate (|tag, spred|) /\
@@ -484,17 +499,15 @@ let set_tagged_state_invariant #invs tag spred supred prin sess_id content tr =
   local_eq_global_lemma split_local_bytes_state_predicate_params state_pred.pred tag spred (tr, prin, sess_id, serialize _ full_content) tag (tr, prin, sess_id, content);
   // Handle update predicate if applicable
   reveal_opaque (`%has_local_bytes_state_update_predicate) (has_local_bytes_state_update_predicate);
-  let old_full_content_opt = get_state_aux prin sess_id tr in
-  match old_full_content_opt with
-  | None -> ()
-  | Some old_full_content ->
-    match parse tagged_state old_full_content with
-    | None -> ()
-    | Some {tag=old_tag; content=old_content;} -> (
-      if tag <> old_tag
-      then ()
-      else local_eq_global_lemma split_local_bytes_state_update_predicate_params state_update_pred.update_pred tag supred (tr, prin, sess_id, old_full_content, serialize _ full_content) tag (tr, prin, sess_id, old_content, content)
-    )
+
+  match get_tagged_state tag prin sess_id tr with
+  | (None, _) -> assert(get_most_recent_state_for_ghost tr prin sess_id == None)
+  | (Some old_content, _) -> (
+    let old_full_content = {tag; content=old_content;} in
+    local_eq_global_lemma split_local_bytes_state_update_predicate_params state_update_pred.update_pred tag supred (tr, prin, sess_id, serialize _ old_full_content, serialize _ full_content) tag (tr, prin, sess_id, old_content, content);
+    assert(get_most_recent_state_for_ghost tr prin sess_id == Some (serialize _ old_full_content));
+    ()
+  )
 
 val get_tagged_state_same_trace:
   tag:string ->
