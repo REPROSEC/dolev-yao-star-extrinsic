@@ -135,18 +135,10 @@ let trace_entry_invariant #invs tr entry =
     // Stored states satisfy the custom state predicate
     invs.trace_invs.state_pred.pred tr prin sess_id content /\
     (
-      let is_state_for prin sess_id e =
-        match e with
-        | SetState prin' sess_id' content -> prin = prin' && sess_id = sess_id'
-        | _ -> false
-      in
-      let ts_old_opt = trace_search_last tr (is_state_for prin sess_id) in
-      match ts_old_opt with
+      match get_most_recent_state_for_ghost tr prin sess_id with
       | None -> True
-      | Some ts_old -> (
-        let SetState _ _ content_old = get_entry_at tr ts_old in
-        invs.trace_invs.state_update_pred.update_pred tr prin sess_id content_old content
-      )
+      | Some old_content ->
+        invs.trace_invs.state_update_pred.update_pred tr prin sess_id old_content content
     )
   )
   | Event prin tag content -> (
@@ -293,24 +285,25 @@ val state_was_set_twice_implies_update_pred:
    SMTPat (trace_invariant tr);
   ]
 let rec state_was_set_twice_implies_update_pred tr ts1 ts2 prin sess_id content1 content2 =
-  let is_state_for prin sess_id e =
-    match e with
-    | SetState prin' sess_id' content -> prin = prin' && sess_id = sess_id'
-    | _ -> false
-  in
-  let Some ts' = trace_search_last (prefix tr ts2) (is_state_for prin sess_id) in
-  let SetState _ _ content' = get_entry_at tr ts' in
-
   entry_at_implies_trace_entry_invariant tr ts2 (SetState prin sess_id content2);
-  state_update_pred.update_pred_later (prefix tr ts2) tr prin sess_id content' content2;
+  match get_most_recent_state_for_ghost (prefix tr ts2) prin sess_id with
+  | None -> ()
+  | Some prev_content -> (
+    state_update_pred.update_pred_later (prefix tr ts2) tr prin sess_id prev_content content2;
 
-  if ts1 < ts'
-  then (
-    state_was_set_twice_implies_update_pred tr ts1 ts' prin sess_id content1 content';
-    state_update_pred.update_pred_trans tr prin sess_id content1 content' content2;
-    ()
+    eliminate exists ts. ts1 <= ts /\ ts < ts2 /\ state_was_set_at tr ts prin sess_id prev_content
+    returns state_update_pred.update_pred tr prin sess_id content1 content2
+    with _. (
+      if ts = ts1
+      then ()
+      else (
+        state_was_set_twice_implies_update_pred tr ts1 ts prin sess_id content1 prev_content;
+        state_update_pred.update_pred_trans tr prin sess_id content1 prev_content content2;
+        ()
+      )
+    )
   )
-  else ()
+
 
 /// Triggered protocol events satisfy the event predicate.
 
