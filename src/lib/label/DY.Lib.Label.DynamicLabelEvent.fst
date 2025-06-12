@@ -8,8 +8,8 @@ open DY.Lib.Comparse.Parsers
 
 [@@ with_bytes bytes]
 type reveal_event_format = {
-  [@@@ with_parser #bytes ps_string]
-  to:string;
+  [@@@ with_parser #bytes ps_principal]
+  to:principal;
   [@@@ with_parser #bytes ps_timestamp]
   point:timestamp;
 }
@@ -30,11 +30,14 @@ let default_reveal_event_predicate (#crypto_invs:crypto_invariants) : reveal_eve
       (
         (
           is_knowable_by (principal_label prin) tr b \/
+          is_publishable tr b \/
           a.to = prin // this is for the initial reveal (creator of a secret must reveal it to themselves initially (and they can't 'know' it at this point))
         ) /\
-        rand_generated_at tr a.point b
-      ) // \/
-      // is_publishable tr b // if the bytes we would like to reveal are publishable, then we can reveal to whomever.
+        (
+          rand_generated_at tr a.point b \/
+          is_publishable tr b // if the bytes we would like to reveal are publishable, then we can reveal to whomever.
+        )
+      )
 
 (*** Reveal Event Definitions ***)
 
