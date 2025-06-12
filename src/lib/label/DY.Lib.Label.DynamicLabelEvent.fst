@@ -26,15 +26,15 @@ let reveal_event_predicate = event_predicate reveal_event_format
 
 let default_reveal_event_predicate (#crypto_invs:crypto_invariants) : reveal_event_predicate =
   fun tr prin a ->
-    exists (b:bytes) (l:pos).
+    exists (b:bytes).
       (
         (
           is_knowable_by (principal_label prin) tr b \/
           a.to = prin // this is for the initial reveal (creator of a secret must reveal it to themselves initially (and they can't 'know' it at this point))
         ) /\
         rand_generated_at tr a.point b
-      ) \/
-      is_publishable tr b // if the bytes we would like to reveal are publishable, then we can reveal to whomever.
+      ) // \/
+      // is_publishable tr b // if the bytes we would like to reveal are publishable, then we can reveal to whomever.
 
 (*** Reveal Event Definitions ***)
 
