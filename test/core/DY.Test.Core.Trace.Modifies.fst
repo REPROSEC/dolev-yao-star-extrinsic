@@ -26,17 +26,17 @@ val broad_unmodified_proof :
   Lemma (
     let (new_sid, tr_out) = broad_unmodified_test prin tr_in in
     sid == new_sid \/
-    (get_state_would_return prin sid content_opt tr_in ==>
-     get_state_would_return prin sid content_opt tr_out
+    (is_most_recent_state_for prin sid content_opt tr_in ==>
+     is_most_recent_state_for prin sid content_opt tr_out
     )
   )
 let broad_unmodified_proof prin sid content_opt tr_in =
   let (new_sid, tr_out) = broad_unmodified_test prin tr_in in
   if sid = new_sid then ()
   else begin
-    introduce get_state_would_return prin sid content_opt tr_in ==>
-              get_state_would_return prin sid content_opt tr_out
-    with _. traceful_get_state_would_return_later prin sid content_opt (broad_unmodified_test prin) tr_in
+    introduce is_most_recent_state_for prin sid content_opt tr_in ==>
+              is_most_recent_state_for prin sid content_opt tr_out
+    with _. traceful_is_most_recent_state_for_later prin sid content_opt (broad_unmodified_test prin) tr_in
   end
 
 /// This test, similar to the previous, validates the modifies analysis, particularly
@@ -58,17 +58,17 @@ val optional_unmodified_proof :
   Lemma (
     let (new_sid_opt, tr_out) = optional_unmodified_test prin tr_in in
     (Some sid) == new_sid_opt \/
-    (get_state_would_return prin sid content_opt tr_in ==>
-     get_state_would_return prin sid content_opt tr_out
+    (is_most_recent_state_for prin sid content_opt tr_in ==>
+     is_most_recent_state_for prin sid content_opt tr_out
     )
   )
 let optional_unmodified_proof prin sid content_opt tr_in =
   let (new_sid_opt, tr_out) = optional_unmodified_test prin tr_in in
   if (Some sid) = new_sid_opt then ()
   else begin
-    introduce get_state_would_return prin sid content_opt tr_in ==>
-              get_state_would_return prin sid content_opt tr_out
-    with _. traceful_get_state_would_return_later prin sid content_opt (optional_unmodified_test prin) tr_in
+    introduce is_most_recent_state_for prin sid content_opt tr_in ==>
+              is_most_recent_state_for prin sid content_opt tr_out
+    with _. traceful_is_most_recent_state_for_later prin sid content_opt (optional_unmodified_test prin) tr_in
   end
 
 /// The following tests ensure that the automation works despite branching, first
@@ -98,17 +98,17 @@ val branch_unmodified_proof :
     let ((new_sid1, new_sid2), tr_out) = branch_unmodified_test prin tr_in in
     sid == new_sid1 \/
     sid == new_sid2 \/
-    (get_state_would_return prin sid content_opt tr_in ==>
-     get_state_would_return prin sid content_opt tr_out
+    (is_most_recent_state_for prin sid content_opt tr_in ==>
+     is_most_recent_state_for prin sid content_opt tr_out
     )
   )
 let branch_unmodified_proof prin sid content_opt tr_in =
   let ((new_sid1, new_sid2), tr_out) = branch_unmodified_test prin tr_in in
   if sid = new_sid1 || sid = new_sid2 then ()
   else begin
-    introduce get_state_would_return prin sid content_opt tr_in ==>
-              get_state_would_return prin sid content_opt tr_out
-    with _. traceful_get_state_would_return_later prin sid content_opt (branch_unmodified_test prin) tr_in
+    introduce is_most_recent_state_for prin sid content_opt tr_in ==>
+              is_most_recent_state_for prin sid content_opt tr_out
+    with _. traceful_is_most_recent_state_for_later prin sid content_opt (branch_unmodified_test prin) tr_in
   end
 #pop-options
 
@@ -136,16 +136,16 @@ val branch_unmodified_proof_2 :
   Lemma (
     let ((new_sid1, new_sid2), tr_out) = branch_unmodified_test_2 prin tr_in in
     sid == new_sid1 \/
-    (get_state_would_return prin sid content_opt tr_in ==>
-     get_state_would_return prin sid content_opt tr_out
+    (is_most_recent_state_for prin sid content_opt tr_in ==>
+     is_most_recent_state_for prin sid content_opt tr_out
     )
   )
 let branch_unmodified_proof_2 prin sid content_opt tr_in =
   let ((new_sid1, new_sid2), tr_out) = branch_unmodified_test_2 prin tr_in in
   if sid = new_sid1 then ()
   else begin
-    introduce get_state_would_return prin sid content_opt tr_in ==>
-              get_state_would_return prin sid content_opt tr_out
-    with _. traceful_get_state_would_return_later prin sid content_opt (branch_unmodified_test_2 prin) tr_in
+    introduce is_most_recent_state_for prin sid content_opt tr_in ==>
+              is_most_recent_state_for prin sid content_opt tr_out
+    with _. traceful_is_most_recent_state_for_later prin sid content_opt (branch_unmodified_test_2 prin) tr_in
   end
  #pop-options

@@ -247,55 +247,25 @@ val traceful_modifies_trigger_event :
 let traceful_modifies_trigger_event prin tag b tr =
   reveal_opaque (`%trigger_event) (trigger_event)
 
+/// The following two lemmas allow us to propagate the is_most_recent_state_for predicate
+/// when a given address is unmodified.
 
-/// This predicate captures a key notion, that a given address has the specified contents (or
-/// lack of contents) as its most recently stored value.
-
-[@@ "opaque_to_smt"]
-val get_state_would_return :
-  prin:principal -> sid:state_id ->
-  st_opt: option bytes -> tr:trace ->
-  prop
-let get_state_would_return prin sid st_opt tr =
-  get_state_aux prin sid tr == st_opt
-
-
-/// The following lemmas provide ways to prove, propagate, and use the get_state_would_return predicate.
-
-val set_state_get_state_would_return :
-  prin:principal -> sid:state_id ->
-  content:bytes -> tr:trace ->
-  Lemma
-  (requires True)
-  (ensures (
-    let (_, tr_out) = set_state prin sid content tr in
-    get_state_would_return prin sid (Some content) tr_out
-  ))
-  [SMTPat (set_state prin sid content tr)]
-let set_state_get_state_would_return prin sid content tr =
-  reveal_opaque (`%get_state_would_return) get_state_would_return
-
-val get_state_would_return_later :
+val is_most_recent_state_for_later :
   prin:principal -> sid:state_id ->
   content_opt:option bytes ->
   tr1:trace -> tr2:trace ->
   Lemma
   (requires tr1 <$ tr2 /\
-    get_state_would_return prin sid content_opt tr1 /\
+    is_most_recent_state_for prin sid content_opt tr1 /\
     trace_does_not_modify_addr prin sid (tr2 <--> tr1)
   )
-  (ensures get_state_would_return prin sid content_opt tr2)
+  (ensures is_most_recent_state_for prin sid content_opt tr2)
   [SMTPat (tr1 <$ tr2);
-   SMTPat (get_state_would_return prin sid content_opt tr2);
+   SMTPat (is_most_recent_state_for prin sid content_opt tr2);
    SMTPat (trace_does_not_modify_addr prin sid (tr2 <--> tr1));
   ]
-let get_state_would_return_later prin sid content_opt tr1 tr2 =
-  reveal_opaque (`%get_state_would_return) get_state_would_return;
-  let is_state_for prin sess_id e =
-    match e with
-    | SetState prin' sess_id' content -> prin = prin' && sess_id = sess_id'
-    | _ -> false
-  in
+let is_most_recent_state_for_later prin sid content_opt tr1 tr2 =
+  reveal_opaque (`%is_most_recent_state_for) is_most_recent_state_for;
   let ts_opt = trace_search_last (tr2 <--> tr1) (is_state_for prin sid) in
   introduce Some? ts_opt ==> False
   with _. begin
@@ -305,42 +275,24 @@ let get_state_would_return_later prin sid content_opt tr1 tr2 =
   trace_search_last_subtract tr1 tr2 (is_state_for prin sid);
   ()
 
-val traceful_get_state_would_return_later :
+val traceful_is_most_recent_state_for_later :
   (#a:Type) -> prin:principal -> sid:state_id ->
   content_opt:option bytes ->
   f:traceful a -> tr:trace ->
   Lemma
-  (requires get_state_would_return prin sid content_opt tr /\
+  (requires is_most_recent_state_for prin sid content_opt tr /\
     traceful_does_not_modify_addr prin sid f tr
   )
   (ensures (
     let (_, tr_out) = f tr in
-    get_state_would_return prin sid content_opt tr_out
+    is_most_recent_state_for prin sid content_opt tr_out
   ))
   [SMTPat (f tr);
-   SMTPat (get_state_would_return prin sid content_opt tr);
+   SMTPat (is_most_recent_state_for prin sid content_opt tr);
    SMTPat (traceful_does_not_modify_addr prin sid f tr);
   ]
-let traceful_get_state_would_return_later prin sid content_opt f tr =
+let traceful_is_most_recent_state_for_later prin sid content_opt f tr =
   let (_, tr_out) = f tr in
-  // Triggers get_state_would_return_later
+  // Triggers is_most_recent_state_for_later
   assert(trace_does_not_modify_addr prin sid (tr_out <--> tr));
   ()
-
-val get_state_would_return_get_state :
-  prin:principal -> sid:state_id ->
-  content_opt:option bytes -> tr:trace ->
-  Lemma
-  (requires get_state_would_return prin sid content_opt tr)
-  (ensures (
-    let (content_opt', _) = get_state prin sid tr in
-    content_opt == content_opt'
-  ))
-  [SMTPat (get_state prin sid tr);
-   SMTPat (get_state_would_return prin sid content_opt tr);
-  ]
-let get_state_would_return_get_state prin sid content_opt tr =
-  reveal_opaque (`%get_state_would_return) get_state_would_return;
-  ()
-
-
