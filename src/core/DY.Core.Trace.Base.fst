@@ -887,3 +887,65 @@ val find_event_triggered_at_timestamp_later:
    SMTPat (tr1 <$ tr2)
   ]
 let find_event_triggered_at_timestamp_later #label_t tr1 tr2 prin tag content = ()
+
+/// Some helpful functions for working with/reasoning about state.
+/// These primarily serve to make it easier to talk about the current/
+/// most recent value stored at a given principal/state ID pair.
+/// This is useful for reasoning about the evolution of state.
+
+/// Is a trace entry a state of a particular principal/state ID?
+
+val is_state_for:
+  #label_t:Type ->
+  principal -> state_id -> trace_entry_ label_t ->
+  bool
+let is_state_for prin sess_id e =
+  match e with
+  | SetState prin' sess_id' _ -> prin = prin' && sess_id = sess_id'
+  | _ -> false
+
+/// It is often useful to reason about the most recent state at a given
+/// principal/state ID, and this function allows us to access that state
+/// (if it exists) for proof reasons.
+val get_most_recent_state_for_ghost:
+  #label_t:Type ->
+  trace_ label_t -> principal -> state_id ->
+  GTot (option bytes)
+let get_most_recent_state_for_ghost #label_t tr prin sess_id =
+  match trace_search_last tr (is_state_for prin sess_id) with
+  | None -> None
+  | Some ts ->
+    let SetState _ _ content = get_entry_at tr ts in
+    Some content
+
+[@@ "opaque_to_smt"]
+val is_most_recent_state_for:
+  principal -> state_id ->
+  option bytes -> trace ->
+  prop
+let is_most_recent_state_for prin sess_id st_opt tr =
+  get_most_recent_state_for_ghost tr prin sess_id == st_opt
+
+/// The most recent state (if not None) must have been set at some point.
+val is_most_recent_state_for_state_was_set:
+  prin:principal -> sess_id:state_id ->
+  content:bytes -> tr:trace ->
+  Lemma
+  (requires is_most_recent_state_for prin sess_id (Some content) tr)
+  (ensures state_was_set tr prin sess_id content)
+  [SMTPat (is_most_recent_state_for prin sess_id (Some content) tr)]
+let is_most_recent_state_for_state_was_set prin sess_id content tr =
+  reveal_opaque (`%is_most_recent_state_for) (is_most_recent_state_for);
+  let Some _ = get_most_recent_state_for_ghost tr prin sess_id in
+  ()
+
+val is_most_recent_state_for_get_most_recent_state_for_ghost:
+  prin:principal -> sess_id:state_id -> st_opt:option bytes -> tr:trace ->
+  Lemma
+  (requires is_most_recent_state_for prin sess_id st_opt tr)
+  (ensures get_most_recent_state_for_ghost tr prin sess_id == st_opt)
+  [SMTPat (get_most_recent_state_for_ghost tr prin sess_id);
+   SMTPat (is_most_recent_state_for prin sess_id st_opt tr);
+  ]
+let is_most_recent_state_for_get_most_recent_state_for_ghost prin sess_id st_opt tr =
+  reveal_opaque (`%is_most_recent_state_for) (is_most_recent_state_for)

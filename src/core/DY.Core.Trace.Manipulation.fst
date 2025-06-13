@@ -435,11 +435,6 @@ let new_session_id prin =
 
 val get_state_aux: principal -> state_id -> tr:trace -> option bytes
 let get_state_aux prin sess_id tr =
-  let is_state_for prin sess_id e =
-    match e with
-    | SetState prin' sess_id' content -> prin = prin' && sess_id = sess_id'
-    | _ -> false
-  in
   let? state_ts = trace_search_last tr (is_state_for prin sess_id) in
   let SetState _ _ content = get_entry_at tr state_ts in
   Some content
@@ -465,6 +460,19 @@ val new_session_id_same_trace:
 let new_session_id_same_trace prin tr =
   normalize_term_spec new_session_id
 
+val set_state_is_most_recent_state_for:
+  prin:principal -> sess_id:state_id ->
+  content:bytes -> tr:trace ->
+  Lemma
+  (ensures (
+    let ((), tr_out) = set_state prin sess_id content tr in
+    is_most_recent_state_for prin sess_id (Some content) tr_out
+  ))
+  [SMTPat (set_state prin sess_id content tr);]
+let set_state_is_most_recent_state_for prin sess_id content tr =
+  reveal_opaque (`%set_state) (set_state);
+  reveal_opaque (`%is_most_recent_state_for) (is_most_recent_state_for);
+  ()
 
 val set_state_state_was_set:
   prin:principal -> sess_id:state_id -> content:bytes -> tr:trace ->
@@ -521,6 +529,36 @@ val get_state_same_trace:
 let get_state_same_trace prin sess_id tr =
   reveal_opaque (`%get_state) get_state
 
+val is_most_recent_state_for_get_state:
+  prin:principal -> sess_id:state_id ->
+  content_opt:option bytes -> tr:trace ->
+  Lemma
+  (requires is_most_recent_state_for prin sess_id content_opt tr)
+  (ensures (
+    let (content_opt', _) = get_state prin sess_id tr in
+    content_opt == content_opt'
+  ))
+  [SMTPat (is_most_recent_state_for prin sess_id content_opt tr);
+   SMTPat (get_state prin sess_id tr);
+  ]
+let is_most_recent_state_for_get_state prin sess_id content_opt tr =
+  reveal_opaque (`%get_state) (get_state);
+  reveal_opaque (`%is_most_recent_state_for) (is_most_recent_state_for);
+  ()
+
+val get_state_is_most_recent_state_for:
+  prin:principal -> sess_id:state_id ->
+  tr:trace ->
+  Lemma
+  (ensures (
+    let (content_opt, tr_out) = get_state prin sess_id tr in
+    is_most_recent_state_for prin sess_id content_opt tr
+  ))
+  [SMTPat (get_state prin sess_id tr);]
+let get_state_is_most_recent_state_for prin sess_id tr =
+  reveal_opaque (`%get_state) (get_state);
+  reveal_opaque (`%is_most_recent_state_for) (is_most_recent_state_for);
+  ()
 
 #push-options "--ifuel 1"
 val get_state_aux_state_was_set:
