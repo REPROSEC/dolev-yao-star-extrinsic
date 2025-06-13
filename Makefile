@@ -7,7 +7,8 @@ INNER_SOURCE_DIRS = core lib lib/comparse lib/crypto lib/event lib/hpke lib/labe
 SOURCE_DIRS = $(addprefix $(DY_HOME)/src/, $(INNER_SOURCE_DIRS))
 INNER_EXAMPLE_DIRS = nsl_pk iso_dh
 EXAMPLE_DIRS ?= $(addprefix $(DY_HOME)/examples/, $(INNER_EXAMPLE_DIRS))
-TEST_DIRS = $(addprefix $(DY_HOME)/test/, $(INNER_SOURCE_DIRS))
+INNER_TEST_DIRS = core
+TEST_DIRS = $(addprefix $(DY_HOME)/test/, $(INNER_TEST_DIRS))
 
 INCLUDE_DIRS = $(SOURCE_DIRS) $(TEST_DIRS) $(EXAMPLE_DIRS) $(COMPARSE_HOME)/src
 FSTAR_INCLUDE_DIRS = $(addprefix --include , $(INCLUDE_DIRS))
