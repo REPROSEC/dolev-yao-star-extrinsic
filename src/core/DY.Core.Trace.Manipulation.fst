@@ -460,6 +460,25 @@ val new_session_id_same_trace:
 let new_session_id_same_trace prin tr =
   normalize_term_spec new_session_id
 
+val new_session_id_is_most_recent_state_for:
+  prin:principal -> tr:trace ->
+  Lemma
+  (ensures (
+    let (sess_id, tr_out) = new_session_id prin tr in
+    is_most_recent_state_for prin sess_id None tr
+  ))
+  [SMTPat (new_session_id prin tr)]
+let new_session_id_is_most_recent_state_for prin tr =
+  reveal_opaque (`%new_session_id) (new_session_id);
+  reveal_opaque (`%is_most_recent_state_for) (is_most_recent_state_for);
+  let (sess_id, tr_out) = new_session_id prin tr in
+  match get_most_recent_state_for_ghost tr prin sess_id with
+  | None -> ()
+  | Some content -> (
+    assert(is_most_recent_state_for prin sess_id (Some content) tr);
+    compute_new_session_id_correct prin tr sess_id content
+  )
+
 val set_state_is_most_recent_state_for:
   prin:principal -> sess_id:state_id ->
   content:bytes -> tr:trace ->
