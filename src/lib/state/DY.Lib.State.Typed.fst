@@ -142,6 +142,16 @@ type local_state_update_predicate {|crypto_invariants|} (a:Type) {|local_state a
   ;
 }
 
+val default_local_state_update_pred:
+  {|crypto_invariants|} ->
+  a:Type -> {|local_state a|} ->
+  local_state_update_predicate a
+let default_local_state_update_pred #cinvs a #ls_a = {
+  update_pred = (fun tr prin sess_id content1 content2 -> True);
+  update_pred_later = (fun tr1 tr2 prin sess_id content1 content2 -> ());
+  update_pred_trans = (fun tr prin sess_id content1 content2 content3 -> ());
+}
+
 val local_state_predicate_to_local_bytes_state_predicate:
   {|crypto_invariants|} ->
   #a:Type -> {|local_state a|} ->

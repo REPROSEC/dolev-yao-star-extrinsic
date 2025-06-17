@@ -166,6 +166,15 @@ type local_bytes_state_update_predicate {|crypto_invariants|} (tag:string) = {
   ;
 }
 
+val default_local_bytes_state_update_pred:
+  {|crypto_invariants|} -> (tag:string) ->
+  local_bytes_state_update_predicate tag
+let default_local_bytes_state_update_pred tag = {
+  update_pred = (fun tr prin sess_id content1 content2 -> True);
+  update_pred_later = (fun tr1 tr2 prin sess_id content1 content2 -> ());
+  update_pred_trans = (fun tr prin sess_id content1 content2 content3 -> ());
+}
+
 let split_local_bytes_state_predicate_params {|crypto_invariants|} : split_function_parameters = {
   singleton_split_function_parameters string with
 
