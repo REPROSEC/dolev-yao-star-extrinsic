@@ -49,7 +49,9 @@ val initialize_communication_proof:
   (requires
     trace_invariant tr /\
     has_private_keys_invariant /\
-    has_pki_invariant
+    has_private_keys_state_update_invariant /\
+    has_pki_invariant /\
+    has_pki_state_update_invariant
   )
   (ensures (
     let (_, tr_out) = initialize_communication sender receiver tr in

@@ -28,12 +28,12 @@ instance parseable_serializeable_bytes_com_send_byte: parseable_serializeable by
 /// Data structure to return data from communication layer functions
 type communication_message (a:Type) = {
   sender:principal;
-  receiver:principal;  
+  receiver:principal;
   payload:a;
 }
 
 [@@with_bytes bytes]
-type signature_input = 
+type signature_input =
   | Plain: sender:principal -> receiver:principal -> payload:bytes -> signature_input
   | Encrypted: sender:principal -> receiver:principal -> payload:bytes -> pk:bytes -> signature_input
 
