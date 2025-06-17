@@ -70,6 +70,7 @@ val send_request_proof:
   (requires
     trace_invariant tr /\
     has_pki_invariant /\
+    has_pki_state_update_invariant /\
     has_communication_layer_crypto_predicates /\
     has_communication_layer_reqres_event_predicates request_response_event_preconditions higher_layer_preds /\
     has_communication_layer_state_predicates /\
