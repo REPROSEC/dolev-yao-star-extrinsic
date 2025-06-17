@@ -90,12 +90,18 @@ val state_predicates_communication_layer_and_tag:
 let state_predicates_communication_layer_and_tag #cinvs =
   mk_local_state_tag_and_pred state_predicates_communication_layer
 
+val state_update_predicates_communication_layer_and_tag:
+  {|crypto_invariants|} ->
+  dtuple2 string local_bytes_state_update_predicate
+let state_update_predicates_communication_layer_and_tag #cinvs =
+  mk_local_state_tag_and_update_pred (default_local_state_update_pred communication_states)
+
 val has_communication_layer_state_predicates:
   {|protocol_invariants|} ->
   prop
 let has_communication_layer_state_predicates #invs =
-  has_local_state_predicate state_predicates_communication_layer
-
+  has_local_state_predicate state_predicates_communication_layer /\
+  has_local_state_update_predicate (default_local_state_update_pred communication_states)
 
 (*** Event Predicates ***)
 
