@@ -108,6 +108,7 @@ val join_associative:
   l1:label -> l2:label -> l3:label ->
   Lemma
   (((l1 `join` l2) `join` l3) == (l1 `join` (l2 `join` l3)))
+  [SMTPat ((l1 `join` l2) `join` l3); SMTPat (l1 `join` (l2 `join` l3))]
 let join_associative l1 l2 l3 =
   intro_label_equal ((l1 `join` l2) `join` l3) (l1 `join` (l2 `join` l3)) (fun tr -> ())
 
@@ -115,6 +116,7 @@ val join_commutes:
   l1:label -> l2:label ->
   Lemma
   ((l1 `join` l2) == (l2 `join` l1))
+  [SMTPat (l1 `join` l2); SMTPat (l2 `join` l1)]
 let join_commutes l1 l2 =
   intro_label_equal (l1 `join` l2) (l2 `join` l1) (fun tr -> ())
 
@@ -152,15 +154,16 @@ val meet_associative:
   l1:label -> l2:label -> l3:label ->
   Lemma
   (((l1 `meet` l2) `meet` l3) == (l1 `meet` (l2 `meet` l3)))
+  [SMTPat ((l1 `meet` l2) `meet` l3); SMTPat (l1 `meet` (l2 `meet` l3))]
 let meet_associative l1 l2 l3 =
   intro_label_equal ((l1 `meet` l2) `meet` l3) (l1 `meet` (l2 `meet` l3)) (fun tr -> ())
 
 val meet_commutes:
-  tr:trace ->
   l1:label -> l2:label ->
   Lemma
   ((l1 `meet` l2) == (l2 `meet` l1))
-let meet_commutes tr l1 l2 =
+  [SMTPat (l1 `meet` l2); SMTPat (l2 `meet` l1)]
+let meet_commutes l1 l2 =
   intro_label_equal (l1 `meet` l2) (l2 `meet` l1) (fun tr -> ())
 
 val meet_label_public:
