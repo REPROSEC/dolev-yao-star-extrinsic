@@ -141,7 +141,7 @@ val guarded_authentication_lemma:
   Lemma
   (requires is_corrupt tr g)
   (ensures
-    is_corrupt tr (guarded l g) \/ (
+    (guarded l g `can_flow tr` public) \/ (
       exists tr_before_ev.
         ~(is_corrupt tr_before_ev g) /\
         tr_before_ev <$ tr /\
