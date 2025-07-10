@@ -304,6 +304,46 @@ let rec state_was_set_twice_implies_update_pred tr ts1 ts2 prin sess_id content1
     )
   )
 
+val most_recent_state_update_pred:
+  {|protocol_invariants|} ->
+  tr:trace ->
+  prin:principal -> sess_id:state_id ->
+  content1:bytes -> content2:bytes ->
+  Lemma
+  (requires
+    state_was_set tr prin sess_id content1 /\
+    is_most_recent_state_for prin sess_id (Some content2) tr /\
+    trace_invariant tr
+  )
+  (ensures
+    state_update_pred.update_pred tr prin sess_id content1 content2 \/
+    content1 == content2
+  )
+let most_recent_state_update_pred #invs tr prin sess_id content1 content2 =
+  eliminate exists ts1. state_was_set_at tr ts1 prin sess_id content1
+  returns state_update_pred.update_pred tr prin sess_id content1 content2 \/ content1 == content2
+  with _. begin
+    is_most_recent_state_for_get_most_recent_state_for_ghost prin sess_id (Some content2) tr;
+    assert(exists ts2. state_was_set_at tr ts2 prin sess_id content2 /\ ts1 <= ts2)
+  end
+
+val state_was_set_has_most_recent_state:
+  {|protocol_invariants|} ->
+  tr:trace ->
+  prin:principal -> sess_id:state_id ->
+  content1:bytes ->
+  Lemma
+  (requires
+    state_was_set tr prin sess_id content1 /\
+    trace_invariant tr
+  )
+  (ensures
+    exists content2. is_most_recent_state_for prin sess_id (Some content2) tr
+  )
+let state_was_set_has_most_recent_state #invs tr prin sess_id content1 =
+  let st_opt = get_most_recent_state_for_ghost tr prin sess_id in
+  is_most_recent_state_for_get_most_recent_state_for_ghost prin sess_id st_opt tr
+
 
 /// Triggered protocol events satisfy the event predicate.
 
