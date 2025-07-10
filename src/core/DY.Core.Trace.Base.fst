@@ -949,8 +949,8 @@ let is_most_recent_state_for_state_was_set prin sess_id content tr =
 val is_most_recent_state_for_get_most_recent_state_for_ghost:
   prin:principal -> sess_id:state_id -> st_opt:option bytes -> tr:trace ->
   Lemma
-  (requires is_most_recent_state_for prin sess_id st_opt tr)
-  (ensures get_most_recent_state_for_ghost tr prin sess_id == st_opt)
+  (is_most_recent_state_for prin sess_id st_opt tr <==>
+  get_most_recent_state_for_ghost tr prin sess_id == st_opt)
   [SMTPat (get_most_recent_state_for_ghost tr prin sess_id);
    SMTPat (is_most_recent_state_for prin sess_id st_opt tr);
   ]
