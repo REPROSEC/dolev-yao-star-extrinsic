@@ -535,3 +535,68 @@ val state_was_set_implies_pred:
 let state_was_set_implies_pred #a #ls #invs tr spred prin sess_id content =
   parse_serialize_inv_lemma #bytes a content;
   reveal_opaque (`%state_was_set) (state_was_set #a)
+
+val state_was_set_twice_implies_update_pred:
+  #a:Type -> {|local_state a|} ->
+  {|protocol_invariants|} -> tr:trace ->
+  ts1:timestamp -> ts2:timestamp ->
+  supred:local_state_update_predicate a ->
+  prin:principal -> sess_id:state_id ->
+  content1:a -> content2:a ->
+  Lemma
+  (requires
+    state_was_set_at tr ts1 prin sess_id content1 /\
+    state_was_set_at tr ts2 prin sess_id content2 /\
+    ts1 < ts2 /\
+    trace_invariant tr /\
+    has_local_state_update_predicate supred
+  )
+  (ensures
+    supred.update_pred tr prin sess_id content1 content2
+  )
+  [SMTPat (state_was_set_at tr ts1 prin sess_id content1);
+   SMTPat (state_was_set_at tr ts2 prin sess_id content2);
+   SMTPat (trace_invariant tr);
+   SMTPat (has_local_state_update_predicate supred);
+  ]
+let state_was_set_twice_implies_update_pred #a #ls_a #invs tr ts1 ts2 supred prin sess_id content1 content2 =
+  reveal_opaque (`%state_was_set_at) (state_was_set_at #a);
+  let content1_bytes = serialize _ content1 in
+  let content2_bytes = serialize _ content2 in
+  let tagged_supred = local_state_update_predicate_to_local_bytes_state_update_predicate supred in
+  tagged_state_was_set_twice_implies_update_pred tr ts1 ts2 ls_a.tag tagged_supred prin sess_id content1_bytes content2_bytes;
+  ()
+
+val most_recent_state_update_pred:
+  #a:Type -> {|local_state a|} ->
+  {|protocol_invariants|} ->
+  tr:trace ->
+  supred:local_state_update_predicate a ->
+  prin:principal -> sess_id:state_id ->
+  content:a ->
+  Lemma
+  (requires
+    state_was_set tr prin sess_id content /\
+    trace_invariant tr /\
+    has_local_state_update_predicate supred
+  )
+  (ensures (
+    match get_state prin sess_id tr with
+    | (None, _) -> False
+    | (Some new_content, _) -> (
+      supred.update_pred tr prin sess_id content new_content \/
+      content == new_content
+    )
+  ))
+  [SMTPat (state_was_set tr prin sess_id content);
+   SMTPat (trace_invariant tr);
+   SMTPat (has_local_state_update_predicate supred);
+   SMTPat (get_state #a prin sess_id tr);
+  ]
+let most_recent_state_update_pred #a #ls_a #invs tr supred prin sess_id content =
+  reveal_opaque (`%state_was_set) (state_was_set #a);
+  reveal_opaque (`%get_state) (get_state #a);
+  let content_bytes = serialize _ content in
+  let tagged_supred = local_state_update_predicate_to_local_bytes_state_update_predicate supred in
+  most_recent_tagged_state_update_pred tr ls_a.tag tagged_supred prin sess_id content_bytes;
+  ()
