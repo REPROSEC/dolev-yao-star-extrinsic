@@ -396,6 +396,7 @@ let keys_same rows1 rows2 =
 
 
 /// TODO Not currently used
+#push-options "--fuel 1"
 val get_rows_grows:
   {|protocol_invariants|} ->
   #row_t:Type0 -> {|db_types row_t|} ->
@@ -414,6 +415,8 @@ val get_rows_grows:
     List.Tot.Base.length rows1 <= List.Tot.Base.length rows2
   ))
 let rec get_rows_grows #invs #row_t #db_t db_pred tr1 tr2 prin ptrs =
+  let rows1 = get_rows #row_t tr1 prin ptrs in
+  let rows2 = get_rows #row_t tr2 prin ptrs in
   normalize_term_spec (get_rows #row_t tr1 prin ptrs);
   normalize_term_spec (get_rows #row_t tr2 prin ptrs);
   match ptrs with
@@ -422,27 +425,52 @@ let rec get_rows_grows #invs #row_t #db_t db_pred tr1 tr2 prin ptrs =
     let rows1' = get_rows #row_t tr1 prin ptrs' in
     let rows2' = get_rows #row_t tr2 prin ptrs' in
     get_rows_grows db_pred tr1 tr2 prin ptrs';
+    normalize_term_spec (get_rows #row_t tr1 prin ptrs');
+    normalize_term_spec (get_rows #row_t tr2 prin ptrs');
+    assert(List.Tot.Base.length (get_rows #row_t tr2 prin ptrs') <= List.Tot.Base.length (get_rows #row_t tr2 prin ptrs)) by (
+      let open FStar.Tactics in
+      grewrite (quote ptrs) (quote (ptr::ptrs'));
+      iseq [idtac; assumption; idtac];
+      norm [delta_only [`%get_rows]; zeta];
+      norm [iota];
+      let t1 = quote (List.Tot.Base.choose (get_row_opt #row_t tr2 prin) (ptr::ptrs')) in
+      let t2 = norm_term [delta_only [`%List.Tot.Base.choose]; zeta] t1 in
+      change_with t1 t2;
+      seq (fun () -> destruct (quote (get_row_opt #row_t tr2 prin ptr))) (fun () ->
+        let res = intros () in
+        guard(Cons? res);
+        let x = List.Tot.Base.last res in
+        grewrite_eq x;
+        smt();
+        ()
+      )
+    );
     match get_row_opt #row_t tr1 prin ptr with
-    | None -> (
-      assert(get_rows #row_t tr1 prin ptrs == get_rows #row_t tr1 prin ptrs') by (
-        let open FStar.Tactics in
-        norm [delta_only [`%get_rows]; zeta];
-        grewrite (quote ptrs) (quote (ptr::ptrs'));
-        iseq [idtac; assumption];
-        trans ();
-        norm [delta_only [`%List.Tot.Base.choose]; zeta; iota];
-        grewrite (quote (get_row_opt #row_t tr1 prin ptr)) (`None);
-        iseq [idtac; assumption];
-        iseq [trefl; trefl]
-      );
-      assert(List.Tot.Base.length rows1' <= List.Tot.Base.length rows2');
-      admit()
-    )
+    | None -> ()
     | Some row1 -> (
       let Some row2 = get_row_opt #row_t tr2 prin ptr in
-      admit()
+      assert(List.Tot.Base.length rows1 == (1 + List.Tot.Base.length rows1')) by (
+        let open FStar.Tactics in
+        trans();
+        grewrite (quote rows1) (quote (row1::rows1'));
+        iseq [idtac; smt; idtac];
+        norm [delta_only [`%List.Tot.Base.length]; zeta];
+        norm [iota];
+        iseq [trefl; trefl]
+      );
+      assert(List.Tot.Base.length rows2 == (1 + List.Tot.Base.length rows2')) by (
+        let open FStar.Tactics in
+        trans();
+        grewrite (quote rows2) (quote (row2::rows2'));
+        iseq [idtac; smt; idtac];
+        norm [delta_only [`%List.Tot.Base.length]; zeta];
+        norm [iota];
+        iseq [trefl; trefl]
+      );
+      ()
     )
   )
+#pop-options
 
 (*
 val get_rows_keys_same:
