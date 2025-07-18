@@ -228,46 +228,14 @@ val db_session_update_invariant:
   local_state_update_predicate db #(local_state_db row_t)
 let db_session_update_invariant #cinvs #row_t #db_t db_pred = {
   update_pred = (fun tr prin sess_id db1 db2 ->
-    // TODO: Should this be stronger, enforcing order too?
-    // Does it really matter?
-    // Should we use a set instead of a list to begin with?
-    List.Tot.Base.subset db1.rows db2.rows
+    // Does order really matter? Should we be using a set instead?
+    squash (List.Tot.Base.strict_suffix_of (db1.rows) (db2.rows))
   );
   update_pred_later = (fun tr1 tr2 prin sess_id db1 db2 -> ());
   update_pred_trans = (fun tr prin sess_id db1 db2 db3 -> ());
 }
 
 /// Predicates needed to define the event predicate
-
-val is_pointer_to_row :
-  #row_t:Type0 -> {|db_types row_t|} ->
-  tr:trace ->
-  prin:principal -> row_state_id:state_id ->
-  prop
-let is_pointer_to_row #row_t #db_t tr prin row_state_id =
-  let (row_opt, _) = get_state #row_t prin row_state_id tr in
-  Some? row_opt
-
-val get_row_by_pointer :
-  #row_t:Type0 -> {|db_types row_t|} ->
-  tr:trace ->
-  prin:principal -> row_state_id:state_id{is_pointer_to_row #row_t tr prin row_state_id} ->
-  row_t
-let get_row_by_pointer #row_t #db_t tr prin row_state_id =
-  let (row_opt, _) = get_state #row_t prin row_state_id tr in
-  Some?.v row_opt
-
-[@@ "opaque_to_smt"]
-val get_rows:
-  #row_t:Type0 -> {|db_types row_t|} ->
-  tr:trace -> prin:principal ->
-  ptrs:list state_id ->
-  (_:squash (for_allP (is_pointer_to_row #row_t tr prin) ptrs)) ->
-  list row_t
-let get_rows #row_t #db_t tr prin ptrs _ =
-  for_allP_eq (is_pointer_to_row #row_t tr prin) ptrs;
-  let ptrs = List.Tot.Base.list_ref #state_id #(is_pointer_to_row #row_t tr prin) ptrs in
-  List.Tot.Base.map (get_row_by_pointer #row_t tr prin) ptrs
 
 val get_row_opt:
   #row_t:Type0 -> {|db_types row_t|} ->
@@ -278,45 +246,12 @@ let get_row_opt #row_t #db_t tr prin ptr =
   let (row_opt, _) = get_state #row_t prin ptr tr in
   row_opt
 
-val get_row_opts:
-  #row_t:Type0 -> {|db_types row_t|} ->
-  tr:trace -> prin:principal ->
-  ptrs:list state_id ->
-  list (option row_t)
-let get_row_opts #row_t #db_t tr prin ptrs =
-  List.Tot.Base.map (get_row_opt tr prin) ptrs
-
-// TODO Needed?
-#push-options "--fuel 1 --ifuel 1"
-val unfold_get_row_opts:
-  #row_t:Type0 -> {|db_types row_t|} ->
-  tr:trace -> prin:principal ->
-  ptrs:list state_id ->
-  Lemma
-  (
-    get_row_opts #row_t tr prin ptrs == (match ptrs with
-    | [] -> []
-    | ptr::ptrs' -> (get_row_opt tr prin ptr)::(get_row_opts tr prin ptrs')
-    )
-  )
-let unfold_get_row_opts #row_t #db_t tr prin ptrs = ()
-#pop-options
-
-val get_rows':
+val get_rows:
   #row_t:Type0 -> {|db_types row_t|} ->
   tr:trace -> prin:principal ->
   ptrs:list state_id ->
   list row_t
-let get_rows' #row_t #db_t tr prin ptrs =
-  let row_opts = get_row_opts tr prin ptrs in
-  List.Tot.Base.choose (fun x -> x) row_opts
-
-val get_rows'':
-  #row_t:Type0 -> {|db_types row_t|} ->
-  tr:trace -> prin:principal ->
-  ptrs:list state_id ->
-  list row_t
-let get_rows'' #row_t #db_t tr prin ptrs =
+let get_rows #row_t #db_t tr prin ptrs =
   List.Tot.Base.choose (get_row_opt tr prin) ptrs
 
 #push-options "--fuel 1"
@@ -332,48 +267,24 @@ let rec choose_shrinks f l =
 #pop-options
 
 #push-options "--fuel 1 --ifuel 1"
-val unfold_get_rows'':
+val unfold_get_rows:
   #row_t:Type0 -> {|db_types row_t|} ->
   tr:trace -> prin:principal ->
   ptrs:list state_id ->
   Lemma
-  (requires List.Tot.Base.length ptrs == List.Tot.Base.length (get_rows'' #row_t tr prin ptrs))
+  (requires List.Tot.Base.length ptrs == List.Tot.Base.length (get_rows #row_t tr prin ptrs))
   (ensures (
     match ptrs with
-    | [] -> get_rows'' #row_t tr prin ptrs == []
+    | [] -> get_rows #row_t tr prin ptrs == []
     | ptr::ptrs' -> (
       Some? (get_row_opt #row_t tr prin ptr) /\
-      get_rows'' tr prin ptrs == (Some?.v (get_row_opt tr prin ptr))::(get_rows'' #row_t tr prin ptrs')
+      get_rows tr prin ptrs == (Some?.v (get_row_opt tr prin ptr))::(get_rows #row_t tr prin ptrs')
     )
   ))
-let unfold_get_rows'' #row_t #db_t tr prin ptrs =
+let unfold_get_rows #row_t #db_t tr prin ptrs =
   match ptrs with
   | [] -> ()
   | ptr::ptrs' -> choose_shrinks (get_row_opt #row_t tr prin) ptrs'
-#pop-options
-
-#push-options "--fuel 1 --ifuel 1"
-val tmp:
-  #row_t:Type0 -> {|db_types row_t|} ->
-  tr:trace -> prin:principal ->
-  ptrs:list state_id ->
-  Lemma
-  (requires List.Tot.Base.for_all (Some?) (get_row_opts #row_t tr prin ptrs))
-  (ensures (
-    let row_opts = get_row_opts tr prin ptrs in
-    let rows = get_rows' tr prin ptrs in
-    row_opts == List.Tot.Base.map #row_t (Some) rows
-  ))
-let tmp #row_t #db_t tr prin ptrs =
-  let rows = get_rows' tr prin ptrs in
-  let row_opts = get_row_opts tr prin ptrs in
-  assert(row_opts == List.Tot.Base.map #row_t (Some) rows) by (
-    // Provable but would need recursion
-    let open FStar.Tactics in
-    norm [delta_only [`%get_rows'; `%List.Tot.Base.choose]; zeta];
-    dump "";
-    tadmit()
-  )
 #pop-options
 
 /// TODO
@@ -392,36 +303,6 @@ let tmp #row_t #db_t tr prin ptrs =
 /// - implementation uses this and checks uniqueness.
 /// Enough?
 
-#push-options "--ifuel 1 --fuel 1"
-val unfold_get_rows:
-  #row_t:Type0 -> {|db_types row_t|} ->
-  tr:trace -> prin:principal ->
-  ptrs:list state_id ->
-  Lemma
-  (requires for_allP (is_pointer_to_row #row_t tr prin) ptrs)
-  (ensures (
-    for_allP_eq (is_pointer_to_row #row_t tr prin) ptrs;
-    match ptrs with
-    | [] -> get_rows #row_t tr prin ptrs _ == []
-    | ptr::ptrs' -> get_rows tr prin ptrs _ == (get_row_by_pointer #row_t tr prin ptr)::(get_rows tr prin ptrs' _)
-  ))
-let unfold_get_rows #row_t #db_t tr prin ptrs =
-  reveal_opaque (`%get_rows) (get_rows #row_t);
-  match ptrs with
-  | [] -> assert_norm(get_rows #row_t tr prin ptrs _ == [])
-  | ptr::ptrs' -> (
-    for_allP_eq (is_pointer_to_row #row_t tr prin) ptrs;
-    assert(get_rows tr prin ptrs _ == (get_row_by_pointer #row_t tr prin ptr)::(get_rows tr prin ptrs' _)) by (
-      let open FStar.Tactics in
-      trans();
-      grewrite (quote ptrs) (quote (ptr::ptrs'));
-      iseq [idtac; assumption];
-      norm [delta_only [`%List.Tot.Base.list_ref; `%List.Tot.Base.map]; zeta];
-      norm [iota];
-      iterAll trefl
-    )
-  )
-
 val key_unique:
   #row_t:Type0 -> {|db_types row_t|} ->
   rows_list:list row_t ->
@@ -432,11 +313,11 @@ let key_unique #row_t #db_t rows_list key =
   let keys_list = List.Tot.Base.map get_key rows_list in
   List.Tot.Base.noRepeats keys_list
 
-val keys_unique:
+val all_db_keys_unique:
   #row_t:Type0 -> {|db_types row_t|} ->
   rows_list:list row_t ->
   bool
-let keys_unique #row_t #db_t rows_list =
+let all_db_keys_unique #row_t #db_t rows_list =
   List.Tot.Base.for_all (key_unique rows_list) db_t.keys
 
 val db_event_predicate:
@@ -448,12 +329,12 @@ let db_event_predicate #cinvs #row_t #db_t db_pred =
   fun tr prin e ->
     (match e with
     | {db_sess_id; db_row_pointers} -> (
-      let rows = get_rows'' #row_t tr prin db_row_pointers in
+      let rows = get_rows #row_t tr prin db_row_pointers in
       List.Tot.Base.length rows == List.Tot.Base.length db_row_pointers /\
-      keys_unique #row_t rows
+      all_db_keys_unique #row_t rows
     (*
       for_allP (is_pointer_to_row #row_t tr prin) db_row_pointers /\
-      keys_unique #row_t (get_rows tr prin db_row_pointers _)
+      all_db_keys_unique #row_t (get_rows tr prin db_row_pointers _)
       *)
     ))
 
@@ -513,7 +394,9 @@ val keys_same:
 let keys_same rows1 rows2 =
   (fun (|t, get_key|) -> List.Tot.map get_key rows1 == List.Tot.map get_key rows2)
 
-val get_rows''_grows:
+
+/// TODO Not currently used
+val get_rows_grows:
   {|protocol_invariants|} ->
   #row_t:Type0 -> {|db_types row_t|} ->
   db_pred:db_predicate row_t ->
@@ -526,16 +409,43 @@ val get_rows''_grows:
     has_db_state_invariants db_pred
   ))
   (ensures (
-    let rows1 = get_rows'' #row_t tr1 prin ptrs in
-    let rows2 = get_rows'' #row_t tr2 prin ptrs in
+    let rows1 = get_rows #row_t tr1 prin ptrs in
+    let rows2 = get_rows #row_t tr2 prin ptrs in
     List.Tot.Base.length rows1 <= List.Tot.Base.length rows2
   ))
-let rec get_rows''_grows #invs #row_t #db_t db_pred tr1 tr2 prin ptrs =
+let rec get_rows_grows #invs #row_t #db_t db_pred tr1 tr2 prin ptrs =
+  normalize_term_spec (get_rows #row_t tr1 prin ptrs);
+  normalize_term_spec (get_rows #row_t tr2 prin ptrs);
   match ptrs with
   | [] -> ()
-  | ptr::ptrs' -> get_rows''_grows db_pred tr1 tr2 prin ptrs'
+  | ptr::ptrs' -> (
+    let rows1' = get_rows #row_t tr1 prin ptrs' in
+    let rows2' = get_rows #row_t tr2 prin ptrs' in
+    get_rows_grows db_pred tr1 tr2 prin ptrs';
+    match get_row_opt #row_t tr1 prin ptr with
+    | None -> (
+      assert(get_rows #row_t tr1 prin ptrs == get_rows #row_t tr1 prin ptrs') by (
+        let open FStar.Tactics in
+        norm [delta_only [`%get_rows]; zeta];
+        grewrite (quote ptrs) (quote (ptr::ptrs'));
+        iseq [idtac; assumption];
+        trans ();
+        norm [delta_only [`%List.Tot.Base.choose]; zeta; iota];
+        grewrite (quote (get_row_opt #row_t tr1 prin ptr)) (`None);
+        iseq [idtac; assumption];
+        iseq [trefl; trefl]
+      );
+      assert(List.Tot.Base.length rows1' <= List.Tot.Base.length rows2');
+      admit()
+    )
+    | Some row1 -> (
+      let Some row2 = get_row_opt #row_t tr2 prin ptr in
+      admit()
+    )
+  )
 
-val get_rows''_keys_same:
+(*
+val get_rows_keys_same:
   {|protocol_invariants|} ->
   #row_t:Type0 -> {|db_t:db_types row_t|} ->
   db_pred:db_predicate row_t ->
@@ -543,26 +453,27 @@ val get_rows''_keys_same:
   prin:principal -> ptrs:list state_id ->
   Lemma
   (requires (
-    List.Tot.Base.length (get_rows'' #row_t tr1 prin ptrs) == List.Tot.Base.length ptrs /\
+    List.Tot.Base.length (get_rows #row_t tr1 prin ptrs) == List.Tot.Base.length ptrs /\
     tr1 <$ tr2 /\
     trace_invariant tr2 /\
     has_db_state_invariants db_pred
   ))
   (ensures (
-    let rows1 = get_rows'' #row_t tr1 prin ptrs in
-    let rows2 = get_rows'' #row_t tr2 prin ptrs in
+    let rows1 = get_rows #row_t tr1 prin ptrs in
+    let rows2 = get_rows #row_t tr2 prin ptrs in
     for_allP (keys_same rows1 rows2) db_t.keys
   ))
-let rec get_rows''_keys_same #invs #row_t #db_t db_pred tr1 tr2 prin ptrs =
-  let rows1 = get_rows'' #row_t tr1 prin ptrs in
-  let rows2 = get_rows'' #row_t tr2 prin ptrs in
+let rec get_rows_keys_same #invs #row_t #db_t db_pred tr1 tr2 prin ptrs =
+  let rows1 = get_rows #row_t tr1 prin ptrs in
+  let rows2 = get_rows #row_t tr2 prin ptrs in
   for_allP_eq (keys_same rows1 rows2) db_t.keys;
   match ptrs with
   | [] -> ()
   | ptr::ptrs' -> (
-    unfold_get_rows'' #row_t tr1 prin ptrs;
+    unfold_get_rows #row_t tr1 prin ptrs;
     admit()
   )
+*)
 
 #push-options "--fuel 1 --ifuel 1"
 val db_event_pred_later:
@@ -582,31 +493,31 @@ val db_event_pred_later:
     (db_event_predicate db_pred) tr2 prin e
   ))
 let db_event_pred_later #invs #row_t #db_t db_pred tr1 tr2 prin e =
-  let rows1 = get_rows'' #row_t tr1 prin e.db_row_pointers in
-  let rows2 = get_rows'' #row_t tr2 prin e.db_row_pointers in
+  let rows1 = get_rows #row_t tr1 prin e.db_row_pointers in
+  let rows2 = get_rows #row_t tr2 prin e.db_row_pointers in
   let rec tmp_lemma (ptrs:list state_id) :
     Lemma
-    (requires List.Tot.Base.length (get_rows'' #row_t tr1 prin ptrs) == List.Tot.Base.length ptrs)
+    (requires List.Tot.Base.length (get_rows #row_t tr1 prin ptrs) == List.Tot.Base.length ptrs)
     (ensures (
-      let rows1 = get_rows'' #row_t tr1 prin ptrs in
-      let rows2 = get_rows'' #row_t tr2 prin ptrs in
+      let rows1 = get_rows #row_t tr1 prin ptrs in
+      let rows2 = get_rows #row_t tr2 prin ptrs in
       List.Tot.Base.length rows2 == List.Tot.Base.length ptrs /\
       (for_allP (keys_same rows1 rows2) db_t.keys)
     ))
-  = let rows1 = get_rows'' #row_t tr1 prin ptrs in
-    let rows2 = get_rows'' #row_t tr2 prin ptrs in
+  = let rows1 = get_rows #row_t tr1 prin ptrs in
+    let rows2 = get_rows #row_t tr2 prin ptrs in
     for_allP_eq (keys_same rows1 rows2) db_t.keys;
     match ptrs with
     | [] -> ()
     | ptr::ptrs' -> (
-      unfold_get_rows'' #row_t tr1 prin ptrs;
+      unfold_get_rows #row_t tr1 prin ptrs;
       let Some row1 = get_row_opt #row_t tr1 prin ptr in
       let Some row2 = get_row_opt #row_t tr2 prin ptr in
       for_allP_eq (update_preserves_key row1 row2) db_t.keys;
 
       tmp_lemma ptrs';
-      let rows1' = get_rows'' #row_t tr1 prin ptrs' in
-      let rows2' = get_rows'' #row_t tr2 prin ptrs' in
+      let rows1' = get_rows #row_t tr1 prin ptrs' in
+      let rows2' = get_rows #row_t tr2 prin ptrs' in
       for_allP_eq (keys_same rows1' rows2') db_t.keys;
       for_allP_eq (keys_same rows1 rows2) db_t.keys;
       ()
@@ -617,52 +528,6 @@ let db_event_pred_later #invs #row_t #db_t db_pred tr1 tr2 prin e =
   List.Tot.Base.for_all_mem (key_unique rows2) db_t.keys;
   for_allP_eq (keys_same rows1 rows2) db_t.keys;
   ()
-(*
-  for_allP_eq (is_pointer_to_row #row_t tr1 prin) e.db_row_pointers;
-  for_allP_eq (is_pointer_to_row #row_t tr2 prin) e.db_row_pointers;
-  introduce forall sess_id. List.Tot.Base.memP sess_id e.db_row_pointers ==> is_pointer_to_row #row_t tr2 prin sess_id
-  with introduce _ ==> _ with _. begin
-    let old_row = get_row_by_pointer tr1 prin sess_id in
-    most_recent_state_update_pred tr2 (db_row_state_update_invariant db_pred) prin sess_id old_row
-  end;
-  let rows1 = get_rows tr1 prin e.db_row_pointers _ in
-  let rows2 = get_rows tr2 prin e.db_row_pointers _ in
-  List.Tot.Base.for_all_mem (key_unique rows1) db_t.keys;
-  List.Tot.Base.for_all_mem (key_unique rows2) db_t.keys;
-  introduce forall key. List.Tot.Base.memP key db_t.keys ==> key_unique rows2 key
-  with introduce _ ==> _ with _. begin
-    let rec tmp_lemma (ptrs:list state_id) :
-      Lemma
-      (requires (
-        for_allP (is_pointer_to_row #row_t tr1 prin) ptrs /\
-        for_allP (is_pointer_to_row #row_t tr2 prin) ptrs
-      ))
-      (ensures (
-        let rows1 = get_rows tr1 prin ptrs _ in
-        let rows2 = get_rows tr2 prin ptrs _ in
-        let (|t, get_key|) = key in
-        List.Tot.Base.map get_key rows1 == List.Tot.Base.map get_key rows2
-      ))
-    = let (|_, get_key|) = key in
-      unfold_get_rows #row_t tr1 prin ptrs;
-      unfold_get_rows #row_t tr2 prin ptrs;
-      match ptrs with
-      | [] -> ()
-      | ptr::ptrs' -> (
-        // This can be simplified down to just the two lemma calls,
-        // but it's clearer what is being done this way.
-        let row1::_ = get_rows tr1 prin ptrs _ in
-        let row2::_ = get_rows tr2 prin ptrs _ in
-        eliminate row1 == row2 \/ (db_row_state_update_invariant db_pred).update_pred tr2 prin ptr row1 row2
-        returns get_key row1 == get_key row2
-        with _. ()
-        and _. for_allP_eq (update_preserves_key row1 row2) db_t.keys;
-        tmp_lemma ptrs'
-      )
-    in
-    tmp_lemma e.db_row_pointers
-  end
-  *)
 
 (*** Database API ***)
 
@@ -687,10 +552,10 @@ val add_row:
 let add_row #row_t #db_t prin sess_id row =
   let*? curr_db = get_state #db #(local_state_db row_t) prin sess_id in
   let* tr = get_trace in
-  let old_rows = get_rows'' tr prin curr_db.rows in
+  let old_rows = get_rows tr prin curr_db.rows in
   // We check before generating the new session ID to ensure that
   // the trace is unchanged if the check fails.
-  guard_tr(keys_unique #row_t (row::old_rows));*?
+  guard_tr(all_db_keys_unique #row_t (row::old_rows));*?
   let* row_sess_id = new_session_id prin in
   let new_db = { rows = row_sess_id::curr_db.rows } in
   set_state prin row_sess_id row;*
@@ -803,9 +668,9 @@ let add_row_invariant #invs #row_t #db_t db_pred prin sess_id row tr =
     assert(tr' == tr);
     let (tr', tr'') = get_trace tr in
     assert(tr' == tr /\ tr'' == tr);
-    let old_rows = get_rows'' tr prin curr_db.rows in
-    let (_, tr') = guard_tr (keys_unique #row_t (row::old_rows)) tr in
-    assert(keys_unique #row_t (row::old_rows));
+    let old_rows = get_rows tr prin curr_db.rows in
+    let (_, tr') = guard_tr (all_db_keys_unique #row_t (row::old_rows)) tr in
+    assert(all_db_keys_unique #row_t (row::old_rows));
     assert(tr == tr');
     let (row_sess_id, tr_sid) = new_session_id prin tr in
     let new_db = { rows = row_sess_id::curr_db.rows } in
@@ -818,18 +683,18 @@ let add_row_invariant #invs #row_t #db_t db_pred prin sess_id row tr =
     let new_db_event:db_event row_t = {db_sess_id=sess_id; db_row_pointers=new_db.rows} in
     let i = find_event_triggered_at_timestamp tr prin curr_db_event in
     db_event_pred_later db_pred (prefix tr i) tr_row_set prin({db_sess_id=sess_id; db_row_pointers=curr_db.rows});
-    let old_rows' = get_rows'' #row_t tr_row_set prin curr_db.rows in
+    let old_rows' = get_rows #row_t tr_row_set prin curr_db.rows in
     assert(List.Tot.Base.length old_rows' == List.Tot.Base.length curr_db.rows);
     // Probably proveable with a lemma -- analogous to event pred later
     assume(for_allP (keys_same old_rows old_rows') db_t.keys);
-    let new_rows = get_rows'' #row_t tr_row_set prin new_db.rows in
+    let new_rows = get_rows #row_t tr_row_set prin new_db.rows in
     assert(List.Tot.Base.length new_rows == List.Tot.Base.length new_db.rows);
     assume(new_rows == row::old_rows);
-    assert(keys_unique new_rows);
+    assert(all_db_keys_unique new_rows);
     let (_, tr_ev) = trigger_event prin ({db_sess_id=sess_id; db_row_pointers = new_db.rows} <: db_event row_t) tr_row_set in
     assert(trace_invariant tr_ev);
     assume(get_state #db #(local_state_db row_t) prin sess_id tr_ev == (Some curr_db, tr_ev));
-    assume((db_session_update_invariant db_pred).update_pred tr_ev prin sess_id curr_db new_db);
+    assert_norm((db_session_update_invariant db_pred).update_pred tr_ev prin sess_id curr_db new_db);
     set_state_invariant (db_session_invariant db_pred) (db_session_update_invariant db_pred) prin sess_id new_db tr_ev;
     let (_, tr_db_set) = set_state #db #(local_state_db row_t) prin sess_id new_db tr_ev in
     assert(trace_invariant tr_db_set);
@@ -841,10 +706,10 @@ let add_row_invariant #invs #row_t #db_t db_pred prin sess_id row tr =
 (*
   let*? curr_db = get_state #db #(local_state_db row_t) prin sess_id in
   let* tr = get_trace in
-  let old_rows = get_rows'' tr prin curr_db.rows in
+  let old_rows = get_rows tr prin curr_db.rows in
   // We check before generating the new session ID to ensure that
   // the trace is unchanged if the check fails.
-  guard_tr(keys_unique #row_t (row::old_rows));*?
+  guard_tr(all_db_keys_unique #row_t (row::old_rows));*?
   let* row_sess_id = new_session_id prin in
   let new_db = { rows = row_sess_id::curr_db.rows } in
   set_state prin row_sess_id row;*
