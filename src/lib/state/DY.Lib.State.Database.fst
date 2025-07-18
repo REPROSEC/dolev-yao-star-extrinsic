@@ -8,7 +8,7 @@ open DY.Lib.Comparse.Parsers
 open DY.Lib.State.Typed
 open DY.Lib.Event.Typed
 
-#set-options "--fuel 0 --ifuel 1"
+#set-options "--fuel 1 --ifuel 1"
 
 /// This module defines a generic database-like state, which allows
 /// for storing structured records (analogously to database rows),
@@ -449,24 +449,8 @@ let rec get_rows_grows #invs #row_t #db_t db_pred tr1 tr2 prin ptrs =
     | None -> ()
     | Some row1 -> (
       let Some row2 = get_row_opt #row_t tr2 prin ptr in
-      assert(List.Tot.Base.length rows1 == (1 + List.Tot.Base.length rows1')) by (
-        let open FStar.Tactics in
-        trans();
-        grewrite (quote rows1) (quote (row1::rows1'));
-        iseq [idtac; smt; idtac];
-        norm [delta_only [`%List.Tot.Base.length]; zeta];
-        norm [iota];
-        iseq [trefl; trefl]
-      );
-      assert(List.Tot.Base.length rows2 == (1 + List.Tot.Base.length rows2')) by (
-        let open FStar.Tactics in
-        trans();
-        grewrite (quote rows2) (quote (row2::rows2'));
-        iseq [idtac; smt; idtac];
-        norm [delta_only [`%List.Tot.Base.length]; zeta];
-        norm [iota];
-        iseq [trefl; trefl]
-      );
+      assert(List.Tot.Base.length rows1 == (1 + List.Tot.Base.length rows1'));
+      assert(List.Tot.Base.length rows2 == (1 + List.Tot.Base.length rows2'));
       ()
     )
   )
