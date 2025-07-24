@@ -262,9 +262,7 @@ let rec choose_shrinks f l =
   match l with
   | [] -> ()
   | x::xs -> choose_shrinks f xs
-#pop-options
 
-#push-options "--fuel 1 --ifuel 1"
 val unfold_get_rows:
   #row_t:Type0 -> {|db_types row_t|} ->
   tr:trace -> prin:principal ->
