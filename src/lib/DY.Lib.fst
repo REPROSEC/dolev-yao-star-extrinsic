@@ -25,6 +25,7 @@ include DY.Lib.State.Tagged
 include DY.Lib.State.Typed
 
 /// Various state helpers
+include DY.Lib.State.Database
 include DY.Lib.State.Map
 include DY.Lib.State.PKI
 include DY.Lib.State.PrivateKeys
