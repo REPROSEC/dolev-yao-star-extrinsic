@@ -515,6 +515,26 @@ let db_event_pred_later #invs #row_t #db_t db_pred tr1 tr2 prin e =
   for_allP_eq (key_same_all_rows rows1 rows2) db_t.keys;
   ()
 
+val db_event_triggered_implies_event_pred:
+  {|protocol_invariants|} ->
+  #row_t:Type0 -> {|db_types row_t|} ->
+  db_pred:db_predicate row_t ->
+  tr:trace -> prin:principal -> e:db_event row_t ->
+  Lemma
+  (requires (
+    event_triggered tr prin e /\
+    trace_invariant tr /\
+    has_db_invariants db_pred
+  ))
+  (ensures (db_event_predicate db_pred) tr prin e)
+  [SMTPat (event_triggered tr prin e);
+   SMTPat (trace_invariant tr);
+   SMTPat (has_db_invariants db_pred);
+  ]
+let db_event_triggered_implies_event_pred #invs #row_t #db_t db_pred tr prin e =
+  let i = find_event_triggered_at_timestamp tr prin e in
+  db_event_pred_later db_pred (prefix tr i) tr prin e
+
 (*** Database API ***)
 
 [@@ "opaque_to_smt"]
@@ -539,10 +559,11 @@ let add_row #row_t #db_t prin sess_id row =
   let*? curr_db = get_state #db #(local_state_db row_t) prin sess_id in
   let* tr = get_trace in
   let old_rows = get_rows tr prin curr_db.rows in
-  // We check before generating the new session ID to ensure that
-  // the trace is unchanged if the check fails.
-  guard_tr(all_db_keys_unique #row_t (row::old_rows));*?
   let* row_sess_id = new_session_id prin in
+  // We check before setting the state to ensure that
+  // the trace is unchanged if the check fails.
+  guard_tr (row_sess_id <> sess_id);*?
+  guard_tr (all_db_keys_unique #row_t (row::old_rows));*?
   let new_db = { rows = row_sess_id::curr_db.rows } in
   set_state prin row_sess_id row;*
   trigger_event prin ({db_sess_id=sess_id; db_row_pointers=new_db.rows} <: db_event row_t);*
@@ -606,20 +627,59 @@ let initialize_db_invariant #invs #row_t #db_t db_pred prin tr =
   reveal_opaque (`%initialize_db) (initialize_db);
   let (sid, tr_out) = initialize_db row_t prin tr in
   let (sess_id, tr_sid) = new_session_id prin tr in
-  assert(is_most_recent_state_for prin sess_id None tr_sid);
-  assert(sid == sess_id);
   db_event_pred_empty db_pred tr_sid prin sid;
   let (_, tr_ev) = trigger_event prin ({db_sess_id=sess_id; db_row_pointers=[]} <: db_event row_t) tr_sid in
-  assert(trace_invariant tr_ev);
-  let content:db = { rows = [] } in
-  assume(get_state #db #(local_state_db row_t) prin sess_id tr_ev == (None, tr_ev));
-  assert(tr_sid <$ tr_ev);
-  introduce is_most_recent_state_for prin sess_id None tr_sid ==> is_most_recent_state_for prin sess_id None tr_ev
-  with _. begin
-    reveal_opaque (`%trigger_event) (trigger_event #(db_event row_t));
-    traceful_is_most_recent_state_for_later prin sess_id None (trigger_event prin ({db_sess_id=sess_id; db_row_pointers=[]} <: db_event row_t)) tr_sid
+  DY.Core.Trace.Modifies.traceful_is_most_recent_state_for_later prin sess_id None (trigger_event prin ({db_sess_id=sess_id; db_row_pointers=[]} <: db_event row_t)) tr_sid;
+  assert(is_most_recent_state_for #db #(local_state_db row_t) prin sess_id None tr_ev);
+  ()
+
+val add_row_event_predicate:
+  {|protocol_invariants|} ->
+  #row_t:Type0 -> {|db_types row_t|} ->
+  db_pred:db_predicate row_t ->
+  prin:principal ->
+  ptr:state_id -> row:row_t ->
+  e1:db_event row_t ->
+  tr1:trace -> tr2:trace ->
+  Lemma
+  (requires (
+    let rows = get_rows tr1 prin e1.db_row_pointers in
+    event_triggered tr1 prin e1 /\
+    is_most_recent_state_for #row_t prin ptr (Some row) tr2 /\
+    all_db_keys_unique #row_t (row::rows) /\
+    trace_invariant tr2 /\
+    tr1 <$ tr2 /\
+    has_db_invariants db_pred
+  ))
+  (ensures (
+    let e2 = { e1 with db_row_pointers = ptr::e1.db_row_pointers} in
+    (db_event_predicate db_pred) tr2 prin e2
+  ))
+let add_row_event_predicate #invs #row_t #db_t db_pred prin ptr row e1 tr1 tr2 =
+  let old_ptrs = e1.db_row_pointers in
+  let new_ptrs = ptr::old_ptrs in
+  let old_rows1 = get_rows #row_t tr1 prin old_ptrs in
+  let old_rows2 = get_rows #row_t tr2 prin old_ptrs in
+  let new_rows = get_rows #row_t tr2 prin new_ptrs in
+  trace_invariant_before tr1 tr2;
+  db_event_triggered_implies_event_pred db_pred tr1 prin e1;
+  db_event_triggered_implies_event_pred db_pred tr2 prin e1;
+  unfold_get_rows #row_t tr2 prin new_ptrs;
+  get_rows_all_keys_same_later db_pred tr1 tr2 prin old_ptrs;
+  assert(for_allP (key_same_all_rows old_rows1 old_rows2) db_t.keys);
+  for_allP_eq (key_same_all_rows old_rows1 old_rows2) db_t.keys;
+  List.Tot.Base.for_all_mem (key_unique new_rows) db_t.keys;
+  List.Tot.Base.for_all_mem (key_unique (row::old_rows1)) db_t.keys;
+  introduce forall key. List.Tot.Base.memP key db_t.keys ==> key_unique new_rows key
+  with introduce _ ==> _ with _. begin
+    let (|t, get_key|) = key in
+    let old_keys_list1 = List.Tot.Base.map get_key old_rows1 in
+    let old_keys_list2 = List.Tot.Base.map get_key old_rows2 in
+    let new_keys_list = List.Tot.Base.map get_key new_rows in
+    assert(old_keys_list1 == old_keys_list2);
+    assert(new_keys_list == (get_key row)::old_keys_list2)
   end;
-  assert(is_most_recent_state_for prin sess_id None tr_ev);
+  assert(all_db_keys_unique new_rows);
   ()
 
 #push-options "--z3cliopt 'smt.qi.eager_threshold=100'"
@@ -647,68 +707,29 @@ let add_row_invariant #invs #row_t #db_t db_pred prin sess_id row tr =
   | None -> assert(tr == tr_out)
   | Some row_sid -> (
     let (Some curr_db, tr') = get_state #db #(local_state_db row_t) prin sess_id tr in
-    assert(tr' == tr);
-    let (tr', tr'') = get_trace tr in
-    assert(tr' == tr /\ tr'' == tr);
     let old_rows = get_rows tr prin curr_db.rows in
-    let (_, tr') = guard_tr (all_db_keys_unique #row_t (row::old_rows)) tr in
-    assert(all_db_keys_unique #row_t (row::old_rows));
-    assert(tr == tr');
-    let (row_sess_id, tr_sid) = new_session_id prin tr in
+    let (row_sess_id, tr') = new_session_id prin tr' in
+    let (_, tr') = guard_tr (all_db_keys_unique #row_t (row::old_rows)) tr' in
+    let (_, tr') = guard_tr (row_sess_id <> sess_id) tr' in
     let new_db = { rows = row_sess_id::curr_db.rows } in
-    assert(trace_invariant tr_sid);
-    assert(is_most_recent_state_for prin row_sess_id None tr_sid);
-    // Should be inferrable from the line above
-    assume(get_state #row_t prin row_sess_id tr_sid == (None, tr_sid));
-    let (_, tr_row_set) = set_state prin row_sess_id row tr_sid in
+    assert(tr == tr');
+    assert(is_most_recent_state_for #row_t prin row_sess_id None tr');
+    let (_, tr_row_set) = set_state prin row_sess_id row tr' in
     assert(trace_invariant tr_row_set);
     let curr_db_event:db_event row_t = {db_sess_id=sess_id; db_row_pointers=curr_db.rows} in
     let new_db_event:db_event row_t = {db_sess_id=sess_id; db_row_pointers=new_db.rows} in
-    let i = find_event_triggered_at_timestamp tr prin curr_db_event in
-    db_event_pred_later db_pred (prefix tr i) tr_row_set prin({db_sess_id=sess_id; db_row_pointers=curr_db.rows});
-    db_event_pred_later db_pred (prefix tr i) tr prin({db_sess_id=sess_id; db_row_pointers=curr_db.rows});
-    let old_rows' = get_rows #row_t tr_row_set prin curr_db.rows in
-    assert(List.Tot.Base.length old_rows' == List.Tot.Base.length curr_db.rows);
-    // Probably proveable with a lemma -- analogous to event pred later
-    assert(List.Tot.Base.length old_rows == List.Tot.Base.length curr_db.rows);
-    get_rows_all_keys_same_later db_pred tr tr_row_set prin curr_db.rows;
-    assert(for_allP (key_same_all_rows old_rows old_rows') db_t.keys);
-    let new_rows = get_rows #row_t tr_row_set prin new_db.rows in
-    assert(List.Tot.Base.length new_rows == List.Tot.Base.length new_db.rows);
-    unfold_get_rows #row_t tr_row_set prin new_db.rows;
-    let Some tmp = get_row_opt tr_row_set prin row_sess_id in
-    // This should come immediately from tr_row_set being the output of set_state
-    assume(tmp == row);
-    // From modifies analysis
-    assume(old_rows == old_rows');
-    assert(all_db_keys_unique new_rows);
-    let (_, tr_ev) = trigger_event prin ({db_sess_id=sess_id; db_row_pointers = new_db.rows} <: db_event row_t) tr_row_set in
+    add_row_event_predicate db_pred prin row_sess_id row curr_db_event tr tr_row_set;
+    let (_, tr_ev) = trigger_event prin new_db_event tr_row_set in
     assert(trace_invariant tr_ev);
-    // From modifies analysis
-    assume(get_state #db #(local_state_db row_t) prin sess_id tr_ev == (Some curr_db, tr_ev));
+    // TODO: This lemma call should ideally be cleaned up. It also is what forces split queries here.
+    traceful_is_most_recent_state_for_later #db #(local_state_db row_t) prin sess_id (Some curr_db) (set_state prin row_sess_id row;* trigger_event prin new_db_event) tr;
+    assert(is_most_recent_state_for #db #(local_state_db row_t) prin sess_id (Some curr_db) tr_ev);
     assert_norm((db_session_update_invariant db_pred).update_pred tr_ev prin sess_id curr_db new_db);
-    set_state_invariant (db_session_invariant db_pred) (db_session_update_invariant db_pred) prin sess_id new_db tr_ev;
     let (_, tr_db_set) = set_state #db #(local_state_db row_t) prin sess_id new_db tr_ev in
     assert(trace_invariant tr_db_set);
-    assert(tr_out == tr_db_set);
-    assert(trace_invariant tr_out)
+    assert(tr_out == tr_db_set)
   )
 #pop-options
-
-(*
-  let*? curr_db = get_state #db #(local_state_db row_t) prin sess_id in
-  let* tr = get_trace in
-  let old_rows = get_rows tr prin curr_db.rows in
-  // We check before generating the new session ID to ensure that
-  // the trace is unchanged if the check fails.
-  guard_tr(all_db_keys_unique #row_t (row::old_rows));*?
-  let* row_sess_id = new_session_id prin in
-  let new_db = { rows = row_sess_id::curr_db.rows } in
-  set_state prin row_sess_id row;*
-  trigger_event prin ({db_sess_id=sess_id; db_row_pointers=new_db.rows} <: db_event row_t);*
-  set_state #db #(local_state_db row_t) prin sess_id new_db;*
-  return (Some row_sess_id)
-*)
 
 val update_row_invariant:
   {|protocol_invariants|} ->
