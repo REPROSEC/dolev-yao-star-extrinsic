@@ -47,6 +47,11 @@ let state_predicate_nsl: local_state_predicate nsl_session = {
   pred_knowable = (fun tr prin sess_id st -> ());
 }
 
+/// The (local) state update predicate is trivial for this protocol:
+
+let update_predicate_nsl: local_state_update_predicate nsl_session =
+  default_local_state_update_pred nsl_session
+
 /// The (local) event predicate.
 
 let event_predicate_nsl: event_predicate nsl_event =
@@ -85,6 +90,12 @@ let all_sessions = [
   mk_local_state_tag_and_pred state_predicate_nsl;
 ]
 
+let all_session_updates = [
+  pki_tag_and_state_update_pred;
+  private_keys_tag_and_state_update_pred;
+  mk_local_state_tag_and_update_pred update_predicate_nsl;
+]
+
 /// List of all local event predicates.
 
 let all_events = [
@@ -95,6 +106,7 @@ let all_events = [
 
 let trace_invariants_nsl: trace_invariants = {
   state_pred = mk_state_pred all_sessions;
+  state_update_pred = mk_state_update_pred all_session_updates;
   event_pred = mk_event_pred all_events;
 }
 
@@ -106,6 +118,7 @@ instance protocol_invariants_nsl: protocol_invariants = {
 /// Lemmas that the global state predicate contains all the local ones
 
 let _ = do_split_boilerplate mk_state_pred_correct all_sessions
+let _ = do_split_boilerplate mk_state_update_pred_correct all_session_updates
 let _ = do_split_boilerplate mk_event_pred_correct all_events
 
 (*** Proofs ***)
