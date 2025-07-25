@@ -89,12 +89,10 @@ instance local_state_db_row (row_t:Type0) {|db_t:db_types row_t|}: local_state r
 
 [@@ with_bytes bytes]
 type db_event (row_t:Type0) {|db_types row_t|} =
-//  | DatabaseUpdateEvent: db_sess_id:state_id -> db_row_pointers:list (state_id) -> db_event row_t
-{
-  db_sess_id: state_id;
-  [@@@ with_parser #bytes (ps_list (ps_state_id))]
-  db_row_pointers: list (state_id);
-}
+  | DatabaseUpdateEvent:
+    db_sess_id:state_id ->
+    [@@@ with_parser #bytes (ps_list (ps_state_id))] db_row_pointers:list (state_id) ->
+    db_event row_t
 
 %splice [ps_db_event] (gen_parser (`db_event))
 %splice [ps_db_event_is_well_formed] (gen_is_well_formed_lemma (`db_event))
@@ -323,14 +321,10 @@ val db_event_predicate:
 let db_event_predicate #cinvs #row_t #db_t db_pred =
   fun tr prin e ->
     (match e with
-    | {db_sess_id; db_row_pointers} -> (
+    | DatabaseUpdateEvent db_sess_id db_row_pointers -> (
       let rows = get_rows #row_t tr prin db_row_pointers in
       List.Tot.Base.length rows == List.Tot.Base.length db_row_pointers /\
       all_db_keys_unique #row_t rows
-    (*
-      for_allP (is_pointer_to_row #row_t tr prin) db_row_pointers /\
-      all_db_keys_unique #row_t (get_rows tr prin db_row_pointers _)
-      *)
     ))
 
 unfold
@@ -374,7 +368,7 @@ val db_event_pred_empty:
   db_pred:db_predicate row_t ->
   tr:trace ->
   prin:principal -> sess_id:state_id ->
-  Lemma ((db_event_predicate db_pred) tr prin {db_sess_id=sess_id; db_row_pointers=[]})
+  Lemma ((db_event_predicate db_pred) tr prin (DatabaseUpdateEvent sess_id []))
 let db_event_pred_empty #cinvs #row_t #db_t db_pred tr prin sess_id =
   List.Tot.Base.for_all_mem (key_unique []) db_t.keys
 
@@ -545,7 +539,7 @@ let initialize_db row_t #db_t prin =
   let* sess_id = new_session_id prin in
   let session: db = { rows = [] } in
   let db_local_state : local_state db = local_state_db row_t in
-  trigger_event prin ({db_sess_id=sess_id; db_row_pointers=[]} <: db_event row_t);*
+  trigger_event prin (DatabaseUpdateEvent sess_id [] <: db_event row_t);*
   set_state prin sess_id session;*
   return sess_id
 
@@ -566,7 +560,7 @@ let add_row #row_t #db_t prin sess_id row =
   guard_tr (all_db_keys_unique #row_t (row::old_rows));*?
   let new_db = { rows = row_sess_id::curr_db.rows } in
   set_state prin row_sess_id row;*
-  trigger_event prin ({db_sess_id=sess_id; db_row_pointers=new_db.rows} <: db_event row_t);*
+  trigger_event prin (DatabaseUpdateEvent sess_id new_db.rows <: db_event row_t);*
   set_state #db #(local_state_db row_t) prin sess_id new_db;*
   return (Some row_sess_id)
 
@@ -628,7 +622,7 @@ let initialize_db_invariant #invs #row_t #db_t db_pred prin tr =
   let (sid, tr_out) = initialize_db row_t prin tr in
   let (sess_id, tr_sid) = new_session_id prin tr in
   db_event_pred_empty db_pred tr_sid prin sid;
-  let (_, tr_ev) = trigger_event prin ({db_sess_id=sess_id; db_row_pointers=[]} <: db_event row_t) tr_sid in
+  let (_, tr_ev) = trigger_event prin (DatabaseUpdateEvent sess_id [] <: db_event row_t) tr_sid in
   DY.Core.Trace.Modifies.traceful_is_most_recent_state_for_later prin sess_id None (trigger_event prin ({db_sess_id=sess_id; db_row_pointers=[]} <: db_event row_t)) tr_sid;
   assert(is_most_recent_state_for #db #(local_state_db row_t) prin sess_id None tr_ev);
   ()
@@ -716,8 +710,8 @@ let add_row_invariant #invs #row_t #db_t db_pred prin sess_id row tr =
     assert(is_most_recent_state_for #row_t prin row_sess_id None tr');
     let (_, tr_row_set) = set_state prin row_sess_id row tr' in
     assert(trace_invariant tr_row_set);
-    let curr_db_event:db_event row_t = {db_sess_id=sess_id; db_row_pointers=curr_db.rows} in
-    let new_db_event:db_event row_t = {db_sess_id=sess_id; db_row_pointers=new_db.rows} in
+    let curr_db_event:db_event row_t = DatabaseUpdateEvent sess_id curr_db.rows in
+    let new_db_event:db_event row_t = DatabaseUpdateEvent sess_id new_db.rows in
     add_row_event_predicate db_pred prin row_sess_id row curr_db_event tr tr_row_set;
     let (_, tr_ev) = trigger_event prin new_db_event tr_row_set in
     assert(trace_invariant tr_ev);
