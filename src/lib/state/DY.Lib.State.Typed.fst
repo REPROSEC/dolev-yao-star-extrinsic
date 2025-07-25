@@ -192,6 +192,160 @@ let get_state #a #ls prin sess_id =
   | None -> return None
   | Some content -> return (Some content)
 
+[@@ "opaque_to_smt"]
+val is_most_recent_state_for:
+  #a:Type -> {|local_state a|} ->
+  principal -> state_id -> option a -> trace ->
+  prop
+let is_most_recent_state_for #a #ls_a prin sess_id content_opt tr =
+  let (content_opt', _) = get_state prin sess_id tr in
+  content_opt == content_opt'
+
+/// Relate most recent typed states with most recent untyped (tagged) states.
+val most_recent_tagged_state_most_recent_state_none:
+  #a:Type -> {|ls_a:local_state a|} ->
+  prin:principal -> sess_id:state_id -> tr:trace ->
+  Lemma
+  (requires is_most_recent_tagged_state_for ls_a.tag prin sess_id None tr)
+  (ensures is_most_recent_state_for #a prin sess_id None tr)
+  [SMTPat (is_most_recent_state_for #a #ls_a prin sess_id None tr)]
+let most_recent_tagged_state_most_recent_state_none #a #ls_a prin sess_id tr =
+  reveal_opaque (`%is_most_recent_state_for) (is_most_recent_state_for #a);
+  reveal_opaque (`%get_state) (get_state #a);
+  ()
+
+val most_recent_tagged_state_most_recent_state_some:
+  #a:Type -> {|ls_a:local_state a|} ->
+  prin:principal -> sess_id:state_id -> content:a ->
+  tr:trace ->
+  Lemma (
+    is_most_recent_state_for prin sess_id (Some content) tr <==>
+    is_most_recent_tagged_state_for ls_a.tag prin sess_id (Some (serialize a content)) tr
+  )
+  [SMTPat (is_most_recent_state_for #a #ls_a prin sess_id (Some content) tr)]
+let most_recent_tagged_state_most_recent_state_some #a #ls_a prin sess_id content tr =
+  reveal_opaque (`%is_most_recent_state_for) (is_most_recent_state_for #a);
+  reveal_opaque (`%get_state) (get_state #a);
+  let content_bytes = serialize a content in
+  introduce is_most_recent_state_for prin sess_id (Some content) tr ==>
+    is_most_recent_tagged_state_for ls_a.tag prin sess_id (Some content_bytes) tr
+  with _. begin
+    let (Some tmp, _) = get_tagged_state ls_a.tag prin sess_id tr in
+    serialize_parse_inv_lemma #bytes a tmp
+  end
+
+/// Connect set_state and get_state with most recent states.
+val set_state_is_most_recent_state_for:
+  #a:Type -> {|ls_a:local_state a|} ->
+  prin:principal -> sess_id:state_id -> content:a ->
+  tr:trace ->
+  Lemma (
+    let ((), tr_out) = set_state #a prin sess_id content tr in
+    is_most_recent_state_for #a prin sess_id (Some content) tr_out
+  )
+  [SMTPat (set_state #a #ls_a prin sess_id content tr)]
+let set_state_is_most_recent_state_for #a #ls_a prin sess_id content tr =
+  reveal_opaque (`%is_most_recent_state_for) (is_most_recent_state_for #a);
+  reveal_opaque (`%set_state) (set_state #a);
+  let ((), tr_out) = set_state #a prin sess_id content tr in
+  assert(is_most_recent_tagged_state_for ls_a.tag prin sess_id (Some (serialize a content)) tr_out);
+  ()
+
+val is_most_recent_state_for_get_state:
+  #a:Type -> {|ls_a:local_state a|} ->
+  prin:principal -> sess_id:state_id -> content_opt:option a ->
+  tr:trace ->
+  Lemma
+  (requires is_most_recent_state_for #a #ls_a prin sess_id content_opt tr)
+  (ensures (
+    let (content_opt', _) = get_state #a #ls_a prin sess_id tr in
+    content_opt == content_opt'
+  ))
+  [SMTPat (is_most_recent_state_for #a #ls_a prin sess_id content_opt tr);
+   SMTPat (get_state #a #ls_a prin sess_id tr);
+  ]
+let is_most_recent_state_for_get_state #a #ls_a prin sess_id content_opt tr =
+  reveal_opaque (`%is_most_recent_state_for) (is_most_recent_state_for #a)
+
+val get_state_is_most_recent_state_for:
+  #a:Type -> {|ls_a:local_state a|} ->
+  prin:principal -> sess_id:state_id ->
+  tr:trace ->
+  Lemma (
+    let (content_opt, _) = get_state #a #ls_a prin sess_id tr in
+    is_most_recent_state_for #a #ls_a prin sess_id content_opt tr
+  )
+  [SMTPat (get_state #a #ls_a prin sess_id tr)]
+let get_state_is_most_recent_state_for #a #ls_a prin sess_id tr =
+  reveal_opaque (`%is_most_recent_state_for) (is_most_recent_state_for #a)
+
+/// Using DY.Core.Trace.Modifies, we can pull most recent typed state information forward.
+val is_most_recent_state_for_later:
+  #a:Type -> {|ls_a:local_state a|} ->
+  prin:principal -> sess_id:state_id -> content_opt:option a ->
+  tr1:trace -> tr2:trace ->
+  Lemma (requires (
+    tr1 <$ tr2 /\
+    trace_does_not_modify_addr prin sess_id (tr2 <--> tr1) /\
+    is_most_recent_state_for #a #ls_a prin sess_id content_opt tr1
+  ))
+  (ensures
+    is_most_recent_state_for #a #ls_a prin sess_id content_opt tr2
+  )
+  [SMTPat (tr1 <$ tr2);
+   SMTPat (is_most_recent_state_for #a #ls_a prin sess_id content_opt tr2);
+   SMTPat (trace_does_not_modify_addr prin sess_id (tr2 <--> tr1));
+  ]
+let is_most_recent_state_for_later #a #ls_a prin sess_id content_opt tr1 tr2 =
+  reveal_opaque (`%is_most_recent_state_for) (is_most_recent_state_for #a);
+  reveal_opaque (`%get_state) (get_state #a);
+  let (content_bytes_opt1, _) = get_tagged_state ls_a.tag prin sess_id tr1 in
+  // The following two assertions trigger `is_most_recent_tagged_state_for_later`.
+  // Why is the first one needed when it's in the requires?
+  assert(trace_does_not_modify_addr prin sess_id (tr2 <--> tr1));
+  assert(is_most_recent_tagged_state_for ls_a.tag prin sess_id content_bytes_opt1 tr2);
+  ()
+
+val traceful_is_most_recent_state_for_later:
+  #a:Type -> {|ls_a:local_state a|} ->
+  prin:principal -> sess_id:state_id -> content_opt:option a ->
+  #b:Type -> f:traceful b -> tr:trace ->
+  Lemma (requires (
+    traceful_does_not_modify_addr prin sess_id f tr /\
+    is_most_recent_state_for #a #ls_a prin sess_id content_opt tr
+  ))
+  (ensures (
+    let (_, tr_out) = f tr in
+    is_most_recent_state_for #a #ls_a prin sess_id content_opt tr_out
+  ))
+  // It's unclear how useful this SMT pattern is, but it at least doesn't seem to hurt.
+  [SMTPat (f tr);
+   SMTPat (is_most_recent_state_for #a #ls_a prin sess_id content_opt tr);
+   SMTPat (traceful_does_not_modify_addr prin sess_id f tr);
+  ]
+let traceful_is_most_recent_state_for_later #a #ls_a prin sess_id content_opt #b f tr =
+  let (_, tr_out) = f tr in
+  // Triggers is_most_recent_state_for_later
+  assert(trace_does_not_modify_addr prin sess_id (tr_out <--> tr));
+  ()
+
+/// Extend the modifies analysis to typed state functions.
+val traceful_modifies_set_state:
+  #a:Type -> {|ls_a:local_state a|} ->
+  prin:principal -> sess_id:state_id -> content:a -> tr:trace ->
+  Lemma (traceful_modifies (set_state #a #ls_a prin sess_id content) tr == FStar.Set.singleton (prin, sess_id))
+  [SMTPat (traceful_modifies (set_state #a #ls_a prin sess_id content) tr)]
+let traceful_modifies_set_state #a #ls_a prin sess_id content tr =
+  reveal_opaque (`%set_state) (set_state #a)
+
+val traceful_modifies_get_state:
+  #a:Type -> {|ls_a:local_state a|} ->
+  prin:principal -> sess_id:state_id -> tr:trace ->
+  Lemma (traceful_modifies (get_state #a #ls_a prin sess_id) tr == FStar.Set.empty)
+  [SMTPat (traceful_modifies (get_state #a #ls_a prin sess_id) tr)]
+let traceful_modifies_get_state #a #ls_a prin sess_id tr =
+  reveal_opaque (`%get_state) (get_state #a)
+
 
 val set_state_state_was_set:
   #a:Type -> {|ls:local_state a|} ->
