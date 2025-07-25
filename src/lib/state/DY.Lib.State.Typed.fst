@@ -459,7 +459,7 @@ val set_state_invariant:
     spred.pred tr prin sess_id content /\
     (
       match get_state prin sess_id tr with
-      | (None, _) -> is_most_recent_state_for prin sess_id None tr
+      | (None, _) -> DY.Core.Trace.Base.is_most_recent_state_for prin sess_id None tr
       | (Some old_content, _) -> supred.update_pred tr prin sess_id old_content content
     ) /\
     trace_invariant tr /\
