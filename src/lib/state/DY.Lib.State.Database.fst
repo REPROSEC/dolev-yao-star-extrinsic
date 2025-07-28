@@ -98,7 +98,7 @@ type db_event (row_t:Type0) {|db_types row_t|} =
 %splice [ps_db_event_is_well_formed] (gen_is_well_formed_lemma (`db_event))
 
 instance event_db_event (row_t:Type0) {|db_t:db_types row_t|}: event (db_event row_t) = {
-  tag = "DY.Lib.State.Database.Event";
+  tag = db_t.db_tag ^ ".Event";
   format = mk_parseable_serializeable (ps_db_event row_t);
 }
 
