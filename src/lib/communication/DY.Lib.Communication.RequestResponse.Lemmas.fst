@@ -336,8 +336,6 @@ val receive_response_proof:
   Lemma
   (requires
     trace_invariant tr /\
-    has_private_keys_invariant /\
-    has_pki_invariant /\
     has_communication_layer_reqres_crypto_predicates /\
     has_communication_layer_reqres_event_predicates request_response_event_preconditions higher_layer_preds /\
     has_communication_layer_state_predicates
@@ -348,7 +346,7 @@ val receive_response_proof:
     | (Some (payload, _), tr_out) -> (
       trace_invariant tr_out /\
       event_triggered tr_out client (CommClientReceiveResponse client req_meta_data.server (serialize a payload) req_meta_data.key) /\
-      is_well_formed a (is_knowable_by (get_label tr req_meta_data.key) tr) payload
+      is_well_formed a (is_knowable_by (get_label tr_out req_meta_data.key) tr_out) payload
     )
   ))
   [SMTPat (trace_invariant tr);
