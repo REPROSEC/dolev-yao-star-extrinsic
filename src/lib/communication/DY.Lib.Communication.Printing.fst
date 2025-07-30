@@ -78,8 +78,8 @@ let com_core_event_to_string payload_to_string =
         sender receiver (option_to_string payload_to_string payload))
   )))
 
-val com_reqres_event_to_string: (bytes -> option string) -> (string & (bytes -> option string))
-let com_reqres_event_to_string payload_to_string =
+val com_reqres_event_to_string: {|comm_layer_event_reqres_tag|} -> (bytes -> option string) -> (string & (bytes -> option string))
+let com_reqres_event_to_string #event_tag payload_to_string =
   (event_communication_reqres_event.tag, (fun b -> (
     let? cre = parse communication_reqres_event b in
     match cre with
@@ -98,9 +98,10 @@ let com_reqres_event_to_string payload_to_string =
   )))
 
 val com_event_to_string:
+  {|comm_layer_event_reqres_tag|} ->
   (bytes -> option string) -> (bytes -> option string) ->
   list (string & (bytes -> option string))
-let com_event_to_string core_payload_to_string reqres_payload_to_string =
+let com_event_to_string #event_tag core_payload_to_string reqres_payload_to_string =
   [com_core_event_to_string core_payload_to_string;
     com_reqres_event_to_string reqres_payload_to_string]
 

@@ -20,6 +20,7 @@ open DY.Lib.Communication.RequestResponse.Invariants
 (*** Authentication Security Properties ***)
 
 val server_authentication:
+  {|comm_layer_event_reqres_tag|} ->
   {|protocol_invariants|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
   tr:trace -> i:timestamp ->
@@ -36,7 +37,7 @@ val server_authentication:
     is_corrupt (prefix tr i) (principal_label client) \/
     is_corrupt (prefix tr i) (principal_label server)
   )
-let server_authentication #invs #a tr i higher_layer_resreq_preds client server response key = ()
+let server_authentication #event_tag #invs #a tr i higher_layer_resreq_preds client server response key = ()
 
 
 (*** Secrecy Security Property ***)
