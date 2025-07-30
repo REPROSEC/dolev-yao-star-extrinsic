@@ -281,6 +281,7 @@ let mk_rand usg lab len =
   add_entry (RandGen usg lab len);*
   return (Rand len time)
 
+
 val mk_rand_rand_gen_at_end:
   usg:usage -> lab:label -> len:nat{len <> 0} -> tr:trace ->
   Lemma
@@ -291,6 +292,7 @@ val mk_rand_rand_gen_at_end:
   [SMTPat (mk_rand usg lab len tr);]
 let mk_rand_rand_gen_at_end usg lab len tr =
   reveal_opaque (`%mk_rand) (mk_rand)
+
 
 /// Generating a random bytestrings always preserve the trace invariant.
 
@@ -370,6 +372,7 @@ let mk_rand_get_usage #invs usg lab len tr =
   reveal_opaque (`%mk_rand) (mk_rand);
   normalize_term_spec get_usage
 
+
 (*** State ***)
 
 /// Set the state of a principal at a given state identifier.
@@ -395,7 +398,7 @@ let rec compute_new_session_id prin tr =
     match entry with
     | SetState prin' sess_id _ ->
       if prin = prin' then
-        {the_id =
+        {the_id = 
              max (sess_id.the_id + 1) (compute_new_session_id prin tr_init).the_id}
       else
         compute_new_session_id prin tr_init

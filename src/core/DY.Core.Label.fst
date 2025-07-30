@@ -378,7 +378,6 @@ let join_eq tr x1 x2 y =
 /// It can for example be used to depict any state of a principal
 /// (e.g. as done by `principal_label`)
 
-
 val state_pred_label_input: Type u#1
 let state_pred_label_input =
   principal -> state_id -> bytes -> prop
