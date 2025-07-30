@@ -99,3 +99,14 @@ val certain_corruption :
 let certain_corruption #cu tr generator issued_to secret ts =
   attacker_only_knows_publishable_values tr secret;
   ()
+
+// this is a function to produce a nonce with a dynamic label with an initial reveal to the generator of the nonce
+[@@ "opaque_to_smt"]
+val mk_rand_dynamic_label :
+  usg:usage -> len:nat{len <> 0} -> generator:principal ->
+  traceful bytes
+let mk_rand_dynamic_label usg len generator =
+  let* time = get_time in
+  add_entry (RandGen usg (reveal_principal_label time) len);*
+  trigger_reveal_event generator generator time;* 
+  return (Rand len time)
