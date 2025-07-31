@@ -460,6 +460,7 @@ val new_session_id_same_trace:
 let new_session_id_same_trace prin tr =
   normalize_term_spec new_session_id
 
+#push-options "--ifuel 2"
 val set_state_is_most_recent_state_for:
   prin:principal -> sess_id:state_id ->
   content:bytes -> tr:trace ->
@@ -473,6 +474,7 @@ let set_state_is_most_recent_state_for prin sess_id content tr =
   reveal_opaque (`%set_state) (set_state);
   reveal_opaque (`%is_most_recent_state_for) (is_most_recent_state_for);
   ()
+#pop-options
 
 val set_state_state_was_set:
   prin:principal -> sess_id:state_id -> content:bytes -> tr:trace ->
