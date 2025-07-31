@@ -435,6 +435,13 @@ val state_was_set:
 let state_was_set #label_t tr prin sess_id content =
   entry_exists tr (SetState prin sess_id content)
 
+val state_was_set_at:
+  #label_t:Type ->
+  trace_ label_t -> timestamp -> principal -> state_id -> bytes ->
+  prop
+let state_was_set_at #label_t tr ts prin sess_id content =
+  entry_at tr ts (SetState prin sess_id content)
+
 /// A state being set at some time stays on the trace as the trace grows.
 
 val state_was_set_grows:
@@ -942,8 +949,8 @@ let is_most_recent_state_for_state_was_set prin sess_id content tr =
 val is_most_recent_state_for_get_most_recent_state_for_ghost:
   prin:principal -> sess_id:state_id -> st_opt:option bytes -> tr:trace ->
   Lemma
-  (requires is_most_recent_state_for prin sess_id st_opt tr)
-  (ensures get_most_recent_state_for_ghost tr prin sess_id == st_opt)
+  (is_most_recent_state_for prin sess_id st_opt tr <==>
+  get_most_recent_state_for_ghost tr prin sess_id == st_opt)
   [SMTPat (get_most_recent_state_for_ghost tr prin sess_id);
    SMTPat (is_most_recent_state_for prin sess_id st_opt tr);
   ]
