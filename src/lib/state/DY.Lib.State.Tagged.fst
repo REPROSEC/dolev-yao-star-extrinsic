@@ -275,6 +275,156 @@ let get_tagged_state the_tag prin sess_id =
       if tag = the_tag then return (Some content)
       else return None
 
+[@@ "opaque_to_smt"]
+val is_most_recent_tagged_state_for: string -> principal -> state_id -> option bytes -> trace -> prop
+let is_most_recent_tagged_state_for tag prin sess_id content_opt tr =
+  let (res_opt, _) = get_tagged_state tag prin sess_id tr in
+  content_opt == res_opt
+
+/// The following two lemmas relate most recent tagged states to most recent states.
+/// Note that the most recent tagged state can be None without the most recent state
+/// being None, in the case that the state does not have a tag, or has the wrong tag.
+val most_recent_state_most_recent_tagged_state_none:
+  tag:string -> prin:principal -> sess_id:state_id ->
+  tr:trace ->
+  Lemma
+  (requires is_most_recent_state_for prin sess_id None tr)
+  (ensures is_most_recent_tagged_state_for tag prin sess_id None tr)
+  [SMTPat (is_most_recent_tagged_state_for tag prin sess_id None tr)]
+let most_recent_state_most_recent_tagged_state_none tag prin sess_id tr =
+  reveal_opaque (`%is_most_recent_tagged_state_for) (is_most_recent_tagged_state_for);
+  reveal_opaque (`%get_tagged_state) (get_tagged_state);
+  ()
+
+val most_recent_state_most_recent_tagged_state_some:
+  tag:string -> prin:principal -> sess_id:state_id -> content:bytes ->
+  tr:trace ->
+  Lemma (
+    let full_content_bytes = serialize tagged_state {tag; content;} in
+    is_most_recent_tagged_state_for tag prin sess_id (Some content) tr <==>
+    is_most_recent_state_for prin sess_id (Some full_content_bytes) tr
+  )
+  [SMTPat (is_most_recent_tagged_state_for tag prin sess_id (Some content) tr)]
+let most_recent_state_most_recent_tagged_state_some tag prin sess_id content tr =
+  reveal_opaque (`%is_most_recent_tagged_state_for) (is_most_recent_tagged_state_for);
+  reveal_opaque (`%get_tagged_state) (get_tagged_state);
+  let full_content_bytes = serialize tagged_state {tag; content;} in
+  introduce is_most_recent_tagged_state_for tag prin sess_id (Some content) tr ==>
+    is_most_recent_state_for prin sess_id (Some full_content_bytes) tr
+  with _. begin
+    let (Some tmp, _) = get_state prin sess_id tr in
+    serialize_parse_inv_lemma #bytes tagged_state tmp
+  end;
+  ()
+
+/// set_tagged_state and get_tagged_state interact correctly with the most recent state ---
+/// setting a state guarantees that what was set is the most recent tagged state, and getting
+/// always returns the most recent tagged state.
+val set_tagged_state_is_most_recent_tagged_state_for:
+  tag:string -> prin:principal -> sess_id:state_id -> content:bytes ->
+  tr:trace ->
+  Lemma (
+    let ((), tr_out) = set_tagged_state tag prin sess_id content tr in
+    is_most_recent_tagged_state_for tag prin sess_id (Some content) tr_out
+  )
+  [SMTPat (set_tagged_state tag prin sess_id content tr)]
+let set_tagged_state_is_most_recent_tagged_state_for tag prin sess_id content tr =
+  reveal_opaque (`%is_most_recent_tagged_state_for) (is_most_recent_tagged_state_for);
+  reveal_opaque (`%set_tagged_state) (set_tagged_state);
+  ()
+
+val is_most_recent_tagged_state_for_get_tagged_state:
+  tag:string -> prin:principal -> sess_id:state_id -> content_opt:option bytes ->
+  tr:trace ->
+  Lemma (requires is_most_recent_tagged_state_for tag prin sess_id content_opt tr)
+  (ensures (
+    let (content_opt', _) = get_tagged_state tag prin sess_id tr in
+    content_opt == content_opt'
+  ))
+  [SMTPat (is_most_recent_tagged_state_for tag prin sess_id content_opt tr);
+   SMTPat (get_tagged_state tag prin sess_id tr);
+  ]
+let is_most_recent_tagged_state_for_get_tagged_state tag prin sess_id content_opt tr =
+  reveal_opaque (`%is_most_recent_tagged_state_for) (is_most_recent_tagged_state_for)
+
+val get_tagged_state_is_most_recent_tagged_state_for:
+  tag:string -> prin:principal -> sess_id:state_id ->
+  tr:trace ->
+  Lemma (
+    let (content_opt, _) = get_tagged_state tag prin sess_id tr in
+    is_most_recent_tagged_state_for tag prin sess_id content_opt tr
+  )
+  [SMTPat (get_tagged_state tag prin sess_id tr)]
+let get_tagged_state_is_most_recent_tagged_state_for tag prin sess_id tr =
+  reveal_opaque (`%is_most_recent_tagged_state_for) (is_most_recent_tagged_state_for)
+
+/// Relies on DY.Core.Trace.Modifies. If we know the most recent tagged state in a trace tr1,
+/// we can pull this forward to an extension tr2, as long as the relevant address was not
+/// modified.
+val is_most_recent_tagged_state_for_later:
+  tag:string -> prin:principal -> sess_id:state_id -> content_opt:option bytes ->
+  tr1:trace -> tr2:trace ->
+  Lemma (requires (
+    tr1 <$ tr2 /\
+    trace_does_not_modify_addr prin sess_id (tr2 <--> tr1) /\
+    is_most_recent_tagged_state_for tag prin sess_id content_opt tr1
+  ))
+  (ensures
+    is_most_recent_tagged_state_for tag prin sess_id content_opt tr2
+  )
+  [SMTPat (tr1 <$ tr2);
+   SMTPat (is_most_recent_tagged_state_for tag prin sess_id content_opt tr2);
+   SMTPat (trace_does_not_modify_addr prin sess_id (tr2 <--> tr1));
+  ]
+let is_most_recent_tagged_state_for_later tag prin sess_id content_opt tr1 tr2 =
+  reveal_opaque (`%is_most_recent_tagged_state_for) (is_most_recent_tagged_state_for);
+  reveal_opaque (`%get_tagged_state) (get_tagged_state);
+  let (full_content_bytes_opt1, _) = get_state prin sess_id tr1 in
+  // The following two assertions trigger `is_most_recent_state_for_later`.
+  // Why is the first one needed when it's in the requires?
+  assert(trace_does_not_modify_addr prin sess_id (tr2 <--> tr1));
+  assert(is_most_recent_state_for prin sess_id full_content_bytes_opt1 tr2);
+  ()
+
+val traceful_is_most_recent_tagged_state_for_later:
+  tag:string -> prin:principal -> sess_id:state_id -> content_opt:option bytes ->
+  a:Type -> f:traceful a -> tr:trace ->
+  Lemma (requires (
+    traceful_does_not_modify_addr prin sess_id f tr /\
+    is_most_recent_tagged_state_for tag prin sess_id content_opt tr
+  ))
+  (ensures (
+    let (_, tr_out) = f tr in
+    is_most_recent_tagged_state_for tag prin sess_id content_opt tr_out
+  ))
+  // It's unclear how useful this SMT pattern is, but it at least doesn't seem to hurt.
+  [SMTPat (f tr);
+   SMTPat (is_most_recent_tagged_state_for tag prin sess_id content_opt tr);
+   SMTPat (traceful_does_not_modify_addr prin sess_id f tr);
+  ]
+let traceful_is_most_recent_tagged_state_for_later tag prin sess_id content_opt a f tr =
+  let (_, tr_out) = f tr in
+  // Triggers is_most_recent_tagged_state_for_later
+  assert(trace_does_not_modify_addr prin sess_id (tr_out <--> tr));
+  ()
+
+/// Extending the modifies analysis to tagged state functions.
+/// set_tagged_state modifies the expected singleton, and get_tagged_state does not modify any addresses.
+
+val traceful_modifies_set_tagged_state:
+  tag:string -> prin:principal -> sess_id:state_id -> b:bytes -> tr:trace ->
+  Lemma (traceful_modifies (set_tagged_state tag prin sess_id b) tr == FStar.Set.singleton (prin, sess_id))
+  [SMTPat (traceful_modifies (set_tagged_state tag prin sess_id b) tr)]
+let traceful_modifies_set_tagged_state tag prin sess_id b tr =
+  reveal_opaque (`%set_tagged_state) (set_tagged_state)
+
+val traceful_modifies_get_tagged_state:
+  tag:string -> prin:principal -> sess_id:state_id -> tr:trace ->
+  Lemma (traceful_modifies (get_tagged_state tag prin sess_id) tr == FStar.Set.empty)
+  [SMTPat (traceful_modifies (get_tagged_state tag prin sess_id) tr)]
+let traceful_modifies_get_tagged_state tag prin sess_id tr =
+  reveal_opaque (`%get_tagged_state) (get_tagged_state)
+
 val set_tagged_state_state_was_set:
   tag:string -> 
   prin:principal -> sess_id:state_id -> content:bytes -> tr:trace ->
