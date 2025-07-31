@@ -96,16 +96,6 @@ val traceful_does_not_modify_addr :
 let traceful_does_not_modify_addr prin sid f tr =
   ~((prin, sid) `mem` (traceful_modifies f tr))
 
-// TODO: Which of this and the previous definition is more useful?
-// Simple cases can usually guarantee the stronger forall traces
-// property, but that may be more difficult to work with in general.
-val traceful_never_modifies_addr:
-  #a:Type -> principal -> state_id ->
-  f:traceful a -> prop
-let traceful_never_modifies_addr prin sid f =
-  forall tr. ~((prin, sid) `mem` (traceful_modifies f tr))
-
-
 /// Lemmas to automate modifies analysis
 
 val traceful_modifies_bind :
@@ -183,12 +173,7 @@ val traceful_modifies_add_entry :
   ))
   [SMTPat (traceful_modifies (add_entry e) tr)]
 let traceful_modifies_add_entry e tr =
-  /// TODO Can we find a way to remove the need for these next two lines?
-  let (_, tr_out) = add_entry e tr in
-  assert(tr_out == append_entry tr e);
-  match e with
-  | SetState prin sid _ -> assert(equal (add (prin, sid) empty) (singleton (prin, sid)))
-  | _ -> ()
+  normalize_term_spec (traceful_modifies (add_entry e) tr)
 #pop-options
 
 val traceful_modifies_get_time :
