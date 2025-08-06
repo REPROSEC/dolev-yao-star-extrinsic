@@ -101,8 +101,7 @@ val has_communication_layer_state_predicates:
   {|protocol_invariants|} ->
   prop
 let has_communication_layer_state_predicates #tag #invs =
-  has_local_state_predicate state_predicates_communication_layer /\
-  has_local_state_update_predicate (default_local_state_update_pred communication_states)
+  has_local_state_predicate state_predicates_communication_layer
 
 (*** Event Predicates ***)
 
