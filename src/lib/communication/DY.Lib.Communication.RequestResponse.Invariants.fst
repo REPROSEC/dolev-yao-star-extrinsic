@@ -22,10 +22,10 @@ open DY.Lib.Communication.Core.Invariants
 
 #push-options "--ifuel 1"
 val aead_crypto_predicate_communication_layer:
-  {|comm_layer_event_reqres_tag|} ->
+  {|comm_layer_reqres_tag|} ->
   {|cusages:crypto_usages|} ->
   aead_crypto_predicate
-let aead_crypto_predicate_communication_layer #event_tag #cusages = {
+let aead_crypto_predicate_communication_layer #tag #cusages = {
   pred = (fun tr key_usage key nonce msg ad ->
       (match parse authenticated_data ad with
       | None -> False
@@ -42,17 +42,17 @@ let aead_crypto_predicate_communication_layer #event_tag #cusages = {
 #pop-options
 
 val aead_crypto_predicates_communication_layer_and_tag:
-  {|comm_layer_event_reqres_tag|} ->
+  {|comm_layer_reqres_tag|} ->
   {|cusages:crypto_usages|} ->
   (string & aead_crypto_predicate)
-let aead_crypto_predicates_communication_layer_and_tag #event_tag #cusages =
+let aead_crypto_predicates_communication_layer_and_tag #tag #cusages =
   (comm_layer_aead_tag, aead_crypto_predicate_communication_layer)
 
 val has_communication_layer_reqres_crypto_predicates:
-  {|comm_layer_event_reqres_tag|} ->
+  {|comm_layer_reqres_tag|} ->
   {|cinvs:crypto_invariants|} ->
   prop
-let has_communication_layer_reqres_crypto_predicates #event_tag #cinvs =
+let has_communication_layer_reqres_crypto_predicates #tag #cinvs =
   // Fix for the get_label function in the model code
   cinvs.usages == default_crypto_usages /\
   has_pke_predicate pke_crypto_predicates_communication_layer_and_tag /\
@@ -63,7 +63,7 @@ let has_communication_layer_reqres_crypto_predicates #event_tag #cinvs =
 (*** State Predicates ***)
 
 #push-options "--ifuel 2 --z3rlimit 25"
-let state_predicates_communication_layer {|crypto_invariants|}: local_state_predicate communication_states = {
+let state_predicates_communication_layer {|comm_layer_reqres_tag|} {|crypto_invariants|}: local_state_predicate communication_states = {
   pred = (fun tr prin sess_id st ->
     match st with
     | ClientSendRequest {server; request; key} -> (
@@ -90,17 +90,19 @@ let state_predicates_communication_layer {|crypto_invariants|}: local_state_pred
 #pop-options
 
 val state_predicates_communication_layer_and_tag:
+  {|comm_layer_reqres_tag|} ->
   {|crypto_invariants|} ->
   dtuple2 string local_bytes_state_predicate
-let state_predicates_communication_layer_and_tag #cinvs =
+let state_predicates_communication_layer_and_tag #tag #cinvs =
   mk_local_state_tag_and_pred state_predicates_communication_layer
 
 val has_communication_layer_state_predicates:
+  {|comm_layer_reqres_tag|} ->
   {|protocol_invariants|} ->
   prop
-let has_communication_layer_state_predicates #invs =
-  has_local_state_predicate state_predicates_communication_layer
-
+let has_communication_layer_state_predicates #tag #invs =
+  has_local_state_predicate state_predicates_communication_layer /\
+  has_local_state_update_predicate (default_local_state_update_pred communication_states)
 
 (*** Event Predicates ***)
 
@@ -145,7 +147,7 @@ let default_comm_reqres_higher_layer_event_preds (a:Type) {| parseable_serialize
 
 #push-options "--ifuel 1 --fuel 0"
 let event_predicate_communication_layer_reqres
-  {|comm_layer_event_reqres_tag|}
+  {|comm_layer_reqres_tag|}
   {|crypto_invariants|}
   (#a:Type) {| parseable_serializeable bytes a |}
   (higher_layer_resreq_preds:comm_reqres_higher_layer_event_preds a) :
@@ -182,10 +184,10 @@ let event_predicate_communication_layer_reqres
 // Additional event preconditions for the events from the core communication layer
 #push-options "--fuel 0 --ifuel 2"
 val request_response_event_preconditions:
-  {|comm_layer_event_reqres_tag|} ->
+  {|comm_layer_reqres_tag|} ->
   {|cinvs:crypto_invariants|} ->
   comm_higher_layer_event_preds com_message_t
-let request_response_event_preconditions #event_tag #cinvs = {
+let request_response_event_preconditions #tag #cinvs = {
   (default_comm_higher_layer_event_preds com_message_t) with
   send_conf = (fun tr client server (com_msg_t:com_message_t) ->
     match com_msg_t with
@@ -200,7 +202,7 @@ let request_response_event_preconditions #event_tag #cinvs = {
 #pop-options
 
 val event_predicate_communication_layer_reqres_and_tag:
-  {|comm_layer_event_reqres_tag|} ->
+  {|comm_layer_reqres_tag|} ->
   {|cinvs:crypto_invariants|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
   comm_reqres_higher_layer_event_preds a ->
@@ -212,7 +214,7 @@ let event_predicate_communication_layer_reqres_and_tag #cinvs #a higher_layer_re
   ]
 
 val has_communication_layer_reqres_event_predicates:
-  {|comm_layer_event_reqres_tag|} ->
+  {|comm_layer_reqres_tag|} ->
   {|protocol_invariants|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
   comm_higher_layer_event_preds com_message_t ->

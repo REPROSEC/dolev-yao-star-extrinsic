@@ -60,7 +60,7 @@ let enable_reqres_comm_layer_lemmas preds =
   normalize_term_spec (reqres_comm_layer_lemmas_enabled preds)
 
 val send_request_proof:
-  {|comm_layer_event_reqres_tag|} ->
+  {|comm_layer_reqres_tag|} ->
   {|protocol_invariants|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
   tr:trace ->
@@ -88,8 +88,8 @@ val send_request_proof:
   [SMTPat (trace_invariant tr);
   SMTPat (reqres_comm_layer_lemmas_enabled higher_layer_preds);
   SMTPat (send_request comm_keys_ids client server request tr)]
-let send_request_proof #event_tag #invs #a tr comm_keys_ids higher_layer_preds client server request =
-  reveal_opaque (`%send_request) (send_request #event_tag #a);
+let send_request_proof #tag #invs #a tr comm_keys_ids higher_layer_preds client server request =
+  reveal_opaque (`%send_request) (send_request #tag #a);
   enable_core_comm_layer_lemmas request_response_event_preconditions;
   let request_bytes = serialize #bytes a request in
   match send_request comm_keys_ids client server request tr with
@@ -119,7 +119,7 @@ let send_request_proof #event_tag #invs #a tr comm_keys_ids higher_layer_preds c
 
 #push-options "--z3rlimit 50"
 val receive_request_proof:
-  {|event_tag:comm_layer_event_reqres_tag|} ->
+  {|tag:comm_layer_reqres_tag|} ->
   {|protocol_invariants|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
   tr:trace ->
@@ -149,11 +149,11 @@ val receive_request_proof:
   ))
   [SMTPat (trace_invariant tr);
   SMTPat (reqres_comm_layer_lemmas_enabled higher_layer_preds);
-  SMTPat (receive_request #event_tag #a comm_keys_ids server msg_id tr)]
-let receive_request_proof #event_tag #invs #a tr comm_keys_ids higher_layer_preds server msg_id =
-  reveal_opaque (`%receive_request) (receive_request #event_tag #a);
+  SMTPat (receive_request #tag #a comm_keys_ids server msg_id tr)]
+let receive_request_proof #tag #invs #a tr comm_keys_ids higher_layer_preds server msg_id =
+  reveal_opaque (`%receive_request) (receive_request #tag #a);
   enable_core_comm_layer_lemmas request_response_event_preconditions;
-  match receive_request #event_tag #a comm_keys_ids server msg_id tr with
+  match receive_request #tag #a comm_keys_ids server msg_id tr with
   | (None, tr_out) -> ()
   | (Some (payload, req_meta_data), tr_out) -> (
     let (Some req_msg_t, tr') = receive_confidential comm_keys_ids server msg_id tr in
@@ -196,7 +196,7 @@ let receive_request_proof #event_tag #invs #a tr comm_keys_ids higher_layer_pred
 
 
 val mk_comm_layer_response_nonce_proof:
-  {|comm_layer_event_reqres_tag|} ->
+  {|comm_layer_reqres_tag|} ->
   {|protocol_invariants|} ->
   tr:trace ->
   req_meta_data:comm_meta_data -> usg:usage ->
@@ -214,12 +214,12 @@ val mk_comm_layer_response_nonce_proof:
       is_knowable_by (get_response_label tr_out req_meta_data) tr_out nonce
     )
   ))
-let mk_comm_layer_response_nonce_proof #event_tag #invs tr req_meta_data usg =
+let mk_comm_layer_response_nonce_proof #tag #invs tr req_meta_data usg =
   reveal_opaque (`%mk_comm_layer_response_nonce) (mk_comm_layer_response_nonce)
 
 
 val compute_response_message_proof:
-  {|comm_layer_event_reqres_tag|} ->
+  {|comm_layer_reqres_tag|} ->
   {|crypto_invariants|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
   tr:trace ->
@@ -237,7 +237,7 @@ val compute_response_message_proof:
   (ensures
     is_publishable tr (compute_response_message #a server key nonce response)
   )
-let compute_response_message_proof #event_tag #cinvs #a tr server key nonce request response =
+let compute_response_message_proof #tag #cinvs #a tr server key nonce request response =
   reveal_opaque (`%compute_response_message) (compute_response_message #a);
   let res_bytes = serialize a response in
   serialize_wf_lemma a (is_knowable_by (get_label tr key) tr) response;
@@ -251,7 +251,7 @@ let compute_response_message_proof #event_tag #cinvs #a tr server key nonce requ
   ()
 
 val send_response_proof:
-  {|comm_layer_event_reqres_tag|} ->
+  {|comm_layer_reqres_tag|} ->
   {|protocol_invariants|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
   tr:trace ->
@@ -275,8 +275,8 @@ val send_response_proof:
   [SMTPat (trace_invariant tr);
   SMTPat (reqres_comm_layer_lemmas_enabled higher_layer_preds);
   SMTPat (send_response server req_meta_data response tr)]
-let send_response_proof #event_tag #invs #a tr higher_layer_preds server req_meta_data response =
-  reveal_opaque (`%send_response) (send_response #event_tag #a);
+let send_response_proof #tag #invs #a tr higher_layer_preds server req_meta_data response =
+  reveal_opaque (`%send_response) (send_response #tag #a);
   match send_response server req_meta_data response tr with
   | (None, tr_out) -> ()
   | (Some msg_id, tr_out) -> (
@@ -295,7 +295,7 @@ let send_response_proof #event_tag #invs #a tr higher_layer_preds server req_met
 
 #push-options "--fuel 0 --ifuel 1 --z3rlimit 10"
 val decode_response_proof:
-  {|comm_layer_event_reqres_tag|} ->
+  {|comm_layer_reqres_tag|} ->
   {|crypto_invariants|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
   tr:trace ->
@@ -318,9 +318,9 @@ val decode_response_proof:
         \/ is_corrupt tr (principal_label client) \/ is_corrupt tr (principal_label server))
     )
   ))
-let decode_response_proof #event_tag #cinvs #a #ps tr client server key msg_bytes =
-  reveal_opaque (`%decode_response_message) (decode_response_message #event_tag #a);
-  match decode_response_message #event_tag #a server key msg_bytes with
+let decode_response_proof #tag #cinvs #a #ps tr client server key msg_bytes =
+  reveal_opaque (`%decode_response_message) (decode_response_message #tag #a);
+  match decode_response_message #tag #a server key msg_bytes with
   | None -> ()
   | Some payload -> (
     parse_wf_lemma com_message_t (is_publishable tr) msg_bytes;
@@ -334,7 +334,7 @@ let decode_response_proof #event_tag #cinvs #a #ps tr client server key msg_byte
 #pop-options
 
 val receive_response_proof:
-  {|event_tag:comm_layer_event_reqres_tag|} ->
+  {|tag:comm_layer_reqres_tag|} ->
   {|protocol_invariants|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
   tr:trace ->
@@ -358,10 +358,10 @@ val receive_response_proof:
   ))
   [SMTPat (trace_invariant tr);
   SMTPat (reqres_comm_layer_lemmas_enabled higher_layer_preds);
-  SMTPat (receive_response #event_tag #a client req_meta_data msg_id tr)]
-let receive_response_proof #event_tag #invs #a tr higher_layer_preds client req_meta_data msg_id =
-  reveal_opaque (`%receive_response) (receive_response #event_tag #a);
-  match receive_response #event_tag #a client req_meta_data msg_id tr with
+  SMTPat (receive_response #tag #a client req_meta_data msg_id tr)]
+let receive_response_proof #tag #invs #a tr higher_layer_preds client req_meta_data msg_id =
+  reveal_opaque (`%receive_response) (receive_response #tag #a);
+  match receive_response #tag #a client req_meta_data msg_id tr with
   | (None, tr_out) -> ()
   | (Some (response, _), tr_out) -> (
     let server = req_meta_data.server in
@@ -369,7 +369,7 @@ let receive_response_proof #event_tag #invs #a tr higher_layer_preds client req_
     let (Some state, tr') = get_state client req_meta_data.sid tr in
     let ClientSendRequest csr = state in
     let (Some resp_msg_bytes, tr') = recv_msg msg_id tr' in
-    decode_response_proof #event_tag #invs.crypto_invs #a tr' client csr.server csr.key resp_msg_bytes;
+    decode_response_proof #tag #invs.crypto_invs #a tr' client csr.server csr.key resp_msg_bytes;
     let Some response = decode_response_message csr.server csr.key resp_msg_bytes in
     let ((), tr') = set_state client req_meta_data.sid (ClientReceiveResponse {server=csr.server; response=(serialize a response); key=csr.key} <: communication_states) tr' in
     let ((), tr') = trigger_event client (CommClientReceiveResponse client csr.server (serialize a response) csr.key) tr' in

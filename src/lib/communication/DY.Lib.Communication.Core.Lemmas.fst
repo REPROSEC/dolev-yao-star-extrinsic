@@ -42,6 +42,7 @@ let enable_core_comm_layer_lemmas preds =
 
 #push-options "--ifuel 2"
 val initialize_communication_proof:
+  {|comm_layer_core_tag|} ->
   {|invs:protocol_invariants|} ->
   tr:trace ->
   sender:principal -> receiver:principal ->
@@ -65,7 +66,7 @@ let initialize_communication_proof tr sender receiver =
 (**** Confidential Send and Receive Lemmas ****)
 
 val encrypt_message_proof:
-  {|comm_layer_event_core_tag|} ->
+  {|comm_layer_core_tag|} ->
   {|cinvs:crypto_invariants|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
   tr:trace ->
@@ -84,11 +85,11 @@ val encrypt_message_proof:
   (ensures
     is_publishable tr (encrypt_message pk_receiver nonce payload)
   )
-let encrypt_message_proof #event_tag #cinvs #a tr sender receiver pk_receiver nonce pkenc_in =
+let encrypt_message_proof #tag #cinvs #a tr sender receiver pk_receiver nonce pkenc_in =
   reveal_opaque (`%encrypt_message) (encrypt_message #a)
 
 val send_confidential_proof:
-  {|comm_layer_event_core_tag|} ->
+  {|comm_layer_core_tag|} ->
   {|invs:protocol_invariants|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
   tr:trace ->
@@ -116,8 +117,8 @@ val send_confidential_proof:
   [SMTPat (trace_invariant #invs tr);
    SMTPat (send_confidential keys_sess_ids sender receiver payload tr);
    SMTPat (core_comm_layer_lemmas_enabled higher_layer_preds)]
-let send_confidential_proof #event_tag #invs #a tr higher_layer_preds keys_sess_ids sender receiver payload =
-  reveal_opaque (`%send_confidential) (send_confidential #event_tag #a);
+let send_confidential_proof #tag #invs #a tr higher_layer_preds keys_sess_ids sender receiver payload =
+  reveal_opaque (`%send_confidential) (send_confidential #tag #a);
   match send_confidential keys_sess_ids sender receiver payload tr with
   | (None, tr_out) -> ()
   | (Some _, tr_out) -> (
@@ -135,7 +136,7 @@ let send_confidential_proof #event_tag #invs #a tr higher_layer_preds keys_sess_
   )
 
 val decrypt_message_proof:
-  {|comm_layer_event_core_tag|} ->
+  {|comm_layer_core_tag|} ->
   {|cinvs:crypto_invariants|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
   tr:trace ->
@@ -160,7 +161,7 @@ val decrypt_message_proof:
       )
     )
   )
-let decrypt_message_proof #event_tag #cinvs #a tr receiver sk_receiver msg_encrypted =
+let decrypt_message_proof #tag #cinvs #a tr receiver sk_receiver msg_encrypted =
   reveal_opaque (`%decrypt_message) (decrypt_message #a);
   match decrypt_message #a sk_receiver msg_encrypted with
   | None -> ()
@@ -171,7 +172,7 @@ let decrypt_message_proof #event_tag #cinvs #a tr receiver sk_receiver msg_encry
   )
 
 val receive_confidential_proof:
-  {|event_tag:comm_layer_event_core_tag|} ->
+  {|tag:comm_layer_core_tag|} ->
   {|invs:protocol_invariants|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
   tr:trace ->
@@ -194,16 +195,16 @@ val receive_confidential_proof:
       is_well_formed a (is_knowable_by (principal_label receiver) tr) payload
   ))
   [SMTPat (trace_invariant tr);
-   SMTPat (receive_confidential #event_tag #a comm_keys_ids receiver msg_id tr);
+   SMTPat (receive_confidential #tag #a comm_keys_ids receiver msg_id tr);
    SMTPat (core_comm_layer_lemmas_enabled higher_layer_preds)]
-let receive_confidential_proof #event_tag #invs #a tr higher_layer_preds comm_keys_ids receiver msg_id =
-  reveal_opaque (`%receive_confidential) (receive_confidential #event_tag #a);
+let receive_confidential_proof #tag #invs #a tr higher_layer_preds comm_keys_ids receiver msg_id =
+  reveal_opaque (`%receive_confidential) (receive_confidential #tag #a);
   match receive_confidential comm_keys_ids receiver msg_id tr with
   | (None, tr_out) -> ()
   | (Some payload, tr_out) -> (
     let (Some sk_receiver, tr) = get_private_key receiver comm_keys_ids.private_keys (LongTermPkeKey comm_layer_pkenc_tag) tr in
     let (Some msg_encrypted, tr) = recv_msg msg_id tr in
-    decrypt_message_proof #event_tag #invs.crypto_invs #a tr receiver sk_receiver msg_encrypted;
+    decrypt_message_proof #tag #invs.crypto_invs #a tr receiver sk_receiver msg_encrypted;
     let Some msg_plain = decrypt_message #a sk_receiver msg_encrypted in
     let ((), tr) = trigger_event receiver (CommConfReceiveMsg receiver (serialize a payload)) tr in
     assert(tr_out == tr);
@@ -215,7 +216,7 @@ let receive_confidential_proof #event_tag #invs #a tr higher_layer_preds comm_ke
 (**** Authenticated Send and Receive Lemmas ****)
 
 val sign_message_proof:
-  {|comm_layer_event_core_tag|} ->
+  {|comm_layer_core_tag|} ->
   {|cinvs:crypto_invariants|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
   tr:trace ->
@@ -247,7 +248,7 @@ val sign_message_proof:
   (ensures
     is_publishable tr (sign_message sender receiver payload pk_receiver sk_sender nonce)
   )
-let sign_message_proof #event_tag #cinvs #a tr sender receiver payload pk_receiver sk_sender nonce =
+let sign_message_proof #tag #cinvs #a tr sender receiver payload pk_receiver sk_sender nonce =
   reveal_opaque (`%sign_message) (sign_message #a);
   let payload_bytes = serialize a payload in
   assert(is_publishable tr payload_bytes);
@@ -264,7 +265,7 @@ let sign_message_proof #event_tag #cinvs #a tr sender receiver payload pk_receiv
   ()
 
 val send_authenticated_proof:
-  {|event_tag:comm_layer_event_core_tag|} ->
+  {|event_tag:comm_layer_core_tag|} ->
   {|invs:protocol_invariants|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
   tr:trace ->
@@ -287,8 +288,8 @@ val send_authenticated_proof:
   [SMTPat (trace_invariant #invs tr);
    SMTPat (send_authenticated comm_keys_ids sender receiver payload tr);
    SMTPat (core_comm_layer_lemmas_enabled higher_layer_preds)]
-let send_authenticated_proof #event_tag #invs #a tr higher_layer_preds comm_keys_ids sender receiver payload =
-    reveal_opaque (`%send_authenticated) (send_authenticated #event_tag #a);
+let send_authenticated_proof #tag #invs #a tr higher_layer_preds comm_keys_ids sender receiver payload =
+    reveal_opaque (`%send_authenticated) (send_authenticated #tag #a);
     match send_authenticated comm_keys_ids sender receiver payload tr with
     | (None, tr_out) -> ()
     | (Some _, tr_out) -> (
@@ -298,7 +299,7 @@ let send_authenticated_proof #event_tag #invs #a tr higher_layer_preds comm_keys
       let payload_bytes = serialize a payload in
       let ((), tr') = trigger_event sender (CommAuthSendMsg sender payload_bytes) tr' in
       assert(event_triggered tr' sender (CommAuthSendMsg sender payload_bytes));
-      sign_message_proof #event_tag #invs.crypto_invs #a tr' sender receiver payload None sk_sender nonce;
+      sign_message_proof #tag #invs.crypto_invs #a tr' sender receiver payload None sk_sender nonce;
       let msg_signed = sign_message #a sender receiver payload None sk_sender nonce in
       let (msg_id, tr') = send_msg msg_signed tr' in
       assert(tr_out == tr');
@@ -309,7 +310,7 @@ let send_authenticated_proof #event_tag #invs #a tr higher_layer_preds comm_keys
 
 #push-options "--z3rlimit 50"
 val verify_message_proof:
-  {|comm_layer_event_core_tag|} ->
+  {|comm_layer_core_tag|} ->
   {|cinvs:crypto_invariants|} ->
   #a:Type -> {| ps:parseable_serializeable bytes a |} ->
   tr:trace ->
@@ -355,7 +356,7 @@ val verify_message_proof:
     )
     | _ -> True
   ))
-let verify_message_proof #event_tag #cinvs #a #ps tr sender receiver msg_bytes sk_receiver_opt vk_sender =
+let verify_message_proof #tag #cinvs #a #ps tr sender receiver msg_bytes sk_receiver_opt vk_sender =
   assert(get_signkey_label tr vk_sender == long_term_key_label sender);
   match verify_message #a receiver msg_bytes sk_receiver_opt vk_sender with
   | None -> ()
@@ -380,7 +381,7 @@ let verify_message_proof #event_tag #cinvs #a #ps tr sender receiver msg_bytes s
 #pop-options
 
 val receive_authenticated_proof:
-  {|event_tag:comm_layer_event_core_tag|} ->
+  {|tag:comm_layer_core_tag|} ->
   {|invs:protocol_invariants|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
   tr:trace ->
@@ -404,17 +405,17 @@ val receive_authenticated_proof:
     )
   ))
   [SMTPat (trace_invariant #invs tr);
-   SMTPat (receive_authenticated #event_tag #a comm_keys_ids receiver msg_id tr);
+   SMTPat (receive_authenticated #tag #a comm_keys_ids receiver msg_id tr);
    SMTPat (core_comm_layer_lemmas_enabled higher_layer_preds)]
-let receive_authenticated_proof #event_tag #invs #a tr higher_layer_preds comm_keys_ids receiver msg_id =
-  reveal_opaque (`%receive_authenticated) (receive_authenticated #event_tag #a);
-  match receive_authenticated #event_tag #a comm_keys_ids receiver msg_id tr with
+let receive_authenticated_proof #tag #invs #a tr higher_layer_preds comm_keys_ids receiver msg_id =
+  reveal_opaque (`%receive_authenticated) (receive_authenticated #tag #a);
+  match receive_authenticated #tag #a comm_keys_ids receiver msg_id tr with
   | (None, tr_out) -> ()
   | (Some cm', tr_out) -> (
     let (Some msg_signed_bytes, tr) = recv_msg msg_id tr in
     let Some sender = get_sender msg_signed_bytes in
     let (Some vk_sender, tr) = get_public_key receiver comm_keys_ids.pki (LongTermSigKey comm_layer_sign_tag) sender tr in
-    verify_message_proof #event_tag #invs.crypto_invs #a tr sender receiver msg_signed_bytes None vk_sender;
+    verify_message_proof #tag #invs.crypto_invs #a tr sender receiver msg_signed_bytes None vk_sender;
     let (Some cm) = verify_message #a receiver msg_signed_bytes None vk_sender in
     let ((), tr) = trigger_event receiver (CommAuthReceiveMsg sender receiver (serialize a cm.payload)) tr in
     assert(tr_out == tr);
@@ -426,7 +427,7 @@ let receive_authenticated_proof #event_tag #invs #a tr higher_layer_preds comm_k
 (**** Confidential and Authenticates Send and Receive Lemmas ****)
 
 val encrypt_and_sign_message_proof:
-  {|comm_layer_event_core_tag|} ->
+  {|comm_layer_core_tag|} ->
   {|cinvs:crypto_invariants|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
   tr:trace ->
@@ -449,7 +450,7 @@ val encrypt_and_sign_message_proof:
   (ensures
     is_publishable tr (encrypt_and_sign_message sender receiver payload pk_receiver sk_sender enc_nonce sign_nonce)
   )
-let encrypt_and_sign_message_proof #event_tag #cinvs #a tr sender receiver payload pk_receiver sk_sender enc_nonce sign_nonce =
+let encrypt_and_sign_message_proof #tag #cinvs #a tr sender receiver payload pk_receiver sk_sender enc_nonce sign_nonce =
   reveal_opaque (`%encrypt_and_sign_message) (encrypt_and_sign_message #a);
   reveal_opaque (`%encrypt_message) (encrypt_message #a); // TODO: This should be removeable.
   encrypt_message_proof tr sender receiver pk_receiver enc_nonce payload;
@@ -458,7 +459,7 @@ let encrypt_and_sign_message_proof #event_tag #cinvs #a tr sender receiver paylo
   ()
 
 val send_confidential_authenticated_proof:
-  {|event_tag:comm_layer_event_core_tag|} ->
+  {|tag:comm_layer_core_tag|} ->
   {|invs:protocol_invariants|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
   tr:trace ->
@@ -481,10 +482,10 @@ val send_confidential_authenticated_proof:
     trace_invariant tr_out
   ))
   [SMTPat (trace_invariant #invs tr);
-   SMTPat (send_confidential_authenticated #event_tag #a comm_keys_ids sender receiver payload tr);
+   SMTPat (send_confidential_authenticated #tag #a comm_keys_ids sender receiver payload tr);
    SMTPat (core_comm_layer_lemmas_enabled higher_layer_preds)]
-let send_confidential_authenticated_proof #event_tag #invs #a tr higher_layer_preds comm_keys_ids sender receiver payload =
-  reveal_opaque (`%send_confidential_authenticated) (send_confidential_authenticated #event_tag #a);
+let send_confidential_authenticated_proof #tag #invs #a tr higher_layer_preds comm_keys_ids sender receiver payload =
+  reveal_opaque (`%send_confidential_authenticated) (send_confidential_authenticated #tag #a);
   match send_confidential_authenticated comm_keys_ids sender receiver payload tr with
   | (None, tr_out) -> ()
   | (Some _, tr_out) -> (
@@ -513,7 +514,7 @@ let send_confidential_authenticated_proof #event_tag #invs #a tr higher_layer_pr
 
 #push-options "--ifuel 1 --z3rlimit 40"
 val verify_and_decrypt_message_proof:
-  {|comm_layer_event_core_tag|} ->
+  {|comm_layer_core_tag|} ->
   {|cinvs:crypto_invariants|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
   tr:trace ->
@@ -538,13 +539,13 @@ val verify_and_decrypt_message_proof:
       )
     )
   ))
-let verify_and_decrypt_message_proof #event_tag #cinvs #a tr sender receiver msg_encrypted_signed sk_receiver vk_sender =
+let verify_and_decrypt_message_proof #tag #cinvs #a tr sender receiver msg_encrypted_signed sk_receiver vk_sender =
   reveal_opaque (`%verify_and_decrypt_message) (verify_and_decrypt_message #a);
   reveal_opaque (`%decrypt_message) (decrypt_message #a);
   match verify_and_decrypt_message #a receiver sk_receiver vk_sender msg_encrypted_signed with
   | None -> ()
   | Some cm -> (
-    verify_message_proof #event_tag #cinvs #com_send_byte tr sender receiver msg_encrypted_signed (Some sk_receiver) vk_sender;
+    verify_message_proof #tag #cinvs #com_send_byte tr sender receiver msg_encrypted_signed (Some sk_receiver) vk_sender;
     let Some cm' = verify_message #com_send_byte receiver msg_encrypted_signed (Some sk_receiver) vk_sender in
 
     let Some msg_signed_t = parse com_message_t msg_encrypted_signed in
@@ -573,7 +574,7 @@ let verify_and_decrypt_message_proof #event_tag #cinvs #a tr sender receiver msg
 #pop-options
 
 val receive_confidential_authenticated_proof:
-  {|event_tag:comm_layer_event_core_tag|} ->
+  {|tag:comm_layer_core_tag|} ->
   {|invs:protocol_invariants|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
   tr:trace ->
@@ -590,7 +591,7 @@ val receive_confidential_authenticated_proof:
   )
   (ensures
     (
-      match receive_confidential_authenticated #event_tag #a comm_keys_ids receiver msg_id tr with
+      match receive_confidential_authenticated #tag #a comm_keys_ids receiver msg_id tr with
       | (None, tr_out) -> trace_invariant tr_out
       | (Some cm, tr_out) -> (
         trace_invariant tr_out /\
@@ -600,19 +601,19 @@ val receive_confidential_authenticated_proof:
     )
   )
   [SMTPat (trace_invariant #invs tr);
-   SMTPat (receive_confidential_authenticated #event_tag #a comm_keys_ids receiver msg_id tr);
+   SMTPat (receive_confidential_authenticated #tag #a comm_keys_ids receiver msg_id tr);
    SMTPat (core_comm_layer_lemmas_enabled higher_layer_preds)]
-let receive_confidential_authenticated_proof #event_tag #invs #a tr higher_layer_preds comm_keys_ids receiver msg_id =
-  reveal_opaque (`%receive_confidential_authenticated) (receive_confidential_authenticated #event_tag #a);
+let receive_confidential_authenticated_proof #tag #invs #a tr higher_layer_preds comm_keys_ids receiver msg_id =
+  reveal_opaque (`%receive_confidential_authenticated) (receive_confidential_authenticated #tag #a);
   reveal_opaque (`%verify_and_decrypt_message) (verify_and_decrypt_message #a); // TODO: These reveals should be removeable.
-  match receive_confidential_authenticated #event_tag #a comm_keys_ids receiver msg_id tr with
+  match receive_confidential_authenticated #tag #a comm_keys_ids receiver msg_id tr with
   | (None, tr_out) -> ()
   | (Some cm, tr_out) -> (
     let (Some msg_encrypted_signed, tr) = recv_msg msg_id tr in
     let (Some sk_receiver, tr) = get_private_key receiver comm_keys_ids.private_keys (LongTermPkeKey comm_layer_pkenc_tag) tr in
     let Some sender = get_sender msg_encrypted_signed in
     let (Some vk_sender, tr) = get_public_key receiver comm_keys_ids.pki (LongTermSigKey comm_layer_sign_tag) sender tr in
-    verify_and_decrypt_message_proof #event_tag #invs.crypto_invs #a tr sender receiver msg_encrypted_signed sk_receiver vk_sender;
+    verify_and_decrypt_message_proof #tag #invs.crypto_invs #a tr sender receiver msg_encrypted_signed sk_receiver vk_sender;
     let Some cm = verify_and_decrypt_message #a receiver sk_receiver vk_sender msg_encrypted_signed in
     let ((), tr) = trigger_event receiver (CommConfAuthReceiveMsg sender receiver (serialize a cm.payload)) tr in
     assert(event_triggered tr receiver (CommConfAuthReceiveMsg sender receiver (serialize a cm.payload)));

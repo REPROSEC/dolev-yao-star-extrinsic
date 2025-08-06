@@ -13,11 +13,15 @@ open DY.Lib.Communication.Data
 
 (*** Layer Setup ***)
 
-val comm_layer_pkenc_tag: string
-let comm_layer_pkenc_tag = "DY.Lib.Communication.PkEnc.PublicKey"
+class comm_layer_core_tag = {
+  tag: string;
+}
 
-val comm_layer_sign_tag: string
-let comm_layer_sign_tag = "DY.Lib.Communication.Sign.PublicKey"
+val comm_layer_pkenc_tag: {|comm_layer_core_tag|} -> string
+let comm_layer_pkenc_tag #tag = tag.tag ^ ".PkEnc.PublicKey"
+
+val comm_layer_sign_tag: {|comm_layer_core_tag|} -> string
+let comm_layer_sign_tag #tag = tag.tag ^ ".Sign.PublicKey"
 
 type communication_keys_sess_ids = {
   pki: state_id;
@@ -45,11 +49,7 @@ type communication_event =
 %splice [ps_communication_event_is_well_formed] (gen_is_well_formed_lemma (`communication_event))
 #pop-options
 
-class comm_layer_event_core_tag = {
-  tag: string;
-}
-
-instance event_communication_event {|t:comm_layer_event_core_tag|}: event communication_event = {
+instance event_communication_event {|t:comm_layer_core_tag|}: event communication_event = {
   tag = t.tag;
   format = mk_parseable_serializeable ps_communication_event;
 }
@@ -68,12 +68,12 @@ let encrypt_message #a pk_receiver nonce payload =
 
 [@@ "opaque_to_smt"]
 val send_confidential:
-  {|comm_layer_event_core_tag|} ->
+  {|comm_layer_core_tag|} ->
   #a:Type0 -> {| parseable_serializeable bytes a |} ->
   communication_keys_sess_ids ->
   principal -> principal -> a ->
   traceful (option timestamp)
-let send_confidential #event_tag #a comm_keys_ids sender receiver payload =
+let send_confidential #tag #a comm_keys_ids sender receiver payload =
   let*? pk_receiver = get_public_key sender comm_keys_ids.pki (LongTermPkeKey comm_layer_pkenc_tag) receiver in
   let* nonce = mk_rand PkeNonce (long_term_key_label sender) 32 in
   trigger_event sender (CommConfSendMsg sender receiver (serialize a payload));*
@@ -91,12 +91,12 @@ let decrypt_message #a sk_receiver msg_encrypted =
 
 [@@ "opaque_to_smt"]
 val receive_confidential:
-  {|comm_layer_event_core_tag|} ->
+  {|comm_layer_core_tag|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
   communication_keys_sess_ids ->
   principal -> timestamp ->
   traceful (option a)
-let receive_confidential #event_tag #a comm_keys_ids receiver msg_id =
+let receive_confidential #tag #a comm_keys_ids receiver msg_id =
   let*? sk_receiver = get_private_key receiver comm_keys_ids.private_keys (LongTermPkeKey comm_layer_pkenc_tag) in
   let*? msg_encrypted = recv_msg msg_id in
   let*? payload = return (decrypt_message #a sk_receiver msg_encrypted) in
@@ -126,12 +126,12 @@ let sign_message #a sender receiver payload pk_receiver sk nonce =
 
 [@@ "opaque_to_smt"]
 val send_authenticated:
-  {|comm_layer_event_core_tag|} ->
+  {|comm_layer_core_tag|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
   communication_keys_sess_ids ->
   principal -> principal -> a ->
   traceful (option timestamp)
-let send_authenticated #event_tag #a comm_keys_ids sender receiver payload =
+let send_authenticated #tag #a comm_keys_ids sender receiver payload =
   let*? sk_sender = get_private_key sender comm_keys_ids.private_keys (LongTermSigKey comm_layer_sign_tag) in
   let* nonce = mk_rand SigNonce (long_term_key_label sender) 32 in
   let payload_bytes = serialize a payload in
@@ -178,12 +178,12 @@ let get_sender sign_msg_bytes =
 
 [@@ "opaque_to_smt"]
 val receive_authenticated:
-  {|comm_layer_event_core_tag|} ->
+  {|comm_layer_core_tag|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
   communication_keys_sess_ids ->
   principal -> timestamp ->
   traceful (option (communication_message a))
-let receive_authenticated #event_tag #a comm_keys_ids receiver msg_id =
+let receive_authenticated #tag #a comm_keys_ids receiver msg_id =
   let*? msg_signed_bytes = recv_msg msg_id in
   let*? sender = return (get_sender msg_signed_bytes) in
   let*? vk_sender = get_public_key receiver comm_keys_ids.pki (LongTermSigKey comm_layer_sign_tag) sender in
@@ -208,12 +208,12 @@ let encrypt_and_sign_message #a sender receiver payload pk_receiver sk_sender en
 // to create and parse confidential and authenticated messages.
 [@@ "opaque_to_smt"]
 val send_confidential_authenticated:
-  {|comm_layer_event_core_tag|} ->
+  {|comm_layer_core_tag|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
   communication_keys_sess_ids ->
   principal -> principal -> a ->
   traceful (option timestamp)
-let send_confidential_authenticated #event_tag #a comm_keys_ids sender receiver payload =
+let send_confidential_authenticated #tag #a comm_keys_ids sender receiver payload =
   let*? pk_receiver = get_public_key sender comm_keys_ids.pki (LongTermPkeKey comm_layer_pkenc_tag) receiver in
   let*? sk_sender = get_private_key sender comm_keys_ids.private_keys (LongTermSigKey comm_layer_sign_tag) in
   let* enc_nonce = mk_rand PkeNonce (long_term_key_label sender) 32 in
@@ -235,12 +235,12 @@ let verify_and_decrypt_message #a #ps receiver sk_receiver vk_sender msg_encrypt
 
 [@@ "opaque_to_smt"]
 val receive_confidential_authenticated:
-  {|comm_layer_event_core_tag|} ->
+  {|comm_layer_core_tag|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
   communication_keys_sess_ids ->
   principal -> timestamp ->
   traceful (option (communication_message a))
-let receive_confidential_authenticated #event_tag #a comm_keys_ids receiver msg_id =
+let receive_confidential_authenticated #tag #a comm_keys_ids receiver msg_id =
   let*? msg_encrypted_signed = recv_msg msg_id in
   let*? sk_receiver = get_private_key receiver comm_keys_ids.private_keys (LongTermPkeKey comm_layer_pkenc_tag) in
   let*? sender = return (get_sender msg_encrypted_signed) in
@@ -253,8 +253,8 @@ let receive_confidential_authenticated #event_tag #a comm_keys_ids receiver msg_
 (**** Layer Initialization ****)
 
 [@@ "opaque_to_smt"]
-val initialize_communication: principal -> principal -> traceful (option (communication_keys_sess_ids & communication_keys_sess_ids))
-let initialize_communication sender receiver =
+val initialize_communication: {|comm_layer_core_tag|} -> principal -> principal -> traceful (option (communication_keys_sess_ids & communication_keys_sess_ids))
+let initialize_communication #tag sender receiver =
   // Initialize keys for public key encryption
   let* client_global_session_priv_key_id = initialize_private_keys sender in
   generate_private_key sender client_global_session_priv_key_id (LongTermPkeKey comm_layer_pkenc_tag);*
