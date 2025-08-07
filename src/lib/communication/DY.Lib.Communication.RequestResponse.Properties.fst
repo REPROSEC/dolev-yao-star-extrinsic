@@ -45,17 +45,18 @@ let server_authentication #tag #invs #a tr i higher_layer_resreq_preds client se
 val key_secrecy_client:
   {|comm_layer_reqres_tag|} ->
   {|protocol_invariants|} ->
+  #a:Type -> {|comparse_parser_serializer a|} ->
   tr:trace ->
   client:principal -> server:principal ->
-  key:bytes -> request:bytes -> response:bytes ->
+  key:bytes -> request:a -> response:a ->
   Lemma
   (requires
     trace_invariant tr /\
-    has_communication_layer_state_predicates /\
+    has_communication_layer_state_predicates a /\
     attacker_knows tr key /\
     (
-      (exists sid. state_was_set tr client sid (ClientSendRequest {server; request; key})) \/
-      (exists sid. state_was_set tr client sid (ClientReceiveResponse {server; response; key}))
+      (exists sid. state_was_set #(communication_states a) #(local_state_communication_layer_session a) tr client sid (ClientSendRequest {server; request; key} <: communication_states a)) \/
+      (exists sid. state_was_set #(communication_states a) #(local_state_communication_layer_session a) tr client sid (ClientReceiveResponse {server; response; key} <: communication_states a))
     )
   )
   (ensures

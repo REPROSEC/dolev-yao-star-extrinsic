@@ -62,46 +62,56 @@ let has_communication_layer_reqres_crypto_predicates #tag #cinvs =
 
 (*** State Predicates ***)
 
-#push-options "--ifuel 2 --z3rlimit 25"
-let state_predicates_communication_layer {|comm_layer_reqres_tag|} {|crypto_invariants|}: local_state_predicate communication_states = {
+#push-options "--ifuel 5 --fuel 5 --z3rlimit 25"
+let state_predicates_communication_layer {|comm_layer_reqres_tag|} {|crypto_invariants|} (a:Type) {|comparse_parser_serializer a|}: local_state_predicate (communication_states a) = {
   pred = (fun tr prin sess_id st ->
     match st with
     | ClientSendRequest {server; request; key} -> (
       let client = prin in
-      is_knowable_by (comm_label client server) tr request /\
+      is_well_formed a #ps_able (is_knowable_by (comm_label client server) tr) request /\
       is_secret (comm_label client server) tr key /\
       key `has_usage tr` (AeadKey comm_layer_aead_tag empty)
     )
     | ServerReceiveRequest {request; key} -> (
       let server = prin in
       is_knowable_by (principal_label server) tr key /\
-      is_knowable_by (get_label tr key) tr request /\
+      is_well_formed a #ps_able (is_knowable_by (principal_label server) tr) request /\
       key `has_usage tr` (AeadKey comm_layer_aead_tag empty)
     )
     | ClientReceiveResponse {server; response; key} -> (
       let client = prin in
-      is_knowable_by (comm_label client server) tr response /\
+      is_well_formed a #ps_able (is_knowable_by (comm_label client server) tr) response /\
       is_secret (comm_label client server) tr key
     )
   );
-  pred_later = (fun tr1 tr2 prin sess_id state -> ());
-  pred_knowable = (fun tr prin sess_id state -> ());
+  pred_later = (fun tr1 tr2 prin sess_id st -> ());
+  pred_knowable = (fun tr prin sess_id st -> (
+    match st with
+    | ClientSendRequest {server; request; key} ->
+      assert(is_well_formed a #ps_able (is_knowable_by (principal_typed_state_content_label prin (DY.Lib.State.Typed.tag #(communication_states a)) sess_id st) tr) request)
+    | ServerReceiveRequest {request; key} ->
+      assert(is_well_formed a #ps_able (is_knowable_by (principal_typed_state_content_label prin (DY.Lib.State.Typed.tag #(communication_states a)) sess_id st) tr) request)
+    | ClientReceiveResponse {server; response; key} ->
+      assert(is_well_formed a #ps_able (is_knowable_by (principal_typed_state_content_label prin (DY.Lib.State.Typed.tag #(communication_states a)) sess_id st) tr) response)
+  ));
 }
 #pop-options
 
 val state_predicates_communication_layer_and_tag:
   {|comm_layer_reqres_tag|} ->
   {|crypto_invariants|} ->
+  (a:Type0) -> {|comparse_parser_serializer a|} ->
   dtuple2 string local_bytes_state_predicate
-let state_predicates_communication_layer_and_tag #tag #cinvs =
-  mk_local_state_tag_and_pred state_predicates_communication_layer
+let state_predicates_communication_layer_and_tag #tag #cinvs a #ps =
+  mk_local_state_tag_and_pred (state_predicates_communication_layer a)
 
 val has_communication_layer_state_predicates:
   {|comm_layer_reqres_tag|} ->
   {|protocol_invariants|} ->
+  (a:Type0) -> {|comparse_parser_serializer a|} ->
   prop
-let has_communication_layer_state_predicates #tag #invs =
-  has_local_state_predicate state_predicates_communication_layer
+let has_communication_layer_state_predicates #tag #invs a #ps =
+  has_local_state_predicate (state_predicates_communication_layer a)
 
 (*** Event Predicates ***)
 
