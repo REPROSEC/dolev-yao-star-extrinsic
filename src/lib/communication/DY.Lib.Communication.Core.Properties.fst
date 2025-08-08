@@ -22,6 +22,7 @@ open DY.Lib.Communication.Core.Lemmas
 (*** Confidential Messages Properties ***)
 
 val conf_message_secrecy:
+  {|comm_layer_core_tag|} ->
   {|protocol_invariants|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
   tr:trace -> i:timestamp ->
@@ -42,7 +43,7 @@ val conf_message_secrecy:
       is_well_formed a (is_publishable (prefix tr i)) payload_parsed
     ) payload
   )
-let conf_message_secrecy #invs #a tr i higher_layer_preds receiver payload =
+let conf_message_secrecy #tag #invs #a tr i higher_layer_preds receiver payload =
   let send_event sender = CommConfSendMsg sender receiver payload in
   let tr_i = prefix tr i in
   eliminate (exists sender. event_triggered tr_i sender (send_event sender)) \/
@@ -68,6 +69,7 @@ let conf_message_secrecy #invs #a tr i higher_layer_preds receiver payload =
 (*** Authenticated Messages Properties ***)
 
 val sender_authentication:
+  {|comm_layer_core_tag|} ->
   {|protocol_invariants|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
   tr:trace -> i:timestamp ->
@@ -84,12 +86,13 @@ val sender_authentication:
     event_triggered (prefix tr i) sender (CommAuthSendMsg sender payload) \/
     is_corrupt (prefix tr i) (long_term_key_label sender)
   )
-let sender_authentication #invs #a tr i higher_layer_preds sender receiver secret = ()
+let sender_authentication #tag #invs #a tr i higher_layer_preds sender receiver secret = ()
 
 
 (*** Confidential and Authenticated Messages Properties ***)
 
 val sender_confauth_authentication:
+  {|comm_layer_core_tag|} ->
   {|protocol_invariants|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
   tr:trace -> i:timestamp ->
@@ -106,4 +109,4 @@ val sender_confauth_authentication:
     event_triggered (prefix tr i) sender (CommConfAuthSendMsg sender receiver payload) \/
     is_corrupt (prefix tr i) (long_term_key_label sender)
   )
-let sender_confauth_authentication #invs #a tr i higher_layer_preds sender receiver secret = ()
+let sender_confauth_authentication #tag #invs #a tr i higher_layer_preds sender receiver secret = ()

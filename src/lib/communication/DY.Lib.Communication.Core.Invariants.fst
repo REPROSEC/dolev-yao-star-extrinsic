@@ -17,8 +17,8 @@ open DY.Lib.Communication.Core
 
 (*** PkEnc Predicates ***)
 
-val pke_crypto_predicates_communication_layer: {|cusages:crypto_usages|} -> pke_crypto_predicate
-let pke_crypto_predicates_communication_layer #cusages = {
+val pke_crypto_predicates_communication_layer: {|comm_layer_core_tag|} -> {|cusages:crypto_usages|} -> pke_crypto_predicate
+let pke_crypto_predicates_communication_layer #tag #cusages = {
   pred = (fun tr sk_usage pk msg ->
     (exists sender receiver.
       sk_usage == long_term_key_type_to_usage (LongTermPkeKey comm_layer_pkenc_tag)  receiver /\
@@ -30,16 +30,17 @@ let pke_crypto_predicates_communication_layer #cusages = {
 }
 
 val pke_crypto_predicates_communication_layer_and_tag:
+  {|comm_layer_core_tag|} ->
   {|cusages:crypto_usages|} ->
   (string & pke_crypto_predicate)
-let pke_crypto_predicates_communication_layer_and_tag #cusages =
+let pke_crypto_predicates_communication_layer_and_tag #tag #cusages =
   (comm_layer_pkenc_tag, pke_crypto_predicates_communication_layer)
 
 (*** Sign Predicates ***)
 
 #push-options "--ifuel 3 --fuel 0"
-val sign_crypto_predicates_communication_layer: {|cusages:crypto_usages|} -> sign_crypto_predicate
-let sign_crypto_predicates_communication_layer #cusages = {
+val sign_crypto_predicates_communication_layer: {|comm_layer_core_tag|} -> {|cusages:crypto_usages|} -> sign_crypto_predicate
+let sign_crypto_predicates_communication_layer #tag #cusages = {
   pred = (fun tr sk_usage vk sig_msg ->
     (match parse signature_input sig_msg with
     | Some (Plain sender receiver payload_bytes) -> (
@@ -66,15 +67,17 @@ let sign_crypto_predicates_communication_layer #cusages = {
 #pop-options
 
 val sign_crypto_predicates_communication_layer_and_tag:
+  {|comm_layer_core_tag|} ->
   {|cusages:crypto_usages|} ->
   (string & sign_crypto_predicate)
-let sign_crypto_predicates_communication_layer_and_tag #cusages =
+let sign_crypto_predicates_communication_layer_and_tag #tag #cusages =
   (comm_layer_sign_tag, sign_crypto_predicates_communication_layer)
 
 val has_communication_layer_crypto_predicates:
+  {|comm_layer_core_tag|} ->
   {|crypto_invariants|} ->
   prop
-let has_communication_layer_crypto_predicates #cinvs =
+let has_communication_layer_crypto_predicates #tag #cinvs =
   has_pke_predicate pke_crypto_predicates_communication_layer_and_tag /\
   has_sign_predicate sign_crypto_predicates_communication_layer_and_tag
 
@@ -130,6 +133,7 @@ let default_comm_higher_layer_event_preds (a:Type) {| parseable_serializeable by
 
 #push-options "--ifuel 1 --fuel 0"
 let event_predicate_communication_layer
+  {|comm_layer_core_tag|}
   {|cinvs:crypto_invariants|}
   (#a:Type) {| parseable_serializeable bytes a |}
   (higher_layer_preds:comm_higher_layer_event_preds a) :
@@ -183,6 +187,7 @@ let event_predicate_communication_layer
 #pop-options
 
 val event_predicate_communication_layer_and_tag:
+  {|comm_layer_core_tag|} ->
   {|cinvs:crypto_invariants|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
   comm_higher_layer_event_preds a ->
@@ -191,9 +196,10 @@ let event_predicate_communication_layer_and_tag #cinvs higher_layer_preds =
   mk_event_tag_and_pred (event_predicate_communication_layer higher_layer_preds)
 
 val has_communication_layer_event_predicates:
+  {|comm_layer_core_tag|} ->
   {|protocol_invariants|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
   comm_higher_layer_event_preds a ->
   prop
-let has_communication_layer_event_predicates #invs higher_layer_preds =
-  has_event_pred (event_predicate_communication_layer #invs.crypto_invs higher_layer_preds)
+let has_communication_layer_event_predicates #tag #invs higher_layer_preds =
+  has_event_pred (event_predicate_communication_layer higher_layer_preds)
