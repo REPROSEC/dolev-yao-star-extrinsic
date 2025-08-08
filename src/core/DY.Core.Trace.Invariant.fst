@@ -52,11 +52,53 @@ type state_predicate {|crypto_invariants|} = {
   ;
 }
 
+/// The state update predicate can be used to constrain how a principal's state is allowed
+/// to evolve over time, for instance, requiring that some fields of the state are constant
+/// once set, or that a counter is monotonically increasing.
+/// To update a state (i.e., write to a principal, state_id pair that already had a state
+/// entry on the current trace), the state predicate needs to hold for the new state, but
+/// also the update predicate must hold, relating the old and new states (at the trace/time
+/// where the update is taking place).
+
+noeq
+type state_update_predicate {|crypto_invariants|} = {
+  update_pred: trace -> principal -> state_id -> bytes -> bytes -> prop;
+  // TODO Should this hold? It seems quite natural that if an update
+  // from A to B was allowed, it remains allowed. This works because we
+  // talk about both the start and end of the update, rather than saying
+  // "it is allowed to update from [current value] to B".
+  update_pred_later:
+    tr1:trace -> tr2:trace ->
+    prin:principal -> sess_id:state_id ->
+    b1:bytes -> b2:bytes ->
+    Lemma
+    (requires
+      update_pred tr1 prin sess_id b1 b2 /\
+      tr1 <$ tr2
+    )
+    (ensures update_pred tr2 prin sess_id b1 b2)
+  ;
+  // Do we want transitivity?
+  update_pred_trans:
+    tr:trace ->
+    prin:principal -> sess_id:state_id ->
+    b1:bytes -> b2:bytes -> b3:bytes ->
+    Lemma
+    (requires
+      update_pred tr prin sess_id b1 b2 /\
+      update_pred tr prin sess_id b2 b3
+    )
+    (ensures update_pred tr prin sess_id b1 b3)
+  ;
+  // Reflexivity too?
+}
+
 /// The parameters of the trace invariant.
 
 noeq
 type trace_invariants {|crypto_invariants|} = {
   state_pred: state_predicate;
+  state_update_pred: state_update_predicate;
   event_pred: trace -> principal -> string -> bytes -> prop;
 }
 
@@ -76,6 +118,7 @@ class protocol_invariants = {
 // hence we simulate inheritance like this.
 
 let state_pred {|invs:protocol_invariants|} = invs.trace_invs.state_pred
+let state_update_pred {|invs:protocol_invariants|} = invs.trace_invs.state_update_pred
 let event_pred {|invs:protocol_invariants|} = invs.trace_invs.event_pred
 
 (*** Trace invariant definition ***)
@@ -90,7 +133,13 @@ let trace_entry_invariant #invs tr entry =
     is_publishable tr msg
   | SetState prin sess_id content -> (
     // Stored states satisfy the custom state predicate
-    invs.trace_invs.state_pred.pred tr prin sess_id content
+    invs.trace_invs.state_pred.pred tr prin sess_id content /\
+    (
+      match get_most_recent_state_for_ghost tr prin sess_id with
+      | None -> True
+      | Some old_content ->
+        invs.trace_invs.state_update_pred.update_pred tr prin sess_id old_content content
+    )
   )
   | Event prin tag content -> (
     // Triggered protocol events satisfy the custom event predicate
@@ -212,6 +261,89 @@ val state_is_knowable_by:
   (ensures is_knowable_by (principal_state_content_label prin sess_id content) tr content)
 let state_is_knowable_by #invs tr prin sess_id content =
   state_pred.pred_knowable tr prin sess_id content
+
+/// If a state was known to be set at two different times, its value at those times
+/// must be related by the update predicate.
+
+val state_was_set_twice_implies_update_pred:
+  {|protocol_invariants|} -> tr:trace ->
+  ts1:timestamp -> ts2:timestamp ->
+  prin:principal -> sess_id:state_id ->
+  content1:bytes -> content2:bytes ->
+  Lemma
+  (requires
+    state_was_set_at tr ts1 prin sess_id content1 /\
+    state_was_set_at tr ts2 prin sess_id content2 /\
+    ts1 < ts2 /\
+    trace_invariant tr
+  )
+  (ensures
+    state_update_pred.update_pred tr prin sess_id content1 content2
+  )
+  [SMTPat (state_was_set_at tr ts1 prin sess_id content1);
+   SMTPat (state_was_set_at tr ts2 prin sess_id content2);
+   SMTPat (trace_invariant tr);
+  ]
+let rec state_was_set_twice_implies_update_pred tr ts1 ts2 prin sess_id content1 content2 =
+  entry_at_implies_trace_entry_invariant tr ts2 (SetState prin sess_id content2);
+  match get_most_recent_state_for_ghost (prefix tr ts2) prin sess_id with
+  | None -> ()
+  | Some prev_content -> (
+    state_update_pred.update_pred_later (prefix tr ts2) tr prin sess_id prev_content content2;
+
+    eliminate exists ts. ts1 <= ts /\ ts < ts2 /\ state_was_set_at tr ts prin sess_id prev_content
+    returns state_update_pred.update_pred tr prin sess_id content1 content2
+    with _. (
+      if ts = ts1
+      then ()
+      else (
+        state_was_set_twice_implies_update_pred tr ts1 ts prin sess_id content1 prev_content;
+        state_update_pred.update_pred_trans tr prin sess_id content1 prev_content content2;
+        ()
+      )
+    )
+  )
+
+val most_recent_state_update_pred:
+  {|protocol_invariants|} ->
+  tr:trace ->
+  prin:principal -> sess_id:state_id ->
+  content1:bytes -> content2:bytes ->
+  Lemma
+  (requires
+    state_was_set tr prin sess_id content1 /\
+    is_most_recent_state_for prin sess_id (Some content2) tr /\
+    trace_invariant tr
+  )
+  (ensures
+    state_update_pred.update_pred tr prin sess_id content1 content2 \/
+    content1 == content2
+  )
+let most_recent_state_update_pred #invs tr prin sess_id content1 content2 =
+  eliminate exists ts1. state_was_set_at tr ts1 prin sess_id content1
+  returns state_update_pred.update_pred tr prin sess_id content1 content2 \/ content1 == content2
+  with _. begin
+    is_most_recent_state_for_get_most_recent_state_for_ghost prin sess_id (Some content2) tr;
+    assert(exists ts2. state_was_set_at tr ts2 prin sess_id content2 /\ ts1 <= ts2)
+  end
+
+val state_was_set_has_most_recent_state:
+  {|protocol_invariants|} ->
+  tr:trace ->
+  prin:principal -> sess_id:state_id ->
+  content1:bytes ->
+  Lemma
+  (requires
+    state_was_set tr prin sess_id content1 /\
+    trace_invariant tr
+  )
+  (ensures
+    exists content2. is_most_recent_state_for prin sess_id (Some content2) tr
+  )
+let state_was_set_has_most_recent_state #invs tr prin sess_id content1 =
+  let st_opt = get_most_recent_state_for_ghost tr prin sess_id in
+  is_most_recent_state_for_get_most_recent_state_for_ghost prin sess_id st_opt tr
+
 
 /// Triggered protocol events satisfy the event predicate.
 
