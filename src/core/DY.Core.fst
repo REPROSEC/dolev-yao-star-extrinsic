@@ -114,6 +114,7 @@ include DY.Core.Trace.Type
 include DY.Core.Trace.Base
 include DY.Core.Trace.Arithmetic
 include DY.Core.Trace.Arithmetic.Derived
+include DY.Core.Trace.Modifies
 // include Bytes after Trace because of shadowing `length` function
 include DY.Core.Bytes
 include DY.Core.Bytes.Type
