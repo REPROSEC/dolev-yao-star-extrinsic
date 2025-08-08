@@ -53,12 +53,12 @@ let comm_meta_data_knowable #cinvs tr a #ps prin req_meta_data =
 
 [@@"opaque_to_smt"]
 val reqres_comm_layer_lemmas_enabled:
-  #a:Type -> {| parseable_serializeable bytes a |} ->
-  comm_reqres_higher_layer_event_preds a -> prop
+  #a:Type -> {| comparse_parser_serializer a |} ->
+  comm_reqres_higher_layer_event_preds a #ps_able -> prop
 let reqres_comm_layer_lemmas_enabled _ = True
 
 val enable_reqres_comm_layer_lemmas:
-  #a:Type -> {| parseable_serializeable bytes a |} ->
+  #a:Type -> {| comparse_parser_serializer a |} ->
   preds:comm_reqres_higher_layer_event_preds a ->
   Lemma (reqres_comm_layer_lemmas_enabled preds)
 let enable_reqres_comm_layer_lemmas preds =
