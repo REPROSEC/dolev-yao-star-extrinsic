@@ -2345,6 +2345,7 @@ let dh sk pk =
 val dh_shared_secret_lemma:
   x:bytes -> y:bytes ->
   Lemma (dh x (dh_pk y) == dh y (dh_pk x))
+  [SMTPat (dh x (dh_pk y)); SMTPat (dh y (dh_pk x))]
 let dh_shared_secret_lemma x y =
   reveal_opaque (`%dh_pk) (dh_pk);
   reveal_opaque (`%dh) (dh);
@@ -2494,8 +2495,7 @@ let get_label_dh tr sk pk =
   reveal_opaque (`%dh_pk) (dh_pk);
   reveal_opaque (`%dh) (dh);
   normalize_term_spec get_dh_label;
-  normalize_term_spec get_label;
-  join_commutes (get_label tr sk) (get_dh_label tr pk)
+  normalize_term_spec get_label
 
 /// User lemma (dh bytes usage with known peer)
 
