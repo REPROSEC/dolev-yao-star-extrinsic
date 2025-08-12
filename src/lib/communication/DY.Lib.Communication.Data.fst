@@ -11,19 +11,21 @@ open DY.Lib.Comparse.Parsers
 
 (**** Core ****)
 
+(*)
 /// The following type is meant to be used to send a single byte with a function
 /// of the communication layer. Since the communication layer always takes a
 /// serializable data object we need to encapsulate the byte in a data object.
 [@@with_bytes bytes]
-type com_send_byte = {
+type comm_send_byte = {
   b:bytes;
 }
 
-%splice [ps_com_send_byte] (gen_parser (`com_send_byte))
-%splice [ps_com_send_byte_is_well_formed] (gen_is_well_formed_lemma (`com_send_byte))
+%splice [ps_comm_send_byte] (gen_parser (`comm_send_byte))
+%splice [ps_comm_send_byte_is_well_formed] (gen_is_well_formed_lemma (`comm_send_byte))
 
-instance parseable_serializeable_bytes_com_send_byte: parseable_serializeable bytes com_send_byte
-  = mk_parseable_serializeable ps_com_send_byte
+instance parseable_serializeable_bytes_comm_send_byte: parseable_serializeable bytes comm_send_byte
+  = mk_parseable_serializeable ps_comm_send_byte
+  *)
 
 /// Data structure to return data from communication layer functions
 type communication_message (a:Type) = {
@@ -89,15 +91,15 @@ instance parseable_serializeable_bytes_authenticated_data: parseable_serializeab
 (**** Message Type for all Messages on the Wire ****)
 
 [@@with_bytes bytes]
-type com_message_t =
-  | SigMessage: signed_communication_message -> com_message_t
-  | RequestMessage: request_message -> com_message_t
-  | ResponseMessage: response_envelope -> com_message_t
+type comm_message_t =
+  | SigMessage: signed_communication_message -> comm_message_t
+  | RequestMessage: request_message -> comm_message_t
+  | ResponseMessage: response_envelope -> comm_message_t
 
 #push-options "--ifuel 1"
-%splice [ps_com_message_t] (gen_parser (`com_message_t))
-%splice [ps_com_message_t_is_well_formed] (gen_is_well_formed_lemma (`com_message_t))
+%splice [ps_comm_message_t] (gen_parser (`comm_message_t))
+%splice [ps_comm_message_t_is_well_formed] (gen_is_well_formed_lemma (`comm_message_t))
 #pop-options
 
-instance parseable_serializeable_bytes_com_message_t: parseable_serializeable bytes com_message_t
-  = mk_parseable_serializeable ps_com_message_t
+instance parseable_serializeable_bytes_comm_message_t: parseable_serializeable bytes comm_message_t
+  = mk_parseable_serializeable ps_comm_message_t

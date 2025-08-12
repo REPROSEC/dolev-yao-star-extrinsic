@@ -30,6 +30,7 @@ val empty_trace : #label_t:Type -> trace_ label_t
 let empty_trace = Nil
 
 unfold
+unfold
 val is_empty: #label_t:Type -> trace_ label_t -> bool
 let is_empty = Nil?
 

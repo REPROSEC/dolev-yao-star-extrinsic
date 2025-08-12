@@ -21,44 +21,45 @@ open DY.Lib.Communication.RequestResponse.Invariants
 
 val server_authentication:
   {|protocol_invariants|} ->
-  #a:Type -> {| parseable_serializeable bytes a |} ->
+  #a:Type -> {| comm_layer_reqres_config a |} ->
   tr:trace -> i:timestamp ->
   higher_layer_resreq_preds:comm_reqres_higher_layer_event_preds a ->
-  client:principal -> server:principal -> response:bytes -> key:bytes ->
+  client:principal -> server:principal -> response:a -> key:bytes ->
   Lemma
   (requires
     trace_invariant tr /\
-    has_communication_layer_reqres_event_predicates request_response_event_preconditions higher_layer_resreq_preds /\
-    event_triggered_at tr i client (CommClientReceiveResponse client server  response key)
+    has_communication_layer_reqres_event_predicates higher_layer_resreq_preds /\
+    event_triggered_at tr i client (CommClientReceiveResponse client server  response key <: communication_reqres_event a)
   )
   (ensures
-    (exists request. event_triggered (prefix tr i) server (CommServerSendResponse server request response)) \/
+    (exists request. event_triggered (prefix tr i) server (CommServerSendResponse server request response <: communication_reqres_event a)) \/
     is_corrupt (prefix tr i) (principal_label client) \/
     is_corrupt (prefix tr i) (principal_label server)
   )
-let server_authentication #invs #a tr i higher_layer_resreq_preds client server response key = ()
+let server_authentication #tag #invs #a tr i higher_layer_resreq_preds client server response key = ()
 
 
 (*** Secrecy Security Property ***)
 
 val key_secrecy_client:
   {|protocol_invariants|} ->
+  #a:Type -> {|comm_layer_reqres_config a|} ->
   tr:trace ->
   client:principal -> server:principal ->
-  key:bytes -> request:bytes -> response:bytes ->
+  key:bytes -> request:a -> response:a ->
   Lemma
   (requires
     trace_invariant tr /\
-    has_communication_layer_state_predicates /\
+    has_communication_layer_reqres_state_predicates a /\
     attacker_knows tr key /\
     (
-      (exists sid. state_was_set tr client sid (ClientSendRequest {server; request; key})) \/
-      (exists sid. state_was_set tr client sid (ClientReceiveResponse {server; response; key}))
+      (exists sid. state_was_set #(communication_states a) #(local_state_communication_layer_session a) tr client sid (ClientSendRequest {server; request; key} <: communication_states a)) \/
+      (exists sid. state_was_set #(communication_states a) #(local_state_communication_layer_session a) tr client sid (ClientReceiveResponse {server; response; key} <: communication_states a))
     )
   )
   (ensures
     is_corrupt tr (principal_label client) \/ is_corrupt tr (principal_label server)
   )
-let key_secrecy_client tr client server key request response =
+let key_secrecy_client #tag #invs tr client server key request response =
   attacker_only_knows_publishable_values tr key;
   ()
