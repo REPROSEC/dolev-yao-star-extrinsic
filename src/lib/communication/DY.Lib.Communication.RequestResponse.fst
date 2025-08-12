@@ -20,11 +20,11 @@ class comm_layer_reqres_config (a:Type) = {
   ps_a: parser_serializer bytes a;
 }
 
-instance parseable_serializeable_bytes_a (#a:Type) {|c:comm_layer_reqres_config a|}: parseable_serializeable bytes a =
-  mk_parseable_serializeable c.ps_a
+instance parseable_serializeable_bytes_a (#a:Type) {|config:comm_layer_reqres_config a|}: parseable_serializeable bytes a =
+  mk_parseable_serializeable config.ps_a
 
-instance comm_layer_tag_core_config_reqres: comm_layer_core_config comm_message_t = {
-  tag = "DY.Lib.Communication.CoreConfig.ReqRes";
+instance comm_layer_tag_core_config_reqres (a:Type) {|config:comm_layer_reqres_config a|}: comm_layer_core_config comm_message_t = {
+  tag = config.tag ^ ".CoreConfig.ReqRes";
   ps_a = ps_comm_message_t;
 }
 
@@ -109,8 +109,8 @@ type communication_reqres_event (a:Type) {|c:comm_layer_reqres_config a|} =
 %splice [ps_communication_reqres_event_is_well_formed] (gen_is_well_formed_lemma (`communication_reqres_event))
 #pop-options
 
-instance event_communication_reqres_event (#a:Type) {|c:comm_layer_reqres_config a|}: event (communication_reqres_event a) = {
-  tag = c.tag ^ ".Event";
+instance event_communication_reqres_event (#a:Type) {|config:comm_layer_reqres_config a|}: event (communication_reqres_event a) = {
+  tag = config.tag ^ ".Event";
   format = mk_parseable_serializeable (ps_communication_reqres_event a);
 }
 
@@ -119,18 +119,18 @@ instance event_communication_reqres_event (#a:Type) {|c:comm_layer_reqres_config
 
 [@@ "opaque_to_smt"]
 val send_request:
-  #a:Type -> {|comm_layer_reqres_config a|} ->
+  #a:Type0 -> {|comm_layer_reqres_config a|} ->
   communication_keys_sess_ids ->
   principal -> principal -> a ->
   traceful (option (timestamp & comm_meta_data a))
-let send_request #a comm_keys_ids client server request =
+let send_request #a #config comm_keys_ids client server request =
   let* key = mk_rand (AeadKey (comm_layer_aead_tag a) empty) (comm_label client server) 32 in
   let payload_bytes:bytes = serialize a request in
   let* sid = new_session_id client in
   set_state client sid (ClientSendRequest {server; request; key} <: communication_states a);*
   trigger_event client (CommClientSendRequest client server request key <: communication_reqres_event a);*
   let req_payload:comm_message_t = RequestMessage {request=payload_bytes; key} in
-  let*? msg_id = send_confidential comm_keys_ids client server req_payload in
+  let*? msg_id = send_confidential #comm_message_t #(comm_layer_tag_core_config_reqres a) comm_keys_ids client server req_payload in
   let req_meta_data:comm_meta_data a = {key; server; sid; request} in
   return (Some (msg_id, req_meta_data))
 
@@ -141,7 +141,7 @@ val receive_request:
   principal -> timestamp ->
   traceful (option (a & comm_meta_data a))
 let receive_request #a comm_keys_ids server msg_id =
-  let*? req_msg_t:comm_message_t = receive_confidential comm_keys_ids server msg_id in
+  let*? req_msg_t:comm_message_t = receive_confidential #comm_message_t #(comm_layer_tag_core_config_reqres a) comm_keys_ids server msg_id in
   guard_tr (RequestMessage? req_msg_t);*?
   let RequestMessage req_msg = req_msg_t in
   let*? request = return (parse a req_msg.request) in
@@ -223,3 +223,10 @@ let receive_response #a client req_meta_data msg_id =
   set_state client req_meta_data.sid (ClientReceiveResponse {server=csr.server; response=payload; key=csr.key} <: communication_states a);*
   trigger_event client (CommClientReceiveResponse client csr.server payload csr.key <: communication_reqres_event a);*
   return (Some (payload, req_meta_data))
+
+
+(**** Layer Initialization ****)
+
+[@@ "opaque_to_smt"]
+val initialize_communication_reqres: a:Type -> {|comm_layer_reqres_config a|} -> principal -> principal -> traceful (option (communication_keys_sess_ids & communication_keys_sess_ids))
+let initialize_communication_reqres a client server = initialize_communication_core comm_message_t #(comm_layer_tag_core_config_reqres a) client server

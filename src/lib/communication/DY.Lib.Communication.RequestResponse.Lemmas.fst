@@ -64,6 +64,31 @@ val enable_reqres_comm_layer_lemmas:
 let enable_reqres_comm_layer_lemmas preds =
   normalize_term_spec (reqres_comm_layer_lemmas_enabled preds)
 
+
+#push-options "--ifuel 2"
+val initialize_communication_reqres_proof:
+  {|invs:protocol_invariants|} ->
+  tr:trace ->
+  a:Type -> {|comm_layer_reqres_config a|} ->
+  sender:principal -> receiver:principal ->
+  Lemma
+  (requires
+    trace_invariant tr /\
+    has_private_keys_invariant /\
+    has_pki_invariant
+  )
+  (ensures (
+    let (_, tr_out) = initialize_communication_reqres a sender receiver tr in
+    trace_invariant tr_out
+  ))
+  [SMTPat (trace_invariant #invs tr);
+   SMTPat (initialize_communication_reqres a sender receiver tr);
+  ]
+let initialize_communication_reqres_proof tr a sender receiver =
+  reveal_opaque (`%initialize_communication_reqres) (initialize_communication_reqres a sender receiver)
+#pop-options
+
+
 val send_request_proof:
   {|protocol_invariants|} ->
   #a:Type0 -> {|comm_layer_reqres_config a|} ->
@@ -75,9 +100,9 @@ val send_request_proof:
   (requires
     trace_invariant tr /\
     has_pki_invariant /\
-    has_communication_layer_crypto_predicates comm_message_t /\
+    has_communication_layer_reqres_crypto_predicates a /\
     has_communication_layer_reqres_event_predicates higher_layer_preds /\
-    has_communication_layer_state_predicates a /\
+    has_communication_layer_reqres_state_predicates a /\
     higher_layer_preds.send_request tr client server request (comm_label client server) /\
     is_well_formed a (is_knowable_by (comm_label client server) tr) request
   )
@@ -94,7 +119,7 @@ val send_request_proof:
   SMTPat (send_request comm_keys_ids client server request tr)]
 let send_request_proof #invs #a tr comm_keys_ids higher_layer_preds client server request =
   reveal_opaque (`%send_request) (send_request #a);
-  enable_core_comm_layer_lemmas (request_response_event_preconditions a);
+  enable_core_comm_layer_lemmas (comm_core_higher_layer_event_preds_reqres a);
   let request_bytes = serialize a request in
   match send_request comm_keys_ids client server request tr with
   | (None, tr_out) -> (
@@ -112,7 +137,7 @@ let send_request_proof #invs #a tr comm_keys_ids higher_layer_preds client serve
     let ((), tr') = trigger_event client (CommClientSendRequest client server request key <: communication_reqres_event a) tr' in
     assert(trace_invariant tr');
     let req_payload:comm_message_t = RequestMessage {request=request_bytes; key} in
-    let (Some msg_id, tr') = send_confidential comm_keys_ids client server req_payload tr' in
+    let (Some msg_id, tr') = send_confidential #comm_message_t #(comm_layer_tag_core_config_reqres a) comm_keys_ids client server req_payload tr' in
 
     assert(tr_out == tr');
     assert(trace_invariant tr_out);
@@ -135,7 +160,7 @@ val receive_request_proof:
     has_pki_invariant /\
     has_communication_layer_reqres_crypto_predicates a /\
     has_communication_layer_reqres_event_predicates higher_layer_preds /\
-    has_communication_layer_state_predicates a
+    has_communication_layer_reqres_state_predicates a
   )
   (ensures (
     match receive_request #a comm_keys_ids server msg_id tr with
@@ -151,22 +176,22 @@ val receive_request_proof:
   [SMTPat (trace_invariant tr);
   SMTPat (reqres_comm_layer_lemmas_enabled higher_layer_preds);
   SMTPat (receive_request #a comm_keys_ids server msg_id tr)]
-let receive_request_proof #invs #a tr comm_keys_ids higher_layer_preds server msg_id =
+let receive_request_proof #invs #a #config tr comm_keys_ids higher_layer_preds server msg_id =
   reveal_opaque (`%receive_request) (receive_request #a);
-  enable_core_comm_layer_lemmas (request_response_event_preconditions a);
+  enable_core_comm_layer_lemmas (comm_core_higher_layer_event_preds_reqres a);
   match receive_request #a comm_keys_ids server msg_id tr with
   | (None, tr_out) -> ()
   | (Some (payload, req_meta_data), tr_out) -> (
-    receive_confidential_proof tr (request_response_event_preconditions a) comm_keys_ids server msg_id;
-    let (Some req_msg_t, tr') = receive_confidential comm_keys_ids server msg_id tr in
+    receive_confidential_proof #invs #comm_message_t #(comm_layer_tag_core_config_reqres a) tr (comm_core_higher_layer_event_preds_reqres a) comm_keys_ids server msg_id;
+    let (Some req_msg_t, tr') = receive_confidential #comm_message_t #(comm_layer_tag_core_config_reqres a) comm_keys_ids server msg_id tr in
     let RequestMessage req_msg = req_msg_t in
     let Some request = parse a req_msg.request in
 
     let req_msg_bytes:bytes = serialize comm_message_t req_msg_t in
     let req_send_event client:communication_reqres_event a = CommClientSendRequest client server request req_msg.key in
 
-    let i = find_event_triggered_at_timestamp tr' server (CommConfReceiveMsg server req_msg_t <: communication_core_event comm_message_t) in
-    conf_message_secrecy tr' i (request_response_event_preconditions a) server req_msg_t;
+    let i = find_event_triggered_at_timestamp tr' server (CommConfReceiveMsg server req_msg_t <: communication_core_event comm_message_t #(comm_layer_tag_core_config_reqres a)) in
+    conf_message_secrecy tr' i (comm_core_higher_layer_event_preds_reqres a) server req_msg_t;
 
     // Properties that can be proved uniformly in both the honest and corrupt case
     eliminate (exists client. event_triggered tr' client (req_send_event client)) \/
@@ -209,7 +234,7 @@ val mk_comm_layer_response_nonce_proof:
   Lemma
   (requires
     trace_invariant tr /\
-    has_communication_layer_state_predicates a /\
+    has_communication_layer_reqres_state_predicates a /\
     has_communication_layer_reqres_crypto_predicates a /\
     bytes_well_formed tr req_meta_data.key
   )
@@ -267,7 +292,7 @@ val send_response_proof:
     has_communication_layer_reqres_crypto_predicates a /\
     has_communication_layer_reqres_event_predicates higher_layer_preds /\
     higher_layer_preds.send_response tr server req_meta_data.request response /\
-    has_communication_layer_state_predicates a /\
+    has_communication_layer_reqres_state_predicates a /\
     is_well_formed a (is_knowable_by (get_response_label tr req_meta_data) tr) response
   )
   (ensures (
@@ -345,7 +370,7 @@ val receive_response_proof:
     trace_invariant tr /\
     has_communication_layer_reqres_crypto_predicates a /\
     has_communication_layer_reqres_event_predicates higher_layer_preds /\
-    has_communication_layer_state_predicates a
+    has_communication_layer_reqres_state_predicates a
   )
   (ensures (
     match receive_response client req_meta_data msg_id tr with

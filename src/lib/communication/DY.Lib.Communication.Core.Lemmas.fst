@@ -21,19 +21,19 @@ open DY.Lib.Communication.Core.Invariants
 /// To enable these core lemmas for an analysis, which requires specifying which
 /// predicates they shouild be used for, one can use the line
 /// `enable_core_comm_layer_lemmas preds`, where `preds` is the relevant
-/// `comm_higher_layer_event_preds` for the protocol.
+/// `comm_core_higher_layer_event_preds` for the protocol.
 /// See https://github.com/FStarLang/FStar/wiki/Quantifiers-and-patterns
 /// for more information on this technique.
 
 [@@"opaque_to_smt"]
 val core_comm_layer_lemmas_enabled:
   #a:Type -> {|comm_layer_core_config a|} ->
-  comm_higher_layer_event_preds a -> prop
+  comm_core_higher_layer_event_preds a -> prop
 let core_comm_layer_lemmas_enabled _ = True
 
 val enable_core_comm_layer_lemmas:
   #a:Type -> {|comm_layer_core_config a|} ->
-  preds:comm_higher_layer_event_preds a ->
+  preds:comm_core_higher_layer_event_preds a ->
   Lemma (core_comm_layer_lemmas_enabled preds)
 let enable_core_comm_layer_lemmas preds =
   normalize_term_spec (core_comm_layer_lemmas_enabled preds)
@@ -41,7 +41,7 @@ let enable_core_comm_layer_lemmas preds =
 (**** Initialization Satisfies the Trace Invariants ****)
 
 #push-options "--ifuel 2"
-val initialize_communication_proof:
+val initialize_communication_core_proof:
   {|invs:protocol_invariants|} ->
   tr:trace ->
   a:Type -> {|comm_layer_core_config a|} ->
@@ -53,14 +53,14 @@ val initialize_communication_proof:
     has_pki_invariant
   )
   (ensures (
-    let (_, tr_out) = initialize_communication a sender receiver tr in
+    let (_, tr_out) = initialize_communication_core a sender receiver tr in
     trace_invariant tr_out
   ))
   [SMTPat (trace_invariant #invs tr);
-   SMTPat (initialize_communication a sender receiver tr);
+   SMTPat (initialize_communication_core a sender receiver tr);
   ]
-let initialize_communication_proof tr a sender receiver =
-  reveal_opaque (`%initialize_communication) (initialize_communication a sender receiver)
+let initialize_communication_core_proof tr a sender receiver =
+  reveal_opaque (`%initialize_communication_core) (initialize_communication_core a sender receiver)
 #pop-options
 
 (**** Confidential Send and Receive Lemmas ****)
@@ -73,7 +73,7 @@ val encrypt_message_proof:
   pk_receiver:bytes -> nonce:bytes -> payload:a ->
   Lemma
   (requires (
-    has_communication_layer_crypto_predicates a /\
+    has_communication_layer_core_crypto_predicates a /\
     is_secret (long_term_key_label sender) tr nonce /\
     nonce `has_usage tr` PkeNonce /\
     is_public_key_for tr pk_receiver (LongTermPkeKey (comm_layer_pkenc_tag a)) receiver /\
@@ -90,20 +90,20 @@ val send_confidential_proof:
   {|invs:protocol_invariants|} ->
   #a:Type0 -> {|comm_layer_core_config a|} ->
   tr:trace ->
-  higher_layer_preds:comm_higher_layer_event_preds a ->
+  higher_layer_preds:comm_core_higher_layer_event_preds a ->
   keys_sess_ids:communication_keys_sess_ids ->
   sender:principal -> receiver:principal -> payload:a ->
   Lemma
   (requires (
     trace_invariant tr /\
     has_pki_invariant /\
-    has_communication_layer_crypto_predicates a /\
-    has_communication_layer_event_predicates a higher_layer_preds /\
+    has_communication_layer_core_crypto_predicates a /\
+    has_communication_layer_core_event_predicates a higher_layer_preds /\
     higher_layer_preds.send_conf tr sender receiver payload /\
     // We only require the payload to flow to the sender and receiver to allow
     // the sender to send a payload readable by other principals. If you want
     // the payload to be only readable by the sender and receiver, you can use
-    // the `comm_higher_layer_event_preds` on the protocol level to enforce
+    // the `comm_core_higher_layer_event_preds` on the protocol level to enforce
     // this. Look into the usage examples of this layer to see how it works.
     is_well_formed a (is_knowable_by (comm_label sender receiver) tr) payload
   ))
@@ -137,7 +137,7 @@ val decrypt_message_proof:
   receiver:principal -> sk_receiver:bytes -> msg_encrypted:bytes ->
   Lemma
   (requires
-    has_communication_layer_crypto_predicates a /\
+    has_communication_layer_core_crypto_predicates a /\
     is_private_key_for tr sk_receiver (LongTermPkeKey (comm_layer_pkenc_tag a)) receiver /\
     bytes_invariant tr msg_encrypted
   )
@@ -169,15 +169,15 @@ val receive_confidential_proof:
   {|invs:protocol_invariants|} ->
   #a:Type0 -> {|comm_layer_core_config a|} ->
   tr:trace ->
-  higher_layer_preds:comm_higher_layer_event_preds a ->
+  higher_layer_preds:comm_core_higher_layer_event_preds a ->
   comm_keys_ids:communication_keys_sess_ids ->
   receiver:principal -> msg_id:timestamp ->
   Lemma
   (requires
     trace_invariant tr /\
     has_private_keys_invariant /\
-    has_communication_layer_crypto_predicates a /\
-    has_communication_layer_event_predicates a higher_layer_preds
+    has_communication_layer_core_crypto_predicates a /\
+    has_communication_layer_core_event_predicates a higher_layer_preds
   )
   (ensures (
     match receive_confidential comm_keys_ids receiver msg_id tr with
@@ -218,7 +218,7 @@ val sign_message_proof:
   (requires (
     (Some? pk_receiver <==> Inr? payload) /\ 
     (None? pk_receiver <==> Inl? payload) /\
-    has_communication_layer_crypto_predicates a /\
+    has_communication_layer_core_crypto_predicates a /\
     is_secret (long_term_key_label sender) tr nonce /\
     nonce `has_usage tr` SigNonce /\
     is_private_key_for tr sk_sender (LongTermSigKey (comm_layer_sign_tag a)) sender /\
@@ -261,15 +261,15 @@ val send_authenticated_proof:
   {|invs:protocol_invariants|} ->
   #a:Type -> {|comm_layer_core_config a|} ->
   tr:trace ->
-  higher_layer_preds:comm_higher_layer_event_preds a ->
+  higher_layer_preds:comm_core_higher_layer_event_preds a ->
   comm_keys_ids:communication_keys_sess_ids ->
   sender:principal -> receiver:principal -> payload:a ->
   Lemma
   (requires
     trace_invariant tr /\
     has_private_keys_invariant /\
-    has_communication_layer_crypto_predicates a /\
-    has_communication_layer_event_predicates a higher_layer_preds /\
+    has_communication_layer_core_crypto_predicates a /\
+    has_communication_layer_core_event_predicates a higher_layer_preds /\
     higher_layer_preds.send_auth tr sender payload /\
     is_well_formed a (is_publishable tr) payload
   )
@@ -308,7 +308,7 @@ val verify_message_proof:
   vk_sender:bytes ->
   Lemma
   (requires
-    has_communication_layer_crypto_predicates a /\
+    has_communication_layer_core_crypto_predicates a /\
     is_publishable tr msg_bytes /\
     is_public_key_for tr vk_sender (LongTermSigKey (comm_layer_sign_tag a)) sender
   )
@@ -369,15 +369,15 @@ val receive_authenticated_proof:
   {|invs:protocol_invariants|} ->
   #a:Type -> {|config:comm_layer_core_config a|} ->
   tr:trace ->
-  higher_layer_preds:comm_higher_layer_event_preds a ->
+  higher_layer_preds:comm_core_higher_layer_event_preds a ->
   comm_keys_ids:communication_keys_sess_ids ->
   receiver:principal -> msg_id:timestamp ->
   Lemma
   (requires
     trace_invariant tr /\
     has_pki_invariant /\
-    has_communication_layer_crypto_predicates a /\
-    has_communication_layer_event_predicates a higher_layer_preds
+    has_communication_layer_core_crypto_predicates a /\
+    has_communication_layer_core_event_predicates a higher_layer_preds
   )
   (ensures (
     match receive_authenticated comm_keys_ids receiver msg_id tr with
@@ -421,7 +421,7 @@ val encrypt_and_sign_message_proof:
   pk_receiver:bytes -> sk_sender:bytes -> enc_nonce:bytes -> sign_nonce:bytes ->
   Lemma
   (requires
-    has_communication_layer_crypto_predicates a /\
+    has_communication_layer_core_crypto_predicates a /\
     is_secret (long_term_key_label sender) tr enc_nonce /\
     is_secret (long_term_key_label sender) tr sign_nonce /\
     enc_nonce `has_usage tr` PkeNonce /\
@@ -447,7 +447,7 @@ val send_confidential_authenticated_proof:
   {|protocol_invariants|} ->
   #a:Type0 -> {|comm_layer_core_config a|}  ->
   tr:trace ->
-  higher_layer_preds:comm_higher_layer_event_preds a ->
+  higher_layer_preds:comm_core_higher_layer_event_preds a ->
   comm_keys_ids:communication_keys_sess_ids ->
   sender:principal -> receiver:principal -> payload:a ->
   Lemma
@@ -455,8 +455,8 @@ val send_confidential_authenticated_proof:
     trace_invariant tr /\
     has_private_keys_invariant /\
     has_pki_invariant /\
-    has_communication_layer_crypto_predicates a /\
-    has_communication_layer_event_predicates a higher_layer_preds /\
+    has_communication_layer_core_crypto_predicates a /\
+    has_communication_layer_core_event_predicates a higher_layer_preds /\
     higher_layer_preds.send_conf tr sender receiver payload /\
     higher_layer_preds.send_conf_auth tr sender receiver payload /\
     is_well_formed a (is_knowable_by (join (principal_label sender) (principal_label receiver)) tr) payload
@@ -505,7 +505,7 @@ val verify_and_decrypt_message_proof:
   sk_receiver:bytes -> vk_sender:bytes ->
   Lemma
   (requires
-    has_communication_layer_crypto_predicates a /\
+    has_communication_layer_core_crypto_predicates a /\
     is_publishable tr msg_encrypted_signed /\
     is_private_key_for tr sk_receiver (LongTermPkeKey (comm_layer_pkenc_tag a)) receiver /\
     is_public_key_for tr vk_sender (LongTermSigKey (comm_layer_sign_tag a)) sender
@@ -560,7 +560,7 @@ val receive_confidential_authenticated_proof:
   {|invs:protocol_invariants|} ->
   #a:Type -> {|comm_layer_core_config a|} ->
   tr:trace ->
-  higher_layer_preds:comm_higher_layer_event_preds a ->
+  higher_layer_preds:comm_core_higher_layer_event_preds a ->
   comm_keys_ids:communication_keys_sess_ids ->
   receiver:principal -> msg_id:timestamp ->
   Lemma
@@ -568,8 +568,8 @@ val receive_confidential_authenticated_proof:
     trace_invariant tr /\
     has_private_keys_invariant /\
     has_pki_invariant /\
-    has_communication_layer_crypto_predicates a /\
-    has_communication_layer_event_predicates a higher_layer_preds
+    has_communication_layer_core_crypto_predicates a /\
+    has_communication_layer_core_event_predicates a higher_layer_preds
   )
   (ensures
     (

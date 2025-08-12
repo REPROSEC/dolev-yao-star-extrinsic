@@ -50,7 +50,7 @@ val key_secrecy_client:
   Lemma
   (requires
     trace_invariant tr /\
-    has_communication_layer_state_predicates a /\
+    has_communication_layer_reqres_state_predicates a /\
     attacker_knows tr key /\
     (
       (exists sid. state_was_set #(communication_states a) #(local_state_communication_layer_session a) tr client sid (ClientSendRequest {server; request; key} <: communication_states a)) \/

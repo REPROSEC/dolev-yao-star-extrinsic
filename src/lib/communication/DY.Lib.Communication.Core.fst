@@ -18,8 +18,8 @@ class comm_layer_core_config (a:Type) = {
   ps_a: parser_serializer bytes a;
 }
 
-instance parseable_serializeable_bytes_a (#a:Type) {|c:comm_layer_core_config a|}: parseable_serializeable bytes a =
-  mk_parseable_serializeable c.ps_a
+instance parseable_serializeable_bytes_a (#a:Type) {|config:comm_layer_core_config a|}: parseable_serializeable bytes a =
+  mk_parseable_serializeable config.ps_a
 
 val comm_layer_pkenc_tag: (a:Type) -> {|comm_layer_core_config a|} -> string
 let comm_layer_pkenc_tag a #config = config.tag ^ ".PkEnc.PublicKey"
@@ -250,8 +250,8 @@ let receive_confidential_authenticated #a comm_keys_ids receiver msg_id =
 (**** Layer Initialization ****)
 
 [@@ "opaque_to_smt"]
-val initialize_communication: a:Type -> {|comm_layer_core_config a|} -> principal -> principal -> traceful (option (communication_keys_sess_ids & communication_keys_sess_ids))
-let initialize_communication a sender receiver =
+val initialize_communication_core: a:Type -> {|comm_layer_core_config a|} -> principal -> principal -> traceful (option (communication_keys_sess_ids & communication_keys_sess_ids))
+let initialize_communication_core a sender receiver =
   // Initialize keys for public key encryption
   let* client_global_session_priv_key_id = initialize_private_keys sender in
   generate_private_key sender client_global_session_priv_key_id (LongTermPkeKey (comm_layer_pkenc_tag a));*

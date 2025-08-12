@@ -25,13 +25,13 @@ val conf_message_secrecy:
   {|protocol_invariants|} ->
   #a:Type -> {|comm_layer_core_config a|} ->
   tr:trace -> i:timestamp ->
-  higher_layer_preds:comm_higher_layer_event_preds a ->
+  higher_layer_preds:comm_core_higher_layer_event_preds a ->
   receiver:principal ->
   payload:a ->
   Lemma
   (requires
     trace_invariant tr /\
-    has_communication_layer_event_predicates a higher_layer_preds /\
+    has_communication_layer_core_event_predicates a higher_layer_preds /\
     event_triggered_at tr i receiver (CommConfReceiveMsg receiver payload <: communication_core_event a)
   )
   (ensures
@@ -66,13 +66,13 @@ val sender_authentication:
   {|protocol_invariants|} ->
   #a:Type -> {|comm_layer_core_config a|} ->
   tr:trace -> i:timestamp ->
-  higher_layer_preds:comm_higher_layer_event_preds a ->
+  higher_layer_preds:comm_core_higher_layer_event_preds a ->
   sender:principal -> receiver:principal ->
   payload:a ->
   Lemma
   (requires
     trace_invariant tr /\
-    has_communication_layer_event_predicates a higher_layer_preds /\
+    has_communication_layer_core_event_predicates a higher_layer_preds /\
     event_triggered_at tr i receiver (CommAuthReceiveMsg sender receiver payload <: communication_core_event a)
   )
   (ensures
@@ -88,13 +88,13 @@ val sender_confauth_authentication:
   {|protocol_invariants|} ->
   #a:Type -> {|comm_layer_core_config a|} ->
   tr:trace -> i:timestamp ->
-  higher_layer_preds:comm_higher_layer_event_preds a ->
+  higher_layer_preds:comm_core_higher_layer_event_preds a ->
   sender:principal -> receiver:principal ->
   payload:a ->
   Lemma
   (requires
     trace_invariant tr /\
-    has_communication_layer_event_predicates a higher_layer_preds /\
+    has_communication_layer_core_event_predicates a higher_layer_preds /\
     event_triggered_at tr i receiver (CommConfAuthReceiveMsg sender receiver payload <: communication_core_event a)
   )
   (ensures
