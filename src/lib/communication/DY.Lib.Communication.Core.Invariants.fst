@@ -17,48 +17,57 @@ open DY.Lib.Communication.Core
 
 (*** PkEnc Predicates ***)
 
-val pke_crypto_predicates_communication_layer: {|comm_layer_core_tag|} -> {|cusages:crypto_usages|} -> pke_crypto_predicate
-let pke_crypto_predicates_communication_layer #tag #cusages = {
+#push-options "--ifuel 1"
+val pke_crypto_predicates_communication_layer: {|cusages:crypto_usages|} -> a:Type0 -> {|comm_layer_core_config a|} -> pke_crypto_predicate
+let pke_crypto_predicates_communication_layer #cusages a #config  = {
   pred = (fun tr sk_usage pk msg ->
     (exists sender receiver.
-      sk_usage == long_term_key_type_to_usage (LongTermPkeKey comm_layer_pkenc_tag)  receiver /\
+      sk_usage == long_term_key_type_to_usage (LongTermPkeKey (comm_layer_pkenc_tag a))  receiver /\
       (get_label tr msg) `can_flow tr` (comm_label sender receiver) /\
-      event_triggered tr sender (CommConfSendMsg sender receiver msg)
+      (match parse a msg with
+      | None -> False
+      | Some msg_parsed -> event_triggered tr sender (CommConfSendMsg sender receiver msg_parsed <: communication_core_event a))
+      
     )
     );
   pred_later = (fun tr1 tr2 sk_usage pk msg -> ());
 }
+#pop-options
 
 val pke_crypto_predicates_communication_layer_and_tag:
-  {|comm_layer_core_tag|} ->
   {|cusages:crypto_usages|} ->
+  (a:Type0) -> {|comm_layer_core_config a|} ->  
   (string & pke_crypto_predicate)
-let pke_crypto_predicates_communication_layer_and_tag #tag #cusages =
-  (comm_layer_pkenc_tag, pke_crypto_predicates_communication_layer)
+let pke_crypto_predicates_communication_layer_and_tag #cusages a #config =
+  ((comm_layer_pkenc_tag a), pke_crypto_predicates_communication_layer a)
 
 (*** Sign Predicates ***)
 
 #push-options "--ifuel 3 --fuel 0"
-val sign_crypto_predicates_communication_layer: {|comm_layer_core_tag|} -> {|cusages:crypto_usages|} -> sign_crypto_predicate
-let sign_crypto_predicates_communication_layer #tag #cusages = {
+val sign_crypto_predicates_communication_layer: {|cusages:crypto_usages|} -> a:Type0 -> {|comm_layer_core_config a|} -> sign_crypto_predicate
+let sign_crypto_predicates_communication_layer #cusages a #config = {
   pred = (fun tr sk_usage vk sig_msg ->
     (match parse signature_input sig_msg with
     | Some (Plain sender receiver payload_bytes) -> (
-      sk_usage == long_term_key_type_to_usage (LongTermSigKey comm_layer_sign_tag) sender /\
+      sk_usage == long_term_key_type_to_usage (LongTermSigKey (comm_layer_sign_tag a)) sender /\
       get_label tr payload_bytes `can_flow tr` public /\
-      event_triggered tr sender (CommAuthSendMsg sender payload_bytes)
-    )
-    | Some (Encrypted sender receiver payload_bytes pk_receiver) -> (
-      match parse com_send_byte payload_bytes with
+      (match parse a payload_bytes with
       | None -> False
-      | Some payload -> (
-        get_label tr payload_bytes `can_flow tr` public /\
+      | Some payload -> event_triggered tr sender (CommAuthSendMsg sender payload <: communication_core_event a))
+    )
+    | Some (Encrypted sender receiver payload pk_receiver) -> (
+      (*match parse comm_send_byte payload_bytes with
+      | None -> False
+      | Some payload -> ( *)
+        get_label tr payload `can_flow tr` public /\
+        sk_usage == long_term_key_type_to_usage (LongTermSigKey (comm_layer_sign_tag a)) sender /\
         (exists plain_payload nonce.
-          sk_usage == long_term_key_type_to_usage (LongTermSigKey comm_layer_sign_tag) sender /\
-          payload.b == pke_enc pk_receiver nonce plain_payload /\
-          event_triggered tr sender (CommConfAuthSendMsg sender receiver plain_payload)
+          payload == pke_enc pk_receiver nonce plain_payload /\
+          (match parse a plain_payload with
+          | None -> False
+          | Some plain_payload_parsed -> event_triggered tr sender (CommConfAuthSendMsg sender receiver plain_payload_parsed <: communication_core_event a))
         )
-      )
+      //)
     )
     | None -> False)
   );
@@ -67,24 +76,24 @@ let sign_crypto_predicates_communication_layer #tag #cusages = {
 #pop-options
 
 val sign_crypto_predicates_communication_layer_and_tag:
-  {|comm_layer_core_tag|} ->
   {|cusages:crypto_usages|} ->
+  (a:Type0) -> {|comm_layer_core_config a|} -> 
   (string & sign_crypto_predicate)
-let sign_crypto_predicates_communication_layer_and_tag #tag #cusages =
-  (comm_layer_sign_tag, sign_crypto_predicates_communication_layer)
+let sign_crypto_predicates_communication_layer_and_tag #cusages a #config =
+  (comm_layer_sign_tag a, sign_crypto_predicates_communication_layer a)
 
 val has_communication_layer_crypto_predicates:
-  {|comm_layer_core_tag|} ->
   {|crypto_invariants|} ->
+  (a:Type0) -> {|comm_layer_core_config a|} -> 
   prop
-let has_communication_layer_crypto_predicates #tag #cinvs =
-  has_pke_predicate pke_crypto_predicates_communication_layer_and_tag /\
-  has_sign_predicate sign_crypto_predicates_communication_layer_and_tag
+let has_communication_layer_crypto_predicates #cinvs a #config =
+  has_pke_predicate (pke_crypto_predicates_communication_layer_and_tag a) /\
+  has_sign_predicate (sign_crypto_predicates_communication_layer_and_tag a)
 
 (*** Event Predicates ***)
 
 noeq
-type comm_higher_layer_event_preds (a:Type) {| parseable_serializeable bytes a |} = {
+type comm_higher_layer_event_preds (a:Type) {|comm_layer_core_config a|} = {
   send_conf: tr:trace -> sender:principal -> receiver:principal -> payload:a -> prop;
   send_conf_later:
     tr1:trace -> tr2:trace ->
@@ -122,7 +131,7 @@ type comm_higher_layer_event_preds (a:Type) {| parseable_serializeable bytes a |
     (ensures send_conf_auth tr2 sender receiver payload)
 }
 
-let default_comm_higher_layer_event_preds (a:Type) {| parseable_serializeable bytes a |} : comm_higher_layer_event_preds a = {
+let default_comm_higher_layer_event_preds (a:Type) {|comm_layer_core_config a|} : comm_higher_layer_event_preds a = {
   send_conf = (fun tr sender receiver payload -> False);
   send_conf_later = (fun tr1 tr2 sender receiver payload -> ());
   send_auth = (fun tr sender payload -> False);
@@ -133,38 +142,33 @@ let default_comm_higher_layer_event_preds (a:Type) {| parseable_serializeable by
 
 #push-options "--ifuel 1 --fuel 0"
 let event_predicate_communication_layer
-  {|comm_layer_core_tag|}
   {|cinvs:crypto_invariants|}
-  (#a:Type) {| parseable_serializeable bytes a |}
+  (#a:Type0) {|comm_layer_core_config a|}
   (higher_layer_preds:comm_higher_layer_event_preds a) :
-  event_predicate communication_event =
+  event_predicate (communication_core_event a) =
   fun tr prin e ->
     (match e with
     | CommConfSendMsg sender receiver payload -> (
-      is_knowable_by (comm_label sender receiver) tr payload /\
-      parse_and_pred (higher_layer_preds.send_conf tr sender receiver) payload
+      is_well_formed a (is_knowable_by (comm_label sender receiver) tr) payload /\
+      higher_layer_preds.send_conf tr sender receiver payload
     )
     | CommConfReceiveMsg receiver payload -> (
-      Some? (parse a payload) /\
-      (
-        (exists sender. event_triggered tr sender (CommConfSendMsg sender receiver payload)) \/
-        is_publishable tr payload
-      )
+      (exists sender. event_triggered tr sender (CommConfSendMsg sender receiver payload <: communication_core_event a)) \/
+      is_well_formed a (is_publishable tr) payload
     )
     | CommAuthSendMsg sender payload -> (
-      parse_and_pred (higher_layer_preds.send_auth tr sender) payload
+      higher_layer_preds.send_auth tr sender payload
     )
     | CommAuthReceiveMsg sender receiver payload -> (
-      Some? (parse a payload) /\
-      is_publishable tr payload /\
+      is_well_formed a (is_publishable tr) payload /\
       (
-        event_triggered tr sender (CommAuthSendMsg sender payload) \/
+        event_triggered tr sender (CommAuthSendMsg sender payload <: communication_core_event a) \/
         is_corrupt tr (long_term_key_label sender)
       )
     )
     | CommConfAuthSendMsg sender receiver payload -> (
-      is_knowable_by (comm_label sender receiver) tr payload /\
-      parse_and_pred (higher_layer_preds.send_conf_auth tr sender receiver) payload
+      is_well_formed a (is_knowable_by (comm_label sender receiver) tr) payload /\
+      higher_layer_preds.send_conf_auth tr sender receiver payload
     )
     | CommConfAuthReceiveMsg sender receiver payload -> (
       // We can only show the following about the decrypted ciphertext (payload):
@@ -177,9 +181,8 @@ let event_predicate_communication_layer
       // Since the attacker can freely choose the sender/receiver information, the
       // receiver cannot guarantee that the full confidential/authenticated message
       // was honestly generated by the stated sender.
-      Some? (parse a payload) /\
       (
-        event_triggered tr sender (CommConfAuthSendMsg sender receiver payload) \/
+        event_triggered tr sender (CommConfAuthSendMsg sender receiver payload <: communication_core_event a) \/
         is_corrupt tr (long_term_key_label sender)
       )
     )
@@ -187,19 +190,17 @@ let event_predicate_communication_layer
 #pop-options
 
 val event_predicate_communication_layer_and_tag:
-  {|comm_layer_core_tag|} ->
   {|cinvs:crypto_invariants|} ->
-  #a:Type -> {| parseable_serializeable bytes a |} ->
+  #a:Type0 -> {|comm_layer_core_config a|} ->
   comm_higher_layer_event_preds a ->
   (string & compiled_event_predicate)
-let event_predicate_communication_layer_and_tag #cinvs higher_layer_preds =
+let event_predicate_communication_layer_and_tag #cinvs #a higher_layer_preds =
   mk_event_tag_and_pred (event_predicate_communication_layer higher_layer_preds)
 
 val has_communication_layer_event_predicates:
-  {|comm_layer_core_tag|} ->
   {|protocol_invariants|} ->
-  #a:Type -> {| parseable_serializeable bytes a |} ->
+  a:Type0 -> {|comm_layer_core_config a|} ->
   comm_higher_layer_event_preds a ->
   prop
-let has_communication_layer_event_predicates #tag #invs higher_layer_preds =
+let has_communication_layer_event_predicates #invs a higher_layer_preds =
   has_event_pred (event_predicate_communication_layer higher_layer_preds)

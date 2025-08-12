@@ -20,20 +20,19 @@ open DY.Lib.Communication.RequestResponse.Invariants
 (*** Authentication Security Properties ***)
 
 val server_authentication:
-  {|comm_layer_reqres_tag|} ->
   {|protocol_invariants|} ->
-  #a:Type -> {| parseable_serializeable bytes a |} ->
+  #a:Type -> {| comm_layer_reqres_config a |} ->
   tr:trace -> i:timestamp ->
   higher_layer_resreq_preds:comm_reqres_higher_layer_event_preds a ->
-  client:principal -> server:principal -> response:bytes -> key:bytes ->
+  client:principal -> server:principal -> response:a -> key:bytes ->
   Lemma
   (requires
     trace_invariant tr /\
-    has_communication_layer_reqres_event_predicates request_response_event_preconditions higher_layer_resreq_preds /\
-    event_triggered_at tr i client (CommClientReceiveResponse client server  response key)
+    has_communication_layer_reqres_event_predicates higher_layer_resreq_preds /\
+    event_triggered_at tr i client (CommClientReceiveResponse client server  response key <: communication_reqres_event a)
   )
   (ensures
-    (exists request. event_triggered (prefix tr i) server (CommServerSendResponse server request response)) \/
+    (exists request. event_triggered (prefix tr i) server (CommServerSendResponse server request response <: communication_reqres_event a)) \/
     is_corrupt (prefix tr i) (principal_label client) \/
     is_corrupt (prefix tr i) (principal_label server)
   )
@@ -43,9 +42,8 @@ let server_authentication #tag #invs #a tr i higher_layer_resreq_preds client se
 (*** Secrecy Security Property ***)
 
 val key_secrecy_client:
-  {|comm_layer_reqres_tag|} ->
   {|protocol_invariants|} ->
-  #a:Type -> {|comparse_parser_serializer a|} ->
+  #a:Type -> {|comm_layer_reqres_config a|} ->
   tr:trace ->
   client:principal -> server:principal ->
   key:bytes -> request:a -> response:a ->
