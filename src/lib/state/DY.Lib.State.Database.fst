@@ -676,7 +676,7 @@ let add_row_event_predicate #invs #row_t #db_t db_pred prin ptr row e1 tr1 tr2 =
   assert(all_db_keys_unique new_rows);
   ()
 
-#push-options "--z3cliopt 'smt.qi.eager_threshold=100'"
+#push-options "--z3cliopt 'smt.qi.eager_threshold=100' --split_queries always"
 val add_row_invariant:
   {|protocol_invariants|} ->
   #row_t:Type0 -> {|db_types row_t|} ->
