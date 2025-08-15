@@ -90,14 +90,6 @@ let all_sessions = [
   mk_local_state_tag_and_preds state_predicates_nsl;
 ]
 
-(*
-let all_session_updates = [
-  pki_tag_and_state_update_pred;
-  private_keys_tag_and_state_update_pred;
-  mk_local_state_tag_and_update_pred update_predicate_nsl;
-]
-*)
-
 /// List of all local event predicates.
 
 let all_events = [
@@ -108,7 +100,6 @@ let all_events = [
 
 let trace_invariants_nsl: trace_invariants = {
   state_preds = mk_state_preds all_sessions;
-//  state_update_pred = mk_state_update_pred all_session_updates;
   event_pred = mk_event_pred all_events;
 }
 
@@ -120,7 +111,6 @@ instance protocol_invariants_nsl: protocol_invariants = {
 /// Lemmas that the global state predicate contains all the local ones
 
 let _ = do_split_boilerplate mk_state_preds_correct all_sessions
-//let _ = do_split_boilerplate mk_state_update_pred_correct all_session_updates
 let _ = do_split_boilerplate mk_event_pred_correct all_events
 
 (*** Proofs ***)

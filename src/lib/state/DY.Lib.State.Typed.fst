@@ -237,40 +237,6 @@ val mk_local_state_tag_and_preds:
 let mk_local_state_tag_and_preds #a #ls_a #cinvs spred =
   (|ls_a.tag, (local_state_predicates_to_local_bytes_state_predicates spred)|)
 
-(*
-val mk_local_state_tag_and_pred:
-  #a:Type -> {|local_state a|} ->
-  {|crypto_invariants|} -> local_state_predicate a ->
-  dtuple2 string local_bytes_state_predicate
-let mk_local_state_tag_and_pred #a #ls_a #cinvs spred =
-  (|ls_a.tag, (local_state_predicate_to_local_bytes_state_predicate spred)|)
-
-val mk_local_state_tag_and_update_pred:
-  #a:Type -> {|local_state a|} ->
-  {|crypto_invariants|} -> local_state_update_predicate a ->
-  dtuple2 string local_bytes_state_update_predicate
-let mk_local_state_tag_and_update_pred #a #ls_a #cinvs supred =
-  (|ls_a.tag, (local_state_update_predicate_to_local_bytes_state_update_predicate supred)|)
-*)
-
-(*
-unfold
-val has_local_state_predicate:
-  #a:Type -> {|local_state a|} ->
-  {|protocol_invariants|} -> local_state_predicate a ->
-  prop
-let has_local_state_predicate #a #ls #invs spred =
-  has_local_bytes_state_predicate (mk_local_state_tag_and_pred spred)
-
-unfold
-val has_local_state_update_predicate:
-  #a:Type -> {|local_state a|} ->
-  {|protocol_invariants|} -> local_state_update_predicate a ->
-  prop
-let has_local_state_update_predicate #a #ls #invs supred =
-  has_local_bytes_state_update_predicate (mk_local_state_tag_and_update_pred supred)
-*)
-
 unfold
 val has_local_state_predicates:
   #a:Type -> {|local_state a|} ->

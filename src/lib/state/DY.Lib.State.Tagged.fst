@@ -640,8 +640,6 @@ val set_tagged_state_invariant:
     ) /\
     trace_invariant tr /\
     has_local_bytes_state_predicates (|tag, spred|)
-//    has_local_bytes_state_predicate (|tag, spred|) /\
-//    has_local_bytes_state_update_predicate (|tag, supred|)
   )
   (ensures (
     let ((), tr_out) = set_tagged_state tag prin sess_id content tr in
@@ -650,7 +648,6 @@ val set_tagged_state_invariant:
   [SMTPat (set_tagged_state tag prin sess_id content tr);
    SMTPat (trace_invariant tr);
    SMTPat (has_local_bytes_state_predicates (|tag, spred|));
-//   SMTPat (has_local_bytes_state_update_predicate (|tag, supred|));
   ]
 let set_tagged_state_invariant #invs tag spred prin sess_id content tr =
   reveal_opaque (`%has_local_bytes_state_predicates) (has_local_bytes_state_predicates);
