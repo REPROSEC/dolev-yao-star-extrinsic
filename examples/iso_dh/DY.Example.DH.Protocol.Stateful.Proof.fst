@@ -60,10 +60,10 @@ let dh_session_pred: local_state_predicate dh_session = {
   pred_knowable = (fun tr prin sess_id st -> ());
 }
 
-/// The (local) state update predicate is trivial for this protocol:
-
-let dh_session_update_pred: local_state_update_predicate dh_session =
-  default_local_state_update_pred dh_session
+let dh_session_preds: local_state_predicates dh_session = {
+  default_local_state_preds dh_session with
+  local_state_pred = dh_session_pred
+}
 
 /// The (local) event predicate.
 
@@ -93,16 +93,18 @@ let dh_event_pred: event_predicate dh_event =
 /// List of all local state predicates.
 
 let all_sessions = [
-  pki_tag_and_invariant;
-  private_keys_tag_and_invariant;
-  mk_local_state_tag_and_pred dh_session_pred;
+  pki_tag_and_preds;
+  private_keys_tag_and_preds;
+  mk_local_state_tag_and_preds dh_session_preds;
 ]
 
+(*
 let all_session_updates = [
   pki_tag_and_state_update_pred;
   private_keys_tag_and_state_update_pred;
   mk_local_state_tag_and_update_pred dh_session_update_pred;
 ]
+*)
 
 /// List of all local event predicates.
 
@@ -113,8 +115,9 @@ let all_events = [
 /// Create the global trace invariants.
 
 let dh_trace_invs: trace_invariants = {
-  state_pred = mk_state_pred all_sessions;
-  state_update_pred = mk_state_update_pred all_session_updates;
+  state_preds = mk_state_preds all_sessions;
+//  state_pred = mk_state_pred all_sessions;
+//  state_update_pred = mk_state_update_pred all_session_updates;
   event_pred = mk_event_pred all_events;
 }
 
@@ -125,8 +128,8 @@ instance dh_protocol_invs: protocol_invariants = {
 
 /// Lemmas that the global state predicate contains all the local ones
 
-let _ = do_split_boilerplate mk_state_pred_correct all_sessions
-let _ = do_split_boilerplate mk_state_update_pred_correct all_session_updates
+let _ = do_split_boilerplate mk_state_preds_correct all_sessions
+//let _ = do_split_boilerplate mk_state_update_pred_correct all_session_updates
 let _ = do_split_boilerplate mk_event_pred_correct all_events
 
 (*** Proofs ****)

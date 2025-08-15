@@ -63,10 +63,6 @@ type state_predicate {|crypto_invariants|} = {
 noeq
 type state_update_predicate {|crypto_invariants|} = {
   update_pred: trace -> principal -> state_id -> bytes -> bytes -> prop;
-  // TODO Should this hold? It seems quite natural that if an update
-  // from A to B was allowed, it remains allowed. This works because we
-  // talk about both the start and end of the update, rather than saying
-  // "it is allowed to update from [current value] to B".
   update_pred_later:
     tr1:trace -> tr2:trace ->
     prin:principal -> sess_id:state_id ->
@@ -78,7 +74,7 @@ type state_update_predicate {|crypto_invariants|} = {
     )
     (ensures update_pred tr2 prin sess_id b1 b2)
   ;
-  // Do we want transitivity?
+  // TODO: We may want to relax this in the future.
   update_pred_trans:
     tr:trace ->
     prin:principal -> sess_id:state_id ->
@@ -90,15 +86,19 @@ type state_update_predicate {|crypto_invariants|} = {
     )
     (ensures update_pred tr prin sess_id b1 b3)
   ;
-  // Reflexivity too?
+}
+
+noeq
+type state_predicates {|crypto_invariants|} = {
+  state_pred: state_predicate;
+  state_update_pred: state_update_predicate;
 }
 
 /// The parameters of the trace invariant.
 
 noeq
 type trace_invariants {|crypto_invariants|} = {
-  state_pred: state_predicate;
-  state_update_pred: state_update_predicate;
+  state_preds: state_predicates;
   event_pred: trace -> principal -> string -> bytes -> prop;
 }
 
@@ -117,9 +117,36 @@ class protocol_invariants = {
 // `trace_invariants` cannot be a typeclass that is inherited by `protocol_invariants`,
 // hence we simulate inheritance like this.
 
-let state_pred {|invs:protocol_invariants|} = invs.trace_invs.state_pred
-let state_update_pred {|invs:protocol_invariants|} = invs.trace_invs.state_update_pred
+let state_pred {|invs:protocol_invariants|} = invs.trace_invs.state_preds.state_pred
+let state_update_pred {|invs:protocol_invariants|} = invs.trace_invs.state_preds.state_update_pred
 let event_pred {|invs:protocol_invariants|} = invs.trace_invs.event_pred
+
+/// Default state predicates, allowing all state updates, but no state sets.
+/// In practice, this means that no states can be set with the default predicates,
+/// ensuring that state is not inadvertently used, but also makes it easy to supply
+/// only the state predicate (without the update predicate) in situations where we do
+/// not need to constrain updates.
+
+val default_state_predicate: {|crypto_invariants|} -> state_predicate
+let default_state_predicate #cinvs = {
+  pred = (fun tr prin sess_id b -> False);
+  pred_later = (fun tr1 tr2 prin sess_id b -> ());
+  pred_knowable = (fun tr prin sess_id b -> ());
+}
+
+val default_state_update_predicate: {|crypto_invariants|} -> state_update_predicate
+let default_state_update_predicate #cinvs = {
+  update_pred = (fun tr prin sess_id b1 b2 -> True);
+  update_pred_later = (fun tr1 tr2 prin sess_id b1 b2 -> ());
+  update_pred_trans = (fun tr prin sess_id b1 b2 b3 -> ());
+}
+
+val default_state_predicates: {|crypto_invariants|} -> state_predicates
+let default_state_predicates #cinvs = {
+  state_pred = default_state_predicate;
+  state_update_pred = default_state_update_predicate;
+}
+
 
 (*** Trace invariant definition ***)
 
@@ -133,12 +160,12 @@ let trace_entry_invariant #invs tr entry =
     is_publishable tr msg
   | SetState prin sess_id content -> (
     // Stored states satisfy the custom state predicate
-    invs.trace_invs.state_pred.pred tr prin sess_id content /\
+    state_pred.pred tr prin sess_id content /\
     (
       match get_most_recent_state_for_ghost tr prin sess_id with
       | None -> True
       | Some old_content ->
-        invs.trace_invs.state_update_pred.update_pred tr prin sess_id old_content content
+        state_update_pred.update_pred tr prin sess_id old_content content
     )
   )
   | Event prin tag content -> (
@@ -241,10 +268,10 @@ val state_was_set_implies_pred:
   ]
 let state_was_set_implies_pred #invs tr prin sess_id content =
   eliminate exists i. entry_at tr i (SetState prin sess_id content)
-  returns invs.trace_invs.state_pred.pred tr prin sess_id content
+  returns state_pred.pred tr prin sess_id content
   with _. (
     entry_at_implies_trace_entry_invariant tr i (SetState prin sess_id content);
-    invs.trace_invs.state_pred.pred_later (prefix tr i) tr prin sess_id content
+    state_pred.pred_later (prefix tr i) tr prin sess_id content
   )
 
 /// States stored are knowable by the corresponding principal and state identifier.

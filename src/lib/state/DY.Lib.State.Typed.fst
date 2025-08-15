@@ -142,6 +142,22 @@ type local_state_update_predicate {|crypto_invariants|} (a:Type) {|local_state a
   ;
 }
 
+noeq
+type local_state_predicates {|crypto_invariants|} (a:Type) {|local_state a|} = {
+  local_state_pred: local_state_predicate a;
+  local_state_update_pred: local_state_update_predicate a;
+}
+
+val default_local_state_pred:
+  {|crypto_invariants|} ->
+  a:Type -> {|local_state a|} ->
+  local_state_predicate a
+let default_local_state_pred #cinvs a #ls_a = {
+  pred = (fun tr prin sess_id content -> False);
+  pred_later = (fun tr1 tr2 prin sess_id content -> ());
+  pred_knowable = (fun tr prin sess_id content -> ());
+}
+
 val default_local_state_update_pred:
   {|crypto_invariants|} ->
   a:Type -> {|local_state a|} ->
@@ -150,6 +166,15 @@ let default_local_state_update_pred #cinvs a #ls_a = {
   update_pred = (fun tr prin sess_id content1 content2 -> True);
   update_pred_later = (fun tr1 tr2 prin sess_id content1 content2 -> ());
   update_pred_trans = (fun tr prin sess_id content1 content2 content3 -> ());
+}
+
+val default_local_state_preds:
+  {|crypto_invariants|} ->
+  a:Type -> {|local_state a|} ->
+  local_state_predicates a
+let default_local_state_preds #cinvs a #ls_a = {
+  local_state_pred = default_local_state_pred a;
+  local_state_update_pred = default_local_state_update_pred a;
 }
 
 val local_state_predicate_to_local_bytes_state_predicate:
@@ -196,6 +221,23 @@ let local_state_update_predicate_to_local_bytes_state_update_predicate #cinvs #a
     );
   }
 
+val local_state_predicates_to_local_bytes_state_predicates:
+  {|crypto_invariants|} ->
+  #a:Type -> {|local_state a|} ->
+  local_state_predicates a -> local_bytes_state_predicates (tag #a)
+let local_state_predicates_to_local_bytes_state_predicates #cinvs #a #ls_a typed_spred = {
+  local_bytes_state_pred = local_state_predicate_to_local_bytes_state_predicate typed_spred.local_state_pred;
+  local_bytes_state_update_pred = local_state_update_predicate_to_local_bytes_state_update_predicate typed_spred.local_state_update_pred;
+}
+
+val mk_local_state_tag_and_preds:
+  #a:Type -> {|local_state a|} ->
+  {|crypto_invariants|} -> local_state_predicates a ->
+  dtuple2 string local_bytes_state_predicates
+let mk_local_state_tag_and_preds #a #ls_a #cinvs spred =
+  (|ls_a.tag, (local_state_predicates_to_local_bytes_state_predicates spred)|)
+
+(*
 val mk_local_state_tag_and_pred:
   #a:Type -> {|local_state a|} ->
   {|crypto_invariants|} -> local_state_predicate a ->
@@ -209,7 +251,9 @@ val mk_local_state_tag_and_update_pred:
   dtuple2 string local_bytes_state_update_predicate
 let mk_local_state_tag_and_update_pred #a #ls_a #cinvs supred =
   (|ls_a.tag, (local_state_update_predicate_to_local_bytes_state_update_predicate supred)|)
+*)
 
+(*
 unfold
 val has_local_state_predicate:
   #a:Type -> {|local_state a|} ->
@@ -225,6 +269,16 @@ val has_local_state_update_predicate:
   prop
 let has_local_state_update_predicate #a #ls #invs supred =
   has_local_bytes_state_update_predicate (mk_local_state_tag_and_update_pred supred)
+*)
+
+unfold
+val has_local_state_predicates:
+  #a:Type -> {|local_state a|} ->
+  {|protocol_invariants|} -> local_state_predicates a ->
+  prop
+let has_local_state_predicates #a #ls #invs spred =
+  has_local_bytes_state_predicates (mk_local_state_tag_and_preds spred)
+
 
 [@@ "opaque_to_smt"]
 val state_was_set:
@@ -452,19 +506,18 @@ let set_state_state_was_set #a #ls  prin sess_id content tr =
 val set_state_invariant:
   #a:Type -> {|ls:local_state a|} ->
   {|protocol_invariants|} ->
-  spred:local_state_predicate a -> supred:local_state_update_predicate a ->
+  spred:local_state_predicates a ->
   prin:principal -> sess_id:state_id -> content:a -> tr:trace ->
   Lemma
   (requires
-    spred.pred tr prin sess_id content /\
+    spred.local_state_pred.pred tr prin sess_id content /\
     (
       match get_state prin sess_id tr with
       | (None, _) -> DY.Core.Trace.Base.is_most_recent_state_for prin sess_id None tr
-      | (Some old_content, _) -> supred.update_pred tr prin sess_id old_content content
+      | (Some old_content, _) -> spred.local_state_update_pred.update_pred tr prin sess_id old_content content
     ) /\
     trace_invariant tr /\
-    has_local_state_predicate spred /\
-    has_local_state_update_predicate supred
+    has_local_state_predicates spred
   )
   (ensures (
     let ((), tr_out) = set_state prin sess_id content tr in
@@ -472,10 +525,9 @@ val set_state_invariant:
   ))
   [SMTPat (set_state prin sess_id content tr);
    SMTPat (trace_invariant tr);
-   SMTPat (has_local_state_predicate spred);
-   SMTPat (has_local_state_update_predicate supred);
+   SMTPat (has_local_state_predicates spred);
   ]
-let set_state_invariant #a #ls #invs spred supred prin sess_id content tr =
+let set_state_invariant #a #ls #invs spred prin sess_id content tr =
   reveal_opaque (`%set_state) (set_state #a);
   parse_serialize_inv_lemma #bytes a content;
   // Handle update predicate if applicable
@@ -519,18 +571,18 @@ let get_state_state_was_set #a #ls prin sess_id tr =
 val state_was_set_implies_pred:
   #a:Type -> {|local_state a|} ->
   {|protocol_invariants|} -> tr:trace ->
-  spred:local_state_predicate a ->
+  spred:local_state_predicates a ->
   prin:principal -> sess_id:state_id -> content:a ->
   Lemma
   (requires
     state_was_set tr prin sess_id content /\
     trace_invariant tr /\
-    has_local_state_predicate spred
+    has_local_state_predicates spred
   )
-  (ensures spred.pred tr prin sess_id content)
+  (ensures spred.local_state_pred.pred tr prin sess_id content)
   [SMTPat (state_was_set tr prin sess_id content);
    SMTPat (trace_invariant tr);
-   SMTPat (has_local_state_predicate spred);
+   SMTPat (has_local_state_predicates spred);
   ]
 let state_was_set_implies_pred #a #ls #invs tr spred prin sess_id content =
   parse_serialize_inv_lemma #bytes a content;
@@ -540,7 +592,7 @@ val state_was_set_twice_implies_update_pred:
   #a:Type -> {|local_state a|} ->
   {|protocol_invariants|} -> tr:trace ->
   ts1:timestamp -> ts2:timestamp ->
-  supred:local_state_update_predicate a ->
+  spred:local_state_predicates a ->
   prin:principal -> sess_id:state_id ->
   content1:a -> content2:a ->
   Lemma
@@ -549,54 +601,54 @@ val state_was_set_twice_implies_update_pred:
     state_was_set_at tr ts2 prin sess_id content2 /\
     ts1 < ts2 /\
     trace_invariant tr /\
-    has_local_state_update_predicate supred
+    has_local_state_predicates spred
   )
   (ensures
-    supred.update_pred tr prin sess_id content1 content2
+    spred.local_state_update_pred.update_pred tr prin sess_id content1 content2
   )
   [SMTPat (state_was_set_at tr ts1 prin sess_id content1);
    SMTPat (state_was_set_at tr ts2 prin sess_id content2);
    SMTPat (trace_invariant tr);
-   SMTPat (has_local_state_update_predicate supred);
+   SMTPat (has_local_state_predicates spred);
   ]
-let state_was_set_twice_implies_update_pred #a #ls_a #invs tr ts1 ts2 supred prin sess_id content1 content2 =
+let state_was_set_twice_implies_update_pred #a #ls_a #invs tr ts1 ts2 spred prin sess_id content1 content2 =
   reveal_opaque (`%state_was_set_at) (state_was_set_at #a);
   let content1_bytes = serialize _ content1 in
   let content2_bytes = serialize _ content2 in
-  let tagged_supred = local_state_update_predicate_to_local_bytes_state_update_predicate supred in
-  tagged_state_was_set_twice_implies_update_pred tr ts1 ts2 ls_a.tag tagged_supred prin sess_id content1_bytes content2_bytes;
+  let tagged_spred = local_state_predicates_to_local_bytes_state_predicates spred in
+  tagged_state_was_set_twice_implies_update_pred tr ts1 ts2 ls_a.tag tagged_spred prin sess_id content1_bytes content2_bytes;
   ()
 
 val most_recent_state_update_pred:
   #a:Type -> {|local_state a|} ->
   {|protocol_invariants|} ->
   tr:trace ->
-  supred:local_state_update_predicate a ->
+  spred:local_state_predicates a ->
   prin:principal -> sess_id:state_id ->
   content:a ->
   Lemma
   (requires
     state_was_set tr prin sess_id content /\
     trace_invariant tr /\
-    has_local_state_update_predicate supred
+    has_local_state_predicates spred
   )
   (ensures (
     match get_state prin sess_id tr with
     | (None, _) -> False
     | (Some new_content, _) -> (
-      supred.update_pred tr prin sess_id content new_content \/
+      spred.local_state_update_pred.update_pred tr prin sess_id content new_content \/
       content == new_content
     )
   ))
   [SMTPat (state_was_set tr prin sess_id content);
    SMTPat (trace_invariant tr);
-   SMTPat (has_local_state_update_predicate supred);
+   SMTPat (has_local_state_predicates spred);
    SMTPat (get_state #a prin sess_id tr);
   ]
-let most_recent_state_update_pred #a #ls_a #invs tr supred prin sess_id content =
+let most_recent_state_update_pred #a #ls_a #invs tr spred prin sess_id content =
   reveal_opaque (`%state_was_set) (state_was_set #a);
   reveal_opaque (`%get_state) (get_state #a);
   let content_bytes = serialize _ content in
-  let tagged_supred = local_state_update_predicate_to_local_bytes_state_update_predicate supred in
-  most_recent_tagged_state_update_pred tr ls_a.tag tagged_supred prin sess_id content_bytes;
+  let tagged_spred = local_state_predicates_to_local_bytes_state_predicates spred in
+  most_recent_tagged_state_update_pred tr ls_a.tag tagged_spred prin sess_id content_bytes;
   ()

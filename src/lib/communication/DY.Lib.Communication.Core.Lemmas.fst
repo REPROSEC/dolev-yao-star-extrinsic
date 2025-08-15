@@ -48,10 +48,12 @@ val initialize_communication_proof:
   Lemma
   (requires
     trace_invariant tr /\
-    has_private_keys_invariant /\
-    has_private_keys_state_update_invariant /\
-    has_pki_invariant /\
-    has_pki_state_update_invariant
+    has_private_keys_preds /\
+    has_pki_preds
+//    has_private_keys_invariant /\
+//    has_private_keys_state_update_invariant /\
+//    has_pki_invariant /\
+//    has_pki_state_update_invariant
   )
   (ensures (
     let (_, tr_out) = initialize_communication sender receiver tr in
@@ -98,7 +100,8 @@ val send_confidential_proof:
   Lemma
   (requires (
     trace_invariant tr /\
-    has_pki_invariant /\
+    has_pki_preds /\
+//    has_pki_invariant /\
     has_communication_layer_crypto_predicates /\
     has_communication_layer_event_predicates higher_layer_preds /\
     higher_layer_preds.send_conf tr sender receiver payload /\
@@ -179,7 +182,8 @@ val receive_confidential_proof:
   Lemma
   (requires
     trace_invariant tr /\
-    has_private_keys_invariant /\
+    has_private_keys_preds /\
+//    has_private_keys_invariant /\
     has_communication_layer_crypto_predicates /\
     has_communication_layer_event_predicates higher_layer_preds
   )
@@ -270,7 +274,8 @@ val send_authenticated_proof:
   Lemma
   (requires
     trace_invariant tr /\
-    has_private_keys_invariant /\
+//    has_private_keys_invariant /\
+    has_private_keys_preds /\
     has_communication_layer_crypto_predicates /\
     has_communication_layer_event_predicates higher_layer_preds /\
     higher_layer_preds.send_auth tr sender payload /\
@@ -384,7 +389,8 @@ val receive_authenticated_proof:
   Lemma
   (requires
     trace_invariant tr /\
-    has_pki_invariant /\
+    has_pki_preds /\
+//    has_pki_invariant /\
     has_communication_layer_crypto_predicates /\
     has_communication_layer_event_predicates higher_layer_preds
   )
@@ -460,8 +466,10 @@ val send_confidential_authenticated_proof:
   Lemma
   (requires
     trace_invariant tr /\
-    has_private_keys_invariant /\
-    has_pki_invariant /\
+    has_private_keys_preds /\
+    has_pki_preds /\
+//    has_private_keys_invariant /\
+//    has_pki_invariant /\
     has_communication_layer_crypto_predicates /\
     has_communication_layer_event_predicates higher_layer_preds /\
     higher_layer_preds.send_conf tr sender receiver payload /\
@@ -573,8 +581,10 @@ val receive_confidential_authenticated_proof:
   Lemma
   (requires
     trace_invariant tr /\
-    has_private_keys_invariant /\
-    has_pki_invariant /\
+    has_private_keys_preds /\
+    has_pki_preds /\
+//    has_private_keys_invariant /\
+//    has_pki_invariant /\
     has_communication_layer_crypto_predicates /\
     has_communication_layer_event_predicates higher_layer_preds
   )

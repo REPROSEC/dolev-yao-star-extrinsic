@@ -123,13 +123,24 @@ let map_session_invariant #cinvs #key_t #value_t #mt mpred = {
   );
 }
 
-val mk_map_state_tag_and_pred:
+val map_state_preds:
+  {|crypto_invariants|} ->
+  #key_t:eqtype -> #value_t:Type0 -> {|map_types key_t value_t|} ->
+  mpred:map_predicate key_t value_t ->
+  local_state_predicates (map key_t value_t)
+let map_state_preds #cinvs #key_t #value_t #map_t mpred = {
+  default_local_state_preds (map key_t value_t) with
+  local_state_pred = map_session_invariant mpred;
+}
+
+val mk_map_state_tag_and_preds:
   #key_t:eqtype -> #value_t:Type0 -> {|map_types key_t value_t|} ->
   {|crypto_invariants|} -> map_predicate key_t value_t ->
-  dtuple2 string local_bytes_state_predicate
-let mk_map_state_tag_and_pred #key_t #value_t #mt #cinvs mpred =
-  mk_local_state_tag_and_pred (map_session_invariant mpred)
+  dtuple2 string local_bytes_state_predicates
+let mk_map_state_tag_and_preds #key_t #value_t #mt #cinvs mpred =
+  mk_local_state_tag_and_preds (map_state_preds mpred)
 
+(*
 unfold
 val has_map_session_invariant:
   #key_t:eqtype -> #value_t:Type0 -> {|map_types key_t value_t|} ->
@@ -158,6 +169,14 @@ val has_map_state_update_invariant:
   {|protocol_invariants|} -> map_predicate key_t value_t -> prop
 let has_map_state_update_invariant #key_t #value_t #mt #invs mpred =
   has_local_bytes_state_update_predicate (mk_map_state_tag_and_update_pred mpred)
+*)
+
+unfold
+val has_map_state_preds:
+  #key_t:eqtype -> #value_t:Type0 -> {|map_types key_t value_t|} ->
+  {|protocol_invariants|} -> map_predicate key_t value_t -> prop
+let has_map_state_preds #key_t #value_t #map_t #invs mpred =
+  has_local_bytes_state_predicates (mk_map_state_tag_and_preds mpred)
 
 (*** Map API ***)
 
@@ -228,16 +247,18 @@ val initialize_map_invariant:
   Lemma
   (requires
     trace_invariant tr /\
-    has_map_session_invariant mpred /\
-    has_map_state_update_invariant mpred
+    has_map_state_preds mpred
+//    has_map_session_invariant mpred /\
+//    has_map_state_update_invariant mpred
   )
   (ensures (
     let (_, tr_out) = initialize_map key_t value_t prin tr in
     trace_invariant tr_out
   ))
   [SMTPat (initialize_map key_t value_t prin tr);
-   SMTPat (has_map_session_invariant mpred);
-   SMTPat (has_map_state_update_invariant mpred);
+//   SMTPat (has_map_session_invariant mpred);
+//   SMTPat (has_map_state_update_invariant mpred);
+   SMTPat (has_map_state_preds mpred);
    SMTPat (trace_invariant tr)
   ]
 let initialize_map_invariant #invs #key_t #value_t #mt mpred prin tr =
@@ -256,16 +277,18 @@ val add_key_value_invariant:
   (requires
     mpred.pred tr prin sess_id key value /\
     trace_invariant tr /\
-    has_map_session_invariant mpred /\
-    has_map_state_update_invariant mpred
+    has_map_state_preds mpred
+//    has_map_session_invariant mpred /\
+//    has_map_state_update_invariant mpred
   )
   (ensures (
     let (_, tr_out) = add_key_value prin sess_id key value tr in
     trace_invariant tr_out
   ))
   [SMTPat (add_key_value prin sess_id key value tr);
-   SMTPat (has_map_session_invariant mpred);
-   SMTPat (has_map_state_update_invariant mpred);
+   SMTPat (has_map_state_preds mpred);
+//   SMTPat (has_map_session_invariant mpred);
+//   SMTPat (has_map_state_update_invariant mpred);
    SMTPat (trace_invariant tr)
   ]
 let add_key_value_invariant #invs #key_t #value_t #mt mpred prin sess_id key value tr =
@@ -296,7 +319,8 @@ val find_value_invariant:
   Lemma
   (requires
     trace_invariant tr /\
-    has_map_session_invariant mpred
+    has_map_state_preds mpred
+//    has_map_session_invariant mpred
   )
   (ensures (
     let (opt_value, tr_out) = find_value prin sess_id key tr in
@@ -307,7 +331,8 @@ val find_value_invariant:
       )
   ))
   [SMTPat (find_value #key_t #value_t prin sess_id key tr);
-   SMTPat (has_map_session_invariant mpred);
+//   SMTPat (has_map_session_invariant mpred);
+   SMTPat (has_map_state_preds mpred);
    SMTPat (trace_invariant tr);
   ]
 let find_value_invariant #invs #key_t #value_t #mt mpred prin sess_id key tr =

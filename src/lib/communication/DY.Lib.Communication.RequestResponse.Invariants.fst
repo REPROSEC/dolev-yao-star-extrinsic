@@ -58,7 +58,7 @@ let has_communication_layer_reqres_crypto_predicates #cinvs =
 (*** State Predicates ***)
 
 #push-options "--ifuel 2 --z3rlimit 25"
-let state_predicates_communication_layer {|crypto_invariants|}: local_state_predicate communication_states = {
+let state_predicate_communication_layer {|crypto_invariants|}: local_state_predicate communication_states = {
   pred = (fun tr prin sess_id st ->
     match st with
     | ClientSendRequest {server; request; key} -> (
@@ -84,24 +84,36 @@ let state_predicates_communication_layer {|crypto_invariants|}: local_state_pred
 }
 #pop-options
 
+val state_predicates_communication_layer:
+  {|crypto_invariants|} ->
+  local_state_predicates communication_states
+let state_predicates_communication_layer #cinvs = {
+  default_local_state_preds communication_states with
+  local_state_pred = state_predicate_communication_layer
+}
+
 val state_predicates_communication_layer_and_tag:
   {|crypto_invariants|} ->
-  dtuple2 string local_bytes_state_predicate
+  dtuple2 string local_bytes_state_predicates
 let state_predicates_communication_layer_and_tag #cinvs =
-  mk_local_state_tag_and_pred state_predicates_communication_layer
+  mk_local_state_tag_and_preds state_predicates_communication_layer
 
+(*
 val state_update_predicates_communication_layer_and_tag:
   {|crypto_invariants|} ->
   dtuple2 string local_bytes_state_update_predicate
 let state_update_predicates_communication_layer_and_tag #cinvs =
   mk_local_state_tag_and_update_pred (default_local_state_update_pred communication_states)
+*)
 
+unfold
 val has_communication_layer_state_predicates:
   {|protocol_invariants|} ->
   prop
 let has_communication_layer_state_predicates #invs =
-  has_local_state_predicate state_predicates_communication_layer /\
-  has_local_state_update_predicate (default_local_state_update_pred communication_states)
+  has_local_state_predicates state_predicates_communication_layer
+//  has_local_state_predicate state_predicates_communication_layer /\
+//  has_local_state_update_predicate (default_local_state_update_pred communication_states)
 
 (*** Event Predicates ***)
 
