@@ -11,21 +11,14 @@ open DY.Lib.Comparse.Parsers
 
 (**** Core ****)
 
-(*)
-/// The following type is meant to be used to send a single byte with a function
-/// of the communication layer. Since the communication layer always takes a
-/// serializable data object we need to encapsulate the byte in a data object.
-[@@with_bytes bytes]
-type comm_send_byte = {
-  b:bytes;
+/// Communication layer core configuration
+class comm_layer_core_config (a:Type) = {
+  core_tag: string;
+  core_ps_a: parser_serializer bytes a;
 }
 
-%splice [ps_comm_send_byte] (gen_parser (`comm_send_byte))
-%splice [ps_comm_send_byte_is_well_formed] (gen_is_well_formed_lemma (`comm_send_byte))
-
-instance parseable_serializeable_bytes_comm_send_byte: parseable_serializeable bytes comm_send_byte
-  = mk_parseable_serializeable ps_comm_send_byte
-  *)
+instance parseable_serializeable_bytes_a_core (#a:Type) {|config:comm_layer_core_config a|}: parseable_serializeable bytes a =
+  mk_parseable_serializeable config.core_ps_a
 
 /// Data structure to return data from communication layer functions
 type communication_message (a:Type) = {
@@ -35,17 +28,17 @@ type communication_message (a:Type) = {
 }
 
 [@@with_bytes bytes]
-type signature_input = 
-  | Plain: sender:principal -> receiver:principal -> payload:bytes -> signature_input
-  | Encrypted: sender:principal -> receiver:principal -> payload:bytes -> pk:bytes -> signature_input
+type signature_input (a:Type) {|config:comm_layer_core_config a|} = 
+  | Plain: sender:principal -> receiver:principal -> [@@@ with_parser #bytes config.core_ps_a] payload:a -> signature_input a
+  | Encrypted: sender:principal -> receiver:principal -> payload:bytes -> pk:bytes -> signature_input a
 
 #push-options "--ifuel 1 --fuel 0"
 %splice [ps_signature_input] (gen_parser (`signature_input))
 %splice [ps_signature_input_is_well_formed] (gen_is_well_formed_lemma (`signature_input))
 #pop-options
 
-instance parseable_serializeable_bytes_signature_input: parseable_serializeable bytes signature_input
-  = mk_parseable_serializeable ps_signature_input
+instance parseable_serializeable_bytes_signature_input (#a:Type) {|config:comm_layer_core_config a|}: parseable_serializeable bytes (signature_input a)
+  = mk_parseable_serializeable (ps_signature_input a)
 
 [@@with_bytes bytes]
 type signed_communication_message = {
@@ -57,6 +50,15 @@ type signed_communication_message = {
 %splice [ps_signed_communication_message_is_well_formed] (gen_is_well_formed_lemma (`signed_communication_message))
 
 (**** Request/Response ****)
+
+/// Communication layer reqres configuration
+class comm_layer_reqres_config (a:Type) = {
+  reqres_tag: string;
+  reqres_ps_a: parser_serializer bytes a;
+}
+
+instance parseable_serializeable_bytes_a_reqres (#a:Type) {|config:comm_layer_reqres_config a|}: parseable_serializeable bytes a =
+  mk_parseable_serializeable config.reqres_ps_a
 
 [@@with_bytes bytes]
 type request_message = {

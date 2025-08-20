@@ -65,6 +65,13 @@ let initialize_communication_core_proof tr a sender receiver =
 
 (**** Confidential Send and Receive Lemmas ****)
 
+val comm_conf_send_event_triggered:
+  #a:Type0 -> {|comm_layer_core_config a|} ->
+  trace -> principal -> principal -> a ->
+  prop
+let comm_conf_send_event_triggered #a tr sender receiver payload =
+  event_triggered tr sender (CommConfSendMsg sender receiver payload <: communication_core_event a)
+
 val encrypt_message_proof:
   {|cinvs:crypto_invariants|} ->
   #a:Type -> {|comm_layer_core_config a|} ->
@@ -77,11 +84,11 @@ val encrypt_message_proof:
     is_secret (long_term_key_label sender) tr nonce /\
     nonce `has_usage tr` PkeNonce /\
     is_public_key_for tr pk_receiver (LongTermPkeKey (comm_layer_pkenc_tag a)) receiver /\
-    is_well_formed a (is_knowable_by (join (principal_label sender) (principal_label receiver)) tr) payload /\
-    event_triggered tr sender (CommConfSendMsg sender receiver payload <: communication_core_event a)
+    is_well_formed a (is_knowable_by (comm_label sender receiver) tr) payload /\
+    comm_conf_send_event_triggered tr sender receiver payload
   ))
   (ensures
-    is_publishable tr (encrypt_message pk_receiver nonce payload)
+    is_publishable tr (encrypt_message pk_receiver nonce payload) 
   )
 let encrypt_message_proof #cinvs #a tr sender receiver pk_receiver nonce pkenc_in =
   reveal_opaque (`%encrypt_message) (encrypt_message #a)
@@ -97,8 +104,7 @@ val send_confidential_proof:
   (requires (
     trace_invariant tr /\
     has_pki_invariant /\
-    has_communication_layer_core_crypto_predicates a /\
-    has_communication_layer_core_event_predicates a higher_layer_preds /\
+    has_communication_layer_core_predicates higher_layer_preds /\
     higher_layer_preds.send_conf tr sender receiver payload /\
     // We only require the payload to flow to the sender and receiver to allow
     // the sender to send a payload readable by other principals. If you want
@@ -149,7 +155,7 @@ val decrypt_message_proof:
         is_well_formed a (is_knowable_by (comm_label sender receiver) tr) payload /\
         is_well_formed a (is_knowable_by (comm_label sender receiver) tr) payload /\
         (
-          event_triggered tr sender (CommConfSendMsg sender receiver payload <: communication_core_event a) \/
+          comm_conf_send_event_triggered tr sender receiver payload \/
           is_well_formed a (is_publishable tr) payload
         )
       )
@@ -176,8 +182,7 @@ val receive_confidential_proof:
   (requires
     trace_invariant tr /\
     has_private_keys_invariant /\
-    has_communication_layer_core_crypto_predicates a /\
-    has_communication_layer_core_event_predicates a higher_layer_preds
+    has_communication_layer_core_predicates higher_layer_preds
   )
   (ensures (
     match receive_confidential comm_keys_ids receiver msg_id tr with
@@ -208,54 +213,79 @@ let receive_confidential_proof #invs #a tr higher_layer_preds comm_keys_ids rece
 
 (**** Authenticated Send and Receive Lemmas ****)
 
+val comm_auth_send_event_triggered:
+  #a:Type0 -> {|comm_layer_core_config a|} ->
+  trace -> principal -> a ->
+  prop
+let comm_auth_send_event_triggered #a tr sender payload =
+  event_triggered tr sender (CommAuthSendMsg sender payload <: communication_core_event a)
+
+val comm_conf_auth_send_event_triggered:
+  #a:Type0 -> {|comm_layer_core_config a|} ->
+  trace -> principal -> principal -> a ->
+  prop
+let comm_conf_auth_send_event_triggered #a tr sender receiver payload =
+  event_triggered tr sender (CommConfAuthSendMsg sender receiver payload <: communication_core_event a)
+
+#push-options "--ifuel 1 --fuel 0 --z3rlimit 50"
 val sign_message_proof:
   {|cinvs:crypto_invariants|} ->
   #a:Type0 -> {|config:comm_layer_core_config a|} ->
   tr:trace ->
-  sender:principal -> receiver:principal -> payload:either a bytes -> pk_receiver:option bytes ->
+  sender:principal -> receiver:principal -> input:either a (bytes & bytes) ->
   sk_sender:bytes -> nonce:bytes ->
   Lemma
   (requires (
-    (Some? pk_receiver <==> Inr? payload) /\ 
-    (None? pk_receiver <==> Inl? payload) /\
     has_communication_layer_core_crypto_predicates a /\
     is_secret (long_term_key_label sender) tr nonce /\
     nonce `has_usage tr` SigNonce /\
     is_private_key_for tr sk_sender (LongTermSigKey (comm_layer_sign_tag a)) sender /\
     (
-      match pk_receiver with
-      | None -> (
-        is_well_formed a (is_publishable tr) (Inl?.v payload) /\
-        event_triggered tr sender (CommAuthSendMsg sender (Inl?.v payload) <: communication_core_event a)
+      match input with
+      | Inl payload -> (
+        is_well_formed a (is_publishable tr) payload /\
+        comm_auth_send_event_triggered #a tr sender payload
       )
-      | Some pk -> (
-        is_publishable tr (Inr?.v payload) /\
+      | Inr (payload, pk) -> (
+        is_publishable tr payload /\
         is_publishable tr pk /\
         (exists plain_payload nonce.
-          Inr?.v payload == pke_enc pk nonce plain_payload /\
-          (match parse a #(parseable_serializeable_bytes_a #a) plain_payload with
+          payload == pke_enc pk nonce plain_payload /\
+          (match parse a #(parseable_serializeable_bytes_a_core #a) plain_payload with
           | None -> False
-          | Some plain_payload_parsed -> event_triggered tr sender (CommConfAuthSendMsg sender receiver plain_payload_parsed <: communication_core_event a))
+          | Some plain_payload_parsed -> comm_conf_auth_send_event_triggered tr sender receiver plain_payload_parsed)
         )
       )
     )
   ))
   (ensures
-    is_publishable tr (sign_message sender receiver payload pk_receiver sk_sender nonce)
+    is_publishable tr (sign_message sender receiver input sk_sender nonce)
   )
-let sign_message_proof #cinvs #a #config tr sender receiver payload pk_receiver sk_sender nonce =
+let sign_message_proof #cinvs #a #config tr sender receiver input sk_sender nonce =
   reveal_opaque (`%sign_message) (sign_message #a);
-  let sig_input = match pk_receiver with
-    | None -> Plain sender receiver (serialize a (Inl?.v payload))
-    | Some pk -> Encrypted sender receiver (Inr?.v payload) pk
-  in 
-  let sig_input_bytes = serialize signature_input sig_input in
-  serialize_wf_lemma signature_input (is_publishable tr) sig_input;
-  let signature = sign sk_sender nonce sig_input_bytes in
-  let msg_signed = SigMessage {msg=sig_input_bytes; signature} in
-  assert(bytes_invariant tr signature);
-  serialize_wf_lemma comm_message_t (is_publishable tr) msg_signed;
-  ()
+  // The proof is duplicated here to improve the proof performance
+  match input with
+    | Inl payload -> (
+      let sig_input:signature_input a = Plain sender receiver payload in
+      let sig_input_bytes = serialize (signature_input a) sig_input in
+      serialize_wf_lemma (signature_input a) (is_publishable tr) sig_input;
+      let signature = sign sk_sender nonce sig_input_bytes in
+      assert(bytes_invariant tr signature); // Improves proof performance
+      let msg_signed = SigMessage {msg=sig_input_bytes; signature} in
+      serialize_wf_lemma comm_message_t (is_publishable tr) msg_signed;
+      ()
+    )
+    | Inr (payload, pk) -> (
+      let sig_input:signature_input a = Encrypted sender receiver payload pk in
+      let sig_input_bytes = serialize (signature_input a) sig_input in
+      serialize_wf_lemma (signature_input a) (is_publishable tr) sig_input;
+      let signature = sign sk_sender nonce sig_input_bytes in
+      assert(bytes_invariant tr signature); // Improves proof performance
+      let msg_signed = SigMessage {msg=sig_input_bytes; signature} in
+      serialize_wf_lemma comm_message_t (is_publishable tr) msg_signed;
+      ()
+    )
+#pop-options
 
 val send_authenticated_proof:
   {|invs:protocol_invariants|} ->
@@ -268,8 +298,7 @@ val send_authenticated_proof:
   (requires
     trace_invariant tr /\
     has_private_keys_invariant /\
-    has_communication_layer_core_crypto_predicates a /\
-    has_communication_layer_core_event_predicates a higher_layer_preds /\
+    has_communication_layer_core_predicates higher_layer_preds /\
     higher_layer_preds.send_auth tr sender payload /\
     is_well_formed a (is_publishable tr) payload
   )
@@ -289,9 +318,9 @@ let send_authenticated_proof #invs #a tr higher_layer_preds comm_keys_ids sender
       let (nonce,  tr') = mk_rand SigNonce (long_term_key_label sender) 32 tr' in
       higher_layer_preds.send_auth_later tr tr' sender payload;
       let ((), tr') = trigger_event sender (CommAuthSendMsg sender payload <: communication_core_event a) tr' in
-      assert(event_triggered tr' sender (CommAuthSendMsg sender payload <: communication_core_event a));
-      sign_message_proof #invs.crypto_invs #a tr' sender receiver (Inl payload) None sk_sender nonce;
-      let msg_signed = sign_message #a sender receiver (Inl payload) None sk_sender nonce in
+      assert(comm_auth_send_event_triggered tr' sender payload);
+      sign_message_proof #invs.crypto_invs #a tr' sender receiver (Inl payload) sk_sender nonce;
+      let msg_signed = sign_message #a sender receiver (Inl payload) sk_sender nonce in
       let (msg_id, tr') = send_msg msg_signed tr' in
       assert(tr_out == tr');
       assert(trace_invariant tr_out);
@@ -315,27 +344,30 @@ val verify_message_proof:
   (ensures (
     match verify_message #a receiver msg_bytes sk_receiver_opt vk_sender with
     | Some payload -> (
-      let Some msg_signed_t = parse comm_message_t msg_bytes in
-      let SigMessage msg_signed = msg_signed_t in
-      let Some sign_input = parse signature_input msg_signed.msg in
+      let Some (SigMessage msg_signed) = parse comm_message_t msg_bytes in
+      let Some sign_input = parse (signature_input a) msg_signed.msg in
       (
         match sign_input with
         | Plain sender' receiver' payload_bytes' -> (
           is_well_formed a (is_publishable tr) (Inl?.v payload) /\
           (
-            event_triggered tr sender (CommAuthSendMsg sender (Inl?.v payload) <: communication_core_event a) \/ 
+            sender == sender' /\
+            receiver == receiver' /\
+            comm_auth_send_event_triggered tr sender (Inl?.v payload) \/ 
             is_corrupt tr (long_term_key_label sender)
           )
         )
         | Encrypted sender' receiver' payload_bytes' pk_receiver -> (
           is_publishable tr (Inr?.v payload) /\
           (
+            sender == sender' /\
+            receiver == receiver' /\
             (
               exists plain_payload nonce.
                 (Inr?.v payload) == pke_enc pk_receiver nonce plain_payload /\
                 (match parse a plain_payload with
                 | None -> False
-                | Some plain_payload_parsed -> event_triggered tr sender (CommConfAuthSendMsg sender receiver plain_payload_parsed <: communication_core_event a))
+                | Some plain_payload_parsed -> comm_conf_auth_send_event_triggered tr sender receiver plain_payload_parsed)
             ) \/ (
               is_corrupt tr (long_term_key_label sender)
             )
@@ -353,11 +385,10 @@ let verify_message_proof #cinvs #a #config tr sender receiver msg_bytes sk_recei
     parse_wf_lemma comm_message_t (is_publishable tr) msg_bytes;
     let Some msg_signed_t = parse comm_message_t msg_bytes in
     let SigMessage msg_signed = msg_signed_t in
-    parse_wf_lemma signature_input (is_publishable tr) msg_signed.msg;
-    let Some sign_input = parse signature_input msg_signed.msg in
+    parse_wf_lemma (signature_input a) (is_publishable tr) msg_signed.msg;
+    let Some sign_input = parse (signature_input a) msg_signed.msg in
     match sign_input with
     | Plain sender' receiver' payload_bytes' -> (
-      serialize_parse_inv_lemma a payload_bytes';
       ()
     )
     | Encrypted sender' receiver' payload_bytes' pk_receiver -> (
@@ -376,8 +407,7 @@ val receive_authenticated_proof:
   (requires
     trace_invariant tr /\
     has_pki_invariant /\
-    has_communication_layer_core_crypto_predicates a /\
-    has_communication_layer_core_event_predicates a higher_layer_preds
+    has_communication_layer_core_predicates higher_layer_preds
   )
   (ensures (
     match receive_authenticated comm_keys_ids receiver msg_id tr with
@@ -397,7 +427,7 @@ let receive_authenticated_proof #invs #a tr higher_layer_preds comm_keys_ids rec
   | (None, tr_out) -> ()
   | (Some cm', tr_out) -> (
     let (Some msg_signed_bytes, tr) = recv_msg msg_id tr in
-    let Some sender = get_sender msg_signed_bytes in
+    let Some sender = get_sender #a msg_signed_bytes in
     let (Some vk_sender, tr) = get_public_key receiver comm_keys_ids.pki (LongTermSigKey (comm_layer_sign_tag a)) sender tr in
     verify_message_proof #invs.crypto_invs #a tr sender receiver msg_signed_bytes None vk_sender;
     match verify_message #a receiver msg_signed_bytes None vk_sender with
@@ -429,8 +459,8 @@ val encrypt_and_sign_message_proof:
     is_public_key_for tr pk_receiver (LongTermPkeKey (comm_layer_pkenc_tag a)) receiver /\
     is_private_key_for tr sk_sender (LongTermSigKey (comm_layer_sign_tag a)) sender /\
     is_well_formed a (is_knowable_by (comm_label sender receiver) tr) payload /\
-    event_triggered tr sender (CommConfSendMsg sender receiver payload <: communication_core_event a) /\
-    event_triggered tr sender (CommConfAuthSendMsg sender receiver payload <: communication_core_event a)
+    comm_conf_send_event_triggered tr sender receiver payload /\
+    comm_conf_auth_send_event_triggered tr sender receiver payload
   )
   (ensures
     is_publishable tr (encrypt_and_sign_message sender receiver payload pk_receiver sk_sender enc_nonce sign_nonce)
@@ -440,7 +470,7 @@ let encrypt_and_sign_message_proof #cinvs #a tr sender receiver payload pk_recei
   reveal_opaque (`%encrypt_message) (encrypt_message #a); // TODO: This should be removeable.
   encrypt_message_proof tr sender receiver pk_receiver enc_nonce payload;
   let enc_payload = encrypt_message pk_receiver enc_nonce payload in
-  sign_message_proof #cinvs #a tr sender receiver (Inr enc_payload) (Some pk_receiver) sk_sender sign_nonce;
+  sign_message_proof #cinvs #a tr sender receiver (Inr (enc_payload, pk_receiver)) sk_sender sign_nonce;
   ()
 
 val send_confidential_authenticated_proof:
@@ -455,8 +485,7 @@ val send_confidential_authenticated_proof:
     trace_invariant tr /\
     has_private_keys_invariant /\
     has_pki_invariant /\
-    has_communication_layer_core_crypto_predicates a /\
-    has_communication_layer_core_event_predicates a higher_layer_preds /\
+    has_communication_layer_core_predicates higher_layer_preds /\
     higher_layer_preds.send_conf tr sender receiver payload /\
     higher_layer_preds.send_conf_auth tr sender receiver payload /\
     is_well_formed a (is_knowable_by (join (principal_label sender) (principal_label receiver)) tr) payload
@@ -481,11 +510,11 @@ let send_confidential_authenticated_proof #invs #a tr higher_layer_preds comm_ke
     let payload_bytes = serialize #bytes a payload in
     higher_layer_preds.send_conf_later tr tr' sender receiver payload;
     let ((), tr') = trigger_event sender (CommConfSendMsg sender receiver payload <: communication_core_event a) tr' in
-    assert(event_triggered tr' sender (CommConfSendMsg sender receiver payload <: communication_core_event a));
+    assert(comm_conf_send_event_triggered tr' sender receiver payload);
 
     higher_layer_preds.send_conf_auth_later tr tr' sender receiver payload;
     let ((), tr') = trigger_event sender (CommConfAuthSendMsg sender receiver payload <: communication_core_event a) tr' in
-    assert(event_triggered tr' sender (CommConfAuthSendMsg sender receiver payload <: communication_core_event a));
+    assert(comm_conf_auth_send_event_triggered tr' sender receiver payload);
 
     encrypt_and_sign_message_proof tr' sender receiver payload pk_receiver sk_sender enc_nonce sign_nonce;
     let msg = encrypt_and_sign_message sender receiver payload pk_receiver sk_sender enc_nonce sign_nonce in
@@ -517,7 +546,7 @@ val verify_and_decrypt_message_proof:
       is_well_formed a (is_knowable_by (principal_label receiver) tr) cm.payload /\
       //is_knowable_by (principal_label receiver) tr (serialize a cm.payload) /\
       (
-        event_triggered tr sender (CommConfAuthSendMsg sender receiver cm.payload <: communication_core_event a) \/
+        comm_conf_auth_send_event_triggered tr sender receiver cm.payload \/
         is_corrupt tr (long_term_key_label sender)
       )
     )
@@ -532,7 +561,7 @@ let verify_and_decrypt_message_proof #cinvs #a tr sender receiver msg_encrypted_
     let Some (Inr payload_enc) = verify_message #a receiver msg_encrypted_signed (Some sk_receiver) vk_sender in
     let Some msg_signed_t = parse comm_message_t msg_encrypted_signed in
     let SigMessage msg_signed = msg_signed_t in
-    let Some sign_input = parse signature_input msg_signed.msg in
+    let Some sign_input = parse (signature_input a) msg_signed.msg in
     let Encrypted _ _ _ pk_receiver = sign_input in
     assert(pk_receiver == pk sk_receiver);
 
@@ -540,14 +569,14 @@ let verify_and_decrypt_message_proof #cinvs #a tr sender receiver msg_encrypted_
     serialize_parse_inv_lemma #bytes a plaintext;
 
     introduce (~(is_corrupt tr (long_term_key_label sender))) ==>  (
-        event_triggered tr sender (CommConfAuthSendMsg sender receiver cm.payload <: communication_core_event a)
+        comm_conf_auth_send_event_triggered tr sender receiver cm.payload
       )
     with _. (
       eliminate exists plain_payload nonce.
           payload_enc == pke_enc pk_receiver nonce plain_payload /\
           Some? (parse a plain_payload) /\
-          event_triggered tr sender (CommConfAuthSendMsg sender receiver (Some?.v (parse a plain_payload)) <: communication_core_event a)
-      returns event_triggered tr sender (CommConfAuthSendMsg sender receiver cm.payload <: communication_core_event a)
+          comm_conf_auth_send_event_triggered tr sender receiver (Some?.v (parse a plain_payload))
+      returns comm_conf_auth_send_event_triggered tr sender receiver cm.payload
       with _. (
         pke_dec_enc sk_receiver nonce plain_payload;
         ()
@@ -568,8 +597,7 @@ val receive_confidential_authenticated_proof:
     trace_invariant tr /\
     has_private_keys_invariant /\
     has_pki_invariant /\
-    has_communication_layer_core_crypto_predicates a /\
-    has_communication_layer_core_event_predicates a higher_layer_preds
+    has_communication_layer_core_predicates higher_layer_preds
   )
   (ensures
     (
@@ -593,7 +621,7 @@ let receive_confidential_authenticated_proof #invs #a tr higher_layer_preds comm
   | (Some cm, tr_out) -> (
     let (Some msg_encrypted_signed, tr) = recv_msg msg_id tr in
     let (Some sk_receiver, tr) = get_private_key receiver comm_keys_ids.private_keys (LongTermPkeKey (comm_layer_pkenc_tag a)) tr in
-    let Some sender = get_sender msg_encrypted_signed in
+    let Some sender = get_sender #a msg_encrypted_signed in
     let (Some vk_sender, tr) = get_public_key receiver comm_keys_ids.pki (LongTermSigKey (comm_layer_sign_tag a)) sender tr in
     verify_and_decrypt_message_proof #invs.crypto_invs #a tr sender receiver msg_encrypted_signed sk_receiver vk_sender;
     let Some cm = verify_and_decrypt_message #a receiver sk_receiver vk_sender msg_encrypted_signed in

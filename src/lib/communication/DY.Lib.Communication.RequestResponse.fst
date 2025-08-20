@@ -15,28 +15,20 @@ open DY.Lib.Communication.Core
 
 (*** Layer Setup ***)
 
-class comm_layer_reqres_config (a:Type) = {
-  tag: string;
-  ps_a: parser_serializer bytes a;
-}
-
-instance parseable_serializeable_bytes_a (#a:Type) {|config:comm_layer_reqres_config a|}: parseable_serializeable bytes a =
-  mk_parseable_serializeable config.ps_a
-
 instance comm_layer_tag_core_config_reqres (a:Type) {|config:comm_layer_reqres_config a|}: comm_layer_core_config comm_message_t = {
-  tag = config.tag ^ ".CoreConfig.ReqRes";
-  ps_a = ps_comm_message_t;
+  core_tag = config.reqres_tag ^ ".CoreConfig.ReqRes";
+  core_ps_a = ps_comm_message_t;
 }
 
 val comm_layer_aead_tag: a:Type -> {|comm_layer_reqres_config a|} -> string
-let comm_layer_aead_tag a #config = config.tag ^ ".Aead.Key"
+let comm_layer_aead_tag a #config = config.reqres_tag ^ ".Aead.Key"
 
 [@@with_bytes bytes]
-type comm_meta_data (a:Type) {|c:comm_layer_reqres_config a|} = {
+type comm_meta_data (a:Type) {|config:comm_layer_reqres_config a|} = {
   key:bytes;
   server:principal;
   sid:state_id;
-  [@@@ with_parser #bytes c.ps_a]
+  [@@@ with_parser #bytes config.reqres_ps_a]
   request:a;
 }
 
@@ -47,9 +39,9 @@ type comm_meta_data (a:Type) {|c:comm_layer_reqres_config a|} = {
 (*** States ***)
 
 [@@with_bytes bytes]
-type client_send_request (a:Type) {|c:comm_layer_reqres_config a|}  = {
+type client_send_request (a:Type) {|config:comm_layer_reqres_config a|}  = {
   server:principal;
-  [@@@ with_parser #bytes c.ps_a]
+  [@@@ with_parser #bytes config.reqres_ps_a]
   request:a;
   key:bytes
 }
@@ -58,8 +50,8 @@ type client_send_request (a:Type) {|c:comm_layer_reqres_config a|}  = {
 %splice [ps_client_send_request_is_well_formed] (gen_is_well_formed_lemma (`client_send_request))
 
 [@@with_bytes bytes]
-type server_receive_request (a:Type) {|c:comm_layer_reqres_config a|}  = {
-  [@@@ with_parser #bytes c.ps_a]
+type server_receive_request (a:Type) {|config:comm_layer_reqres_config a|}  = {
+  [@@@ with_parser #bytes config.reqres_ps_a]
   request:a;
   key:bytes
 }
@@ -68,9 +60,9 @@ type server_receive_request (a:Type) {|c:comm_layer_reqres_config a|}  = {
 %splice [ps_server_receive_request_is_well_formed] (gen_is_well_formed_lemma (`server_receive_request))
 
 [@@with_bytes bytes]
-type client_receive_response (a:Type) {|c:comm_layer_reqres_config a|}  = {
+type client_receive_response (a:Type) {|config:comm_layer_reqres_config a|}  = {
   server:principal;
-  [@@@ with_parser #bytes c.ps_a]
+  [@@@ with_parser #bytes config.reqres_ps_a]
   response:a;
   key:bytes
 }
@@ -89,20 +81,20 @@ type communication_states (a:Type) {|c:comm_layer_reqres_config a|}  =
 %splice [ps_communication_states_is_well_formed] (gen_is_well_formed_lemma (`communication_states))
 #pop-options
 
-instance parseable_serializeable_bytes_communication_states (a:Type) {|c:comm_layer_reqres_config a|}: parseable_serializeable bytes (communication_states a)
+instance parseable_serializeable_bytes_communication_states (a:Type) {|comm_layer_reqres_config a|}: parseable_serializeable bytes (communication_states a)
   = mk_parseable_serializeable (ps_communication_states a)
 
-instance local_state_communication_layer_session (a:Type) {|c:comm_layer_reqres_config a|}: local_state (communication_states a) = {
-  tag = c.tag ^ ".State";
+instance local_state_communication_layer_session (a:Type) {|config:comm_layer_reqres_config a|}: local_state (communication_states a) = {
+  tag = config.reqres_tag ^ ".State";
   format = parseable_serializeable_bytes_communication_states a;
 }
 
 [@@with_bytes bytes]
-type communication_reqres_event (a:Type) {|c:comm_layer_reqres_config a|} =
-  | CommClientSendRequest: client:principal -> server:principal -> [@@@ with_parser #bytes c.ps_a] request:a -> key:bytes -> communication_reqres_event a
-  | CommServerReceiveRequest: server:principal -> [@@@ with_parser #bytes c.ps_a] request:a -> key:bytes -> communication_reqres_event a
-  | CommServerSendResponse: server:principal -> [@@@ with_parser #bytes c.ps_a] request:a -> [@@@ with_parser #bytes c.ps_a] response:a -> communication_reqres_event a
-  | CommClientReceiveResponse: client:principal -> server:principal -> [@@@ with_parser #bytes c.ps_a] response:a -> key:bytes -> communication_reqres_event a
+type communication_reqres_event (a:Type) {|config:comm_layer_reqres_config a|} =
+  | CommClientSendRequest: client:principal -> server:principal -> [@@@ with_parser #bytes config.reqres_ps_a] request:a -> key:bytes -> communication_reqres_event a
+  | CommServerReceiveRequest: server:principal -> [@@@ with_parser #bytes config.reqres_ps_a] request:a -> key:bytes -> communication_reqres_event a
+  | CommServerSendResponse: server:principal -> [@@@ with_parser #bytes config.reqres_ps_a] request:a -> [@@@ with_parser #bytes config.reqres_ps_a] response:a -> communication_reqres_event a
+  | CommClientReceiveResponse: client:principal -> server:principal -> [@@@ with_parser #bytes config.reqres_ps_a] response:a -> key:bytes -> communication_reqres_event a
 
 #push-options "--ifuel 1"
 %splice [ps_communication_reqres_event] (gen_parser (`communication_reqres_event))
@@ -110,7 +102,7 @@ type communication_reqres_event (a:Type) {|c:comm_layer_reqres_config a|} =
 #pop-options
 
 instance event_communication_reqres_event (#a:Type) {|config:comm_layer_reqres_config a|}: event (communication_reqres_event a) = {
-  tag = config.tag ^ ".Event";
+  tag = config.reqres_tag ^ ".Event";
   format = mk_parseable_serializeable (ps_communication_reqres_event a);
 }
 

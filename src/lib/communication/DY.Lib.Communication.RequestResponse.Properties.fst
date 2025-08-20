@@ -9,6 +9,7 @@ open DY.Lib.State.PKI
 open DY.Lib.State.PrivateKeys
 open DY.Lib.State.Typed
 
+open DY.Lib.Communication.Data
 open DY.Lib.Communication.RequestResponse
 open DY.Lib.Communication.RequestResponse.Invariants
 
@@ -50,11 +51,11 @@ val key_secrecy_client:
   Lemma
   (requires
     trace_invariant tr /\
-    has_communication_layer_reqres_state_predicates a /\
+    has_communication_layer_reqres_state_predicate a /\
     attacker_knows tr key /\
     (
-      (exists sid. state_was_set #(communication_states a) #(local_state_communication_layer_session a) tr client sid (ClientSendRequest {server; request; key} <: communication_states a)) \/
-      (exists sid. state_was_set #(communication_states a) #(local_state_communication_layer_session a) tr client sid (ClientReceiveResponse {server; response; key} <: communication_states a))
+      (exists sid. state_was_set tr client sid (ClientSendRequest {server; request; key} <: communication_states a)) \/
+      (exists sid. state_was_set tr client sid (ClientReceiveResponse {server; response; key} <: communication_states a))
     )
   )
   (ensures
