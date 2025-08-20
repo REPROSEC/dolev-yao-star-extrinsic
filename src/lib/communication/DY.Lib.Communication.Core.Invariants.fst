@@ -18,42 +18,39 @@ open DY.Lib.Communication.Core
 (*** PkEnc Predicates ***)
 
 #push-options "--ifuel 1"
-val pke_crypto_predicates_communication_layer: {|cusages:crypto_usages|} -> a:Type0 -> {|comm_layer_core_config a|} -> pke_crypto_predicate
-let pke_crypto_predicates_communication_layer #cusages a #config  = {
+val pke_crypto_predicates_communication_layer_core: {|cusages:crypto_usages|} -> a:Type0 -> {|comm_layer_core_config a|} -> pke_crypto_predicate
+let pke_crypto_predicates_communication_layer_core #cusages a #config  = {
   pred = (fun tr sk_usage pk msg ->
     (exists sender receiver.
       sk_usage == long_term_key_type_to_usage (LongTermPkeKey (comm_layer_pkenc_tag a))  receiver /\
       (get_label tr msg) `can_flow tr` (comm_label sender receiver) /\
-      (match parse a msg with
-      | None -> False
-      | Some msg_parsed -> event_triggered tr sender (CommConfSendMsg sender receiver msg_parsed <: communication_core_event a))
-      
+      parse_and_pred 
+        (fun msg_parsed -> event_triggered tr sender (CommConfSendMsg sender receiver msg_parsed <: communication_core_event a)) 
+        msg      
     )
     );
   pred_later = (fun tr1 tr2 sk_usage pk msg -> ());
 }
 #pop-options
 
-val pke_crypto_predicates_communication_layer_core_and_tag:
+val pke_crypto_predicates_and_tag_communication_layer_core:
   {|cusages:crypto_usages|} ->
   (a:Type0) -> {|comm_layer_core_config a|} ->  
   (string & pke_crypto_predicate)
-let pke_crypto_predicates_communication_layer_core_and_tag #cusages a #config =
-  ((comm_layer_pkenc_tag a), pke_crypto_predicates_communication_layer a)
+let pke_crypto_predicates_and_tag_communication_layer_core #cusages a #config =
+  ((comm_layer_pkenc_tag a), pke_crypto_predicates_communication_layer_core a)
 
 (*** Sign Predicates ***)
 
 #push-options "--ifuel 3 --fuel 0"
-val sign_crypto_predicates_communication_layer: {|cusages:crypto_usages|} -> a:Type0 -> {|comm_layer_core_config a|} -> sign_crypto_predicate
-let sign_crypto_predicates_communication_layer #cusages a #config = {
+val sign_crypto_predicate_communication_layer_core: {|cusages:crypto_usages|} -> a:Type0 -> {|comm_layer_core_config a|} -> sign_crypto_predicate
+let sign_crypto_predicate_communication_layer_core #cusages a #config = {
   pred = (fun tr sk_usage vk sig_msg ->
-    (match parse signature_input sig_msg with
-    | Some (Plain sender receiver payload_bytes) -> (
+    (match parse (signature_input a) sig_msg with
+    | Some (Plain sender receiver payload) -> (
       sk_usage == long_term_key_type_to_usage (LongTermSigKey (comm_layer_sign_tag a)) sender /\
-      get_label tr payload_bytes `can_flow tr` public /\
-      (match parse a payload_bytes with
-      | None -> False
-      | Some payload -> event_triggered tr sender (CommAuthSendMsg sender payload <: communication_core_event a))
+      get_label tr (serialize a payload) `can_flow tr` public /\
+      event_triggered tr sender (CommAuthSendMsg sender payload <: communication_core_event a)
     )
     | Some (Encrypted sender receiver payload pk_receiver) -> (
       get_label tr payload `can_flow tr` public /\
@@ -67,24 +64,32 @@ let sign_crypto_predicates_communication_layer #cusages a #config = {
     )
     | None -> False)
   );
-  pred_later = (fun tr1 tr2 sk_usage vk msg -> parse_wf_lemma signature_input (bytes_well_formed tr1) msg);
+  pred_later = (fun tr1 tr2 sk_usage vk msg -> (
+    parse_wf_lemma (signature_input a) (bytes_well_formed tr1) msg);
+    match parse (signature_input a) msg with
+    | Some (Plain sender receiver payload) -> (
+      serialize_wf_lemma a (bytes_well_formed tr1) payload;
+      ()
+    )
+    | _ -> ()
+  );
 }
 #pop-options
 
-val sign_crypto_predicates_communication_layer_core_and_tag:
+val sign_crypto_predicate_and_tag_communication_layer_core:
   {|cusages:crypto_usages|} ->
   (a:Type0) -> {|comm_layer_core_config a|} -> 
   (string & sign_crypto_predicate)
-let sign_crypto_predicates_communication_layer_core_and_tag #cusages a #config =
-  (comm_layer_sign_tag a, sign_crypto_predicates_communication_layer a)
+let sign_crypto_predicate_and_tag_communication_layer_core #cusages a #config =
+  (comm_layer_sign_tag a, sign_crypto_predicate_communication_layer_core a)
 
 val has_communication_layer_core_crypto_predicates:
   {|crypto_invariants|} ->
   (a:Type0) -> {|comm_layer_core_config a|} -> 
   prop
 let has_communication_layer_core_crypto_predicates #cinvs a #config =
-  has_pke_predicate (pke_crypto_predicates_communication_layer_core_and_tag a) /\
-  has_sign_predicate (sign_crypto_predicates_communication_layer_core_and_tag a)
+  has_pke_predicate (pke_crypto_predicates_and_tag_communication_layer_core a) /\
+  has_sign_predicate (sign_crypto_predicate_and_tag_communication_layer_core a)
 
 (*** Event Predicates ***)
 
@@ -185,18 +190,30 @@ let event_predicate_communication_layer_core
     )
 #pop-options
 
-val event_predicate_communication_layer_core_and_tag:
+val event_predicate_and_tag_communication_layer_core:
   {|cinvs:crypto_invariants|} ->
   #a:Type0 -> {|comm_layer_core_config a|} ->
   comm_core_higher_layer_event_preds a ->
   (string & compiled_event_predicate)
-let event_predicate_communication_layer_core_and_tag #cinvs #a higher_layer_preds =
+let event_predicate_and_tag_communication_layer_core #cinvs #a higher_layer_preds =
   mk_event_tag_and_pred (event_predicate_communication_layer_core higher_layer_preds)
 
-val has_communication_layer_core_event_predicates:
+val has_communication_layer_core_event_predicate:
   {|protocol_invariants|} ->
-  a:Type0 -> {|comm_layer_core_config a|} ->
+  #a:Type0 -> {|comm_layer_core_config a|} ->
   comm_core_higher_layer_event_preds a ->
   prop
-let has_communication_layer_core_event_predicates #invs a higher_layer_preds =
+let has_communication_layer_core_event_predicate #invs #a higher_layer_preds =
   has_event_pred (event_predicate_communication_layer_core higher_layer_preds)
+
+
+(*** All Communication Layer Core Predicates ***)
+
+val has_communication_layer_core_predicates:
+  {|protocol_invariants|} ->
+  #a:Type0 -> {|comm_layer_core_config a|} ->
+  comm_core_higher_layer_event_preds a ->
+  prop
+let has_communication_layer_core_predicates #invs #a higher_layer_preds =
+  has_communication_layer_core_crypto_predicates a /\
+  has_communication_layer_core_event_predicate higher_layer_preds

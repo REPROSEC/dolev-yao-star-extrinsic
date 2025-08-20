@@ -103,9 +103,7 @@ val send_request_proof:
     trace_invariant tr /\
     has_pki_invariant /\
     has_pki_state_update_invariant /\
-    has_communication_layer_reqres_crypto_predicates a /\
-    has_communication_layer_reqres_event_predicates higher_layer_preds /\
-    has_communication_layer_reqres_state_predicates a /\
+    has_communication_layer_reqres_predicates higher_layer_preds /\
     higher_layer_preds.send_request tr client server request (comm_label client server) /\
     is_well_formed a (is_knowable_by (comm_label client server) tr) request
   )
@@ -161,9 +159,7 @@ val receive_request_proof:
     trace_invariant tr /\
     has_private_keys_invariant /\
     has_pki_invariant /\
-    has_communication_layer_reqres_crypto_predicates a /\
-    has_communication_layer_reqres_event_predicates higher_layer_preds /\
-    has_communication_layer_reqres_state_predicates a
+    has_communication_layer_reqres_predicates higher_layer_preds
   )
   (ensures (
     match receive_request #a comm_keys_ids server msg_id tr with
@@ -237,7 +233,7 @@ val mk_comm_layer_response_nonce_proof:
   Lemma
   (requires
     trace_invariant tr /\
-    has_communication_layer_reqres_state_predicates a /\
+    has_communication_layer_reqres_state_predicate a /\
     has_communication_layer_reqres_crypto_predicates a /\
     bytes_well_formed tr req_meta_data.key
   )
@@ -292,10 +288,8 @@ val send_response_proof:
   Lemma
   (requires
     trace_invariant tr /\
-    has_communication_layer_reqres_crypto_predicates a /\
-    has_communication_layer_reqres_event_predicates higher_layer_preds /\
+    has_communication_layer_reqres_predicates higher_layer_preds /\
     higher_layer_preds.send_response tr server req_meta_data.request response /\
-    has_communication_layer_reqres_state_predicates a /\
     is_well_formed a (is_knowable_by (get_response_label tr req_meta_data) tr) response
   )
   (ensures (
@@ -371,9 +365,7 @@ val receive_response_proof:
   Lemma
   (requires
     trace_invariant tr /\
-    has_communication_layer_reqres_crypto_predicates a /\
-    has_communication_layer_reqres_event_predicates higher_layer_preds /\
-    has_communication_layer_reqres_state_predicates a
+    has_communication_layer_reqres_predicates higher_layer_preds
   )
   (ensures (
     match receive_response client req_meta_data msg_id tr with

@@ -33,14 +33,12 @@ let comm_message_to_string #core_type #core_config #reqres_type #reqres_config m
   | _ -> (
     match parse comm_message_t b with
     | Some (SigMessage {msg; signature}) -> (
-      match parse signature_input msg with
+      match parse (signature_input core_type) msg with
       | Some si -> (
         let sender, receiver, payload = (
           match si with
           | Plain sender receiver payload -> (
-            sender, receiver, (match parse core_type payload with
-            | None -> "Error: signature_input payload could not be parsed"
-            | Some payload_parsed -> msg_to_string payload_parsed))
+            sender, receiver, msg_to_string payload)
           | Encrypted sender receiver payload _ -> sender, receiver, (
             match payload with
             | PkeEnc pk nonce msg -> (

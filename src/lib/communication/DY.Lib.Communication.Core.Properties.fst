@@ -10,6 +10,7 @@ open DY.Lib.State.PrivateKeys
 open DY.Lib.State.Typed
 open DY.Lib.Comparse.DYUtils
 
+open DY.Lib.Communication.Data
 open DY.Lib.Communication.Core
 open DY.Lib.Communication.Core.Invariants
 open DY.Lib.Communication.Core.Lemmas
@@ -31,7 +32,7 @@ val conf_message_secrecy:
   Lemma
   (requires
     trace_invariant tr /\
-    has_communication_layer_core_event_predicates a higher_layer_preds /\
+    has_communication_layer_core_predicates higher_layer_preds /\
     event_triggered_at tr i receiver (CommConfReceiveMsg receiver payload <: communication_core_event a)
   )
   (ensures
@@ -72,7 +73,7 @@ val sender_authentication:
   Lemma
   (requires
     trace_invariant tr /\
-    has_communication_layer_core_event_predicates a higher_layer_preds /\
+    has_communication_layer_core_predicates higher_layer_preds /\
     event_triggered_at tr i receiver (CommAuthReceiveMsg sender receiver payload <: communication_core_event a)
   )
   (ensures
@@ -94,7 +95,7 @@ val sender_confauth_authentication:
   Lemma
   (requires
     trace_invariant tr /\
-    has_communication_layer_core_event_predicates a higher_layer_preds /\
+    has_communication_layer_core_predicates higher_layer_preds /\
     event_triggered_at tr i receiver (CommConfAuthReceiveMsg sender receiver payload <: communication_core_event a)
   )
   (ensures

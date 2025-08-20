@@ -21,11 +21,11 @@ open DY.Lib.Communication.Core.Invariants
 (*** AEAD Predicate ***)
 
 #push-options "--ifuel 1"
-val aead_crypto_predicate_communication_layer:
+val aead_crypto_predicate_communication_layer_reqres:
   {|cusages:crypto_usages|} ->
   a:Type0 -> {|comm_layer_reqres_config a|} ->
   aead_crypto_predicate
-let aead_crypto_predicate_communication_layer #cusages a #config = {
+let aead_crypto_predicate_communication_layer_reqres #cusages a #config = {
   pred = (fun tr key_usage key nonce msg ad ->
       (match parse authenticated_data ad with
       | None -> False
@@ -44,29 +44,29 @@ let aead_crypto_predicate_communication_layer #cusages a #config = {
 }
 #pop-options
 
-val aead_crypto_predicates_communication_layer_reqres_and_tag:
+val aead_crypto_predicate_and_tag_communication_layer_reqres:
   {|cusages:crypto_usages|} ->
   a:Type0 -> {|comm_layer_reqres_config a|} ->
   (string & aead_crypto_predicate)
-let aead_crypto_predicates_communication_layer_reqres_and_tag #cusages a #config =
-  (comm_layer_aead_tag a, aead_crypto_predicate_communication_layer a)
+let aead_crypto_predicate_and_tag_communication_layer_reqres #cusages a #config =
+  (comm_layer_aead_tag a, aead_crypto_predicate_communication_layer_reqres a)
 
 
 (*** Core Crypto Predicates ***)
 
-val pke_crypto_predicates_communication_layer_reqres_and_tag:
+val pke_crypto_predicate_and_tag_communication_layer_reqres:
   {|cusages:crypto_usages|} ->
   a:Type0 -> {|comm_layer_reqres_config a|} ->
   (string & pke_crypto_predicate)
-let pke_crypto_predicates_communication_layer_reqres_and_tag #cusages a #config =
-  pke_crypto_predicates_communication_layer_core_and_tag comm_message_t #(comm_layer_tag_core_config_reqres a)
+let pke_crypto_predicate_and_tag_communication_layer_reqres #cusages a #config =
+  pke_crypto_predicates_and_tag_communication_layer_core comm_message_t #(comm_layer_tag_core_config_reqres a)
 
-val sign_crypto_predicates_communication_layer_reqres_and_tag:
+val sign_crypto_predicate_and_tag_communication_layer_reqres:
   {|cusages:crypto_usages|} ->
   a:Type0 -> {|comm_layer_reqres_config a|} ->
   (string & sign_crypto_predicate)
-let sign_crypto_predicates_communication_layer_reqres_and_tag #cusages a #config =
-  sign_crypto_predicates_communication_layer_core_and_tag comm_message_t #(comm_layer_tag_core_config_reqres a)
+let sign_crypto_predicate_and_tag_communication_layer_reqres #cusages a #config =
+  sign_crypto_predicate_and_tag_communication_layer_core comm_message_t #(comm_layer_tag_core_config_reqres a)
 
 val has_communication_layer_reqres_crypto_predicates:
   {|cinvs:crypto_invariants|} ->
@@ -75,15 +75,15 @@ val has_communication_layer_reqres_crypto_predicates:
 let has_communication_layer_reqres_crypto_predicates #cinvs a #config =
   // Fix for the get_label function in the model code
   cinvs.usages == default_crypto_usages /\
-  has_pke_predicate (pke_crypto_predicates_communication_layer_reqres_and_tag a) /\
-  has_sign_predicate (sign_crypto_predicates_communication_layer_reqres_and_tag a) /\
-  has_aead_predicate (aead_crypto_predicates_communication_layer_reqres_and_tag a)
+  has_pke_predicate (pke_crypto_predicate_and_tag_communication_layer_reqres a) /\
+  has_sign_predicate (sign_crypto_predicate_and_tag_communication_layer_reqres a) /\
+  has_aead_predicate (aead_crypto_predicate_and_tag_communication_layer_reqres a)
 
 
 (*** State Predicates ***)
 
 #push-options "--ifuel 2 --z3rlimit 10"
-let state_predicates_communication_layer {|crypto_invariants|} (a:Type) {|comm_layer_reqres_config a|}: local_state_predicate (communication_states a) = {
+let state_predicate_communication_layer_reqres {|crypto_invariants|} (a:Type) {|comm_layer_reqres_config a|}: local_state_predicate (communication_states a) = {
   pred = (fun tr prin sess_id st ->
     match st with
     | ClientSendRequest {server; request; key} -> (
@@ -107,22 +107,20 @@ let state_predicates_communication_layer {|crypto_invariants|} (a:Type) {|comm_l
   pred_later = (fun tr1 tr2 prin sess_id st -> ());
   pred_knowable = (fun tr prin sess_id st -> (
     match st with
-    | ClientSendRequest {server; request; key} ->
-      assert(is_well_formed a (is_knowable_by (principal_typed_state_content_label prin (DY.Lib.State.Typed.tag #(communication_states a)) sess_id st) tr) request)
-    | ServerReceiveRequest {request; key} ->
-      assert(is_well_formed a (is_knowable_by (principal_typed_state_content_label prin (DY.Lib.State.Typed.tag #(communication_states a)) sess_id st) tr) request)
-    | ClientReceiveResponse {server; response; key} ->
-      assert(is_well_formed a (is_knowable_by (principal_typed_state_content_label prin (DY.Lib.State.Typed.tag #(communication_states a)) sess_id st) tr) response)
+    | ClientSendRequest {server=_; request=payload; key}
+    | ServerReceiveRequest {request=payload; key}
+    | ClientReceiveResponse {server=_; response=payload; key} ->
+      assert(is_well_formed a (is_knowable_by (principal_typed_state_content_label prin (DY.Lib.State.Typed.tag #(communication_states a)) sess_id st) tr) payload)
   ));
 }
 #pop-options
 
-val state_predicates_communication_layer_reqres_and_tag:
+val state_predicate_and_tag_communication_layer_reqres:
   {|crypto_invariants|} ->
   (a:Type0) -> {|comm_layer_reqres_config a|} ->
   dtuple2 string local_bytes_state_predicate
-let state_predicates_communication_layer_reqres_and_tag #cinvs a #config =
-  mk_local_state_tag_and_pred (state_predicates_communication_layer a)
+let state_predicate_and_tag_communication_layer_reqres #cinvs a #config =
+  mk_local_state_tag_and_pred (state_predicate_communication_layer_reqres a)
 
 val state_update_predicates_communication_layer_and_tag:
   {|crypto_invariants|} ->
@@ -131,12 +129,12 @@ val state_update_predicates_communication_layer_and_tag:
 let state_update_predicates_communication_layer_and_tag #cinvs a #config =
   mk_local_state_tag_and_update_pred (default_local_state_update_pred (communication_states a))
 
-val has_communication_layer_reqres_state_predicates:
+val has_communication_layer_reqres_state_predicate:
   {|protocol_invariants|} ->
   (a:Type0) -> {|comm_layer_reqres_config a|} ->
   prop
-let has_communication_layer_reqres_state_predicates #invs a #config =
-  has_local_state_predicate (state_predicates_communication_layer a) /\
+let has_communication_layer_reqres_state_predicate #invs a #config =
+  has_local_state_predicate (state_predicate_communication_layer_reqres a) /\
   has_local_state_update_predicate (default_local_state_update_pred (communication_states a))
 
 (*** Event Predicates ***)
@@ -222,9 +220,7 @@ let comm_core_higher_layer_event_preds_reqres #cinvs a #config = {
   send_conf = (fun tr client server (com_msg_t:comm_message_t) ->
     match com_msg_t with
     | RequestMessage {request; key} -> (
-      match parse a request with
-      | None -> False
-      | Some request_parsed -> event_triggered tr client (CommClientSendRequest client server request_parsed key <: communication_reqres_event a)
+      parse_and_pred (fun request_parsed -> event_triggered tr client (CommClientSendRequest client server request_parsed key <: communication_reqres_event a)) request
     )
     | _ -> False
   );
@@ -240,7 +236,7 @@ val event_predicate_communication_layer_reqres_and_tag:
   list (string & compiled_event_predicate)
 let event_predicate_communication_layer_reqres_and_tag #cinvs #a higher_layer_resreq_preds =
   [
-    event_predicate_communication_layer_core_and_tag (comm_core_higher_layer_event_preds_reqres a);
+    event_predicate_and_tag_communication_layer_core (comm_core_higher_layer_event_preds_reqres a);
     mk_event_tag_and_pred (event_predicate_communication_layer_reqres higher_layer_resreq_preds)
   ]
 
@@ -252,3 +248,16 @@ val has_communication_layer_reqres_event_predicates:
 let has_communication_layer_reqres_event_predicates #invs #a #config higher_layer_resreq_preds =
   has_event_pred (event_predicate_communication_layer_core (comm_core_higher_layer_event_preds_reqres a)) /\
   has_event_pred (event_predicate_communication_layer_reqres higher_layer_resreq_preds)
+
+
+(*** All Communication Layer ReqRes Predicates ***)
+
+val has_communication_layer_reqres_predicates:
+  {|protocol_invariants|} ->
+  #a:Type0 -> {| comm_layer_reqres_config a |} ->
+  comm_reqres_higher_layer_event_preds a ->
+  prop
+let has_communication_layer_reqres_predicates #invs #a #config higher_layer_resreq_preds =
+  has_communication_layer_reqres_crypto_predicates a /\
+  has_communication_layer_reqres_event_predicates higher_layer_resreq_preds /\
+  has_communication_layer_reqres_state_predicate a
