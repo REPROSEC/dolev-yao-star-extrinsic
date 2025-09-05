@@ -1,7 +1,6 @@
 { "fstar_exe":"fstar.exe",
   "options":[
-    "--cache_dir",
-    "cache",
+    "--cache_dir", "cache",
     "--hint_dir", "hints",
     "--use_hints",
     "--record_hints",
