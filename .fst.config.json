@@ -1,5 +1,12 @@
 { "fstar_exe":"fstar.exe",
-  "options":["--cache_dir", "cache", "--hint_dir", "hints", "--use_hints", "--record_hints"],
+  "options":[
+    "--cache_dir",
+    "cache",
+    "--hint_dir", "hints",
+    "--use_hints",
+    "--record_hints",
+    "--z3version", "4.8.5"
+  ],
   "include_dirs":[
     "${COMPARSE_HOME}/src",
     "src/core",
