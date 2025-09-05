@@ -8,6 +8,7 @@ let
         "Makefile"
         "src(/.*)?"
         "examples(/[^/]*)?"
+        "test(/[^/]*)?"
       ]
     ;
     enableParallelBuilding = true;
@@ -27,6 +28,7 @@ let
         "Makefile"
         "src(/.*)?"
         "examples(/.*)?"
+        "test(/.*)?"
       ]
     ;
     enableParallelBuilding = true;
