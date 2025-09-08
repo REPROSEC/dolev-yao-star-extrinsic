@@ -59,6 +59,7 @@ val enable_reqres_comm_layer_lemmas:
 let enable_reqres_comm_layer_lemmas preds =
   normalize_term_spec (reqres_comm_layer_lemmas_enabled preds)
 
+#push-options "--z3rlimit 100"
 val send_request_proof:
   {|protocol_invariants|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
@@ -114,9 +115,10 @@ let send_request_proof #invs #a tr comm_keys_ids higher_layer_preds client serve
     assert(trace_invariant tr_out);
     ()
   )
+#pop-options
 
 
-#push-options "--ifuel 2 --z3rlimit 50"
+#push-options "--z3rlimit 100"
 val receive_request_proof:
   {|protocol_invariants|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
@@ -174,8 +176,8 @@ let receive_request_proof #invs #a tr comm_keys_ids higher_layer_preds server ms
       returns _
       with _. (
         let i = find_event_triggered_at_timestamp tr' client (req_send_event client) in
-        // Triggers event_triggered_at_implies_pred
-        assert(event_triggered_at tr' i client (req_send_event client))
+        assert(event_predicate_communication_layer_reqres higher_layer_preds (prefix tr' i) client (req_send_event client));
+        ()
       )
     and _. has_usage_publishable tr' req_msg.key (AeadKey comm_layer_aead_tag empty);
 
@@ -327,6 +329,7 @@ let decode_response_proof #cinvs #a #ps tr client server key msg_bytes =
   )
 #pop-options
 
+#push-options "--z3rlimit 25"
 val receive_response_proof:
   {|protocol_invariants|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
@@ -371,3 +374,4 @@ let receive_response_proof #invs #a tr higher_layer_preds client req_meta_data m
     assert(trace_invariant tr_out);
     ()
   )
+#pop-options

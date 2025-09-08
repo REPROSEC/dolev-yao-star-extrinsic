@@ -29,7 +29,6 @@ type dh_event =
   | Respond2: a:principal -> b:principal -> gx:bytes -> gy:bytes -> k:bytes -> dh_event
 
 %splice [ps_dh_event] (gen_parser (`dh_event))
-%splice [ps_dh_event_is_well_formed] (gen_is_well_formed_lemma (`dh_event))
 
 instance dh_event_instance: event dh_event = {
   tag = "DH.Event";

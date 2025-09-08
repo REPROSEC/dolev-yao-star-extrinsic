@@ -58,6 +58,7 @@ instance crypto_invariants_nsl : crypto_invariants = {
 
 (*** Proofs ***)
 
+#push-options "--z3rlimit 25"
 val compute_message1_proof:
   tr:trace ->
   alice:principal -> bob:principal -> pk_b:bytes -> n_a:bytes -> nonce:bytes ->
@@ -79,6 +80,7 @@ let compute_message1_proof tr alice bob pk_b n_a nonce =
   let msg = Msg1 {n_a; alice;} in
   serialize_wf_lemma message (is_knowable_by (long_term_key_label alice) tr) msg;
   serialize_wf_lemma message (is_knowable_by (long_term_key_label bob) tr) msg
+#pop-options
 
 // If bob successfully decrypt the first message,
 // then n_a is knownable both by alice (in the message) and bob (the principal)

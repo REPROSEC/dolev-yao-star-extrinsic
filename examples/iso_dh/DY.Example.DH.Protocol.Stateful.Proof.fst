@@ -7,7 +7,7 @@ open DY.Example.DH.Protocol.Total
 open DY.Example.DH.Protocol.Total.Proof
 open DY.Example.DH.Protocol.Stateful
 
-#set-options "--fuel 0 --ifuel 1 --z3rlimit 25  --z3cliopt 'smt.qi.eager_threshold=100'"
+#set-options "--fuel 0 --ifuel 0 --z3rlimit 25  --z3cliopt 'smt.qi.eager_threshold=100'"
 
 (*** Trace invariants ***)
 
@@ -18,6 +18,7 @@ let is_dh_shared_key tr alice bob k = exists si sj.
   get_label tr k == join (ephemeral_dh_key_label alice si) (ephemeral_dh_key_label bob sj) /\
   k `has_usage tr` AeadKey "DH.aead_key" empty
 
+#push-options "--ifuel 1"
 let dh_session_pred: local_state_predicate dh_session = {
   pred = (fun tr prin sess_id st ->
     match st with
@@ -59,9 +60,11 @@ let dh_session_pred: local_state_predicate dh_session = {
   pred_later = (fun tr1 tr2 prin sess_id st -> ());
   pred_knowable = (fun tr prin sess_id st -> ());
 }
+#pop-options
 
 /// The (local) event predicate.
 
+#push-options "--ifuel 1"
 let dh_event_pred: event_predicate dh_event =
   fun tr prin e ->
     match e with
@@ -84,6 +87,7 @@ let dh_event_pred: event_predicate dh_event =
       (is_dh_shared_key tr alice bob k /\
         event_triggered tr alice (Initiate2 alice bob gx gy k))
     )
+#pop-options
 
 /// List of all local state predicates.
 
@@ -169,6 +173,7 @@ let prepare_msg2_proof tr alice bob msg_id =
   )
   | (None, tr) -> ()
 
+#push-options "--z3rlimit 50"
 val send_msg2_proof:
   tr:trace ->
   global_sess_id:dh_global_sess_ids -> bob:principal -> bob_si:state_id ->
@@ -190,6 +195,7 @@ let send_msg2_proof tr global_sess_id bob bob_si =
     | (None, tr) -> ()
   )
   | _ -> ()
+#pop-options
 
 val prepare_msg3_proof:
   tr:trace ->
