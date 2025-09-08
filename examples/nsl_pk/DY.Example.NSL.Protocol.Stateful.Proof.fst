@@ -262,7 +262,7 @@ val prepare_msg4:
   Lemma
   (requires trace_invariant tr)
   (ensures (
-    let (opt_sess_id, tr_out) = prepare_msg4 global_sess_id bob sess_id msg_id tr in
+    let (_, tr_out) = prepare_msg4 global_sess_id bob sess_id msg_id tr in
     trace_invariant tr_out
   ))
 let prepare_msg4 tr global_sess_id bob sess_id msg_id =
@@ -296,7 +296,7 @@ let prepare_msg4 tr global_sess_id bob sess_id msg_id =
           // principal_corrupt tr alice \/ principal_corrupt tr bob
           // because we know the label of n_b (which is (nsl_nonce_label alice bob)).
           // It is useful in the "modulo corruption" part of the proof.
-          introduce (~((nsl_nonce_label alice bob) `can_flow tr` public)) ==> event_triggered tr alice (Initiate2 alice bob n_a n_b) with _. (
+          introduce (~(is_corrupt tr (nsl_nonce_label alice bob))) ==> event_triggered tr alice (Initiate2 alice bob n_a n_b) with _. (
             assert(exists alice' n_a'. get_label tr n_b `can_flow tr` (nsl_nonce_label alice' bob) /\ event_triggered tr alice' (Initiate2 alice' bob n_a' n_b));
             eliminate exists alice' n_a'. get_label tr n_b `can_flow tr` (nsl_nonce_label alice' bob) /\ event_triggered tr alice' (Initiate2 alice' bob n_a' n_b)
             returns _
