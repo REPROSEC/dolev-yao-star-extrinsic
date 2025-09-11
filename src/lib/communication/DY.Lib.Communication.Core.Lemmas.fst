@@ -440,6 +440,7 @@ let receive_authenticated_proof #invs #a tr higher_layer_preds comm_keys_ids rec
     ()
     )
   )
+#pop-options
 
 
 (**** Confidential and Authenticates Send and Receive Lemmas ****)

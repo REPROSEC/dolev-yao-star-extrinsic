@@ -152,7 +152,11 @@ val prepare_msg1_proof:
   // this lemma.
   [SMTPat (trace_invariant tr); SMTPat (prepare_msg1 alice bob tr)]
 let prepare_msg1_proof tr alice bob =
-  reveal_opaque (`%prepare_msg1) (prepare_msg1 alice bob tr)
+  reveal_opaque (`%prepare_msg1) (prepare_msg1 alice bob tr);
+  let (alice_si, _) = new_session_id alice tr in
+  DY.Core.Trace.Modifies.traceful_is_most_recent_state_for_later alice alice_si None
+    (let* x = mk_rand (DhKey "DH.dh_key" empty) (ephemeral_dh_key_label alice alice_si) 32 in trigger_event alice (Initiate1 alice bob x)) tr;
+  ()
 
 val send_msg1_proof:
   tr:trace ->

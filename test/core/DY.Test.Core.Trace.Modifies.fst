@@ -20,6 +20,7 @@ let broad_unmodified_test prin =
   let* _ = set_state prin new_sid new_rand in
   return new_sid
 
+#push-options "--fuel 3 --z3rlimit 50"
 val broad_unmodified_proof :
   prin:principal -> sid:state_id ->
   content_opt:option bytes -> tr_in:trace ->
@@ -38,6 +39,7 @@ let broad_unmodified_proof prin sid content_opt tr_in =
               is_most_recent_state_for prin sid content_opt tr_out
     with _. traceful_is_most_recent_state_for_later prin sid content_opt (broad_unmodified_test prin) tr_in
   end
+#pop-options
 
 /// This test, similar to the previous, validates the modifies analysis, particularly
 /// ensuring that the traceful option bind with *? works as well.
@@ -52,6 +54,7 @@ let optional_unmodified_test prin =
   let* _ = get_state prin new_sid in
   return (Some new_sid)
 
+#push-options "--fuel 3 --z3rlimit 50"
 val optional_unmodified_proof :
   prin:principal -> sid:state_id ->
   content_opt:option bytes -> tr_in:trace ->
@@ -70,6 +73,7 @@ let optional_unmodified_proof prin sid content_opt tr_in =
               is_most_recent_state_for prin sid content_opt tr_out
     with _. traceful_is_most_recent_state_for_later prin sid content_opt (optional_unmodified_test prin) tr_in
   end
+#pop-options
 
 /// The following tests ensure that the automation works despite branching, first
 /// within a pure value, and then in the control flow.
@@ -129,7 +133,7 @@ let branch_unmodified_test_2 prin =
   else
   return (new_sid1, new_sid2)
 
-#push-options "--z3cliopt 'smt.qi.eager_threshold=100'"
+#push-options "--fuel 4 --ifuel 2 --z3rlimit 200 --z3cliopt 'smt.qi.eager_threshold=100'"
 val branch_unmodified_proof_2 :
   prin:principal -> sid:state_id ->
   content_opt:option bytes -> tr_in:trace ->
@@ -148,4 +152,4 @@ let branch_unmodified_proof_2 prin sid content_opt tr_in =
               is_most_recent_state_for prin sid content_opt tr_out
     with _. traceful_is_most_recent_state_for_later prin sid content_opt (branch_unmodified_test_2 prin) tr_in
   end
- #pop-options
+#pop-options
