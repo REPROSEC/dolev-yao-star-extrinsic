@@ -91,6 +91,7 @@ let initialize_communication_reqres_proof tr a sender receiver =
 #pop-options
 
 
+#push-options "--z3rlimit 100"
 val send_request_proof:
   {|protocol_invariants|} ->
   #a:Type0 -> {|comm_layer_reqres_config a|} ->
@@ -144,9 +145,10 @@ let send_request_proof #invs #a tr comm_keys_ids higher_layer_preds client serve
     assert(trace_invariant tr_out);
     ()
   )
+#pop-options
 
 
-#push-options "--z3rlimit 50"
+#push-options "--z3rlimit 100"
 val receive_request_proof:
   {|protocol_invariants|} ->
   #a:Type -> {|comm_layer_reqres_config a|} ->
@@ -203,8 +205,8 @@ let receive_request_proof #invs #a #config tr comm_keys_ids higher_layer_preds s
       returns _
       with _. (
         let i = find_event_triggered_at_timestamp tr' client (req_send_event client) in
-        // Triggers event_triggered_at_implies_pred
-        assert(event_triggered_at tr' i client (req_send_event client))
+        assert(event_predicate_communication_layer_reqres higher_layer_preds (prefix tr' i) client (req_send_event client));
+        ()
       )
     and _. (has_usage_publishable tr' req_msg.key (AeadKey (comm_layer_aead_tag a) empty);
       parse_wf_lemma a (is_publishable tr') req_msg.request;
@@ -356,6 +358,7 @@ let decode_response_proof #cinvs #a tr client server key msg_bytes =
   )
 #pop-options
 
+#push-options "--z3rlimit 25"
 val receive_response_proof:
   {|protocol_invariants|} ->
   #a:Type -> {|comm_layer_reqres_config a|} ->
@@ -398,3 +401,4 @@ let receive_response_proof #invs #a tr higher_layer_preds client req_meta_data m
     assert(trace_invariant tr_out);
     ()
   )
+#pop-options

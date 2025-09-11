@@ -1,6 +1,5 @@
 DY_HOME 	?= .
 FSTAR_EXE 	?= $(shell which fstar.exe)
-Z3 		?= $(shell which z3)
 COMPARSE_HOME 	?= $(DY_HOME)/../comparse
 
 INNER_SOURCE_DIRS = core lib lib/comparse lib/crypto lib/event lib/hpke lib/label lib/state lib/utils lib/communication

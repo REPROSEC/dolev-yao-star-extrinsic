@@ -2407,7 +2407,12 @@ val bytes_well_formed_dh:
 let bytes_well_formed_dh tr sk pk =
   reveal_opaque (`%dh_pk) (dh_pk);
   reveal_opaque (`%dh) (dh);
-  normalize_term_spec bytes_well_formed
+  normalize_term_spec bytes_well_formed;
+  match pk with
+  | DhPub sk2 ->
+    if sk `DY.Core.Internal.Ord.is_less_than` sk2 then ()
+    else ()
+  | _ -> ()
 
 /// User lemma (dh_pk preserves bytes invariant)
 
@@ -2480,7 +2485,12 @@ val bytes_invariant_dh:
 let bytes_invariant_dh tr sk sk_usg pk =
   reveal_opaque (`%dh_pk) (dh_pk);
   reveal_opaque (`%dh) (dh);
-  normalize_term_spec bytes_invariant
+  normalize_term_spec bytes_invariant;
+  match pk with
+  | DhPub sk2 ->
+    if sk `DY.Core.Internal.Ord.is_less_than` sk2 then ()
+    else ()
+  | _ -> ()
 
 /// User lemma (dh bytes label)
 
@@ -2933,11 +2943,12 @@ let kem_encap_preserves_publishability #ci tr pk nonce =
   normalize_term_spec kem_encap;
   normalize_term_spec bytes_invariant;
   normalize_term_spec get_label;
-  assert(is_publishable tr (KemSecretShared nonce))
+  assert(bytes_invariant tr (KemSecretShared nonce) == bytes_invariant tr nonce)
 #pop-options
 
 /// Lemma for attacker knowledge theorem.
 
+#push-options "--z3rlimit 25"
 val kem_decap_preserves_publishability:
   {|crypto_invariants|} -> tr:trace ->
   sk:bytes -> encap:bytes ->
@@ -2963,6 +2974,7 @@ let kem_decap_preserves_publishability #ci tr sk encap =
     )
     else ()
   | _ -> ()
+#pop-options
 
 /// User lemma (kem_pk well-formedness)
 

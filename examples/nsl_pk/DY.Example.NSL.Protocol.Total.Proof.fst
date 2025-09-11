@@ -58,6 +58,7 @@ instance crypto_invariants_nsl : crypto_invariants = {
 
 (*** Proofs ***)
 
+#push-options "--z3rlimit 25"
 val compute_message1_proof:
   tr:trace ->
   alice:principal -> bob:principal -> pk_b:bytes -> n_a:bytes -> nonce:bytes ->
@@ -76,9 +77,11 @@ val compute_message1_proof:
   )
   (ensures is_publishable tr (compute_message1 alice bob pk_b n_a nonce))
 let compute_message1_proof tr alice bob pk_b n_a nonce =
+  reveal_opaque (`%compute_message1) (compute_message1 alice bob pk_b n_a nonce);
   let msg = Msg1 {n_a; alice;} in
   serialize_wf_lemma message (is_knowable_by (long_term_key_label alice) tr) msg;
   serialize_wf_lemma message (is_knowable_by (long_term_key_label bob) tr) msg
+#pop-options
 
 // If bob successfully decrypt the first message,
 // then n_a is knownable both by alice (in the message) and bob (the principal)
@@ -104,6 +107,7 @@ val decode_message1_proof:
     )
   ))
 let decode_message1_proof tr bob msg_cipher sk_b =
+  reveal_opaque (`%decode_message1) (decode_message1 bob msg_cipher sk_b);
   match decode_message1 bob msg_cipher sk_b with
   | None -> ()
   | Some msg1 ->
@@ -134,6 +138,7 @@ val compute_message2_proof:
     is_publishable tr (compute_message2 bob msg1 pk_a n_b nonce)
   )
 let compute_message2_proof tr bob msg1 pk_a n_b nonce =
+  reveal_opaque (`%compute_message2) (compute_message2 bob msg1 pk_a n_b nonce);
   let msg = Msg2 {n_a = msg1.n_a;  n_b; bob;} in
   serialize_wf_lemma message (is_knowable_by (nsl_nonce_label msg1.alice bob) tr) msg
 
@@ -167,6 +172,7 @@ val decode_message2_proof:
     )
   ))
 let decode_message2_proof tr alice bob msg_cipher sk_a n_a =
+  reveal_opaque (`%decode_message2) (decode_message2 alice bob msg_cipher sk_a n_a);
   match decode_message2 alice bob msg_cipher sk_a n_a with
   | None -> ()
   | Some msg2 -> (
@@ -196,6 +202,7 @@ val compute_message3_proof:
     is_publishable tr (compute_message3 alice bob pk_b n_b nonce)
   )
 let compute_message3_proof tr alice bob pk_b n_b nonce =
+  reveal_opaque (`%compute_message3) (compute_message3 alice bob pk_b n_b nonce);
   assert(exists alice n_a. event_triggered tr alice (Initiate2 alice bob n_a n_b));
   let msg = Msg3 {n_b;} in
   serialize_wf_lemma message (is_knowable_by (long_term_key_label alice) tr) msg;
@@ -225,12 +232,13 @@ val decode_message3_proof:
     | Some msg3 -> (
       (is_corrupt tr (nsl_nonce_label alice bob)) \/ (
         (exists alice n_a.
-          get_label tr msg3.n_b `can_flow tr` (nsl_nonce_label alice bob) /\
+          get_label tr n_b `can_flow tr` (nsl_nonce_label alice bob) /\
           event_triggered tr alice (Initiate2 alice bob n_a n_b))
       )
     )
   ))
 let decode_message3_proof tr alice bob msg_cipher sk_b n_b =
+  reveal_opaque (`%decode_message3) (decode_message3 alice bob msg_cipher sk_b n_b);
   match decode_message3 alice bob msg_cipher sk_b n_b with
   | None -> ()
   | Some msg3 -> (
