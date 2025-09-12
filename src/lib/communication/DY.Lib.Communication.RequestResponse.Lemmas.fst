@@ -206,6 +206,7 @@ let send_request_proof #invs #a tr comm_keys_ids higher_layer_preds client serve
     assert(trace_invariant tr_out);
     ()
   )
+#pop-options
 
 
 #push-options "--z3rlimit 200"
@@ -503,3 +504,4 @@ let receive_response_proof #invs #a tr higher_layer_preds client req_meta_data m
     assert(trace_invariant tr_out);
     ()
   )
+#pop-options
