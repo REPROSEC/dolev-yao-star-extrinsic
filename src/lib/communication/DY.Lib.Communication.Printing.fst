@@ -26,8 +26,9 @@ let comm_message_to_string #core_type #core_config #reqres_type #reqres_config m
     )
     | Some (ResponseMessage _) -> Some "Error: ResponseMessage cannot be inside a PkeEnc encryption"
     | None -> (
-      let? b_parsed = parse core_type b in
-      Some (msg_to_string b_parsed)
+      let? b_parsed = parse core_type msg in
+      Some (Printf.sprintf "pk_enc (pk = %s, msg = (%s))"
+              (bytes_to_string pk) (msg_to_string b_parsed))
     )
   )
   | _ -> (

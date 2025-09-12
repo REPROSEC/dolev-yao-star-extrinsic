@@ -35,6 +35,10 @@ type comm_meta_data (a:Type) {|config:comm_layer_reqres_config a|} = {
 %splice [ps_comm_meta_data] (gen_parser (`comm_meta_data))
 %splice [ps_comm_meta_data_is_well_formed] (gen_is_well_formed_lemma (`comm_meta_data))
 
+[@@"opaque_to_smt"]
+val get_response_label: tr:trace -> #a:Type0 -> {|comm_layer_reqres_config a|} -> comm_meta_data a -> label
+let get_response_label tr #a #ps req_meta_data = get_label #default_crypto_usages tr req_meta_data.key
+
 
 (*** States ***)
 
@@ -147,26 +151,26 @@ let receive_request #a comm_keys_ids server msg_id =
 val mk_comm_layer_response_nonce: #a:Type -> {|comm_layer_reqres_config a|} -> comm_meta_data a -> usage -> traceful (option bytes)
 let mk_comm_layer_response_nonce #a req_meta_data usg =
   let* tr = get_trace in
-  let* nonce = mk_rand usg (get_label #default_crypto_usages tr req_meta_data.key) 32 in
+  let* nonce = mk_rand usg (get_response_label tr req_meta_data) 32 in
   return (Some nonce)
 
 [@@ "opaque_to_smt"]
 val mk_comm_layer_response_nonce_labeled: #a:Type -> {|comm_layer_reqres_config a|} -> comm_meta_data a -> usage -> label -> traceful (option bytes)
 let mk_comm_layer_response_nonce_labeled #a req_meta_data usg lab =
   let* tr = get_trace in
-  let lab_join = join lab (get_label #default_crypto_usages tr req_meta_data.key) in
+  let lab_join = join lab (get_response_label tr req_meta_data) in
   let* nonce = mk_rand usg lab_join 32 in
   return (Some nonce)
 
 [@@ "opaque_to_smt"]
 val compute_response_message:
   #a:Type -> {|comm_layer_reqres_config a|} ->
-  principal -> bytes -> bytes -> a -> bytes
-let compute_response_message #a server key nonce response =
+  principal -> comm_meta_data a -> bytes -> a -> bytes
+let compute_response_message #a server req_meta_data nonce response =
   let res_bytes = serialize a response in
   let ad:authenticated_data = {server} in
   let ad_bytes = serialize authenticated_data ad in
-  let ciphertext = aead_enc key nonce res_bytes ad_bytes in
+  let ciphertext = aead_enc req_meta_data.key nonce res_bytes ad_bytes in
   serialize comm_message_t (ResponseMessage {nonce; ciphertext})
 
 [@@ "opaque_to_smt"]
@@ -181,7 +185,7 @@ let send_response #a server req_meta_data response =
   guard_tr (srr.request = req_meta_data.request);*?
   trigger_event server (CommServerSendResponse server srr.request response <: communication_reqres_event a);*
   let* nonce = mk_rand NoUsage public 32 in
-  let resp_msg = compute_response_message server req_meta_data.key nonce response in
+  let resp_msg = compute_response_message server req_meta_data nonce response in
   let* msg_id = send_msg resp_msg in
   return (Some msg_id)
 
