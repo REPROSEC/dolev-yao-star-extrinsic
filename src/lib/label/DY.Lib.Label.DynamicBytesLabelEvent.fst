@@ -27,6 +27,7 @@ let default_reveal_event_predicate (#crypto_invs:crypto_invariants) : reveal_to_
   fun tr prin a ->
     exists (b:bytes).
       (
+        // bytes_well_formed tr b /\ // need to think if this is required? feels somewhat natural
         (
           is_knowable_by (principal_label prin) tr b \/
           is_publishable tr b \/
