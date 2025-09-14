@@ -7,8 +7,10 @@ INNER_SOURCE_DIRS = core lib lib/comparse lib/crypto lib/event lib/hpke lib/labe
 SOURCE_DIRS = $(addprefix $(DY_HOME)/src/, $(INNER_SOURCE_DIRS))
 INNER_EXAMPLE_DIRS = nsl_pk iso_dh
 EXAMPLE_DIRS ?= $(addprefix $(DY_HOME)/examples/, $(INNER_EXAMPLE_DIRS))
+INNER_TEST_DIRS = core
+TEST_DIRS = $(addprefix $(DY_HOME)/test/, $(INNER_TEST_DIRS))
 
-INCLUDE_DIRS = $(SOURCE_DIRS) $(EXAMPLE_DIRS) $(COMPARSE_HOME)/src
+INCLUDE_DIRS = $(SOURCE_DIRS) $(TEST_DIRS) $(EXAMPLE_DIRS) $(COMPARSE_HOME)/src
 FSTAR_INCLUDE_DIRS = $(addprefix --include , $(INCLUDE_DIRS))
 
 ADMIT ?=
@@ -22,7 +24,7 @@ FSTAR_EXTRACT = --extract '-* +DY +Comparse'
 # - (Warning 242) Definitions of inner let-rec ... and its enclosing top-level letbinding are not encoded to the solver, you will only be able to reason with their types
 # - (Warning 335) Interface ... is admitted without an implementation 
 
-FSTAR_FLAGS = $(FSTAR_INCLUDE_DIRS) --cache_checked_modules --already_cached '+Prims +FStar' --warn_error '@0..1000' --warn_error '+242-335' --record_hints --hint_dir $(DY_HOME)/hints --cache_dir $(DY_HOME)/cache --odir $(DY_HOME)/obj --cmi
+FSTAR_FLAGS = $(FSTAR_INCLUDE_DIRS) --cache_checked_modules --already_cached '+Prims +FStar' --warn_error '@0..1000' --warn_error '+242-335' --record_hints --hint_dir $(DY_HOME)/hints --cache_dir $(DY_HOME)/cache --odir $(DY_HOME)/obj --cmi --z3version 4.8.5
 
 .PHONY: all clean
 
@@ -37,6 +39,8 @@ clean:
 FSTAR_ROOTS = \
   $(wildcard $(addsuffix /*.fsti,$(SOURCE_DIRS))) \
   $(wildcard $(addsuffix /*.fst,$(SOURCE_DIRS))) \
+  $(wildcard $(addsuffix /*.fsti,$(TEST_DIRS))) \
+  $(wildcard $(addsuffix /*.fst,$(TEST_DIRS))) \
   $(wildcard $(addsuffix /*.fsti,$(EXAMPLE_DIRS))) \
   $(wildcard $(addsuffix /*.fst,$(EXAMPLE_DIRS)))
 

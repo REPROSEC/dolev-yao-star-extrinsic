@@ -184,6 +184,14 @@ let trigger_event_trace_invariant #invs #a #ev epred prin e tr =
   reveal_opaque (`%trigger_event) (trigger_event #a);
   local_eq_global_lemma split_event_pred_params event_pred ev.tag (compile_event_pred epred) (tr, prin, ev.tag, serialize _ e) ev.tag (tr, prin, serialize _ e)
 
+val traceful_modifies_trigger_event:
+  #a:Type -> {|ev:event a|} ->
+  prin:principal -> e:a -> tr:trace ->
+  Lemma (traceful_modifies (trigger_event prin e) tr == FStar.Set.empty)
+  [SMTPat (traceful_modifies (trigger_event #a #ev prin e) tr)]
+let traceful_modifies_trigger_event #a #ev prin e tr =
+  reveal_opaque (`%trigger_event) (trigger_event #a)
+
 
 val event_triggered_at_on_trace:
   #a:Type -> {|ev:event a|} ->
