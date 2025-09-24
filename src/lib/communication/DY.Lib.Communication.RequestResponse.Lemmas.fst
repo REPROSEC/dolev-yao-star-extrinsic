@@ -321,6 +321,8 @@ val mk_comm_layer_response_nonce_proof:
       get_label tr_out nonce `can_flow tr_out` get_label tr_out req_meta_data.key
     )
   ))
+  [SMTPat (trace_invariant tr);
+  SMTPat (mk_comm_layer_response_nonce req_meta_data usg tr)]
 let mk_comm_layer_response_nonce_proof #invs #a tr req_meta_data usg =
   reveal_opaque (`%mk_comm_layer_response_nonce) (mk_comm_layer_response_nonce #a);
   reveal_opaque (`%get_response_label) (get_response_label);
@@ -347,6 +349,8 @@ val mk_comm_layer_response_nonce_labeled_proof:
       get_label tr_out nonce `can_flow tr_out` get_label tr_out req_meta_data.key
     )
   ))
+  [SMTPat (trace_invariant tr);
+  SMTPat (mk_comm_layer_response_nonce_labeled req_meta_data usg prin tr)]
 let mk_comm_layer_response_nonce_labeled_proof #invs #a tr req_meta_data usg prin =
   reveal_opaque (`%mk_comm_layer_response_nonce_labeled) (mk_comm_layer_response_nonce_labeled #a);
   reveal_opaque (`%get_response_label) (get_response_label);
