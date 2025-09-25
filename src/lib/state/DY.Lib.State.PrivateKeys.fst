@@ -102,13 +102,13 @@ let private_keys_pred #cinvs = {
 }
 #pop-options
 
-val private_keys_tag_and_invariant: {|crypto_invariants|} -> dtuple2 string local_bytes_state_predicate
-let private_keys_tag_and_invariant #ci = mk_map_state_tag_and_pred private_keys_pred
+val private_keys_tag_and_preds: {|crypto_invariants|} -> dtuple2 string local_bytes_state_predicates
+let private_keys_tag_and_preds #ci = mk_map_state_tag_and_preds private_keys_pred
 
 unfold
-val has_private_keys_invariant: {|protocol_invariants|} -> prop
-let has_private_keys_invariant #invs =
-  has_local_bytes_state_predicate private_keys_tag_and_invariant
+val has_private_keys_preds: {|protocol_invariants|} -> prop
+let has_private_keys_preds #invs =
+  has_local_bytes_state_predicates private_keys_tag_and_preds
 
 (*** Private Keys API ***)
 
@@ -144,14 +144,14 @@ val initialize_private_keys_invariant:
   Lemma
   (requires
     trace_invariant tr /\
-    has_private_keys_invariant
+    has_private_keys_preds
   )
   (ensures (
     let (_, tr_out) = initialize_private_keys prin tr in
     trace_invariant tr_out
   ))
   [SMTPat (initialize_private_keys prin tr);
-   SMTPat (has_private_keys_invariant);
+   SMTPat (has_private_keys_preds);
    SMTPat (trace_invariant tr)]
 let initialize_private_keys_invariant #invs prin tr =
   reveal_opaque (`%initialize_private_keys) (initialize_private_keys)
@@ -162,14 +162,14 @@ val generate_private_key_invariant:
   Lemma
   (requires
     trace_invariant tr /\
-    has_private_keys_invariant
+    has_private_keys_preds
   )
   (ensures (
     let (_, tr_out) = generate_private_key prin sess_id sk_type tr in
     trace_invariant tr_out
   ))
   [SMTPat (generate_private_key prin sess_id sk_type tr);
-   SMTPat (has_private_keys_invariant);
+   SMTPat (has_private_keys_preds);
    SMTPat (trace_invariant tr)]
 let generate_private_key_invariant #invs prin sess_id sk_type tr =
   reveal_opaque (`%generate_private_key) (generate_private_key)
@@ -192,7 +192,7 @@ val get_private_key_invariant:
   Lemma
   (requires
     trace_invariant tr /\
-    has_private_keys_invariant
+    has_private_keys_preds
   )
   (ensures (
     let (opt_private_key, tr_out) = get_private_key prin sess_id pk_type tr in
@@ -202,7 +202,7 @@ val get_private_key_invariant:
         is_private_key_for tr private_key pk_type prin
   ))
   [SMTPat (get_private_key prin sess_id pk_type tr);
-   SMTPat (has_private_keys_invariant);
+   SMTPat (has_private_keys_preds);
    SMTPat (trace_invariant tr)]
 let get_private_key_invariant #invs prin sess_id pk_type tr =
   reveal_opaque (`%get_private_key) (get_private_key)
@@ -226,7 +226,7 @@ val compute_public_key_invariant:
   Lemma
   (requires
     trace_invariant tr /\
-    has_private_keys_invariant
+    has_private_keys_preds
   )
   (ensures (
     let (opt_private_key, tr_out) = compute_public_key prin sess_id pk_type tr in
@@ -236,7 +236,7 @@ val compute_public_key_invariant:
         is_public_key_for tr private_key pk_type prin
   ))
   [SMTPat (compute_public_key prin sess_id pk_type tr);
-   SMTPat (has_private_keys_invariant);
+   SMTPat (has_private_keys_preds);
    SMTPat (trace_invariant tr)]
 let compute_public_key_invariant #invs prin sess_id pk_type tr =
   reveal_opaque (`%compute_public_key) (compute_public_key)

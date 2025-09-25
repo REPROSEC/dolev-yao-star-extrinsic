@@ -47,6 +47,11 @@ let state_predicate_nsl: local_state_predicate nsl_session = {
   pred_knowable = (fun tr prin sess_id st -> ());
 }
 
+let state_predicates_nsl: local_state_predicates nsl_session = {
+  default_local_state_preds nsl_session with
+  local_state_pred = state_predicate_nsl
+}
+
 /// The (local) event predicate.
 
 let event_predicate_nsl: event_predicate nsl_event =
@@ -80,9 +85,9 @@ let event_predicate_nsl: event_predicate nsl_event =
 /// List of all local state predicates.
 
 let all_sessions = [
-  pki_tag_and_invariant;
-  private_keys_tag_and_invariant;
-  mk_local_state_tag_and_pred state_predicate_nsl;
+  pki_tag_and_preds;
+  private_keys_tag_and_preds;
+  mk_local_state_tag_and_preds state_predicates_nsl;
 ]
 
 /// List of all local event predicates.
@@ -94,7 +99,7 @@ let all_events = [
 /// Create the global trace invariants.
 
 let trace_invariants_nsl: trace_invariants = {
-  state_pred = mk_state_pred all_sessions;
+  state_preds = mk_state_preds all_sessions;
   event_pred = mk_event_pred all_events;
 }
 
@@ -105,7 +110,7 @@ instance protocol_invariants_nsl: protocol_invariants = {
 
 /// Lemmas that the global state predicate contains all the local ones
 
-let _ = do_split_boilerplate mk_state_pred_correct all_sessions
+let _ = do_split_boilerplate mk_state_preds_correct all_sessions
 let _ = do_split_boilerplate mk_event_pred_correct all_events
 
 (*** Proofs ***)

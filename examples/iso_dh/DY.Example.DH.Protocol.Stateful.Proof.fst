@@ -60,6 +60,11 @@ let dh_session_pred: local_state_predicate dh_session = {
   pred_knowable = (fun tr prin sess_id st -> ());
 }
 
+let dh_session_preds: local_state_predicates dh_session = {
+  default_local_state_preds dh_session with
+  local_state_pred = dh_session_pred
+}
+
 /// The (local) event predicate.
 
 let dh_event_pred: event_predicate dh_event =
@@ -88,9 +93,9 @@ let dh_event_pred: event_predicate dh_event =
 /// List of all local state predicates.
 
 let all_sessions = [
-  pki_tag_and_invariant;
-  private_keys_tag_and_invariant;
-  mk_local_state_tag_and_pred dh_session_pred;
+  pki_tag_and_preds;
+  private_keys_tag_and_preds;
+  mk_local_state_tag_and_preds dh_session_preds;
 ]
 
 /// List of all local event predicates.
@@ -102,7 +107,7 @@ let all_events = [
 /// Create the global trace invariants.
 
 let dh_trace_invs: trace_invariants = {
-  state_pred = mk_state_pred all_sessions;
+  state_preds = mk_state_preds all_sessions;
   event_pred = mk_event_pred all_events;
 }
 
@@ -113,7 +118,7 @@ instance dh_protocol_invs: protocol_invariants = {
 
 /// Lemmas that the global state predicate contains all the local ones
 
-let _ = do_split_boilerplate mk_state_pred_correct all_sessions
+let _ = do_split_boilerplate mk_state_preds_correct all_sessions
 let _ = do_split_boilerplate mk_event_pred_correct all_events
 
 (*** Proofs ****)
@@ -133,7 +138,11 @@ val prepare_msg1_proof:
   // and the function prepare_msg1 is called then instantiate
   // this lemma.
   [SMTPat (trace_invariant tr); SMTPat (prepare_msg1 alice bob tr)]
-let prepare_msg1_proof tr alice bob = ()
+let prepare_msg1_proof tr alice bob =
+  let (alice_si, _) = new_session_id alice tr in
+  DY.Core.Trace.Modifies.traceful_is_most_recent_state_for_later alice alice_si None
+    (let* x = mk_rand (DhKey "DH.dh_key" empty) (ephemeral_dh_key_label alice alice_si) 32 in trigger_event alice (Initiate1 alice bob x)) tr;
+  ()
 
 val send_msg1_proof:
   tr:trace ->
@@ -165,7 +174,15 @@ val prepare_msg2_proof:
 let prepare_msg2_proof tr alice bob msg_id =
   match recv_msg msg_id tr with
   | (Some msg, tr) -> (
-    decode_message1_proof tr msg
+    decode_message1_proof tr msg;
+    match decode_message1 msg with
+    | Some msg1 -> (
+      let (bob_si, _) = new_session_id bob tr in
+      DY.Core.Trace.Modifies.traceful_is_most_recent_state_for_later bob bob_si None
+        (let* y = mk_rand (DhKey "DH.dh_key" empty) (ephemeral_dh_key_label bob bob_si) 32 in trigger_event bob (Respond1 alice bob msg1.gx (dh_pk y) y)) tr;
+      ()
+    )
+    | None -> ()
   )
   | (None, tr) -> ()
 

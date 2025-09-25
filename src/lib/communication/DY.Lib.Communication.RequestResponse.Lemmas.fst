@@ -69,7 +69,7 @@ val send_request_proof:
   Lemma
   (requires
     trace_invariant tr /\
-    has_pki_invariant /\
+    has_pki_preds /\
     has_communication_layer_crypto_predicates /\
     has_communication_layer_reqres_event_predicates request_response_event_preconditions higher_layer_preds /\
     has_communication_layer_state_predicates /\
@@ -127,8 +127,8 @@ val receive_request_proof:
   Lemma
   (requires
     trace_invariant tr /\
-    has_private_keys_invariant /\
-    has_pki_invariant /\
+    has_private_keys_preds /\
+    has_pki_preds /\
     has_communication_layer_reqres_crypto_predicates /\
     has_communication_layer_reqres_event_predicates request_response_event_preconditions higher_layer_preds /\
     has_communication_layer_state_predicates
