@@ -33,7 +33,7 @@ val server_authentication:
     event_triggered_at tr i client (CommClientReceiveResponse client server  response key <: communication_reqres_event a)
   )
   (ensures
-    (exists request. event_triggered (prefix tr i) server (CommServerSendResponse server request response <: communication_reqres_event a)) \/
+    (exists request. event_triggered (prefix tr i) server (CommServerSendResponse server request response key <: communication_reqres_event a)) \/
     is_corrupt (prefix tr i) (principal_label client) \/
     is_corrupt (prefix tr i) (principal_label server)
   )
@@ -64,3 +64,46 @@ val key_secrecy_client:
 let key_secrecy_client #tag #invs tr client server key request response =
   attacker_only_knows_publishable_values tr key;
   ()
+
+(*** Properties ***)
+
+val request_message_properties:
+  {|protocol_invariants|} ->
+  #a:Type -> {|comm_layer_reqres_config a|} ->
+  tr:trace -> i:timestamp ->
+  higher_layer_preds:comm_reqres_higher_layer_event_preds a ->
+  server:principal -> key:bytes -> request:a ->
+  Lemma
+  (requires
+    trace_invariant tr /\
+    has_communication_layer_reqres_predicates higher_layer_preds /\
+    event_triggered_at tr i server (CommServerReceiveRequest server request key <: communication_reqres_event a)
+  )
+  (ensures
+    is_well_formed a (is_knowable_by (principal_label server) (prefix tr i)) request /\
+    (exists client. higher_layer_preds.send_request (prefix tr i) client server request (get_label (prefix tr i) key)) \/
+    is_publishable (prefix tr i) key
+  )
+let request_message_properties #invs #a tr i higher_layer_preds server key request =
+  let send_event client:communication_reqres_event a = CommClientSendRequest client server request key in
+  let tr_i = prefix tr i in
+  let key_label = get_label tr_i key in
+  assert(is_well_formed a (is_knowable_by (principal_label server) tr_i) request);
+  assert(exists client. event_triggered tr_i client (send_event client) \/
+            is_publishable tr_i key);
+  eliminate (exists client. event_triggered tr_i client (send_event client)) \/
+            is_publishable tr_i key
+  returns
+    is_well_formed a (is_knowable_by (principal_label server) tr_i) request /\
+    (exists client. higher_layer_preds.send_request (prefix tr i) client server request key_label) \/
+    is_publishable tr_i key
+  with _. eliminate exists client. event_triggered tr_i client (send_event client)
+    returns _
+    with _. (
+      let j = find_event_triggered_at_timestamp tr client (send_event client) in
+      find_event_triggered_at_timestamp_later tr_i tr client (send_event client);
+
+      higher_layer_preds.send_request_later (prefix tr j) tr_i client server request key_label;
+      ()
+    )
+  and _. ()

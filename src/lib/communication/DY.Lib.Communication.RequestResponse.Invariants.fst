@@ -33,7 +33,7 @@ let aead_crypto_predicate_communication_layer_reqres #cusages a #config = {
         match parse a msg with
         | None -> False
         | Some response ->
-          event_triggered tr server (CommServerSendResponse server request response <: communication_reqres_event a)
+          event_triggered tr server (CommServerSendResponse server request response key <: communication_reqres_event a)
       )
     )
   );
@@ -155,27 +155,27 @@ type comm_reqres_higher_layer_event_preds (a:Type) {| comm_layer_reqres_config a
       send_request tr2 client server request key_label
     )
   ;
-  send_response: tr:trace -> server:principal -> request:a -> response:a -> prop;
+  send_response: tr:trace -> server:principal -> request:a -> response:a -> key_label:label -> prop;
   send_response_later:
     tr1:trace -> tr2:trace ->
-    server:principal -> request:a -> response:a ->
+    server:principal -> request:a -> response:a -> key_label:label ->
     Lemma
     (requires
-      send_response tr1 server request response /\
+      send_response tr1 server request response key_label /\
       is_well_formed a (bytes_well_formed tr1) request /\
       is_well_formed a (bytes_well_formed tr1) response /\
       tr1 <$ tr2
     )
     (ensures
-      send_response tr2 server request response
+      send_response tr2 server request response key_label
     )
 }
 
 let default_comm_reqres_higher_layer_event_preds (a:Type) {| comm_layer_reqres_config a |} : comm_reqres_higher_layer_event_preds a = {
   send_request = (fun tr client server request key_label -> True);
   send_request_later = (fun tr1 tr2 client server request key_label -> ());
-  send_response = (fun tr server request response -> True);
-  send_response_later = (fun tr1 tr2 server request response -> ())
+  send_response = (fun tr server request response key_label -> True);
+  send_response_later = (fun tr1 tr2 server request response key_label -> ())
 }
 
 #push-options "--ifuel 1 --fuel 0"
@@ -201,9 +201,9 @@ let event_predicate_communication_layer_reqres
         is_publishable tr key
       )
     )
-    | CommServerSendResponse server request response -> higher_layer_resreq_preds.send_response tr server request response
+    | CommServerSendResponse server request response key -> higher_layer_resreq_preds.send_response tr server request response (get_label tr key)
     | CommClientReceiveResponse client server response key -> (
-      (exists request. event_triggered tr server (CommServerSendResponse server request response <: communication_reqres_event a)) \/
+      (exists request. event_triggered tr server (CommServerSendResponse server request response key <: communication_reqres_event a)) \/
       is_corrupt tr (principal_label client) \/ is_corrupt tr (principal_label server)
     )
     )

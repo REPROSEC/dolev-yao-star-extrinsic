@@ -97,7 +97,7 @@ instance local_state_communication_layer_session (a:Type) {|config:comm_layer_re
 type communication_reqres_event (a:Type) {|config:comm_layer_reqres_config a|} =
   | CommClientSendRequest: client:principal -> server:principal -> [@@@ with_parser #bytes config.reqres_ps_a] request:a -> key:bytes -> communication_reqres_event a
   | CommServerReceiveRequest: server:principal -> [@@@ with_parser #bytes config.reqres_ps_a] request:a -> key:bytes -> communication_reqres_event a
-  | CommServerSendResponse: server:principal -> [@@@ with_parser #bytes config.reqres_ps_a] request:a -> [@@@ with_parser #bytes config.reqres_ps_a] response:a -> communication_reqres_event a
+  | CommServerSendResponse: server:principal -> [@@@ with_parser #bytes config.reqres_ps_a] request:a -> [@@@ with_parser #bytes config.reqres_ps_a] response:a -> key:bytes -> communication_reqres_event a
   | CommClientReceiveResponse: client:principal -> server:principal -> [@@@ with_parser #bytes config.reqres_ps_a] response:a -> key:bytes -> communication_reqres_event a
 
 #push-options "--ifuel 1"
@@ -183,7 +183,7 @@ let send_response #a server req_meta_data response =
   let ServerReceiveRequest srr = state in
   guard_tr (srr.key = req_meta_data.key);*?
   guard_tr (srr.request = req_meta_data.request);*?
-  trigger_event server (CommServerSendResponse server srr.request response <: communication_reqres_event a);*
+  trigger_event server (CommServerSendResponse server srr.request response req_meta_data.key <: communication_reqres_event a);*
   let* nonce = mk_rand NoUsage public 32 in
   let resp_msg = compute_response_message server req_meta_data nonce response in
   let* msg_id = send_msg resp_msg in
