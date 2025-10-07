@@ -29,7 +29,6 @@ type dh_event =
   | Respond2: a:principal -> b:principal -> gx:bytes -> gy:bytes -> k:bytes -> dh_event
 
 %splice [ps_dh_event] (gen_parser (`dh_event))
-%splice [ps_dh_event_is_well_formed] (gen_is_well_formed_lemma (`dh_event))
 
 instance dh_event_instance: event dh_event = {
   tag = "DH.Event";
@@ -64,6 +63,7 @@ let ephemeral_dh_key_label prin sess_id =
 // to give the attacker more flexibility. With this
 // separation an attacker can set a state without sending
 // a message over the network.
+[@@ "opaque_to_smt"]
 val prepare_msg1: principal -> principal -> traceful state_id
 let prepare_msg1 alice bob =
   let* alice_si = new_session_id alice in
@@ -73,6 +73,7 @@ let prepare_msg1 alice bob =
   return alice_si
 
 // Alice sends message 1
+[@@ "opaque_to_smt"]
 val send_msg1: principal -> state_id -> traceful (option nat)
 let send_msg1 alice alice_si =
   let*? session_state = get_state alice alice_si in
@@ -83,6 +84,7 @@ let send_msg1 alice alice_si =
   return (Some msg_id)
 
 // Bob prepares message 2
+[@@ "opaque_to_smt"]
 val prepare_msg2: principal -> principal -> nat -> traceful (option state_id)
 let prepare_msg2 alice bob msg_id =
   let*? msg = recv_msg msg_id in
@@ -94,6 +96,7 @@ let prepare_msg2 alice bob msg_id =
   return (Some bob_si)
 
 // Bob sends message 2
+[@@ "opaque_to_smt"]
 val send_msg2: dh_global_sess_ids -> principal -> state_id -> traceful (option nat)
 let send_msg2 global_sess_id bob bob_si =
   let*? session_state = get_state bob bob_si in
@@ -108,6 +111,7 @@ let send_msg2 global_sess_id bob bob_si =
 // Alice prepares message 3
 //
 // This function has to verify the signature from message 2
+[@@ "opaque_to_smt"]
 val prepare_msg3: dh_global_sess_ids -> principal -> state_id -> principal -> nat -> traceful (option unit)
 let prepare_msg3 global_sess_id alice alice_si bob msg_id =
   let*? session_state = get_state alice alice_si in
@@ -121,6 +125,7 @@ let prepare_msg3 global_sess_id alice alice_si bob msg_id =
   return (Some ())
 
 // Alice send message 3
+// [@@ "opaque_to_smt"] // reveal_opaque doesn't seem to work on this one, well
 val send_msg3: dh_global_sess_ids -> principal -> principal -> state_id -> traceful (option nat)
 let send_msg3 global_sess_id alice bob alice_si =
   let*? session_state = get_state alice alice_si in
@@ -133,6 +138,7 @@ let send_msg3 global_sess_id alice bob alice_si =
   return (Some msg_id)
 
 // Bob verifies message 3
+[@@ "opaque_to_smt"]
 val verify_msg3: dh_global_sess_ids -> principal -> principal -> nat -> state_id -> traceful (option unit)
 let verify_msg3 global_sess_id alice bob msg_id bob_si =
   let*? session_state = get_state bob bob_si in

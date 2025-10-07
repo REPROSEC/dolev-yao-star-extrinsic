@@ -7,7 +7,7 @@ open DY.Example.NSL.Protocol.Total
 open DY.Example.NSL.Protocol.Total.Proof
 open DY.Example.NSL.Protocol.Stateful
 
-#set-options "--fuel 0 --ifuel 1 --z3rlimit 25  --z3cliopt 'smt.qi.eager_threshold=100'"
+#set-options "--fuel 0 --ifuel 0 --z3rlimit 25  --z3cliopt 'smt.qi.eager_threshold=100'"
 
 /// This module proves invariant preservation
 /// for all the functions in DY.Example.NSL.Protocol.Stateful.
@@ -16,6 +16,7 @@ open DY.Example.NSL.Protocol.Stateful
 
 /// The (local) state predicate.
 
+#push-options "--ifuel 1"
 let state_predicate_nsl: local_state_predicate nsl_session = {
   pred = (fun tr prin sess_id st ->
     match st with
@@ -46,9 +47,11 @@ let state_predicate_nsl: local_state_predicate nsl_session = {
   pred_later = (fun tr1 tr2 prin sess_id st -> ());
   pred_knowable = (fun tr prin sess_id st -> ());
 }
+#pop-options
 
 /// The (local) event predicate.
 
+#push-options "--ifuel 1"
 let event_predicate_nsl: event_predicate nsl_event =
   fun tr prin e ->
     match e with
@@ -76,6 +79,7 @@ let event_predicate_nsl: event_predicate nsl_event =
         event_triggered tr alice (Initiate2 alice bob n_a n_b)
       )
     )
+#pop-options
 
 /// List of all local state predicates.
 
@@ -163,6 +167,7 @@ let prepare_msg2_proof tr global_sess_id bob msg_id =
     )
   )
 
+#push-options "--z3rlimit 50"
 val send_msg2_proof:
   tr:trace ->
   global_sess_id:nsl_global_sess_ids -> bob:principal -> sess_id:state_id ->
@@ -183,7 +188,9 @@ let send_msg2_proof tr global_sess_id bob sess_id =
     )
   )
   | (_, tr) -> ()
+#pop-options
 
+#push-options "--z3rlimit 50"
 val prepare_msg3_proof:
   tr:trace ->
   global_sess_id:nsl_global_sess_ids -> alice:principal -> sess_id:state_id -> msg_id:timestamp ->
@@ -207,7 +214,9 @@ let prepare_msg3_proof tr global_sess_id alice sess_id msg_id =
       | (_, tr) -> ()
     )
   )
+#pop-options
 
+#push-options "--z3rlimit 100"
 val send_msg3_proof:
   tr:trace ->
   global_sess_id:nsl_global_sess_ids -> alice:principal -> sess_id:state_id ->
@@ -228,6 +237,7 @@ let send_msg3_proof tr global_sess_id alice sess_id =
     )
   )
   | (_, tr) -> ()
+#pop-options
 
 val event_respond1_injective:
   tr:trace ->
@@ -245,14 +255,14 @@ val event_respond1_injective:
   )
 let event_respond1_injective tr alice alice' bob n_a n_a' n_b = ()
 
-#push-options "--z3rlimit 50"
+#push-options "--z3rlimit 100"
 val prepare_msg4:
   tr:trace ->
   global_sess_id:nsl_global_sess_ids -> bob:principal -> sess_id:state_id -> msg_id:timestamp ->
   Lemma
   (requires trace_invariant tr)
   (ensures (
-    let (opt_sess_id, tr_out) = prepare_msg4 global_sess_id bob sess_id msg_id tr in
+    let (_, tr_out) = prepare_msg4 global_sess_id bob sess_id msg_id tr in
     trace_invariant tr_out
   ))
 let prepare_msg4 tr global_sess_id bob sess_id msg_id =
@@ -286,7 +296,7 @@ let prepare_msg4 tr global_sess_id bob sess_id msg_id =
           // principal_corrupt tr alice \/ principal_corrupt tr bob
           // because we know the label of n_b (which is (nsl_nonce_label alice bob)).
           // It is useful in the "modulo corruption" part of the proof.
-          introduce (~((nsl_nonce_label alice bob) `can_flow tr` public)) ==> event_triggered tr alice (Initiate2 alice bob n_a n_b) with _. (
+          introduce (~(is_corrupt tr (nsl_nonce_label alice bob))) ==> event_triggered tr alice (Initiate2 alice bob n_a n_b) with _. (
             assert(exists alice' n_a'. get_label tr n_b `can_flow tr` (nsl_nonce_label alice' bob) /\ event_triggered tr alice' (Initiate2 alice' bob n_a' n_b));
             eliminate exists alice' n_a'. get_label tr n_b `can_flow tr` (nsl_nonce_label alice' bob) /\ event_triggered tr alice' (Initiate2 alice' bob n_a' n_b)
             returns _

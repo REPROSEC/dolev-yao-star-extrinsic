@@ -93,6 +93,7 @@ instance parseable_serializeable_sig_message: parseable_serializeable bytes sig_
 (*** Message Processing ***)
 
 // Alice generates message 1
+[@@ "opaque_to_smt"]
 val compute_message1: principal -> bytes -> bytes
 let compute_message1 alice x =
   let gx = dh_pk x in
@@ -100,6 +101,7 @@ let compute_message1 alice x =
   serialize message msg
 
 // Bob parses message 1
+[@@ "opaque_to_smt"]
 val decode_message1: bytes -> option message1
 let decode_message1 msg1_bytes =
   let? msg1 = parse message msg1_bytes in
@@ -114,6 +116,7 @@ let decode_message1 msg1_bytes =
   *)
 
 // Bob generates message 2
+[@@ "opaque_to_smt"]
 val compute_message2: principal -> principal -> bytes -> bytes -> bytes -> bytes -> bytes
 let compute_message2 alice bob gx gy sk_b n_sig =
   let sig_msg = SigMsg2 {alice; gx; gy} in
@@ -123,6 +126,7 @@ let compute_message2 alice bob gx gy sk_b n_sig =
 
 // Alice parses message 2
 type verify_msg2_result = {gy:bytes; gx:bytes; k:bytes}
+[@@ "opaque_to_smt"]
 val decode_and_verify_message2: bytes -> principal -> bytes -> bytes -> option verify_msg2_result
 let decode_and_verify_message2 msg2_bytes alice x pk_b =
   let? msg2_parsed = parse message msg2_bytes in
@@ -148,6 +152,7 @@ let decode_and_verify_message2 msg2_bytes alice x pk_b =
   *)
 
 // Alice generates message3
+[@@ "opaque_to_smt"]
 val compute_message3: principal -> principal -> bytes -> bytes -> bytes -> bytes -> bytes
 let compute_message3 alice bob gx gy sk_a n_sig =
   let sig_msg = SigMsg3 {bob; gx; gy} in
@@ -157,6 +162,7 @@ let compute_message3 alice bob gx gy sk_a n_sig =
 
 // Bob parses message3
 type verify_msg3_result = {k:bytes}
+[@@ "opaque_to_smt"]
 val decode_and_verify_message3: bytes -> principal -> bytes -> bytes -> bytes -> bytes -> option verify_msg3_result
 let decode_and_verify_message3 msg3_bytes bob gx gy y pk_a =
   let? msg3_parsed = parse message msg3_bytes in
