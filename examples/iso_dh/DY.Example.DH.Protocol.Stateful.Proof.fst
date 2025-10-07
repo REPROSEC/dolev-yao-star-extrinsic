@@ -7,17 +7,19 @@ open DY.Example.DH.Protocol.Total
 open DY.Example.DH.Protocol.Total.Proof
 open DY.Example.DH.Protocol.Stateful
 
-#set-options "--fuel 0 --ifuel 1 --z3rlimit 25  --z3cliopt 'smt.qi.eager_threshold=100'"
+#set-options "--fuel 0 --ifuel 0 --z3rlimit 25  --z3cliopt 'smt.qi.eager_threshold=100'"
 
 (*** Trace invariants ***)
 
 /// The (local) state predicate.
 
 val is_dh_shared_key: trace -> principal -> principal -> bytes -> prop
-let is_dh_shared_key tr alice bob k = exists si sj.
-  get_label tr k == join (ephemeral_dh_key_label alice si) (ephemeral_dh_key_label bob sj) /\
+let is_dh_shared_key tr alice bob k =
+  bytes_invariant tr k /\
+  (exists si sj. get_label tr k == join (ephemeral_dh_key_label alice si) (ephemeral_dh_key_label bob sj)) /\
   k `has_usage tr` AeadKey "DH.aead_key" empty
 
+#push-options "--ifuel 1"
 let dh_session_pred: local_state_predicate dh_session = {
   pred = (fun tr prin sess_id st ->
     match st with
@@ -59,9 +61,11 @@ let dh_session_pred: local_state_predicate dh_session = {
   pred_later = (fun tr1 tr2 prin sess_id st -> ());
   pred_knowable = (fun tr prin sess_id st -> ());
 }
+#pop-options
 
 /// The (local) event predicate.
 
+#push-options "--ifuel 1"
 let dh_event_pred: event_predicate dh_event =
   fun tr prin e ->
     match e with
@@ -84,6 +88,7 @@ let dh_event_pred: event_predicate dh_event =
       (is_dh_shared_key tr alice bob k /\
         event_triggered tr alice (Initiate2 alice bob gx gy k))
     )
+#pop-options
 
 /// List of all local state predicates.
 
@@ -133,7 +138,8 @@ val prepare_msg1_proof:
   // and the function prepare_msg1 is called then instantiate
   // this lemma.
   [SMTPat (trace_invariant tr); SMTPat (prepare_msg1 alice bob tr)]
-let prepare_msg1_proof tr alice bob = ()
+let prepare_msg1_proof tr alice bob =
+  reveal_opaque (`%prepare_msg1) (prepare_msg1 alice bob tr)
 
 val send_msg1_proof:
   tr:trace ->
@@ -146,6 +152,7 @@ val send_msg1_proof:
   ))
   [SMTPat (trace_invariant tr); SMTPat (send_msg1 alice alice_si tr)]
 let send_msg1_proof tr alice alice_si =
+  reveal_opaque (`%send_msg1) (send_msg1 alice alice_si tr);
   match get_state alice alice_si tr with
   | (Some (InitiatorSentMsg1 bob x), tr) -> (
     compute_message1_proof tr alice bob x
@@ -163,12 +170,14 @@ val prepare_msg2_proof:
   ))
   [SMTPat (trace_invariant tr); SMTPat (prepare_msg2 alice bob msg_id tr)]
 let prepare_msg2_proof tr alice bob msg_id =
+  reveal_opaque (`%prepare_msg2) (prepare_msg2 alice bob msg_id tr);
   match recv_msg msg_id tr with
   | (Some msg, tr) -> (
     decode_message1_proof tr msg
   )
   | (None, tr) -> ()
 
+#push-options "--z3rlimit 50"
 val send_msg2_proof:
   tr:trace ->
   global_sess_id:dh_global_sess_ids -> bob:principal -> bob_si:state_id ->
@@ -180,6 +189,7 @@ val send_msg2_proof:
   ))
   [SMTPat (trace_invariant tr); SMTPat (send_msg2 global_sess_id bob bob_si tr)]
 let send_msg2_proof tr global_sess_id bob bob_si =
+  reveal_opaque (`%send_msg2) (send_msg2 global_sess_id bob bob_si tr);
   match get_state bob bob_si tr with
   | (Some (ResponderSentMsg2 alice gx gy y), tr) -> (
     match get_private_key bob global_sess_id.private_keys (LongTermSigKey "DH.SigningKey") tr with
@@ -190,7 +200,9 @@ let send_msg2_proof tr global_sess_id bob bob_si =
     | (None, tr) -> ()
   )
   | _ -> ()
+#pop-options
 
+#push-options "--z3rlimit 100"
 val prepare_msg3_proof:
   tr:trace ->
   global_sess_id:dh_global_sess_ids ->
@@ -204,6 +216,8 @@ val prepare_msg3_proof:
   ))
   [SMTPat (trace_invariant tr); SMTPat (prepare_msg3 global_sess_id alice alice_si bob msg_id tr)]
 let prepare_msg3_proof tr global_sess_id alice alice_si bob msg_id =
+  reveal_opaque (`%prepare_msg3) (prepare_msg3 global_sess_id alice alice_si bob msg_id tr);
+  allow_inversion (dh_session);
   match get_state alice alice_si tr with
   | (Some (InitiatorSentMsg1 bob x), tr) -> (
     match recv_msg msg_id tr with
@@ -212,7 +226,19 @@ let prepare_msg3_proof tr global_sess_id alice alice_si bob msg_id =
       | (Some pk_b, tr) -> (
         match decode_and_verify_message2 msg_bytes alice x pk_b with
         | Some res -> (
-          decode_and_verify_message2_proof tr msg_bytes alice alice_si bob x pk_b
+          decode_and_verify_message2_proof tr msg_bytes alice alice_si bob x pk_b;
+          assert(get_label tr x == ephemeral_dh_key_label alice alice_si);
+          assert(
+            is_corrupt tr (long_term_key_label bob) \/ (
+              exists y. (event_triggered tr bob (Respond1 alice bob res.gx res.gy y)) /\
+                bytes_invariant tr res.k /\
+                res.k `has_usage tr` AeadKey "DH.aead_key" empty /\
+                (exists sj. get_label tr res.k == join (ephemeral_dh_key_label alice alice_si) (ephemeral_dh_key_label bob sj))
+            )
+          );
+          let (), tr = trigger_event alice (Initiate2 alice bob res.gx res.gy res.k) tr in
+          let (), tr = set_state alice alice_si (InitiatorSendMsg3 bob res.gx res.gy res.k <: dh_session) tr in
+          assert(trace_invariant tr)
         )
         | None -> ()
       )
@@ -221,7 +247,9 @@ let prepare_msg3_proof tr global_sess_id alice alice_si bob msg_id =
     | (None, tr) -> ()
   )
   | _ -> ()
+#pop-options
 
+#push-options "--z3rlimit 50"
 val send_msg3_proof:
   tr:trace ->
   global_sess_id:dh_global_sess_ids -> alice:principal -> alice_si:state_id -> bob:principal ->
@@ -233,6 +261,7 @@ val send_msg3_proof:
   ))
   [SMTPat (trace_invariant tr); SMTPat (send_msg3 global_sess_id alice bob alice_si tr)]
 let send_msg3_proof tr global_sess_id alice alice_si bob =
+  reveal_opaque (`%send_msg3) (send_msg3 global_sess_id alice bob alice_si tr);
   match get_state alice alice_si tr with
   | (Some (InitiatorSendMsg3 bob gx gy k), tr') -> (
     match get_private_key alice global_sess_id.private_keys (LongTermSigKey "DH.SigningKey") tr' with
@@ -253,8 +282,9 @@ let send_msg3_proof tr global_sess_id alice alice_si bob =
     | (None, tr') -> ()
   )
   | _ -> ()
+#pop-options
 
-#push-options "--z3rlimit 50"
+#push-options "--z3rlimit 100"
 val verify_msg3_proof:
   tr:trace ->
   global_sess_id:dh_global_sess_ids -> alice:principal -> bob:principal -> msg_id:nat -> bob_si:state_id ->
@@ -266,6 +296,7 @@ val verify_msg3_proof:
   ))
   [SMTPat (trace_invariant tr); SMTPat (verify_msg3 global_sess_id alice bob msg_id bob_si tr)]
 let verify_msg3_proof tr global_sess_id alice bob msg_id bob_si =
+  reveal_opaque (`%verify_msg3) (verify_msg3 global_sess_id alice bob msg_id bob_si tr);
   match get_state bob bob_si tr with
   | (Some (ResponderSentMsg2 alice gx gy y), tr) -> (
     match recv_msg msg_id tr with
@@ -276,7 +307,7 @@ let verify_msg3_proof tr global_sess_id alice bob msg_id bob_si =
           
           match decode_and_verify_message3 msg_bytes bob gx gy y pk_a with
           | Some res -> (
-            assert(exists y. gy == dh_pk y /\ res.k == dh y gx /\ is_secret (ephemeral_dh_key_label bob bob_si) tr y);
+            assert(gy == dh_pk y /\ res.k == dh y gx /\ is_secret (ephemeral_dh_key_label bob bob_si) tr y);
 
             assert(event_triggered tr bob (Respond1 alice bob gx gy y));
             // The decode_message3_proof gives us that there exists a k' such that 

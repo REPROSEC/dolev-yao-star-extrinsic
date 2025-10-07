@@ -72,6 +72,7 @@ val compute_message1_proof:
       is_publishable tr (compute_message1 alice x)
     )
 let compute_message1_proof tr alice bob x =
+  reveal_opaque (`%compute_message1) (compute_message1 alice x);
   let gx = dh_pk x in
   assert(is_publishable tr gx);
   let msg = Msg1 {alice; gx} in
@@ -102,6 +103,7 @@ val decode_message1_proof:
     | None -> True
   ))
 let decode_message1_proof tr msg1_bytes =
+  reveal_opaque (`%decode_message1) (decode_message1 msg1_bytes);
   match decode_message1 msg1_bytes with
     | Some msg1 -> (
       // This lemma
@@ -136,6 +138,7 @@ val compute_message2_proof:
     is_publishable tr (compute_message2 alice bob gx (dh_pk y) sk_b n_sig)
   )
 let compute_message2_proof tr alice bob gx y sk_b n_sig =
+  reveal_opaque (`%compute_message2) (compute_message2 alice bob gx (dh_pk y) sk_b n_sig);
   // Proof that the SigMsg2 is publishable
   // From the precondition we know that
   // msg1.gx and gy are publishable.
@@ -178,14 +181,19 @@ val decode_and_verify_message2_proof:
   (ensures (
     match decode_and_verify_message2 msg2_bytes alice x pk_b with
     | Some res -> (
-      let sig_msg = SigMsg2 {alice; gx=(dh_pk x); gy=res.gy} in
       is_publishable tr res.gy /\
-      (is_corrupt tr (long_term_key_label bob) \/
-      (exists y. event_triggered tr bob (Respond1 alice bob (dh_pk x) res.gy y)))
+      res.gx = dh_pk x /\
+      res.k == dh x res.gy /\
+      (
+        is_corrupt tr (long_term_key_label bob) \/ (
+          exists y. event_triggered tr bob (Respond1 alice bob (dh_pk x) res.gy y)
+        )
+      )
     )
     | None -> True
   ))
 let decode_and_verify_message2_proof tr msg2_bytes alice alice_si bob x pk_b =
+  reveal_opaque (`%decode_and_verify_message2) (decode_and_verify_message2 msg2_bytes alice x pk_b);
   match decode_and_verify_message2 msg2_bytes alice x pk_b with
     | Some res -> (
       parse_wf_lemma message (is_publishable tr) msg2_bytes;
@@ -224,6 +232,7 @@ val compute_message3_proof:
     is_publishable tr (compute_message3 alice bob (dh_pk x) gy sk_a n_sig)
   )
 let compute_message3_proof tr alice bob gx gy x sk_a n_sig =
+  reveal_opaque (`%compute_message3) (compute_message3 alice bob (dh_pk x) gy sk_a n_sig);
   let sig_msg = SigMsg3 {bob; gx; gy} in
   serialize_wf_lemma sig_message (is_publishable tr) sig_msg;
   
@@ -263,13 +272,15 @@ val decode_and_verify_message3_proof:
     let gy = dh_pk y in
     match decode_and_verify_message3 msg3_bytes bob gx gy y pk_a with
     | Some res -> (
-      let sig_msg = SigMsg3 {bob; gx; gy} in
-      (is_corrupt tr (long_term_key_label alice) \/
-      (exists x. gx == dh_pk x /\ event_triggered tr alice (Initiate2 alice bob gx gy (dh x gy))))
+      res.k == dh y gx /\ (
+        (is_corrupt tr (long_term_key_label alice) \/
+        (exists x. gx == dh_pk x /\ event_triggered tr alice (Initiate2 alice bob gx gy (dh x gy))))
+      )
     )
     | None -> True
   ))
 let decode_and_verify_message3_proof tr msg3_bytes alice bob bob_si gx y pk_a =
+  reveal_opaque (`%decode_and_verify_message3) (decode_and_verify_message3 msg3_bytes bob gx (dh_pk y) y pk_a);
   let gy = dh_pk y in
   match decode_and_verify_message3 msg3_bytes bob gx gy y pk_a with
     | Some res -> (

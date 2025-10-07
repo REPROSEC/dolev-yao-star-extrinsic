@@ -70,6 +70,7 @@ instance parseable_serializeable_bytes_message: parseable_serializeable bytes me
 
 /// Alice generates message 1
 
+[@@"opaque_to_smt"]
 val compute_message1: principal -> principal -> bytes -> bytes -> bytes -> bytes
 let compute_message1 alice bob pk_b n_a nonce =
   let msg = Msg1 {n_a; alice;} in
@@ -77,6 +78,7 @@ let compute_message1 alice bob pk_b n_a nonce =
 
 /// Bob process message 1
 
+[@@"opaque_to_smt"]
 val decode_message1: principal -> bytes -> bytes -> option message1
 let decode_message1 bob msg1_cipher sk_b =
   let? msg1_plain = pke_dec sk_b msg1_cipher in
@@ -88,6 +90,7 @@ let decode_message1 bob msg1_cipher sk_b =
 
 /// Bob generates message 2
 
+[@@"opaque_to_smt"]
 val compute_message2: principal -> message1 -> bytes -> bytes -> bytes -> bytes
 let compute_message2 bob msg1 pk_a n_b nonce =
   let msg2 = Msg2 {n_a = msg1.n_a;  n_b; bob;} in
@@ -95,6 +98,7 @@ let compute_message2 bob msg1 pk_a n_b nonce =
 
 /// Alice process message 2
 
+[@@"opaque_to_smt"]
 val decode_message2: principal -> principal -> bytes -> bytes -> bytes -> option (message2)
 let decode_message2 alice bob msg2_cipher sk_a n_a =
   let? msg2_plain = pke_dec sk_a msg2_cipher in
@@ -109,6 +113,7 @@ let decode_message2 alice bob msg2_cipher sk_a n_a =
 
 /// Alice generates message 3
 
+[@@"opaque_to_smt"]
 val compute_message3: principal -> principal -> bytes -> bytes -> bytes -> bytes
 let compute_message3 alice bob pk_b n_b nonce =
   let msg3 = Msg3 {n_b;} in
@@ -116,6 +121,7 @@ let compute_message3 alice bob pk_b n_b nonce =
 
 /// Bob process message 3
 
+[@@"opaque_to_smt"]
 val decode_message3: principal -> principal -> bytes -> bytes -> bytes -> option (message3)
 let decode_message3 alice bob msg_cipher sk_b n_b =
   let? msg_plain = pke_dec sk_b msg_cipher in

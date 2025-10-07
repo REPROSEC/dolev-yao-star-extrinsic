@@ -40,7 +40,7 @@ let enable_core_comm_layer_lemmas preds =
 
 (**** Initialization Satisfies the Trace Invariants ****)
 
-#push-options "--ifuel 2"
+#push-options "--ifuel 2 --z3rlimit 25"
 val initialize_communication_proof:
   {|invs:protocol_invariants|} ->
   tr:trace ->
@@ -210,6 +210,7 @@ let receive_confidential_proof #invs #a tr higher_layer_preds comm_keys_ids rece
 
 (**** Authenticated Send and Receive Lemmas ****)
 
+#push-options "--z3rlimit 25"
 val sign_message_proof:
   {|cinvs:crypto_invariants|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
@@ -257,6 +258,7 @@ let sign_message_proof #cinvs #a tr sender receiver payload pk_receiver sk_sende
   assert(bytes_invariant tr signature);
   serialize_wf_lemma com_message_t (is_publishable tr) msg_signed;
   ()
+#pop-options
 
 val send_authenticated_proof:
   {|invs:protocol_invariants|} ->

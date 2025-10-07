@@ -221,7 +221,6 @@ val mk_global_fun_correct:
   )
   (ensures has_local_fun params (mk_global_fun params tagged_local_funs) (|tag_set, local_fun|))
 let mk_global_fun_correct params tagged_local_funs tag_set local_fun =
-  reveal_opaque (`%mk_global_fun) (mk_global_fun);
   introduce
     forall tagged_data.
       match params.decode_tagged_data tagged_data with
@@ -232,6 +231,7 @@ let mk_global_fun_correct params tagged_local_funs tag_set local_fun =
     match params.decode_tagged_data tagged_data with
     | Some (tag, raw_data) -> (
       if tag `params.tag_belong_to` tag_set then (
+        reveal_opaque (`%mk_global_fun) (mk_global_fun params tagged_local_funs);
         mk_global_fun_correct_aux params tagged_local_funs tag_set local_fun tag;
         params.apply_mk_global_fun (mk_global_fun_aux params tagged_local_funs) tagged_data
       ) else ()
@@ -259,7 +259,7 @@ val mk_global_fun_eq:
     )
   )
 let mk_global_fun_eq params tagged_local_funs tagged_data =
-  reveal_opaque (`%mk_global_fun) (mk_global_fun);
+  reveal_opaque (`%mk_global_fun) (mk_global_fun params tagged_local_funs);
   params.apply_mk_global_fun (mk_global_fun_aux params tagged_local_funs) tagged_data
 
 /// If a global function contains some local function,
