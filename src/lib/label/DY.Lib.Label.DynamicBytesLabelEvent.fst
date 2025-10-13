@@ -21,23 +21,45 @@ instance parseable_serializeable_bytes_reveal_general_event_format: parseable_se
 
 instance reveal_to_bytes_label_event : event reveal_to_bytes_label_event_format = mk_event_instance "GeneralReveal"
 
-let reveal_to_bytes_label_event_predicate = event_predicate reveal_to_bytes_label_event_format
+noeq
+type reveal_to_bytes_label_event_predicate {|crypto_invariants|} =
+  {
+    pred : event_predicate reveal_to_bytes_label_event_format;
+    pred_knowable :
+      tr:trace -> prin:principal -> ev:reveal_to_bytes_label_event_format ->
+      Lemma
+      (requires pred tr prin ev)
+      (ensures (
+        is_knowable_by (principal_label prin) tr ev.bytes_label /\
+        exists b.
+          (
+            rand_generated_at tr ev.point b /\
+            (
+              is_knowable_by (principal_label prin) tr b \/
+              rand_just_generated tr b
+            )
+          ) \/
+          is_publishable tr b
+      ));
 
-let default_reveal_event_predicate (#crypto_invs:crypto_invariants) : reveal_to_bytes_label_event_predicate =
-  fun tr prin a ->
+  }
+
+let default_reveal_event_predicate (#crypto_invs:crypto_invariants) : reveal_to_bytes_label_event_predicate
+  = {
+  pred = (fun tr prin a ->
+    is_knowable_by (principal_label prin) tr a.bytes_label /\
     exists (b:bytes).
       (
-        // bytes_well_formed tr b /\ // need to think if this is required? feels somewhat natural
+        rand_generated_at tr a.point b /\
         (
           is_knowable_by (principal_label prin) tr b \/
-          is_publishable tr b \/
-          get_label tr (a.bytes_label) `can_flow tr` principal_label prin // this is a generalized version of the initial reveal (the creator of a secret can reveal it to a secret that they can know, for the initial reveal)
-        ) /\
-        (
-          rand_generated_at tr a.point b \/
-          is_publishable tr b // if the bytes we would like to reveal are publishable, then we can reveal to whomever.
+          rand_just_generated tr b
         )
-      )
+      ) \/
+      is_publishable tr b
+  );
+  pred_knowable = fun tr prin a -> ()
+}
 
 (*** Reveal Event Definitions ***)
 
