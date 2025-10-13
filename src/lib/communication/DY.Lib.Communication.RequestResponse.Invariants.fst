@@ -20,7 +20,6 @@ open DY.Lib.Communication.Core.Invariants
 
 (*** AEAD Predicate ***)
 
-#push-options "--ifuel 1"
 val aead_crypto_predicate_communication_layer: {|cusages:crypto_usages|} -> aead_crypto_predicate
 let aead_crypto_predicate_communication_layer #cusages = {
   pred = (fun tr key_usage key nonce msg ad ->
@@ -32,11 +31,11 @@ let aead_crypto_predicate_communication_layer #cusages = {
     )
   );
   pred_later = (fun tr1 tr2 key_usage key nonce msg ad -> (
-    parse_wf_lemma authenticated_data (bytes_well_formed tr1) ad;
-    ()
+    match parse authenticated_data ad with
+    | None -> assert(False)
+    | Some {server} -> ()
   ))
 }
-#pop-options
 
 val aead_crypto_predicates_communication_layer_and_tag:
   {|cusages:crypto_usages|} ->
