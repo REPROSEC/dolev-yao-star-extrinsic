@@ -95,7 +95,7 @@ let request_message_properties #invs #a tr i higher_layer_preds server key reque
             is_publishable tr_i key
   returns
     is_well_formed a (is_knowable_by (principal_label server) tr_i) request /\
-    (exists client. higher_layer_preds.send_request (prefix tr i) client server request key_label) \/
+    (exists client. higher_layer_preds.send_request tr_i client server request key_label) \/
     is_publishable tr_i key
   with _. eliminate exists client. event_triggered tr_i client (send_event client)
     returns _
@@ -106,4 +106,49 @@ let request_message_properties #invs #a tr i higher_layer_preds server key reque
       higher_layer_preds.send_request_later (prefix tr j) tr_i client server request key_label;
       ()
     )
+  and _. ()
+
+
+val response_message_properties:
+  {|protocol_invariants|} ->
+  #a:Type -> {|comm_layer_reqres_config a|} ->
+  tr:trace -> i:timestamp ->
+  higher_layer_preds:comm_reqres_higher_layer_event_preds a ->
+  client:principal -> server:principal -> response:a -> req_meta_data:comm_meta_data a ->
+  Lemma
+  (requires
+    trace_invariant tr /\
+    has_communication_layer_reqres_predicates higher_layer_preds /\
+    event_triggered_at tr i client (CommClientReceiveResponse client server response req_meta_data.key <: communication_reqres_event a)
+  )
+  (ensures
+    //is_well_formed a (is_knowable_by (principal_label client) (prefix tr i)) response /\
+    (exists request. higher_layer_preds.send_response tr server request response (get_label tr req_meta_data.key)) \/
+    is_corrupt tr (principal_label client) \/ is_corrupt tr (principal_label server)
+  )
+let response_message_properties #invs #a tr i higher_layer_preds client server response req_meta_data =
+  let send_event request:communication_reqres_event a = CommServerSendResponse server request response req_meta_data.key in
+  let tr_i = prefix tr i in
+  let key_label = get_label tr req_meta_data.key in
+  //assert(is_well_formed a (is_knowable_by (principal_label client) tr_i) response);
+  assert((exists request. event_triggered tr_i server (send_event request)) \/
+            is_corrupt tr (principal_label client) \/ is_corrupt tr (principal_label server));
+  eliminate (exists request. event_triggered tr_i server (send_event request)) \/
+            (is_corrupt tr (principal_label client) \/ is_corrupt tr (principal_label server))
+  returns
+    //is_well_formed a (is_knowable_by (principal_label server) tr_i) response /\
+    (exists request. higher_layer_preds.send_response tr server request response key_label) \/
+      (is_corrupt tr (principal_label client) \/ is_corrupt tr (principal_label server))
+  with _. (
+    assert(exists request. event_triggered tr_i server (send_event request));
+    eliminate exists request. event_triggered tr_i server (send_event request)
+    returns exists request. higher_layer_preds.send_response tr server request response key_label
+    with _. (
+      let j = find_event_triggered_at_timestamp tr server (send_event request) in
+      find_event_triggered_at_timestamp_later tr_i tr server (send_event request);
+      get_label_later (prefix tr j) tr req_meta_data.key;
+      higher_layer_preds.send_response_later (prefix tr j) tr server request response key_label;
+      ()
+    )
+  )
   and _. ()

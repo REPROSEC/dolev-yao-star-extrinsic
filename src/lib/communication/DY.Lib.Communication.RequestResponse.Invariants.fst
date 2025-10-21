@@ -201,12 +201,21 @@ let event_predicate_communication_layer_reqres
         is_publishable tr key
       )
     )
-    | CommServerSendResponse server request response key -> higher_layer_resreq_preds.send_response tr server request response (get_label tr key)
+    | CommServerSendResponse server request response key -> (
+      is_well_formed a (bytes_well_formed tr) request /\
+      is_well_formed a (bytes_well_formed tr) response /\
+      bytes_well_formed tr key /\
+      higher_layer_resreq_preds.send_response tr server request response (get_label tr key)
+    )
     | CommClientReceiveResponse client server response key -> (
+      // TODO think about adding request to this event. 
+      // The problem with this is that all events have to be chained together 
+      // to proof in the end that the server puts the request in the event
+      // that the client send.
       (exists request. event_triggered tr server (CommServerSendResponse server request response key <: communication_reqres_event a)) \/
       is_corrupt tr (principal_label client) \/ is_corrupt tr (principal_label server)
     )
-    )
+    )                                                                                                                                                                                                                                                                                                                                                            
 #pop-options
 
 // Additional event preconditions for the events from the core communication layer

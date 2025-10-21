@@ -164,7 +164,6 @@ let send_request_proof #invs #a tr comm_keys_ids higher_layer_preds client serve
     ()
   )
   | (Some (_, req_meta_data), tr_out) -> (
-    
     let (key, tr') = mk_rand (AeadKey (comm_layer_aead_tag a) empty) (comm_label client server) 32 tr in
     let (sid, tr') = new_session_id client tr' in
     let ((), tr') = set_state client sid (ClientSendRequest {server; request; key} <: communication_states a) tr' in
