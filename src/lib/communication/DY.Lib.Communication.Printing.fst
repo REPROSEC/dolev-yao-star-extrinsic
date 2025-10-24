@@ -117,7 +117,7 @@ let com_reqres_event_to_string #a payload_to_string =
       Some (Printf.sprintf "CommServerSendResponse server = %s, request = %s, response = (%s), key = %s"
         server (payload_to_string request) (payload_to_string response) (bytes_to_string key))
     )
-    | CommClientReceiveResponse client server response key -> (
+    | CommClientReceiveResponse client server request response key -> (
       Some (Printf.sprintf "CommClientReceiveResponse client = %s, server = %s, response = (%s), key = %s" 
         client server (payload_to_string response) (bytes_to_string key))
     )

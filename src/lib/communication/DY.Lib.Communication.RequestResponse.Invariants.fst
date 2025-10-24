@@ -187,6 +187,7 @@ let event_predicate_communication_layer_reqres
   fun tr prin e ->
     (match e with
     | CommClientSendRequest client server request key -> (
+      rand_just_generated tr key /\
       is_well_formed a (is_knowable_by (get_label tr key) tr) request /\
       is_secret (comm_label client server) tr key /\
       key `has_usage tr` (AeadKey (comm_layer_aead_tag a) empty) /\
@@ -202,20 +203,20 @@ let event_predicate_communication_layer_reqres
       )
     )
     | CommServerSendResponse server request response key -> (
+      event_triggered tr server (CommServerReceiveRequest server request key <: communication_reqres_event a) /\
       is_well_formed a (bytes_well_formed tr) request /\
       is_well_formed a (bytes_well_formed tr) response /\
       bytes_well_formed tr key /\
       higher_layer_resreq_preds.send_response tr server request response (get_label tr key)
     )
-    | CommClientReceiveResponse client server response key -> (
-      // TODO think about adding request to this event. 
-      // The problem with this is that all events have to be chained together 
-      // to proof in the end that the server puts the request in the event
-      // that the client send.
-      (exists request. event_triggered tr server (CommServerSendResponse server request response key <: communication_reqres_event a)) \/
-      is_corrupt tr (principal_label client) \/ is_corrupt tr (principal_label server)
+    | CommClientReceiveResponse client server request response key -> (
+      is_well_formed a (is_knowable_by (get_label tr key) tr) response /\
+      is_secret (comm_label client server) tr key /\
+      event_triggered tr client (CommClientSendRequest client server request key <: communication_reqres_event a) /\
+      (event_triggered tr server (CommServerSendResponse server request response key <: communication_reqres_event a) \/
+      is_corrupt tr (principal_label client) \/ is_corrupt tr (principal_label server))
     )
-    )                                                                                                                                                                                                                                                                                                                                                            
+    )                                                                                                                                                                                                                                                                          
 #pop-options
 
 // Additional event preconditions for the events from the core communication layer
