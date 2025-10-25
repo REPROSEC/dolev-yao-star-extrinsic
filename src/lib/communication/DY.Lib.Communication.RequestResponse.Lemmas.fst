@@ -62,6 +62,16 @@ val is_comm_response_payload:
 let is_comm_response_payload #cusg #a #ps tr server req_meta_data payload =
   is_well_formed a (is_knowable_by (get_response_label tr req_meta_data) tr) payload
 
+val comm_meta_data_knowable: 
+  {|crypto_invariants|} ->
+  trace ->
+  a:Type -> {|comm_layer_reqres_config a|} ->
+  principal -> comm_meta_data a ->
+  prop
+let comm_meta_data_knowable #cinvs tr a #ps prin req_meta_data =
+  is_knowable_by (principal_label prin) tr req_meta_data.key /\
+  is_well_formed a (is_knowable_by (principal_label prin) tr) req_meta_data.request
+
 val comm_client_state_invariant: 
   {|crypto_invariants|} ->
   trace ->
@@ -69,8 +79,7 @@ val comm_client_state_invariant:
   principal -> comm_meta_data a ->
   prop
 let comm_client_state_invariant #cinvs tr a #ps prin req_meta_data =
-  is_knowable_by (principal_label prin) tr req_meta_data.key /\
-  is_well_formed a (is_knowable_by (principal_label prin) tr) req_meta_data.request /\
+  comm_meta_data_knowable tr a prin req_meta_data /\
   event_triggered tr prin (CommClientSendRequest prin req_meta_data.server req_meta_data.request req_meta_data.key <: communication_reqres_event a)
 
 /// The communication layer makes use of many lemmas with SMT patterns.
@@ -461,7 +470,7 @@ val comm_client_send_request_injective:
   )
 let comm_client_send_request_injective #invs #a tr higher_layer_preds client client' server request request' key = ()
 
-#push-options "--z3rlimit 75"
+#push-options "--z3rlimit 100"
 val request_response_property:
   {|protocol_invariants|} ->
   #a:Type -> {|comm_layer_reqres_config a|} ->
