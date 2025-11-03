@@ -311,7 +311,7 @@ val mk_comm_layer_response_nonce_labeled_proof:
   {|protocol_invariants|} ->
   #a:Type -> {|comm_layer_reqres_config a|} ->
   tr:trace ->
-  req_meta_data:comm_meta_data a -> usg:usage -> prin:label ->
+  req_meta_data:comm_meta_data a -> usg:usage -> lab:label ->
   Lemma
   (requires
     trace_invariant tr /\
@@ -320,17 +320,17 @@ val mk_comm_layer_response_nonce_labeled_proof:
     bytes_well_formed tr req_meta_data.key // Can be derived from CommServerReceiveRequest event
   )
   (ensures (
-    match mk_comm_layer_response_nonce_labeled req_meta_data usg prin tr with
+    match mk_comm_layer_response_nonce_labeled req_meta_data usg lab tr with
     | (None, tr_out) -> trace_invariant tr_out
     | (Some nonce, tr_out) -> (
       trace_invariant tr_out /\
-      is_secret (join (get_response_label tr_out req_meta_data) prin) tr_out nonce /\
-      get_label tr_out nonce `can_flow tr_out` get_label tr_out req_meta_data.key
+      is_secret (join (get_response_label tr_out req_meta_data) lab) tr_out nonce /\
+      get_label tr_out nonce `can_flow tr_out` join (get_label tr_out req_meta_data.key) lab
     )
   ))
   [SMTPat (trace_invariant tr);
-  SMTPat (mk_comm_layer_response_nonce_labeled req_meta_data usg prin tr)]
-let mk_comm_layer_response_nonce_labeled_proof #invs #a tr req_meta_data usg prin =
+  SMTPat (mk_comm_layer_response_nonce_labeled req_meta_data usg lab tr)]
+let mk_comm_layer_response_nonce_labeled_proof #invs #a tr req_meta_data usg lab =
   reveal_opaque (`%mk_comm_layer_response_nonce_labeled) (mk_comm_layer_response_nonce_labeled #a);
   reveal_opaque (`%get_response_label) (get_response_label);
   ()

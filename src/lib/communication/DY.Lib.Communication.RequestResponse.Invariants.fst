@@ -214,9 +214,9 @@ let event_predicate_communication_layer_reqres
       is_secret (comm_label client server) tr key /\
       event_triggered tr client (CommClientSendRequest client server request key <: communication_reqres_event a) /\
       (event_triggered tr server (CommServerSendResponse server request response key <: communication_reqres_event a) \/
-      is_corrupt tr (principal_label client) \/ is_corrupt tr (principal_label server))
+      (is_publishable tr key /\ is_well_formed a (is_publishable tr) response))
     )
-    )                                                                                                                                                                                                                                                                          
+    )
 #pop-options
 
 // Additional event preconditions for the events from the core communication layer

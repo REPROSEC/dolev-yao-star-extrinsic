@@ -149,7 +149,9 @@ val response_message_properties:
     is_well_formed a (is_knowable_by (comm_label client req_meta_data.server) tr) response /\
     higher_layer_preds.send_request tr client req_meta_data.server req_meta_data.request (get_response_label tr req_meta_data) /\
     (higher_layer_preds.send_response tr req_meta_data.server req_meta_data.request response (get_response_label tr req_meta_data) \/ 
-      is_corrupt tr (principal_label client) \/ is_corrupt tr (principal_label req_meta_data.server))
+      is_corrupt tr (principal_label client) \/ is_corrupt tr (principal_label req_meta_data.server)) /\
+    (higher_layer_preds.send_response tr req_meta_data.server req_meta_data.request response (get_response_label tr req_meta_data) \/
+      (is_publishable tr req_meta_data.key /\ is_well_formed a (is_publishable tr) response))
   )
 let response_message_properties #invs #a tr higher_layer_preds client response req_meta_data =
   let send_event:communication_reqres_event a = CommServerSendResponse req_meta_data.server req_meta_data.request response req_meta_data.key in
@@ -168,12 +170,14 @@ let response_message_properties #invs #a tr higher_layer_preds client response r
             (is_corrupt tr (principal_label client) \/ is_corrupt tr (principal_label req_meta_data.server))
   returns
     is_well_formed a (is_knowable_by (principal_label req_meta_data.server) tr_i) response /\
+    higher_layer_preds.send_request tr client req_meta_data.server req_meta_data.request (get_label tr req_meta_data.key) /\
     (
-       higher_layer_preds.send_request tr client req_meta_data.server req_meta_data.request (get_label tr req_meta_data.key) /\
       higher_layer_preds.send_response tr req_meta_data.server req_meta_data.request response key_label
     ) \/ (
       is_corrupt tr (principal_label client) \/ is_corrupt tr (principal_label req_meta_data.server)
-    )
+    ) /\
+    (higher_layer_preds.send_response tr req_meta_data.server req_meta_data.request response (get_response_label tr req_meta_data) \/
+      (is_publishable tr req_meta_data.key /\ is_well_formed a (is_publishable tr) response))
   with _. (
     let j = find_event_triggered_at_timestamp tr req_meta_data.server send_event in
     higher_layer_preds.send_response_later (prefix tr j) tr req_meta_data.server req_meta_data.request response key_label;
