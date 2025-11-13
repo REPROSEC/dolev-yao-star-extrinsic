@@ -208,8 +208,7 @@ let send_request_proof #invs #a tr comm_keys_ids higher_layer_preds client serve
   )
 #pop-options
 
-
-#push-options "--z3rlimit 200"
+#push-options "--z3rlimit 50"
 val receive_request_proof:
   {|invs:protocol_invariants|} ->
   #a:Type -> {|comm_layer_reqres_config a|} ->
@@ -350,7 +349,7 @@ let mk_comm_layer_response_nonce_labeled_proof #invs #a tr req_meta_data usg pri
   reveal_opaque (`%get_response_label) (get_response_label);
   ()
 
-
+#push-options "--z3rlimit 25"
 val compute_response_message_proof:
   {|crypto_invariants|} ->
   #a:Type0 -> {|comm_layer_reqres_config a|} ->
@@ -382,6 +381,7 @@ let compute_response_message_proof #cinvs #a tr server req_meta_data nonce reque
   FStar.Classical.move_requires (aead_enc_preserves_publishability tr req_meta_data.key nonce res_bytes) ad_bytes;
   serialize_wf_lemma comm_message_t (is_publishable tr) (ResponseMessage {nonce; ciphertext});
   ()
+#pop-options
 
 val send_response_proof:
   {|protocol_invariants|} ->
