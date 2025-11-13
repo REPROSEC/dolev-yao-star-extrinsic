@@ -516,6 +516,17 @@ let get_state_state_was_set #a #ls prin sess_id tr =
       let (Some cont, _) = get_tagged_state ls.tag prin sess_id tr in
       serialize_parse_inv_lemma a cont
 
+val is_most_recent_state_for_state_was_set:
+  #a:Type -> {|ls_a:local_state a|} ->
+  prin:principal -> sess_id:state_id -> content:a ->
+  tr:trace ->
+  Lemma
+  (requires is_most_recent_state_for prin sess_id (Some content) tr)
+  (ensures state_was_set tr prin sess_id content)
+  [SMTPat (is_most_recent_state_for #a #ls_a prin sess_id (Some content) tr)]
+let is_most_recent_state_for_state_was_set #a #ls_a prin sess_id content tr =
+  reveal_opaque (`%is_most_recent_state_for) (is_most_recent_state_for #a)
+
 val state_was_set_implies_pred:
   #a:Type -> {|local_state a|} ->
   {|protocol_invariants|} -> tr:trace ->

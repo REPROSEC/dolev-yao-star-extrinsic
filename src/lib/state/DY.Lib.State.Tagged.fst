@@ -690,6 +690,15 @@ let get_tagged_state_state_was_set tag prin sess_id tr =
     serialize_parse_inv_lemma #bytes tagged_state full_cont_bytes
   )
 
+val is_most_recent_tagged_state_for_tagged_state_was_set:
+  tag:string -> prin:principal -> sess_id:state_id -> content:bytes -> tr:trace ->
+  Lemma
+  (requires is_most_recent_tagged_state_for tag prin sess_id (Some content) tr)
+  (ensures tagged_state_was_set tr tag prin sess_id content)
+let is_most_recent_tagged_state_for_tagged_state_was_set tag prin sess_id content tr =
+  reveal_opaque (`%is_most_recent_tagged_state_for) (is_most_recent_tagged_state_for)
+
+
 (*** Theorem ***)
 
 val tagged_state_was_set_implies_pred:
