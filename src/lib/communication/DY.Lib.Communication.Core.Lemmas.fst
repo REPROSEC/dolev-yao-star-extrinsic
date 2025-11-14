@@ -7,6 +7,7 @@ open DY.Lib.Crypto.Signature.Split
 open DY.Lib.State.PKI
 open DY.Lib.State.PrivateKeys
 open DY.Lib.Event.Typed
+open DY.Lib.Comparse.DYUtils
 
 open DY.Lib.Communication.Data
 open DY.Lib.Communication.Core
@@ -41,7 +42,7 @@ let enable_core_comm_layer_lemmas preds =
 (**** Initialization Satisfies the Trace Invariants ****)
 
 #push-options "--ifuel 2 --z3rlimit 25"
-val initialize_communication_core_proof
+val initialize_communication_core_proof:
   {|invs:protocol_invariants|} ->
   tr:trace ->
   a:Type -> {|comm_layer_core_config a|} ->
@@ -65,13 +66,6 @@ let initialize_communication_core_proof tr a sender receiver =
 
 (**** Confidential Send and Receive Lemmas ****)
 
-val comm_conf_send_event_triggered:
-  #a:Type0 -> {|comm_layer_core_config a|} ->
-  trace -> principal -> principal -> a ->
-  prop
-let comm_conf_send_event_triggered #a tr sender receiver payload =
-  event_triggered tr sender (CommConfSendMsg sender receiver payload <: communication_core_event a)
-
 val encrypt_message_proof:
   {|cinvs:crypto_invariants|} ->
   #a:Type -> {|comm_layer_core_config a|} ->
@@ -88,7 +82,7 @@ val encrypt_message_proof:
     comm_conf_send_event_triggered tr sender receiver payload
   ))
   (ensures
-    is_publishable tr (encrypt_message pk_receiver nonce payload) 
+    is_publishable tr (encrypt_message pk_receiver nonce payload)
   )
 let encrypt_message_proof #cinvs #a tr sender receiver pk_receiver nonce pkenc_in =
   reveal_opaque (`%encrypt_message) (encrypt_message #a)
@@ -212,20 +206,6 @@ let receive_confidential_proof #invs #a tr higher_layer_preds comm_keys_ids rece
 
 
 (**** Authenticated Send and Receive Lemmas ****)
-
-val comm_auth_send_event_triggered:
-  #a:Type0 -> {|comm_layer_core_config a|} ->
-  trace -> principal -> a ->
-  prop
-let comm_auth_send_event_triggered #a tr sender payload =
-  event_triggered tr sender (CommAuthSendMsg sender payload <: communication_core_event a)
-
-val comm_conf_auth_send_event_triggered:
-  #a:Type0 -> {|comm_layer_core_config a|} ->
-  trace -> principal -> principal -> a ->
-  prop
-let comm_conf_auth_send_event_triggered #a tr sender receiver payload =
-  event_triggered tr sender (CommConfAuthSendMsg sender receiver payload <: communication_core_event a)
 
 #push-options "--ifuel 1 --fuel 0 --z3rlimit 50"
 val sign_message_proof:
@@ -365,9 +345,7 @@ val verify_message_proof:
             (
               exists plain_payload nonce.
                 (Inr?.v payload) == pke_enc pk_receiver nonce plain_payload /\
-                (match parse a plain_payload with
-                | None -> False
-                | Some plain_payload_parsed -> comm_conf_auth_send_event_triggered tr sender receiver plain_payload_parsed)
+                parse_and_pred #a (comm_conf_auth_send_event_triggered tr sender receiver) plain_payload
             ) \/ (
               is_corrupt tr (long_term_key_label sender)
             )
@@ -488,7 +466,7 @@ val send_confidential_authenticated_proof:
     has_communication_layer_core_predicates higher_layer_preds /\
     higher_layer_preds.send_conf tr sender receiver payload /\
     higher_layer_preds.send_conf_auth tr sender receiver payload /\
-    is_well_formed a (is_knowable_by (join (principal_label sender) (principal_label receiver)) tr) payload
+    is_well_formed a (is_knowable_by (comm_label sender receiver) tr) payload
   )
   (ensures (
     let (_, tr_out) = send_confidential_authenticated comm_keys_ids sender receiver payload tr in
@@ -574,8 +552,7 @@ let verify_and_decrypt_message_proof #cinvs #a tr sender receiver msg_encrypted_
     with _. (
       eliminate exists plain_payload nonce.
           payload_enc == pke_enc pk_receiver nonce plain_payload /\
-          Some? (parse a plain_payload) /\
-          comm_conf_auth_send_event_triggered tr sender receiver (Some?.v (parse a plain_payload))
+          parse_and_pred #a (comm_conf_auth_send_event_triggered tr sender receiver) plain_payload
       returns comm_conf_auth_send_event_triggered tr sender receiver cm.payload
       with _. (
         pke_dec_enc sk_receiver nonce plain_payload;
