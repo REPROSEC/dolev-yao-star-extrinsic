@@ -53,24 +53,8 @@ let get_response_label_knowable_reverse #cinvs #a tr req_meta_data msg =
   reveal_opaque (`%get_response_label) get_response_label;
   ()
 
-val get_response_label_publishable:
-  {|cinvs:crypto_invariants|} ->
-  #a:Type0 -> {|comm_layer_reqres_config a|} -> tr:trace ->
-  req_meta_data:comm_meta_data a -> request:a ->
-  Lemma
-  (requires
-    (is_well_formed a (is_knowable_by (get_response_label tr req_meta_data) tr) request \/
-      (is_well_formed a (is_publishable tr) request /\ is_publishable tr req_meta_data.key))
-  )
-  (ensures
-    is_well_formed a (is_knowable_by (get_response_label tr req_meta_data) tr) request
-  )
-let get_response_label_publishable #cinvs #a tr req_meta_data request =
-  reveal_opaque (`%get_response_label) get_response_label;
-  ()
-
 val get_response_label_later:
-  #a:Type0 -> {|comm_layer_reqres_config a|} -> 
+  #a:Type0 -> {|comm_layer_reqres_config a|} ->
   tr1:trace -> tr2:trace ->
   req_meta_data:comm_meta_data a ->
   Lemma
@@ -81,7 +65,9 @@ val get_response_label_later:
   (ensures
     get_response_label tr1 req_meta_data == get_response_label tr2 req_meta_data
   )
-  [SMTPat (get_response_label tr1 req_meta_data); SMTPat (tr1 <$ tr2)]
+  [SMTPat (get_response_label tr1 req_meta_data);
+   SMTPat (tr1 <$ tr2);
+  ]
 let get_response_label_later #a tr1 tr2 req_meta_data =
   reveal_opaque (`%get_response_label) get_response_label;
   get_label_later #default_crypto_usages tr1 tr2 req_meta_data.key;
@@ -95,7 +81,7 @@ val is_comm_response_payload:
 let is_comm_response_payload #cusg #a #ps tr server req_meta_data payload =
   is_well_formed a (is_knowable_by (get_response_label tr req_meta_data) tr) payload
 
-val comm_meta_data_knowable: 
+val comm_meta_data_knowable:
   {|crypto_invariants|} ->
   trace ->
   a:Type -> {|comm_layer_reqres_config a|} ->
@@ -254,7 +240,7 @@ let receive_request_proof #invs #a #config tr comm_keys_ids higher_layer_preds s
 
     let i = find_event_triggered_at_timestamp tr_recv server (CommConfReceiveMsg server req_msg_t <: communication_core_event comm_message_t #(comm_layer_tag_core_config_reqres a)) in
     conf_message_secrecy tr_recv i (comm_core_higher_layer_event_preds_reqres a) server req_msg_t;
-    
+
     // Properties that can be proved uniformly in both the honest and corrupt case
     eliminate (exists client. event_triggered tr_recv client (req_send_event client)) \/
               (is_publishable tr_recv req_msg.request /\ is_publishable tr_recv req_msg.key)
@@ -268,9 +254,7 @@ let receive_request_proof #invs #a #config tr comm_keys_ids higher_layer_preds s
         get_response_label_knowable_reverse tr_recv req_meta_data request;
 
         let i = find_event_triggered_at_timestamp tr_recv client (req_send_event client) in
-        // Triggers event_triggered_at_implies_pred
-        assert(event_predicate_communication_layer_reqres higher_layer_preds (prefix tr_recv i) client (req_send_event client));
-        assert(event_triggered_at tr_recv i client (req_send_event client))
+        ()
       )
     and _. (has_usage_publishable tr_recv req_msg.key (AeadKey (comm_layer_aead_tag a) empty);
       parse_wf_lemma a (is_publishable tr_recv) req_msg.request;
@@ -288,8 +272,6 @@ let receive_request_proof #invs #a #config tr comm_keys_ids higher_layer_preds s
     assert((state_predicate_communication_layer_reqres a).pred tr_sess server sid' (ServerReceiveRequest {request; key=req_msg.key} <: communication_states a));
     let ((), tr_st) = set_state server sid' (ServerReceiveRequest {request; key=req_msg.key} <: communication_states a) tr_sess in
 
-    get_response_label_publishable tr_recv req_meta_data request;
-    
     assert(tr_out == tr_st);
     assert(trace_invariant tr_out);
     ()
@@ -315,7 +297,7 @@ val mk_comm_layer_response_nonce_proof:
     | (Some nonce, tr_out) -> (
       trace_invariant tr_out /\
       is_knowable_by (get_response_label tr_out req_meta_data) tr_out nonce /\
-      get_label tr_out nonce `can_flow tr_out` get_label tr_out req_meta_data.key
+      is_knowable_by (get_label tr_out req_meta_data.key) tr_out nonce
     )
   ))
 let mk_comm_layer_response_nonce_proof #invs #a tr req_meta_data usg =
@@ -341,7 +323,8 @@ val mk_comm_layer_response_nonce_labeled_proof:
     | (Some nonce, tr_out) -> (
       trace_invariant tr_out /\
       is_knowable_by (get_response_label tr_out req_meta_data) tr_out nonce /\
-      get_label tr_out nonce `can_flow tr_out` get_label tr_out req_meta_data.key
+      is_knowable_by (get_label tr_out req_meta_data.key) tr_out nonce /\
+      is_knowable_by prin tr_out nonce
     )
   ))
 let mk_comm_layer_response_nonce_labeled_proof #invs #a tr req_meta_data usg prin =
