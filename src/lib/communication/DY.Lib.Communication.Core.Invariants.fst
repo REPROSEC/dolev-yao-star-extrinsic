@@ -93,7 +93,8 @@ let sign_crypto_predicate_communication_layer_core #cusages a #config = {
       serialize_wf_lemma a (bytes_well_formed tr1) payload;
       ()
     )
-    | _ -> ()
+    | Some (Encrypted _ _ _ _) -> ()
+    | None -> assert(False)
   );
 }
 #pop-options

@@ -333,7 +333,7 @@ val verify_message_proof:
           (
             sender == sender' /\
             receiver == receiver' /\
-            comm_auth_send_event_triggered tr sender (Inl?.v payload) \/ 
+            comm_auth_send_event_triggered tr sender (Inl?.v payload) \/
             is_corrupt tr (long_term_key_label sender)
           )
         )
@@ -522,7 +522,6 @@ val verify_and_decrypt_message_proof:
     | None -> True
     | Some cm -> (
       is_well_formed a (is_knowable_by (principal_label receiver) tr) cm.payload /\
-      //is_knowable_by (principal_label receiver) tr (serialize a cm.payload) /\
       (
         comm_conf_auth_send_event_triggered tr sender receiver cm.payload \/
         is_corrupt tr (long_term_key_label sender)

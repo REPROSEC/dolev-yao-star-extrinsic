@@ -38,7 +38,7 @@ type communication_core_event (a:Type) {|config:comm_layer_core_config a|} =
   | CommAuthReceiveMsg: sender:principal -> receiver:principal -> [@@@ with_parser #bytes config.core_ps_a] payload:a -> communication_core_event a
   | CommConfAuthSendMsg: sender:principal -> receiver:principal -> [@@@ with_parser #bytes config.core_ps_a] payload:a -> communication_core_event a
   | CommConfAuthReceiveMsg: sender:principal -> receiver:principal -> [@@@ with_parser #bytes config.core_ps_a] payload:a -> communication_core_event a
-  
+
 
 #push-options "--ifuel 1 --fuel 0"
 %splice [ps_communication_core_event] (gen_parser (`communication_core_event))
@@ -237,8 +237,8 @@ let receive_confidential_authenticated #a comm_keys_ids receiver msg_id =
   let*? msg_encrypted_signed = recv_msg msg_id in
   let*? sk_receiver = get_private_key receiver comm_keys_ids.private_keys (LongTermPkeKey (comm_layer_pkenc_tag a)) in
   let*? sender = return (get_sender #a msg_encrypted_signed) in
-  let*? vk_sender = get_public_key receiver comm_keys_ids.pki (LongTermSigKey (comm_layer_sign_tag a)) sender in 
-  let*? cm:communication_message a = return (verify_and_decrypt_message #a receiver sk_receiver vk_sender msg_encrypted_signed) in 
+  let*? vk_sender = get_public_key receiver comm_keys_ids.pki (LongTermSigKey (comm_layer_sign_tag a)) sender in
+  let*? cm:communication_message a = return (verify_and_decrypt_message #a receiver sk_receiver vk_sender msg_encrypted_signed) in
   trigger_event receiver (CommConfAuthReceiveMsg sender receiver cm.payload <: communication_core_event a);*
   return (Some cm)
 
