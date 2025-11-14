@@ -43,6 +43,7 @@ let aead_crypto_predicate_communication_layer_reqres #cusages a #config = {
     | Some {server} -> ()
   ))
 }
+#pop-options
 
 val aead_crypto_predicate_and_tag_communication_layer_reqres:
   {|cusages:crypto_usages|} ->
