@@ -27,29 +27,13 @@ val get_response_label_knowable:
   req_meta_data:comm_meta_data a -> msg:a ->
   Lemma
   (requires
-    cinvs.usages == default_crypto_usages /\
-    is_well_formed a (is_knowable_by (get_response_label tr req_meta_data) tr) msg
+    cinvs.usages == default_crypto_usages
   )
   (ensures
+    is_well_formed a (is_knowable_by (get_response_label tr req_meta_data) tr) msg <==>
     is_well_formed a (is_knowable_by (get_label tr req_meta_data.key) tr) msg
   )
 let get_response_label_knowable #cinvs #a tr req_meta_data msg =
-  reveal_opaque (`%get_response_label) get_response_label;
-  ()
-
-val get_response_label_knowable_reverse:
-  {|cinvs:crypto_invariants|} ->
-  #a:Type0 -> {|comm_layer_reqres_config a|} -> tr:trace ->
-  req_meta_data:comm_meta_data a -> msg:a ->
-  Lemma
-  (requires
-    cinvs.usages == default_crypto_usages /\
-    is_well_formed a (is_knowable_by (get_label tr req_meta_data.key) tr) msg
-  )
-  (ensures
-    is_well_formed a (is_knowable_by (get_response_label tr req_meta_data) tr) msg
-  )
-let get_response_label_knowable_reverse #cinvs #a tr req_meta_data msg =
   reveal_opaque (`%get_response_label) get_response_label;
   ()
 
@@ -66,6 +50,7 @@ val get_response_label_later:
     get_response_label tr1 req_meta_data == get_response_label tr2 req_meta_data
   )
   [SMTPat (get_response_label tr1 req_meta_data);
+   SMTPat (get_response_label tr2 req_meta_data);
    SMTPat (tr1 <$ tr2);
   ]
 let get_response_label_later #a tr1 tr2 req_meta_data =
@@ -251,7 +236,7 @@ let receive_request_proof #invs #a #config tr comm_keys_ids higher_layer_preds s
     with _. eliminate exists client. event_triggered tr_recv client (req_send_event client)
       returns _
       with _. (
-        get_response_label_knowable_reverse tr_recv req_meta_data request;
+        get_response_label_knowable tr_recv req_meta_data request;
 
         let i = find_event_triggered_at_timestamp tr_recv client (req_send_event client) in
         ()
@@ -395,6 +380,8 @@ let send_response_proof #invs #a tr higher_layer_preds server req_meta_data resp
     let ServerReceiveRequest srr = state in
     let ((), tr') = trigger_event server (CommServerSendResponse server req_meta_data.request response <: communication_reqres_event a) tr' in
     let (nonce, tr') = mk_rand NoUsage public 32 tr' in
+    // Triggers get_response_label_later
+    assert(tr <$ tr');
     compute_response_message_proof tr' server req_meta_data nonce req_meta_data.request response;
     let resp_msg_bytes = compute_response_message server req_meta_data nonce response in
     let (msg_id, tr') = send_msg resp_msg_bytes tr' in
@@ -479,7 +466,7 @@ let receive_response_proof #invs #a tr higher_layer_preds client req_meta_data m
     let (Some resp_msg_bytes, tr') = recv_msg msg_id tr' in
     decode_response_proof #invs.crypto_invs #a tr' client csr.server csr.key resp_msg_bytes;
     let Some response = decode_response_message csr.server csr.key resp_msg_bytes in
-    get_response_label_knowable_reverse tr' req_meta_data response;
+    get_response_label_knowable tr' req_meta_data response;
     let ((), tr') = set_state client req_meta_data.sid (ClientReceiveResponse {server=csr.server; response; key=csr.key} <: communication_states a) tr' in
     let ((), tr') = trigger_event client (CommClientReceiveResponse client csr.server response csr.key <: communication_reqres_event a) tr' in
     assert(event_triggered tr' client (CommClientReceiveResponse client csr.server response csr.key <: communication_reqres_event a));
