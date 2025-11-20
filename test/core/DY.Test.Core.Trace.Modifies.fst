@@ -170,7 +170,6 @@ let branch_unmodified_proof_2 prin sid content_opt tr_in =
       trefl
     );
     l_to_r [`lemma_empty_union; `lemma_union_empty];
-    dump "";
     ()
   );
   if sid = new_sid1 then ()
