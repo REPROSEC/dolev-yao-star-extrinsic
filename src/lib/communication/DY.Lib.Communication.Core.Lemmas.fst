@@ -60,6 +60,7 @@ val initialize_communication_proof:
   ]
 let initialize_communication_proof tr sender receiver =
   reveal_opaque (`%initialize_communication) (initialize_communication sender receiver)
+#pop-options
 
 (**** Confidential Send and Receive Lemmas ****)
 
