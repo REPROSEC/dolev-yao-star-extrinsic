@@ -17,7 +17,8 @@
     z3 = fstar-flake.packages.${system}.z3;
     fstar = fstar-flake.packages.${system}.fstar;
     comparse = comparse-flake.packages.${system}.comparse;
-    dolev-yao-star = pkgs.callPackage ./default.nix {inherit fstar z3 comparse; ocamlPackages = pkgs.ocaml-ng.ocamlPackages_4_14;};
+    ocamlPackages = fstar-flake.packages.${system}.ocamlPackages;
+    dolev-yao-star = pkgs.callPackage ./default.nix {inherit fstar z3 comparse ocamlPackages;};
   in {
     packages.${system} = {
       default = dolev-yao-star;
@@ -26,7 +27,7 @@
     devShells.${system}.default = pkgs.mkShell {
       packages = [
         fstar z3
-      ] ++ (with pkgs.ocaml-ng.ocamlPackages_4_14; [
+      ] ++ (with ocamlPackages; [
         ocaml dune_3 findlib yojson
       ])
       ++ (fstar.buildInputs);

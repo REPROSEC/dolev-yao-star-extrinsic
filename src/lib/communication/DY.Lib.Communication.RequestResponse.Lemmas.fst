@@ -216,7 +216,7 @@ val mk_comm_layer_response_nonce_proof:
 let mk_comm_layer_response_nonce_proof #invs tr req_meta_data usg =
   reveal_opaque (`%mk_comm_layer_response_nonce) (mk_comm_layer_response_nonce)
 
-
+#push-options "--z3rlimit 25"
 val compute_response_message_proof:
   {|crypto_invariants|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
@@ -247,6 +247,7 @@ let compute_response_message_proof #cinvs #a tr server key nonce request respons
   FStar.Classical.move_requires (aead_enc_preserves_publishability tr key nonce res_bytes) ad_bytes;
   serialize_wf_lemma com_message_t (is_publishable tr) (ResponseMessage {nonce; ciphertext});
   ()
+#pop-options
 
 val send_response_proof:
   {|protocol_invariants|} ->
