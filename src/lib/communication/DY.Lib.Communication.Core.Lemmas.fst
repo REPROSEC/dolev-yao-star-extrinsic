@@ -308,6 +308,7 @@ let send_authenticated_proof #invs #a tr higher_layer_preds comm_keys_ids sender
     )
 
 
+#push-options "--z3rlimit 20"
 val verify_message_proof:
   {|cinvs:crypto_invariants|} ->
   #a:Type -> {|config:comm_layer_core_config a|} ->
@@ -373,6 +374,7 @@ let verify_message_proof #cinvs #a #config tr sender receiver msg_bytes sk_recei
       ()
     )
   )
+#pop-options
 
 val receive_authenticated_proof:
   {|invs:protocol_invariants|} ->
