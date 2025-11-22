@@ -118,7 +118,7 @@ let send_request_proof #invs #a tr comm_keys_ids higher_layer_preds client serve
 #pop-options
 
 
-#push-options "--z3rlimit 100"
+#push-options "--z3rlimit 50"
 val receive_request_proof:
   {|protocol_invariants|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
@@ -162,30 +162,19 @@ let receive_request_proof #invs #a tr comm_keys_ids higher_layer_preds server ms
     let req_msg_bytes = serialize com_message_t req_msg_t in
     let req_send_event client = CommClientSendRequest client server req_msg.request req_msg.key in
 
-    let i = find_event_triggered_at_timestamp tr' server (CommConfReceiveMsg server req_msg_bytes) in
-    conf_message_secrecy tr' i request_response_event_preconditions server req_msg_bytes;
+    conf_message_secrecy tr' request_response_event_preconditions server req_msg_bytes;
 
-    // Properties that can be proved uniformly in both the honest and corrupt case
-    eliminate (exists client. event_triggered tr' client (req_send_event client)) \/
-              (is_publishable tr' req_msg.request /\ is_publishable tr' req_msg.key)
-    returns (
-      is_knowable_by (get_response_label tr' req_meta_data) tr' req_msg.request /\
-      req_msg.key `has_usage tr'` (AeadKey comm_layer_aead_tag empty)
-    )
-    with _. eliminate exists client. event_triggered tr' client (req_send_event client)
-      returns _
-      with _. (
-        let i = find_event_triggered_at_timestamp tr' client (req_send_event client) in
-        assert(event_predicate_communication_layer_reqres higher_layer_preds (prefix tr' i) client (req_send_event client));
-        ()
-      )
-    and _. has_usage_publishable tr' req_msg.key (AeadKey comm_layer_aead_tag empty);
+    assert(is_knowable_by (get_label tr' req_msg.key) tr' req_msg.request);
+    FStar.Classical.move_requires (has_usage_publishable tr' req_msg.key) (AeadKey comm_layer_aead_tag empty);
+    assert(req_msg.key `has_usage tr'` (AeadKey comm_layer_aead_tag empty));
 
     // Relating knowledge of the request to knowledge of its fields
     serialize_parse_inv_lemma #bytes a req_msg.request;
-    assert(is_comm_response_payload tr' server req_meta_data payload);
+    let Some payload' = parse a req_msg.request in
+    assert(is_comm_response_payload tr' server req_meta_data payload');
 
     let ((), tr') = trigger_event server (CommServerReceiveRequest server req_msg.request req_msg.key) tr' in
+    assert(trace_invariant tr');
     let (sid', tr') = new_session_id server tr' in
     let ((), tr') = set_state server sid' (ServerReceiveRequest {request=req_msg.request; key=req_msg.key} <: communication_states) tr' in
     assert(tr' == tr_out);
@@ -249,6 +238,7 @@ let compute_response_message_proof #cinvs #a tr server key nonce request respons
   ()
 #pop-options
 
+#push-options "--z3rlimit 75"
 val send_response_proof:
   {|protocol_invariants|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
@@ -289,6 +279,7 @@ let send_response_proof #invs #a tr higher_layer_preds server req_meta_data resp
     assert(trace_invariant tr_out);
     ()
   )
+#pop-options
 
 
 #push-options "--fuel 0 --ifuel 1 --z3rlimit 10"
