@@ -76,6 +76,7 @@ let n_a_secrecy tr alice bob n_a =
 /// The nonce n_b is unknown to the attacker,
 /// unless the attacker corrupted Alice or Bob.
 
+#push-options "--z3rlimit 50"
 val n_b_secrecy:
   tr:trace -> alice:principal -> bob:principal -> n_b:bytes ->
   Lemma
@@ -90,3 +91,4 @@ val n_b_secrecy:
   (ensures is_corrupt tr (principal_label alice) \/ is_corrupt tr (principal_label bob))
 let n_b_secrecy tr alice bob n_b =
   attacker_only_knows_publishable_values tr n_b
+#pop-options
