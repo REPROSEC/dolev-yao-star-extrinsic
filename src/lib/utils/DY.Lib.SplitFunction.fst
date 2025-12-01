@@ -221,7 +221,6 @@ val mk_global_fun_correct:
   )
   (ensures has_local_fun params (mk_global_fun params tagged_local_funs) (|tag_set, local_fun|))
 let mk_global_fun_correct params tagged_local_funs tag_set local_fun =
-  reveal_opaque (`%mk_global_fun) (mk_global_fun);
   introduce
     forall tagged_data.
       match params.decode_tagged_data tagged_data with
@@ -233,7 +232,13 @@ let mk_global_fun_correct params tagged_local_funs tag_set local_fun =
     | Some (tag, raw_data) -> (
       if tag `params.tag_belong_to` tag_set then (
         mk_global_fun_correct_aux params tagged_local_funs tag_set local_fun tag;
-        params.apply_mk_global_fun (mk_global_fun_aux params tagged_local_funs) tagged_data
+        params.apply_mk_global_fun (mk_global_fun_aux params tagged_local_funs) tagged_data;
+        assert(mk_global_fun params tagged_local_funs == (params.mk_global_fun (mk_global_fun_aux params tagged_local_funs))) by (
+          let open FStar.Tactics in
+          unfold_def (`mk_global_fun);
+          trefl()
+        );
+        ()
       ) else ()
     )
     | None -> ()
@@ -259,8 +264,12 @@ val mk_global_fun_eq:
     )
   )
 let mk_global_fun_eq params tagged_local_funs tagged_data =
-  reveal_opaque (`%mk_global_fun) (mk_global_fun);
-  params.apply_mk_global_fun (mk_global_fun_aux params tagged_local_funs) tagged_data
+  params.apply_mk_global_fun (mk_global_fun_aux params tagged_local_funs) tagged_data;
+  assert(mk_global_fun params tagged_local_funs == params.mk_global_fun (mk_global_fun_aux params tagged_local_funs))  by (
+    let open FStar.Tactics in
+    unfold_def (`mk_global_fun);
+    trefl()
+  )
 
 /// If a global function contains some local function,
 /// and the global function input decodes to a tag for this local function,
