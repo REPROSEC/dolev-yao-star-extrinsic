@@ -1,6 +1,5 @@
 DY_HOME 	?= .
 FSTAR_EXE 	?= $(shell which fstar.exe)
-Z3 		?= $(shell which z3)
 COMPARSE_HOME 	?= $(DY_HOME)/../comparse
 
 INNER_SOURCE_DIRS = core lib lib/comparse lib/crypto lib/event lib/hpke lib/label lib/state lib/utils lib/communication
@@ -24,7 +23,7 @@ FSTAR_EXTRACT = --extract '-* +DY +Comparse'
 # - (Warning 242) Definitions of inner let-rec ... and its enclosing top-level letbinding are not encoded to the solver, you will only be able to reason with their types
 # - (Warning 335) Interface ... is admitted without an implementation 
 
-FSTAR_FLAGS = $(FSTAR_INCLUDE_DIRS) --cache_checked_modules --already_cached '+Prims +FStar' --warn_error '@0..1000' --warn_error '+242-335' --record_hints --hint_dir $(DY_HOME)/hints --cache_dir $(DY_HOME)/cache --odir $(DY_HOME)/obj --cmi --z3version 4.8.5
+FSTAR_FLAGS = $(FSTAR_INCLUDE_DIRS) --cache_checked_modules --already_cached '+Prims +FStar' --warn_error '@0..1000' --warn_error '+242-335' --record_hints --hint_dir $(DY_HOME)/hints --cache_dir $(DY_HOME)/cache --odir $(DY_HOME)/obj --cmi
 
 .PHONY: all clean
 

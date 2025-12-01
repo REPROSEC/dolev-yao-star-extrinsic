@@ -376,6 +376,7 @@ let verify_message_proof #cinvs #a #config tr sender receiver msg_bytes sk_recei
   )
 #pop-options
 
+#push-options "--z3rlimit 25"
 val receive_authenticated_proof:
   {|invs:protocol_invariants|} ->
   #a:Type -> {|config:comm_layer_core_config a|} ->
@@ -419,6 +420,7 @@ let receive_authenticated_proof #invs #a tr higher_layer_preds comm_keys_ids rec
     ()
     )
   )
+#pop-options
 
 
 (**** Confidential and Authenticates Send and Receive Lemmas ****)
@@ -453,6 +455,7 @@ let encrypt_and_sign_message_proof #cinvs #a tr sender receiver payload pk_recei
   sign_message_proof #cinvs #a tr sender receiver (Inr (enc_payload, pk_receiver)) sk_sender sign_nonce;
   ()
 
+#push-options "--z3rlimit 50"
 val send_confidential_authenticated_proof:
   {|protocol_invariants|} ->
   #a:Type0 -> {|comm_layer_core_config a|}  ->
@@ -503,6 +506,7 @@ let send_confidential_authenticated_proof #invs #a tr higher_layer_preds comm_ke
     assert(trace_invariant tr_out);
     ()
   )
+#pop-options
 
 
 #push-options "--ifuel 1 --z3rlimit 40"
@@ -563,6 +567,7 @@ let verify_and_decrypt_message_proof #cinvs #a tr sender receiver msg_encrypted_
   )
 #pop-options
 
+#push-options "--z3rlimit 50"
 val receive_confidential_authenticated_proof:
   {|invs:protocol_invariants|} ->
   #a:Type -> {|comm_layer_core_config a|} ->
@@ -609,3 +614,4 @@ let receive_confidential_authenticated_proof #invs #a tr higher_layer_preds comm
     assert(tr == tr_out);
     ()
   )
+#pop-options

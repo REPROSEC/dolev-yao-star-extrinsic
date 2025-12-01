@@ -936,11 +936,9 @@ val is_most_recent_state_for_state_was_set:
   [SMTPat (is_most_recent_state_for prin sess_id (Some content) tr)]
 let is_most_recent_state_for_state_was_set prin sess_id content tr =
   reveal_opaque (`%is_most_recent_state_for) (is_most_recent_state_for);
-  match trace_search_last tr (is_state_for prin sess_id) with
-  | None -> assert(False)
-  | Some ts -> (
-    assert(entry_at tr ts (SetState prin sess_id content))
-  )
+  // `ts` is witness to the `exists` in `state_was_set`
+  let Some ts = trace_search_last tr (is_state_for prin sess_id) in
+  ()
 
 val is_most_recent_state_for_get_most_recent_state_for_ghost:
   prin:principal -> sess_id:state_id -> st_opt:option bytes -> tr:trace ->

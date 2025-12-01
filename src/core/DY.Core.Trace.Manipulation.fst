@@ -122,7 +122,9 @@ val add_entry_entry_exists:
     let ((), tr_out) = add_entry e tr in
     entry_exists tr_out e
   ))
-let add_entry_entry_exists e tr = ()
+let add_entry_entry_exists e tr =
+  let ((), tr_out) = add_entry e tr in
+  assert(get_entry_at tr_out (trace_length tr) == e)
 
 /// Adding a trace entry preserves the trace invariant
 /// when the trace entry satisfy the invariant.

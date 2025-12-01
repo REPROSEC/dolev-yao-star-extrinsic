@@ -179,6 +179,7 @@ let send_request_proof #invs #a tr comm_keys_ids higher_layer_preds client serve
   )
 #pop-options
 
+
 #push-options "--z3rlimit 50"
 val receive_request_proof:
   {|invs:protocol_invariants|} ->
@@ -223,28 +224,11 @@ let receive_request_proof #invs #a #config tr comm_keys_ids higher_layer_preds s
     let req_msg_bytes:bytes = serialize comm_message_t req_msg_t in
     let req_send_event client:communication_reqres_event a = CommClientSendRequest client server request req_msg.key in
 
-    let i = find_event_triggered_at_timestamp tr_recv server (CommConfReceiveMsg server req_msg_t <: communication_core_event comm_message_t #(comm_layer_tag_core_config_reqres a)) in
-    conf_message_secrecy tr_recv i (comm_core_higher_layer_event_preds_reqres a) server req_msg_t;
+    conf_message_secrecy tr' request_response_event_preconditions server req_msg_bytes;
 
-    // Properties that can be proved uniformly in both the honest and corrupt case
-    eliminate (exists client. event_triggered tr_recv client (req_send_event client)) \/
-              (is_publishable tr_recv req_msg.request /\ is_publishable tr_recv req_msg.key)
-    returns (
-      is_well_formed a (is_knowable_by (get_response_label tr_recv req_meta_data) tr_recv) request /\
-      req_msg.key `has_usage tr_recv` (AeadKey (comm_layer_aead_tag a) empty)
-    )
-    with _. eliminate exists client. event_triggered tr_recv client (req_send_event client)
-      returns _
-      with _. (
-        get_response_label_knowable tr_recv req_meta_data request;
-
-        let i = find_event_triggered_at_timestamp tr_recv client (req_send_event client) in
-        ()
-      )
-    and _. (has_usage_publishable tr_recv req_msg.key (AeadKey (comm_layer_aead_tag a) empty);
-      parse_wf_lemma a (is_publishable tr_recv) req_msg.request;
-      ()
-    );
+    assert(is_knowable_by (get_label tr' req_msg.key) tr' req_msg.request);
+    FStar.Classical.move_requires (has_usage_publishable tr' req_msg.key) (AeadKey comm_layer_aead_tag empty);
+    assert(req_msg.key `has_usage tr'` (AeadKey comm_layer_aead_tag empty));
 
     // Relating knowledge of the request to knowledge of its fields
     serialize_parse_inv_lemma #bytes a req_msg.request;
@@ -351,6 +335,7 @@ let compute_response_message_proof #cinvs #a tr server req_meta_data nonce reque
   ()
 #pop-options
 
+#push-options "--z3rlimit 75"
 val send_response_proof:
   {|protocol_invariants|} ->
   #a:eqtype -> {|comm_layer_reqres_config a|} ->
@@ -389,6 +374,7 @@ let send_response_proof #invs #a tr higher_layer_preds server req_meta_data resp
     assert(trace_invariant tr_out);
     ()
   )
+#pop-options
 
 
 #push-options "--fuel 0 --ifuel 1 --z3rlimit 10"
@@ -474,4 +460,5 @@ let receive_response_proof #invs #a tr higher_layer_preds client req_meta_data m
     assert(trace_invariant tr_out);
     ()
   )
+#pop-options
 #pop-options
