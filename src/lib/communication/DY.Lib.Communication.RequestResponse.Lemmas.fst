@@ -132,7 +132,7 @@ let initialize_communication_reqres_proof tr a sender receiver =
 #pop-options
 
 
-#push-options "--z3rlimit 200"
+#push-options "--z3rlimit 250"
 val send_request_proof:
   {|protocol_invariants|} ->
   #a:Type0 -> {|comm_layer_reqres_config a|} ->
@@ -235,8 +235,7 @@ let receive_request_proof #invs #a #config tr comm_keys_ids higher_layer_preds s
     let req_msg_bytes:bytes = serialize comm_message_t req_msg_t in
     let req_send_event client:communication_reqres_event a = CommClientSendRequest client server request req_msg.key in
 
-    let i = find_event_triggered_at_timestamp tr_recv server (CommConfReceiveMsg server req_msg_t <: communication_core_event comm_message_t #(comm_layer_tag_core_config_reqres a)) in
-    conf_message_secrecy tr_recv i (comm_core_higher_layer_event_preds_reqres a) server req_msg_t;
+    conf_message_properties tr_recv (comm_core_higher_layer_event_preds_reqres a) server req_msg_t;
     
     // Properties that can be proved uniformly in both the honest and corrupt case
     eliminate (exists client. event_triggered tr_recv client (req_send_event client)) \/
@@ -297,7 +296,7 @@ val mk_comm_layer_response_nonce_proof:
     | (Some nonce, tr_out) -> (
       trace_invariant tr_out /\
       is_secret (get_response_label tr_out req_meta_data) tr_out nonce /\
-      get_label tr_out nonce `can_flow tr_out` get_label tr_out req_meta_data.key
+      is_knowable_by (get_response_label tr_out req_meta_data) tr_out nonce
     )
   ))
   [SMTPat (trace_invariant tr);
@@ -325,7 +324,7 @@ val mk_comm_layer_response_nonce_labeled_proof:
     | (Some nonce, tr_out) -> (
       trace_invariant tr_out /\
       is_secret (join (get_response_label tr_out req_meta_data) lab) tr_out nonce /\
-      get_label tr_out nonce `can_flow tr_out` join (get_label tr_out req_meta_data.key) lab
+      is_knowable_by (join (get_response_label tr_out req_meta_data) lab) tr_out nonce
     )
   ))
   [SMTPat (trace_invariant tr);
@@ -368,7 +367,7 @@ let compute_response_message_proof #cinvs #a tr server req_meta_data nonce reque
   serialize_wf_lemma comm_message_t (is_publishable tr) (ResponseMessage {nonce; ciphertext});
   ()
 
-#push-options "--z3rlimit 50"
+#push-options "--z3rlimit 10"
 val send_response_proof:
   {|protocol_invariants|} ->
   #a:eqtype -> {|comm_layer_reqres_config a|} ->
@@ -397,15 +396,17 @@ let send_response_proof #invs #a tr higher_layer_preds server req_meta_data resp
   | (Some msg_id, tr_out) -> (
     let (Some state, tr_st):(option (communication_states a) & trace) = get_state server req_meta_data.sid tr in
     let ServerReceiveRequest srr = state in
+    assert(trace_invariant tr_st);
     let ((), tr_ev) = trigger_event server (CommServerSendResponse server req_meta_data.request response req_meta_data.key <: communication_reqres_event a) tr_st in
     get_response_label_eq_key_label tr_ev req_meta_data;
     assert(trace_invariant tr_ev);
     let (nonce, tr_nonce) = mk_rand NoUsage public 32 tr_ev in
+    assert(trace_invariant tr_nonce);
     compute_response_message_proof tr_nonce server req_meta_data nonce req_meta_data.request response;
     let resp_msg_bytes = compute_response_message server req_meta_data nonce response in
-    let (msg_id, tr_nonce) = send_msg resp_msg_bytes tr_nonce in
-    assert(tr_out == tr_nonce);
-    assert(trace_invariant tr_out);
+    let (msg_id, tr_snd) = send_msg resp_msg_bytes tr_nonce in
+    assert(tr_out == tr_snd);
+    assert(trace_invariant tr_out); 
     ()
   )
 #pop-options
@@ -518,7 +519,7 @@ let request_response_property #invs #a tr higher_layer_preds client server reque
   )
 #pop-options
 
-#push-options "--z3rlimit 100"
+#push-options "--z3rlimit 150"
 val receive_response_proof:
   {|protocol_invariants|} ->
   #a:Type -> {|comm_layer_reqres_config a|} ->

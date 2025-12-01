@@ -20,7 +20,7 @@ open DY.Lib.Communication.Core.Invariants
 
 (*** AEAD Predicate ***)
 
-#push-options "--ifuel 1"
+#push-options "--ifuel 2"
 val aead_crypto_predicate_communication_layer_reqres:
   {|cusages:crypto_usages|} ->
   a:Type0 -> {|comm_layer_reqres_config a|} ->

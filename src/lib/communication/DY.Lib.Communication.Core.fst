@@ -239,6 +239,7 @@ let receive_confidential_authenticated #a comm_keys_ids receiver msg_id =
   let*? sender = return (get_sender #a msg_encrypted_signed) in
   let*? vk_sender = get_public_key receiver comm_keys_ids.pki (LongTermSigKey (comm_layer_sign_tag a)) sender in 
   let*? cm:communication_message a = return (verify_and_decrypt_message #a receiver sk_receiver vk_sender msg_encrypted_signed) in 
+  trigger_event receiver (CommConfReceiveMsg receiver cm.payload <: communication_core_event a);*
   trigger_event receiver (CommConfAuthReceiveMsg sender receiver cm.payload <: communication_core_event a);*
   return (Some cm)
 
