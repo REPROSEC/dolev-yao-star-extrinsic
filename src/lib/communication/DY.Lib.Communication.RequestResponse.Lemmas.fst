@@ -21,21 +21,20 @@ open DY.Lib.Communication.RequestResponse.Invariants
 
 (*** Lemmas ***)
 
-val get_response_label_knowable:
+val get_response_label_eq_key_label:
   {|cinvs:crypto_invariants|} ->
-  #a:Type0 -> {|comm_layer_reqres_config a|} -> tr:trace ->
-  req_meta_data:comm_meta_data a -> msg:a ->
+  #a:Type0 -> {|conf:comm_layer_reqres_config a|} -> tr:trace ->
+  req_meta_data:comm_meta_data a ->
   Lemma
   (requires
-    cinvs.usages == default_crypto_usages
+    cinvs.usages == default_crypto_usages /\
+    bytes_well_formed tr req_meta_data.key
   )
   (ensures
-    is_well_formed a (is_knowable_by (get_response_label tr req_meta_data) tr) msg <==>
-    is_well_formed a (is_knowable_by (get_label tr req_meta_data.key) tr) msg
+    get_response_label tr req_meta_data == get_label tr (req_meta_data.key)
   )
-let get_response_label_knowable #cinvs #a tr req_meta_data msg =
-  reveal_opaque (`%get_response_label) get_response_label;
-  ()
+let get_response_label_eq_key_label #cinvs #a #_ tr req_meta_data =
+  reveal_opaque (`%get_response_label) (get_response_label)
 
 val get_response_label_later:
   #a:Type0 -> {|comm_layer_reqres_config a|} ->
@@ -180,7 +179,7 @@ let send_request_proof #invs #a tr comm_keys_ids higher_layer_preds client serve
 #pop-options
 
 
-#push-options "--z3rlimit 50"
+#push-options "--z3rlimit 25"
 val receive_request_proof:
   {|invs:protocol_invariants|} ->
   #a:Type -> {|comm_layer_reqres_config a|} ->
@@ -218,24 +217,32 @@ let receive_request_proof #invs #a #config tr comm_keys_ids higher_layer_preds s
   | (Some (payload, req_meta_data), tr_out) -> (
     receive_confidential_proof #invs #comm_message_t #(comm_layer_tag_core_config_reqres a) tr (comm_core_higher_layer_event_preds_reqres a) comm_keys_ids server msg_id;
     let (Some req_msg_t, tr_recv) = receive_confidential #comm_message_t #(comm_layer_tag_core_config_reqres a) comm_keys_ids server msg_id tr in
+    assert(trace_invariant tr_recv);
+    
     let RequestMessage req_msg = req_msg_t in
     let Some request = parse a req_msg.request in
 
     let req_msg_bytes:bytes = serialize comm_message_t req_msg_t in
     let req_send_event client:communication_reqres_event a = CommClientSendRequest client server request req_msg.key in
 
-    conf_message_secrecy tr' request_response_event_preconditions server req_msg_bytes;
+    conf_message_secrecy tr_recv (comm_core_higher_layer_event_preds_reqres a) server req_msg_t;
 
-    assert(is_knowable_by (get_label tr' req_msg.key) tr' req_msg.request);
-    FStar.Classical.move_requires (has_usage_publishable tr' req_msg.key) (AeadKey comm_layer_aead_tag empty);
-    assert(req_msg.key `has_usage tr'` (AeadKey comm_layer_aead_tag empty));
+    parse_wf_lemma a (is_knowable_by (principal_label server) tr_recv) req_msg.request;
+    assert(is_well_formed a (is_knowable_by (principal_label server) tr_recv) request);
+    
+    FStar.Classical.move_requires (parse_wf_lemma a (is_publishable tr_recv)) req_msg.request;
+    get_response_label_eq_key_label tr_recv req_meta_data;
+    assert(is_well_formed a (is_knowable_by (get_response_label tr_recv req_meta_data) tr_recv) request);
 
-    // Relating knowledge of the request to knowledge of its fields
-    serialize_parse_inv_lemma #bytes a req_msg.request;
-    assert(is_comm_response_payload tr_recv server req_meta_data payload);
-
+    FStar.Classical.move_requires (has_usage_publishable tr_recv req_msg.key) (AeadKey (comm_layer_aead_tag a) empty);
+    assert(req_msg.key `has_usage tr_recv` (AeadKey (comm_layer_aead_tag a) empty));
+    
     let ((), tr_ev) = trigger_event server (CommServerReceiveRequest server request req_msg.key <: communication_reqres_event a) tr_recv in
+    assert(event_triggered tr_ev server (CommServerReceiveRequest server payload req_meta_data.key <: communication_reqres_event a));
+    assert(trace_invariant tr_ev);
+
     let (sid', tr_sess) = new_session_id server tr_ev in
+    assert(trace_invariant tr_sess);
 
     // Needed for the proof to go through
     assert((state_predicate_communication_layer_reqres a).pred tr_sess server sid' (ServerReceiveRequest {request; key=req_msg.key} <: communication_states a));
@@ -322,7 +329,7 @@ val compute_response_message_proof:
   )
 let compute_response_message_proof #cinvs #a tr server req_meta_data nonce request response =
   reveal_opaque (`%compute_response_message) (compute_response_message #a);
-  get_response_label_knowable tr req_meta_data response;
+  get_response_label_eq_key_label tr req_meta_data;
   let res_bytes = serialize a response in
   serialize_wf_lemma a (is_knowable_by (get_response_label tr req_meta_data) tr) response;
   let ad:authenticated_data = {server} in
@@ -377,7 +384,7 @@ let send_response_proof #invs #a tr higher_layer_preds server req_meta_data resp
 #pop-options
 
 
-#push-options "--fuel 0 --ifuel 1 --z3rlimit 10"
+#push-options "--fuel 0 --ifuel 1 --z3rlimit 20"
 val decode_response_proof:
   {|crypto_invariants|} ->
   #a:Type -> {|comm_layer_reqres_config a|} ->
@@ -452,7 +459,7 @@ let receive_response_proof #invs #a tr higher_layer_preds client req_meta_data m
     let (Some resp_msg_bytes, tr') = recv_msg msg_id tr' in
     decode_response_proof #invs.crypto_invs #a tr' client csr.server csr.key resp_msg_bytes;
     let Some response = decode_response_message csr.server csr.key resp_msg_bytes in
-    get_response_label_knowable tr' req_meta_data response;
+    get_response_label_eq_key_label tr' req_meta_data;
     let ((), tr') = set_state client req_meta_data.sid (ClientReceiveResponse {server=csr.server; response; key=csr.key} <: communication_states a) tr' in
     let ((), tr') = trigger_event client (CommClientReceiveResponse client csr.server response csr.key <: communication_reqres_event a) tr' in
     assert(event_triggered tr' client (CommClientReceiveResponse client csr.server response csr.key <: communication_reqres_event a));
@@ -460,5 +467,4 @@ let receive_response_proof #invs #a tr higher_layer_preds client req_meta_data m
     assert(trace_invariant tr_out);
     ()
   )
-#pop-options
 #pop-options
