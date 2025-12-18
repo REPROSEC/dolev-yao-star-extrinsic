@@ -40,6 +40,8 @@ let enable_core_comm_layer_lemmas preds =
 
 (**** Initialization Satisfies the Trace Invariants ****)
 
+#push-options "--ifuel 2 --z3rlimit 25"
+val initialize_communication_proof:
 #push-options "--z3rlimit 20"
 val initialize_communication_core_proof:
   {|invs:protocol_invariants|} ->
@@ -265,28 +267,19 @@ val sign_message_proof:
   )
 let sign_message_proof #cinvs #a #config tr sender receiver input sk_sender nonce =
   reveal_opaque (`%sign_message) (sign_message #a);
-  // The proof is duplicated here to improve the proof performance
-  match input with
-    | Inl payload -> (
-      let sig_input:signature_input a = Plain sender receiver payload in
-      let sig_input_bytes = serialize (signature_input a) sig_input in
-      serialize_wf_lemma (signature_input a) (is_publishable tr) sig_input;
-      let signature = sign sk_sender nonce sig_input_bytes in
-      assert(bytes_invariant tr signature); // Improves proof performance
-      let msg_signed = SigMessage {msg=sig_input_bytes; signature} in
-      serialize_wf_lemma comm_message_t (is_publishable tr) msg_signed;
-      ()
-    )
-    | Inr (payload, pk) -> (
-      let sig_input:signature_input a = Encrypted sender receiver payload pk in
-      let sig_input_bytes = serialize (signature_input a) sig_input in
-      serialize_wf_lemma (signature_input a) (is_publishable tr) sig_input;
-      let signature = sign sk_sender nonce sig_input_bytes in
-      assert(bytes_invariant tr signature); // Improves proof performance
-      let msg_signed = SigMessage {msg=sig_input_bytes; signature} in
-      serialize_wf_lemma comm_message_t (is_publishable tr) msg_signed;
-      ()
-    )
+  let payload_bytes = serialize a payload in
+  assert(is_publishable tr payload_bytes);
+  let sig_input = match pk_receiver with
+    | None -> Plain sender receiver payload_bytes
+    | Some pk -> Encrypted sender receiver payload_bytes pk
+  in
+  let sig_input_bytes = serialize signature_input sig_input in
+  serialize_wf_lemma signature_input (is_publishable tr) sig_input;
+  let signature = sign sk_sender nonce sig_input_bytes in
+  let msg_signed = SigMessage {msg=sig_input_bytes; signature} in
+  assert(bytes_invariant tr signature);
+  serialize_wf_lemma com_message_t (is_publishable tr) msg_signed;
+  ()
 #pop-options
 
 val send_authenticated_proof:

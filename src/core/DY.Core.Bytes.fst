@@ -2539,6 +2539,7 @@ let has_usage_dh_known_peer tr sk sk_usg pk pk_usg =
 
 /// User lemma (dh bytes usage with unknown peer)
 
+#push-options "--z3rlimit 25"
 val has_usage_dh_unknown_peer:
   {|crypto_usages|} ->
   tr:trace ->
@@ -2561,6 +2562,7 @@ let has_usage_dh_unknown_peer tr sk sk_usg pk =
   reveal_opaque (`%has_usage) (has_usage);
   FStar.Classical.forall_intro (FStar.Classical.move_requires (dh_usage.unknown_peer_usage_implies sk_usg));
   FStar.Classical.forall_intro (FStar.Classical.move_requires (dh_usage.known_peer_usage_commutes sk_usg))
+#pop-options
 
 (*** KDF ***)
 

@@ -203,7 +203,7 @@ let send_msg2_proof tr global_sess_id bob sess_id =
   | (_, tr) -> ()
 #pop-options
 
-#push-options "--z3rlimit 100"
+#push-options "--z3rlimit 75"
 val prepare_msg3_proof:
   tr:trace ->
   global_sess_id:nsl_global_sess_ids -> alice:principal -> sess_id:state_id -> msg_id:timestamp ->
@@ -229,7 +229,7 @@ let prepare_msg3_proof tr global_sess_id alice sess_id msg_id =
   )
 #pop-options
 
-#push-options "--z3rlimit 100"
+#push-options "--z3rlimit 150"
 val send_msg3_proof:
   tr:trace ->
   global_sess_id:nsl_global_sess_ids -> alice:principal -> sess_id:state_id ->

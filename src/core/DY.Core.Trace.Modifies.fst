@@ -12,7 +12,7 @@ open FStar.Set
 
 #set-options "--fuel 0 --ifuel 1"
 
-type address = principal & state_id
+type address:eqtype = principal & state_id
 
 type modifies_set = set address
 
@@ -20,13 +20,16 @@ type modifies_set = set address
 
 val lemma_union_empty :
   #a:eqtype -> s:set a ->
-  Lemma (union s empty == s /\ union empty s == s)
-  [SMTPatOr [
-    [SMTPat (union s empty)];
-    [SMTPat (union empty s)]
-  ]]
+  Lemma (union s empty == s)
+  [SMTPat (union s empty)]
 let lemma_union_empty s =
-  assert(equal (union s empty) s);
+  assert(equal (union s empty) s)
+
+val lemma_empty_union :
+  #a:eqtype -> s:set a ->
+  Lemma (union empty s == s)
+  [SMTPat (union empty s)]
+let lemma_empty_union s =
   assert(equal (union empty s) s)
 
 /// Modifies functions
@@ -114,9 +117,11 @@ val traceful_modifies_bind :
   tr_in:trace ->
   Lemma
   (ensures (
-    let (y, tr_mid) = x tr_in in
     traceful_modifies ((let*) x f) tr_in ==
-    union (traceful_modifies x tr_in) (traceful_modifies (f y) tr_mid)
+    (
+      let (y, tr_mid) = x tr_in in
+      union (traceful_modifies x tr_in) (traceful_modifies (f y) tr_mid)
+    )
   ))
   [SMTPat (traceful_modifies ((let*) x f) tr_in)]
 let traceful_modifies_bind x f tr_in =
@@ -131,11 +136,12 @@ val traceful_modifies_option_bind :
   tr_in:trace ->
   Lemma
   (ensures (
-    let (y, tr_mid) = x tr_in in
     traceful_modifies ((let*?) x f) tr_in ==
-    (match y with
-    | None -> traceful_modifies x tr_in
-    | Some y -> (union (traceful_modifies x tr_in) (traceful_modifies (f y) tr_mid))
+    (
+      let (y, tr_mid) = x tr_in in
+      match y with
+      | None -> traceful_modifies x tr_in
+      | Some y -> (union (traceful_modifies x tr_in) (traceful_modifies (f y) tr_mid))
     )
   ))
   [SMTPat (traceful_modifies ((let*?) x f) tr_in)]
@@ -246,6 +252,22 @@ val traceful_modifies_trigger_event :
   [SMTPat (traceful_modifies (trigger_event prin tag b) tr)]
 let traceful_modifies_trigger_event prin tag b tr =
   reveal_opaque (`%trigger_event) (trigger_event)
+
+/// Note: This lemma cannot have a meaningful SMT pattern because if/then/else is
+/// encoded to Z3 in a way that is not compatible with these patterns.
+///
+/// It should be used carefully, because any traceful f is equivalent to
+/// "if true then f else _", and so applying the lemma too eagerly (e.g., in
+/// tactics) can lead o loops.
+val traceful_modifies_if_then_else_commutes :
+  #a:Type -> b:bool ->
+  f1:traceful a -> f2:traceful a -> tr:trace ->
+  Lemma
+  (ensures (
+    traceful_modifies (if b then f1 else f2) tr ==
+    (if b then traceful_modifies f1 tr else traceful_modifies f2 tr)
+  ))
+let traceful_modifies_if_then_else_commutes #a b f1 f2 tr = ()
 
 /// The following two lemmas allow us to propagate the is_most_recent_state_for predicate
 /// when a given address is unmodified.

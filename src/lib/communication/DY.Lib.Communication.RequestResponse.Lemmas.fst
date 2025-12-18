@@ -235,43 +235,22 @@ let receive_request_proof #invs #a #config tr comm_keys_ids higher_layer_preds s
     let req_msg_bytes:bytes = serialize comm_message_t req_msg_t in
     let req_send_event client:communication_reqres_event a = CommClientSendRequest client server request req_msg.key in
 
-    conf_message_properties tr_recv (comm_core_higher_layer_event_preds_reqres a) server req_msg_t;
-    
-    // Properties that can be proved uniformly in both the honest and corrupt case
-    eliminate (exists client. event_triggered tr_recv client (req_send_event client)) \/
-              (is_publishable tr_recv req_msg.request /\ is_publishable tr_recv req_msg.key)
-    returns (
-      is_well_formed a (is_knowable_by (get_response_label tr_recv req_meta_data) tr_recv) request /\
-      req_msg.key `has_usage tr_recv` (AeadKey (comm_layer_aead_tag a) empty)
-    )
-    with _. eliminate exists client. event_triggered tr_recv client (req_send_event client)
-      returns _
-      with _. (
-        get_response_label_eq_key_label tr_recv req_meta_data;
+    conf_message_secrecy tr' request_response_event_preconditions server req_msg_bytes;
 
-        let i = find_event_triggered_at_timestamp tr_recv client (req_send_event client) in
-        assert(event_predicate_communication_layer_reqres higher_layer_preds (prefix tr_recv i) client (req_send_event client));
-        ()
-      )
-    and _. (has_usage_publishable tr_recv req_msg.key (AeadKey (comm_layer_aead_tag a) empty);
-      parse_wf_lemma a (is_publishable tr_recv) req_msg.request;
-      ()
-    );
+    assert(is_knowable_by (get_label tr' req_msg.key) tr' req_msg.request);
+    FStar.Classical.move_requires (has_usage_publishable tr' req_msg.key) (AeadKey comm_layer_aead_tag empty);
+    assert(req_msg.key `has_usage tr'` (AeadKey comm_layer_aead_tag empty));
 
     // Relating knowledge of the request to knowledge of its fields
     serialize_parse_inv_lemma #bytes a req_msg.request;
-    assert(is_comm_response_payload tr_recv server req_meta_data payload);
+    let Some payload' = parse a req_msg.request in
+    assert(is_comm_response_payload tr' server req_meta_data payload');
 
-    let ((), tr_ev) = trigger_event server (CommServerReceiveRequest server request req_msg.key <: communication_reqres_event a) tr_recv in
-    let (sid', tr_sess) = new_session_id server tr_ev in
-
-    // Needed for the proof to go through
-    assert((state_predicate_communication_layer_reqres a).pred tr_sess server sid' (ServerReceiveRequest {request; key=req_msg.key} <: communication_states a));
-    let ((), tr_st) = set_state server sid' (ServerReceiveRequest {request; key=req_msg.key} <: communication_states a) tr_sess in
-
-    get_response_label_eq_key_label tr_recv req_meta_data;
-    
-    assert(tr_out == tr_st);
+    let ((), tr') = trigger_event server (CommServerReceiveRequest server req_msg.request req_msg.key) tr' in
+    assert(trace_invariant tr');
+    let (sid', tr') = new_session_id server tr' in
+    let ((), tr') = set_state server sid' (ServerReceiveRequest {request=req_msg.request; key=req_msg.key} <: communication_states) tr' in
+    assert(tr' == tr_out);
     assert(trace_invariant tr_out);
     ()
   )
@@ -299,7 +278,7 @@ val mk_comm_layer_response_nonce_proof:
       is_knowable_by (get_response_label tr_out req_meta_data) tr_out nonce
     )
   ))
-  [SMTPat (trace_invariant tr);
+[SMTPat (trace_invariant tr);
   SMTPat (mk_comm_layer_response_nonce req_meta_data usg tr)]
 let mk_comm_layer_response_nonce_proof #invs #a tr req_meta_data usg =
   reveal_opaque (`%mk_comm_layer_response_nonce) (mk_comm_layer_response_nonce #a);
@@ -366,6 +345,7 @@ let compute_response_message_proof #cinvs #a tr server req_meta_data nonce reque
   FStar.Classical.move_requires (aead_enc_preserves_publishability tr req_meta_data.key nonce res_bytes) ad_bytes;
   serialize_wf_lemma comm_message_t (is_publishable tr) (ResponseMessage {nonce; ciphertext});
   ()
+#pop-options
 
 #push-options "--z3rlimit 10"
 val send_response_proof:
@@ -409,6 +389,7 @@ let send_response_proof #invs #a tr higher_layer_preds server req_meta_data resp
     assert(trace_invariant tr_out); 
     ()
   )
+#pop-options
 #pop-options
 
 

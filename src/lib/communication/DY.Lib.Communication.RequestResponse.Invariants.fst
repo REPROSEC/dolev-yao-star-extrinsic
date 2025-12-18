@@ -38,11 +38,11 @@ let aead_crypto_predicate_communication_layer_reqres #cusages a #config = {
     )
   );
   pred_later = (fun tr1 tr2 key_usage key nonce msg ad -> (
-    parse_wf_lemma authenticated_data (bytes_well_formed tr1) ad;
-    ()
+    match parse authenticated_data ad with
+    | None -> assert(False)
+    | Some {server} -> ()
   ))
 }
-#pop-options
 
 val aead_crypto_predicate_and_tag_communication_layer_reqres:
   {|cusages:crypto_usages|} ->

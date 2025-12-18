@@ -133,7 +133,6 @@ let branch_unmodified_test_2 prin =
   else
   return (new_sid1, new_sid2)
 
-#push-options "--fuel 4 --ifuel 2 --z3rlimit 200 --z3cliopt 'smt.qi.eager_threshold=100'"
 val branch_unmodified_proof_2 :
   prin:principal -> sid:state_id ->
   content_opt:option bytes -> tr_in:trace ->
@@ -145,11 +144,33 @@ val branch_unmodified_proof_2 :
     )
   )
 let branch_unmodified_proof_2 prin sid content_opt tr_in =
-  let ((new_sid1, new_sid2), tr_out) = branch_unmodified_test_2 prin tr_in in
+  let (Some (new_sid1, new_sid2), tr_out) = branch_unmodified_test_2 prin tr_in in
+  assert(traceful_modifies (branch_unmodified_test_2 prin) tr_in `subset` (singleton (prin, new_sid1))) by (
+    // This is a temporary solution, that should get converted into a general tactic for
+    // automating proofs about traceful_modifies.
+    let open FStar.Tactics in
+    pointwise' (
+      (fun () -> apply_lemma_rw (`traceful_modifies_get_state)) <|>
+      (fun () -> apply_lemma_rw (`traceful_modifies_set_state)) <|>
+      (fun () -> apply_lemma_rw (`traceful_modifies_recv_msg)) <|>
+      (fun () -> apply_lemma_rw (`traceful_modifies_send_msg)) <|>
+      (fun () -> apply_lemma_rw (`traceful_modifies_mk_rand)) <|>
+      (fun () -> apply_lemma_rw (`traceful_modifies_trigger_event)) <|>
+      (fun () -> apply_lemma_rw (`traceful_modifies_new_session_id)) <|>
+      (fun () -> apply_lemma_rw (`traceful_modifies_get_trace)) <|>
+      (fun () -> apply_lemma_rw (`traceful_modifies_guard_tr)) <|>
+      (fun () -> apply_lemma_rw (`traceful_modifies_get_time)) <|>
+      (fun () -> apply_lemma_rw (`traceful_modifies_add_entry)) <|>
+      (fun () -> apply_lemma_rw (`traceful_modifies_return)) <|>
+      (fun () -> apply_lemma_rw (`traceful_modifies_bind)) <|>
+      (fun () -> apply_lemma_rw (`traceful_modifies_option_bind)) <|>
+      (fun () -> apply_lemma_rw (`traceful_modifies_if_then_else_commutes)) <|>
+      trefl
+    );
+    l_to_r [`lemma_empty_union; `lemma_union_empty];
+    ()
+  );
   if sid = new_sid1 then ()
-  else begin
-    introduce is_most_recent_state_for prin sid content_opt tr_in ==>
-              is_most_recent_state_for prin sid content_opt tr_out
-    with _. traceful_is_most_recent_state_for_later prin sid content_opt (branch_unmodified_test_2 prin) tr_in
-  end
-#pop-options
+  else introduce is_most_recent_state_for prin sid content_opt tr_in ==>
+                 is_most_recent_state_for prin sid content_opt tr_out
+  with _. traceful_is_most_recent_state_for_later prin sid content_opt (branch_unmodified_test_2 prin) tr_in
