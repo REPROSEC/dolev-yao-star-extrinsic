@@ -35,6 +35,9 @@ type comm_meta_data (a:Type) {|config:comm_layer_reqres_config a|} = {
 %splice [ps_comm_meta_data] (gen_parser (`comm_meta_data))
 %splice [ps_comm_meta_data_is_well_formed] (gen_is_well_formed_lemma (`comm_meta_data))
 
+instance parseable_serializeable_bytes_comm_meta_data (a:Type) {|comm_layer_reqres_config a|}: parseable_serializeable bytes (comm_meta_data a)
+  = mk_parseable_serializeable (ps_comm_meta_data a)
+
 [@@"opaque_to_smt"]
 val get_response_label: tr:trace -> #a:Type0 -> {|comm_layer_reqres_config a|} -> comm_meta_data a -> label
 let get_response_label tr #a #ps req_meta_data = get_label #default_crypto_usages tr req_meta_data.key

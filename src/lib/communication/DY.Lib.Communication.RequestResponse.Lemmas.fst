@@ -8,6 +8,7 @@ open DY.Lib.State.PKI
 open DY.Lib.State.PrivateKeys
 open DY.Lib.Event.Typed
 open DY.Lib.State.Typed
+open DY.Lib.Comparse.Parsers
 
 open DY.Lib.Communication.Data
 open DY.Lib.Communication.Core
@@ -71,6 +72,37 @@ val comm_meta_data_knowable:
 let comm_meta_data_knowable #cinvs tr a #ps prin req_meta_data =
   is_knowable_by (principal_label prin) tr req_meta_data.key /\
   is_well_formed a (is_knowable_by (principal_label prin) tr) req_meta_data.request
+
+
+instance parseable_serializeable_bytes_state_id: parseable_serializeable bytes state_id
+  = mk_parseable_serializeable ps_state_id
+
+instance parseable_serializeable_bytes_principal: parseable_serializeable bytes principal
+  = mk_parseable_serializeable ps_principal
+
+val comm_meta_data_knowable_proof: 
+  {|crypto_invariants|} ->
+  tr:trace ->
+  a:Type -> {|comm_layer_reqres_config a|} ->
+  st_t:Type0 -> {|ps:parseable_serializeable bytes st_t|} ->
+  sess_id:state_id -> st:st_t -> {|local_state st_t|} ->
+  prin:principal -> req_meta_data:comm_meta_data a ->
+  Lemma
+  (requires
+    comm_meta_data_knowable tr a prin req_meta_data
+  )
+  (ensures
+    is_well_formed (comm_meta_data a) (is_knowable_by (principal_typed_state_content_label prin (DY.Lib.State.Typed.tag #st_t) sess_id st) tr) req_meta_data
+  )
+let comm_meta_data_knowable_proof #cinvs tr a #ps st_t #ps_st_t sess_id st #local_state_st prin req_meta_data = 
+  let lab = principal_typed_state_content_label prin (DY.Lib.State.Typed.tag #st_t) sess_id st in
+  assert(
+    is_knowable_by lab tr req_meta_data.key /\
+    is_well_formed a (is_knowable_by lab tr) req_meta_data.request
+  );
+  assert(is_well_formed state_id (is_knowable_by lab tr) req_meta_data.sid);
+  assert(is_well_formed principal (is_knowable_by lab tr) req_meta_data.server);
+  ()
 
 val comm_client_state_invariant: 
   {|crypto_invariants|} ->
