@@ -400,6 +400,7 @@ let compute_response_message_proof #cinvs #a tr server req_meta_data nonce reque
   ()
 
 #push-options "--z3rlimit 10"
+#restart-solver
 val send_response_proof:
   {|protocol_invariants|} ->
   #a:eqtype -> {|comm_layer_reqres_config a|} ->
@@ -483,6 +484,7 @@ let decode_response_proof #invs #a tr client server response_bytes key =
   )
 #pop-options
 
+#restart-solver
 val comm_client_send_request_injective:
   {|protocol_invariants|} ->
   #a:Type -> {| comm_layer_reqres_config a |} ->
