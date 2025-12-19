@@ -199,7 +199,7 @@ val request_message_properties_send_request:
   )
   (ensures
     (exists client. higher_layer_preds.send_request tr client req_meta_data.server req_meta_data.request (get_response_label tr req_meta_data)) \/
-    is_publishable tr req_meta_data.key
+    (is_publishable tr req_meta_data.key /\ is_well_formed a (is_publishable tr) req_meta_data.request)
   )
 let request_message_properties_send_request #invs #a tr higher_layer_preds req_meta_data =
   request_message_properties #invs #a tr higher_layer_preds req_meta_data
