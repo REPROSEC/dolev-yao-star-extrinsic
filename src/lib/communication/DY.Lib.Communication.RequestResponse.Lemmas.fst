@@ -282,7 +282,7 @@ let send_response_proof #invs #a tr higher_layer_preds server req_meta_data resp
 #pop-options
 
 
-#push-options "--fuel 0 --ifuel 1 --z3rlimit 10"
+#push-options "--fuel 0 --ifuel 1 --z3rlimit 20"
 val decode_response_proof:
   {|crypto_invariants|} ->
   #a:Type -> {| parseable_serializeable bytes a |} ->
