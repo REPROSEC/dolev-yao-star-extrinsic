@@ -10,6 +10,7 @@ open DY.Lib.State.PrivateKeys
 open DY.Lib.State.Typed
 open DY.Lib.Comparse.DYUtils
 
+open DY.Lib.Communication.Data
 open DY.Lib.Communication.Core
 open DY.Lib.Communication.Core.Invariants
 open DY.Lib.Communication.Core.Lemmas
@@ -23,88 +24,83 @@ open DY.Lib.Communication.Core.Lemmas
 
 val conf_message_secrecy:
   {|protocol_invariants|} ->
-  #a:Type -> {| parseable_serializeable bytes a |} ->
+  #a:Type -> {|comm_layer_core_config a|} ->
   tr:trace ->
-  higher_layer_preds:comm_higher_layer_event_preds a ->
+  higher_layer_preds:comm_core_higher_layer_event_preds a ->
   receiver:principal ->
-  payload:bytes ->
+  payload:a ->
   Lemma
   (requires
     trace_invariant tr /\
-    has_communication_layer_event_predicates higher_layer_preds /\
-    event_triggered tr receiver (CommConfReceiveMsg receiver payload)
+    has_communication_layer_core_predicates higher_layer_preds /\
+    event_triggered tr receiver (CommConfReceiveMsg receiver payload <: communication_core_event a)
   )
   (ensures
-    is_knowable_by (principal_label receiver) tr payload /\
-
-    parse_and_pred (fun payload_parsed ->
-      (exists sender. higher_layer_preds.send_conf tr sender receiver payload_parsed) \/
-      is_well_formed a (is_publishable tr) payload_parsed
-    ) payload
+    is_well_formed a (is_knowable_by (principal_label receiver) tr) payload /\
+    ((exists sender. higher_layer_preds.send_conf tr sender receiver payload) \/
+    is_well_formed a (is_publishable tr) payload)
   )
 let conf_message_secrecy #invs #a tr higher_layer_preds receiver payload =
-  let send_event sender = CommConfSendMsg sender receiver payload in
-  let i = find_event_triggered_at_timestamp tr receiver (CommConfReceiveMsg receiver payload) in
+  let send_event sender:communication_core_event a = CommConfSendMsg sender receiver payload in
+  let i = find_event_triggered_at_timestamp tr receiver (CommConfReceiveMsg receiver payload <: communication_core_event a) in
   let tr_i = prefix tr i in
   eliminate (exists sender. event_triggered tr_i sender (send_event sender)) \/
-            is_publishable tr_i payload
+            is_well_formed a (is_publishable tr_i) payload
   returns
-    is_knowable_by (principal_label receiver) tr payload /\
-    parse_and_pred (fun payload_parsed ->
-      (exists sender. higher_layer_preds.send_conf tr sender receiver payload_parsed) \/
-      is_well_formed a (is_publishable tr) payload_parsed
-    ) payload
+    is_well_formed a (is_knowable_by (principal_label receiver) tr) payload /\
+    ((exists sender. higher_layer_preds.send_conf tr sender receiver payload) \/
+    is_well_formed a (is_publishable tr) payload)
   with _. eliminate exists sender. event_triggered tr_i sender (send_event sender)
     returns _
     with _. (
       let j = find_event_triggered_at_timestamp tr sender (send_event sender) in
       find_event_triggered_at_timestamp_later tr_i tr sender (send_event sender);
 
-      serialize_parse_inv_lemma a payload;
-      higher_layer_preds.send_conf_later (prefix tr j) tr sender receiver (Some?.v (parse a payload))
+      higher_layer_preds.send_conf_later (prefix tr j) tr sender receiver payload;
+      ()
     )
-  and _. parse_wf_lemma a (is_publishable tr) payload
+  and _. ()
 
 
 (*** Authenticated Messages Properties ***)
 
 val sender_authentication:
   {|protocol_invariants|} ->
-  #a:Type -> {| parseable_serializeable bytes a |} ->
+  #a:Type -> {|comm_layer_core_config a|} ->
   tr:trace -> i:timestamp ->
-  higher_layer_preds:comm_higher_layer_event_preds a ->
+  higher_layer_preds:comm_core_higher_layer_event_preds a ->
   sender:principal -> receiver:principal ->
-  payload:bytes ->
+  payload:a ->
   Lemma
   (requires
     trace_invariant tr /\
-    has_communication_layer_event_predicates higher_layer_preds /\
-    event_triggered_at tr i receiver (CommAuthReceiveMsg sender receiver payload)
+    has_communication_layer_core_predicates higher_layer_preds /\
+    event_triggered_at tr i receiver (CommAuthReceiveMsg sender receiver payload <: communication_core_event a)
   )
   (ensures
-    event_triggered (prefix tr i) sender (CommAuthSendMsg sender payload) \/
+    comm_auth_send_event_triggered #a (prefix tr i) sender payload \/
     is_corrupt (prefix tr i) (long_term_key_label sender)
   )
-let sender_authentication #invs #a tr i higher_layer_preds sender receiver secret = ()
+let sender_authentication #tag #invs #a tr i higher_layer_preds sender receiver secret = ()
 
 
 (*** Confidential and Authenticated Messages Properties ***)
 
 val sender_confauth_authentication:
   {|protocol_invariants|} ->
-  #a:Type -> {| parseable_serializeable bytes a |} ->
+  #a:Type -> {|comm_layer_core_config a|} ->
   tr:trace -> i:timestamp ->
-  higher_layer_preds:comm_higher_layer_event_preds a ->
+  higher_layer_preds:comm_core_higher_layer_event_preds a ->
   sender:principal -> receiver:principal ->
-  payload:bytes ->
+  payload:a ->
   Lemma
   (requires
     trace_invariant tr /\
-    has_communication_layer_event_predicates higher_layer_preds /\
-    event_triggered_at tr i receiver (CommConfAuthReceiveMsg sender receiver payload)
+    has_communication_layer_core_predicates higher_layer_preds /\
+    event_triggered_at tr i receiver (CommConfAuthReceiveMsg sender receiver payload <: communication_core_event a)
   )
   (ensures
-    event_triggered (prefix tr i) sender (CommConfAuthSendMsg sender receiver payload) \/
+    comm_conf_auth_send_event_triggered #a (prefix tr i) sender receiver payload \/
     is_corrupt (prefix tr i) (long_term_key_label sender)
   )
-let sender_confauth_authentication #invs #a tr i higher_layer_preds sender receiver secret = ()
+let sender_confauth_authentication #tag #invs #a tr i higher_layer_preds sender receiver secret = ()
