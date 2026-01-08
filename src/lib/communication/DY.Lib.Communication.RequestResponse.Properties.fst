@@ -86,6 +86,32 @@ val derive_comm_client_state_invariant:
   )
 let derive_comm_client_state_invariant #invs #a tr higher_layer_preds client req_meta_data = ()
 
+val send_event_properties:
+  {|protocol_invariants|} ->
+  #a:Type -> {|comm_layer_reqres_config a|} ->
+  tr:trace -> client:principal ->
+  higher_layer_preds:comm_reqres_higher_layer_event_preds a ->
+  req_meta_data:comm_meta_data a ->
+  Lemma
+  (requires
+    trace_invariant tr /\
+    has_communication_layer_reqres_predicates higher_layer_preds /\
+    event_triggered tr client (CommClientSendRequest client req_meta_data.server req_meta_data.request req_meta_data.key <: communication_reqres_event a)
+  )
+  (ensures
+    is_well_formed a (is_knowable_by (get_label tr req_meta_data.key) tr) req_meta_data.request /\
+    comm_label client req_meta_data.server == get_response_label tr req_meta_data /\
+    req_meta_data.key `has_usage tr` (AeadKey (comm_layer_aead_tag a) empty) /\
+    higher_layer_preds.send_request tr client req_meta_data.server req_meta_data.request (get_label tr req_meta_data.key)
+  )
+let send_event_properties #invs #a tr client higher_layer_preds req_meta_data =
+  let send_event:communication_reqres_event a = CommClientSendRequest client req_meta_data.server req_meta_data.request req_meta_data.key in
+  let j = find_event_triggered_at_timestamp tr client send_event in
+  let key_label = get_label tr req_meta_data.key in
+  get_response_label_eq_key_label tr req_meta_data;
+  higher_layer_preds.send_request_later (prefix tr j) tr client req_meta_data.server req_meta_data.request key_label;
+  ()
+
 val request_message_properties:
   {|protocol_invariants|} ->
   #a:Type -> {|comm_layer_reqres_config a|} ->
@@ -102,8 +128,10 @@ val request_message_properties:
     is_well_formed a (is_knowable_by (principal_label req_meta_data.server) tr) req_meta_data.request /\
     is_well_formed a (is_knowable_by (get_response_label tr req_meta_data) tr) req_meta_data.request /\
     is_knowable_by (principal_label req_meta_data.server) tr req_meta_data.key /\
-    ((exists client. higher_layer_preds.send_request tr client req_meta_data.server req_meta_data.request (get_response_label tr req_meta_data)) \/
-    is_publishable tr req_meta_data.key)
+    ((exists client. 
+      higher_layer_preds.send_request tr client req_meta_data.server req_meta_data.request (get_response_label tr req_meta_data) /\
+      comm_label client req_meta_data.server == get_response_label tr req_meta_data
+    ) \/ is_publishable tr req_meta_data.key)
   )
 let request_message_properties #invs #a tr higher_layer_preds req_meta_data =
   let send_event client:communication_reqres_event a = CommClientSendRequest client req_meta_data.server req_meta_data.request req_meta_data.key in
@@ -118,8 +146,10 @@ let request_message_properties #invs #a tr higher_layer_preds req_meta_data =
             is_publishable tr_i req_meta_data.key
   returns
     is_well_formed a (is_knowable_by (principal_label req_meta_data.server) tr) req_meta_data.request /\
-    (exists client. higher_layer_preds.send_request tr client req_meta_data.server req_meta_data.request key_label) \/
-    is_publishable tr req_meta_data.key
+    (exists client. 
+      higher_layer_preds.send_request tr client req_meta_data.server req_meta_data.request key_label /\
+      comm_label client req_meta_data.server == get_response_label tr req_meta_data
+    ) \/ is_publishable tr req_meta_data.key
   with _. eliminate exists client. event_triggered tr_i client (send_event client)
     returns _
     with _. (
