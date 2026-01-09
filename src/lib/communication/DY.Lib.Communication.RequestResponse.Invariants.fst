@@ -140,50 +140,49 @@ let has_communication_layer_reqres_state_predicate #invs a #config =
 
 (*** Event Predicates ***)
 
-noeq
-type comm_reqres_higher_layer_event_preds (a:Type) {| comm_layer_reqres_config a |} = {
-  send_request: tr:trace -> client:principal -> server:principal -> request:a -> key_label:label -> prop;
-  send_request_later:
+class comm_reqres_preds (a:Type) {| comm_layer_reqres_config a |} = {
+  send_request_pred: tr:trace -> client:principal -> server:principal -> request:a -> key_label:label -> prop;
+  send_request_pred_later:
     tr1:trace -> tr2:trace ->
     client:principal -> server:principal -> request:a -> key_label:label ->
     Lemma
     (requires
-      send_request tr1 client server request key_label /\
+      send_request_pred tr1 client server request key_label /\
       is_well_formed a (bytes_well_formed tr1) request /\
       tr1 <$ tr2
     )
     (ensures
-      send_request tr2 client server request key_label
+      send_request_pred tr2 client server request key_label
     )
   ;
-  send_response: tr:trace -> server:principal -> request:a -> response:a -> key_label:label -> prop;
-  send_response_later:
+  send_response_pred: tr:trace -> server:principal -> request:a -> response:a -> key_label:label -> prop;
+  send_response_pred_later:
     tr1:trace -> tr2:trace ->
     server:principal -> request:a -> response:a -> key_label:label ->
     Lemma
     (requires
-      send_response tr1 server request response key_label /\
+      send_response_pred tr1 server request response key_label /\
       is_well_formed a (bytes_well_formed tr1) request /\
       is_well_formed a (bytes_well_formed tr1) response /\
       tr1 <$ tr2
     )
     (ensures
-      send_response tr2 server request response key_label
+      send_response_pred tr2 server request response key_label
     )
 }
 
-let default_comm_reqres_higher_layer_event_preds (a:Type) {| comm_layer_reqres_config a |} : comm_reqres_higher_layer_event_preds a = {
+(*let default_comm_reqres_higher_layer_event_preds (a:Type) {| comm_layer_reqres_config a |} : comm_reqres_preds a = {
   send_request = (fun tr client server request key_label -> True);
   send_request_later = (fun tr1 tr2 client server request key_label -> ());
   send_response = (fun tr server request response key_label -> True);
   send_response_later = (fun tr1 tr2 server request response key_label -> ())
-}
+}*)
 
 #push-options "--ifuel 1 --fuel 0"
 let event_predicate_communication_layer_reqres
   {|crypto_invariants|}
-  (#a:Type) {| comm_layer_reqres_config a |}
-  (higher_layer_resreq_preds:comm_reqres_higher_layer_event_preds a) :
+  (a:Type) {| comm_layer_reqres_config a |}
+  {|crpreds:comm_reqres_preds a|} :
   event_predicate (communication_reqres_event a) =
   fun tr prin e ->
     (match e with
@@ -192,7 +191,7 @@ let event_predicate_communication_layer_reqres
       is_well_formed a (is_knowable_by (get_label tr key) tr) request /\
       is_secret (comm_label client server) tr key /\
       key `has_usage tr` (AeadKey (comm_layer_aead_tag a) empty) /\
-      higher_layer_resreq_preds.send_request tr client server request (get_label tr key)
+      crpreds.send_request_pred tr client server request (get_label tr key)
     )
     | CommServerReceiveRequest server request key -> (
       is_knowable_by (principal_label server) tr key /\
@@ -208,7 +207,7 @@ let event_predicate_communication_layer_reqres
       is_well_formed a (bytes_well_formed tr) request /\
       is_well_formed a (bytes_well_formed tr) response /\
       bytes_well_formed tr key /\
-      higher_layer_resreq_preds.send_response tr server request response (get_label tr key)
+      crpreds.send_response_pred tr server request response (get_label tr key)
     )
     | CommClientReceiveResponse client server request response key -> (
       is_well_formed a (is_knowable_by (get_label tr key) tr) response /\
@@ -242,33 +241,33 @@ let comm_core_higher_layer_event_preds_reqres #cinvs a #config = {
 
 val event_predicate_communication_layer_reqres_and_tag:
   {|cinvs:crypto_invariants|} ->
-  #a:Type0 -> {| comm_layer_reqres_config a |} ->
-  comm_reqres_higher_layer_event_preds a ->
+  a:Type0 -> {| comm_layer_reqres_config a |} ->
+  {|comm_reqres_preds a|} ->
   list (string & compiled_event_predicate)
-let event_predicate_communication_layer_reqres_and_tag #cinvs #a higher_layer_resreq_preds =
+let event_predicate_communication_layer_reqres_and_tag #cinvs a #config #crpreds =
   [
     event_predicate_and_tag_communication_layer_core (comm_core_higher_layer_event_preds_reqres a);
-    mk_event_tag_and_pred (event_predicate_communication_layer_reqres higher_layer_resreq_preds)
+    mk_event_tag_and_pred (event_predicate_communication_layer_reqres a)
   ]
 
 val has_communication_layer_reqres_event_predicates:
   {|protocol_invariants|} ->
-  #a:Type0 -> {| comm_layer_reqres_config a |} ->
-  comm_reqres_higher_layer_event_preds a ->
+  a:Type0 -> {| comm_layer_reqres_config a |} ->
+  {|comm_reqres_preds a|} ->
   prop
-let has_communication_layer_reqres_event_predicates #invs #a #config higher_layer_resreq_preds =
+let has_communication_layer_reqres_event_predicates #invs a #config #crpreds =
   has_event_pred (event_predicate_communication_layer_core (comm_core_higher_layer_event_preds_reqres a)) /\
-  has_event_pred (event_predicate_communication_layer_reqres higher_layer_resreq_preds)
+  has_event_pred (event_predicate_communication_layer_reqres a)
 
 
 (*** All Communication Layer ReqRes Predicates ***)
 
 val has_communication_layer_reqres_predicates:
   {|protocol_invariants|} ->
-  #a:Type0 -> {| comm_layer_reqres_config a |} ->
-  comm_reqres_higher_layer_event_preds a ->
+  a:Type0 -> {| comm_layer_reqres_config a |} ->
+  {|comm_reqres_preds a|} ->
   prop
-let has_communication_layer_reqres_predicates #invs #a #config higher_layer_resreq_preds =
+let has_communication_layer_reqres_predicates #invs a #config #crpreds =
   has_communication_layer_reqres_crypto_predicates a /\
-  has_communication_layer_reqres_event_predicates higher_layer_resreq_preds /\
+  has_communication_layer_reqres_event_predicates a /\
   has_communication_layer_reqres_state_predicate a
