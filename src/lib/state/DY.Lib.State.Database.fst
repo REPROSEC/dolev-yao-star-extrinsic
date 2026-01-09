@@ -1,7 +1,8 @@
 module DY.Lib.State.Database
 
 open FStar.List.Tot {
-  choose, map, noRepeats,
+  append,
+  choose, noRepeats,
   for_allP, for_allP_eq,
   for_all, for_all_mem,
   memP, mem
@@ -356,7 +357,7 @@ val key_unique:
   bool
 let key_unique #row_t #db_t rows_list key =
   let (|t, get_key|) = key in
-  let keys_list = map get_key rows_list in
+  let keys_list = List.Tot.Base.map get_key rows_list in
   noRepeats keys_list
 
 val key_unique_elim:
@@ -466,7 +467,7 @@ val key_same_all_rows:
   rows1:list row_t -> rows2:list row_t ->
   ((t:eqtype & (row_t -> t)) -> prop)
 let key_same_all_rows rows1 rows2 =
-  (fun (|t, get_key|) -> List.Tot.map get_key rows1 == List.Tot.map get_key rows2)
+  (fun (|t, get_key|) -> List.Tot.Base.map get_key rows1 == List.Tot.Base.map get_key rows2)
 
 
 /// TODO Not currently used
@@ -761,14 +762,125 @@ let add_row_event_predicate #invs #row_t #db_t db_pred prin ptr row e1 tr1 tr2 =
   introduce forall key. memP key db_t.keys ==> key_unique new_rows key
   with introduce _ ==> _ with _. begin
     let (|t, get_key|) = key in
-    let old_keys_list1 = map get_key old_rows1 in
-    let old_keys_list2 = map get_key old_rows2 in
-    let new_keys_list = map get_key new_rows in
+    let old_keys_list1 = List.Tot.Base.map get_key old_rows1 in
+    let old_keys_list2 = List.Tot.Base.map get_key old_rows2 in
+    let new_keys_list = List.Tot.Base.map get_key new_rows in
     assert(old_keys_list1 == old_keys_list2);
     assert(new_keys_list == (get_key row)::old_keys_list2)
   end;
   assert(all_db_keys_unique new_rows);
   ()
+
+val trace_invariant_opt_bind:
+  {|protocol_invariants|} ->
+  #a:Type -> #b:Type ->
+  f:traceful (option a) ->
+  g:(a -> traceful (option b)) ->
+  tr:trace ->
+  Lemma
+  (requires (
+    trace_invariant tr /\
+    (let (x, tr_f) = f tr in
+     trace_invariant tr_f
+    ) /\
+    (match f tr with
+     | (Some x, tr_f) ->
+       trace_invariant tr_f ==>
+       (
+         let (_, tr_g) = g x tr_f in
+         trace_invariant tr_g
+       )
+     | (_, tr_f) -> True
+    )
+  ))
+  (ensures (
+    let (_, tr_out) = (let*?) #a #b f g tr in
+    trace_invariant tr_out
+  ))
+let trace_invariant_opt_bind #invs #a #b f g tr = ()
+
+
+val trace_invariant_bind:
+  {|protocol_invariants|} ->
+  #a:Type -> #b:Type ->
+  f:traceful a ->
+  g:(a -> traceful b) ->
+  tr:trace ->
+  Lemma
+  (requires (
+    trace_invariant tr /\
+    (let (x, tr_f) = f tr in
+     trace_invariant tr_f
+    ) /\
+    (let (x, tr_f) = f tr in
+       trace_invariant tr_f ==>
+       (
+         let (_, tr_g) = g x tr_f in
+         trace_invariant tr_g
+       )
+    )
+  ))
+  (ensures (
+    let (_, tr_out) = (let*) #a #b f g tr in
+    trace_invariant tr_out
+  ))
+let trace_invariant_bind #invs #a #b f g tr = ()
+
+val fully_split_hypothesis:
+  FStar.Reflection.binding ->
+  FStar.Tactics.Tac (list FStar.Reflection.binding)
+let rec fully_split_hypothesis b =
+  let open FStar.Tactics in
+  match term_as_formula_total (type_of_binding b) with
+  | And _ _ -> (
+    let (b1, b2) = destruct_and b in
+    clear b;
+    let l1 = fully_split_hypothesis b1 in
+    let l2 = fully_split_hypothesis b2 in
+    append l1 l2
+  )
+  | f -> (
+    [b]
+  )
+
+    let tr_bind_match_body () : FStar.Tactics.Tac FStar.Tactics.term =
+      let open FStar.Tactics in
+      match FStar.Reflection.V2.unsquash_term (cur_goal ()) with
+      | None -> fail ""
+      | Some t -> (
+        match inspect_unascribe t with
+        | Tv_Match sc _ _ -> (
+          match FStar.Reflection.V2.Derived.destruct_tuple sc with
+          | Some [t1; t2] -> t1
+          | _ -> fail "Goal is not a match on pair"
+        )
+        | _ -> fail "Goal is not a match"
+      )
+
+    let get_match_body () : FStar.Tactics.Tac FStar.Tactics.term =
+      let open FStar.Tactics in
+      match FStar.Reflection.V2.unsquash_term (cur_goal ()) with
+      | None -> fail ""
+      | Some t -> (
+        match inspect_unascribe t with
+        | Tv_Match sc _ _ -> sc
+        | _ -> fail "Goal is not a match"
+      )
+
+let rec get_assumption_aux (bs: list FStar.Tactics.binding) : FStar.Tactics.Tac FStar.Tactics.binding =
+  let open FStar.Tactics in
+  match bs with
+  | [] -> fail "No assumption matches goal"
+  | b::bs -> (
+    try exact b; b with | _ ->
+    try (apply (`FStar.Squash.return_squash);
+         exact b; b) with | _ ->
+    get_assumption_aux bs
+  )
+
+let get_assumption () : FStar.Tactics.Tac FStar.Tactics.binding =
+  let open FStar.Tactics in
+  get_assumption_aux (cur_vars ())
 
 #push-options "--z3cliopt 'smt.qi.eager_threshold=100'"
 val add_row_invariant:
@@ -793,39 +905,223 @@ val add_row_invariant:
    SMTPat (has_db_invariants db_pred);
   ]
 let add_row_invariant #invs #row_t #db_t db_pred prin sess_id row tr =
+  let (_, tr_out) = add_row prin sess_id row tr in
   reveal_opaque (`%add_row) (add_row #row_t #db_t);
-  let (row_sid_opt, tr_out) = add_row prin sess_id row tr in
-  match row_sid_opt with
-  | None -> assert(tr == tr_out)
-  | Some row_sid -> (
-    let (Some curr_db, tr') = get_state #db #(local_state_db row_t) prin sess_id tr in
-    let old_rows = get_rows tr prin curr_db.rows in
-    let (row_sess_id, tr') = new_session_id prin tr' in
-    let (_, tr') = guard_tr (all_db_keys_unique #row_t (row::old_rows)) tr' in
-    let (_, tr') = guard_tr (row_sess_id <> sess_id) tr' in
-    let new_db = { rows = row_sess_id::curr_db.rows } in
-    assert(tr == tr');
-    assert(is_most_recent_state_for #row_t prin row_sess_id None tr');
-    let (_, tr_row_set) = set_state prin row_sess_id row tr' in
-    assert(trace_invariant tr_row_set);
-    let curr_db_event:db_event row_t = DatabaseUpdateEvent sess_id curr_db.rows in
-    let new_db_event:db_event row_t = DatabaseUpdateEvent sess_id new_db.rows in
-    add_row_event_predicate db_pred prin row_sess_id row curr_db_event tr tr_row_set;
-    let (_, tr_ev) = trigger_event prin new_db_event tr_row_set in
-    assert(trace_invariant tr_ev);
-    assert(is_most_recent_state_for #db #(local_state_db row_t) prin sess_id (Some curr_db) tr_ev) by (
-      let open FStar.Tactics in
-        grewrite (quote (is_most_recent_state_for #db #(local_state_db row_t) prin sess_id (Some curr_db) tr_ev)) (quote (
-        let (_, tr_out) = (set_state #row_t prin row_sess_id row;* trigger_event #(db_event row_t) prin new_db_event) tr in
-        is_most_recent_state_for #db #(local_state_db row_t) prin sess_id (Some curr_db) tr_out
-      ));
-      apply_lemma (`traceful_is_most_recent_state_for_later);
-      ()
-    );
-    assert_norm((db_session_update_invariant db_pred).update_pred tr_ev prin sess_id curr_db new_db);
-    let (_, tr_db_set) = set_state #db #(local_state_db row_t) prin sess_id new_db tr_ev in
-    assert(trace_invariant tr_db_set);
-    assert(tr_out == tr_db_set)
+  let (curr_db_opt, tr') = get_state #db #(local_state_db row_t) prin sess_id tr in
+  match curr_db_opt with
+  | None -> assert(tr' == tr_out)
+  | Some curr_db -> (
+    let (tr'', tr') = get_trace tr' in
+    let old_rows = get_rows tr'' prin curr_db.rows in
+    let (row_sess_id, tr_new_sess_id) = new_session_id prin tr' in
+    let (unit_opt, tr') = guard_tr (row_sess_id <> sess_id) tr_new_sess_id in
+    match unit_opt with
+    | None -> assert(tr' == tr_out)
+    | Some () -> (
+      let (unit_opt, tr') = guard_tr (all_db_keys_unique #row_t (row::old_rows)) tr' in
+      match unit_opt with
+      | None -> assert(tr' == tr_out)
+      | Some () -> (
+        let new_db = { rows = row_sess_id::curr_db.rows } in
+        let ((), tr_row_set) = set_state prin row_sess_id row tr' in
+        assert(trace_invariant tr_row_set) by (
+          let open FStar.Tactics in
+          let _ = pose_lemma (quote (set_state_invariant #row_t (db_row_session_invariant db_pred) (db_row_state_update_invariant db_pred) prin row_sess_id row tr')) in
+          let _ = repeatn 4 split in
+          iseq [
+            // Row pred
+            idtac;
+            // Row update pred (if applicable)
+            idtac;
+            // trace invariant of input;
+            smt;
+            // has_row_pred
+            smt;
+            // has_row_update_pred
+            smt;
+            // Lemma implies goal
+            idtac;
+          ];
+          focus (fun () ->
+            norm [delta_only [`%db_row_session_invariant; `%Mklocal_state_predicate?.pred]; iota];
+            apply_lemma (quote (db_pred.row_pred_later));
+            exact (quote tr);
+            smt();
+
+            ()
+          );
+          focus (fun () ->
+              // Need to prove that the old value at row_sess_id is still none
+            grewrite (quote tr') (quote tr_new_sess_id);
+            focus (fun () ->
+              let _ = tcut (quote (squash (DY.Core.Trace.Base.is_most_recent_state_for prin row_sess_id None tr_new_sess_id))) in
+              let _ = tcut (quote (squash (is_most_recent_state_for #row_t prin row_sess_id None tr_new_sess_id))) in
+              smt();
+              // base None ==> higher layer None
+              apply_lemma (`most_recent_tagged_state_most_recent_state_none);
+              apply_lemma (`(DY.Lib.State.Tagged.most_recent_state_most_recent_tagged_state_none));
+              assumption();
+              let u_tr_in = fresh_uvar (Some (`trace)) in
+              // TODO Figure out how to uniformly move a let into a goal
+              let t = mk_e_app (`new_session_id_is_most_recent_state_for) [quote prin; u_tr_in] in
+              let _ = pose_lemma t in
+              revert ();
+              // Find the right value for u_tr_in
+              pointwise (assumption <|> trefl);
+              exact (intro ());
+              ()
+            );
+            smt();
+            ()
+          );
+          revert();
+          grewrite_eq (nth_var (-2));
+          norm [iota];
+          exact (intro ());
+          ()
+        );
+        let ((), tr_ev) = trigger_event prin (DatabaseUpdateEvent sess_id new_db.rows <: db_event row_t) tr_row_set in
+        assert(trace_invariant tr_ev) by (
+          let open FStar.Tactics in
+          let _ = pose_lemma (quote (trigger_event_trace_invariant (db_event_predicate db_pred) prin (DatabaseUpdateEvent sess_id new_db.rows <: db_event row_t) tr_row_set)) in
+          focus (fun () ->
+            let _ = repeatn 2 split in
+            iseq [
+              // db_event_pred
+              idtac;
+              // has_event_pred
+              smt;
+              // trace_invariant tr_row_set
+              assumption;
+            ];
+            let _ = pose_lemma (quote (add_row_event_predicate db_pred prin row_sess_id row (DatabaseUpdateEvent sess_id curr_db.rows) tr tr_row_set)) in
+            focus (fun () ->
+              let _ = repeat split in
+              iseq [
+                // Event triggered
+                smt;
+                // row most recent state
+                smt;
+                // all keys unique
+                idtac;
+                // trace invariant
+                assumption;
+                // trace grows
+                smt;
+                // has_db_invariants
+                smt;
+              ];
+              norm [delta_only [`%DatabaseUpdateEvent?.db_row_pointers]; iota];
+              smt();
+              ()
+            );
+            revert ();
+            norm [delta_only [`%DatabaseUpdateEvent?.db_sess_id; `%DatabaseUpdateEvent?.db_row_pointers]; iota];
+            norm [delta_only [`%Mkdb?.rows]; iota];
+            exact (intro ());
+            ()
+          );
+          focus (fun () ->
+            revert ();
+            let _ = grewrite_eq (nth_var (-2)) in
+            norm [iota];
+            exact (intro ())
+          );
+          ()
+        );
+        let ((), tr_db_set) = set_state #db #(local_state_db row_t) prin sess_id new_db tr_ev in
+        assert(trace_invariant tr_db_set) by (
+          let open FStar.Tactics in
+//          let t = pose (`set_state_invariant) in
+          let _ = pose_lemma (quote (set_state_invariant (db_session_invariant db_pred) (db_session_update_invariant db_pred) prin sess_id new_db tr_ev)) in
+          focus (fun () ->
+            let _ = repeat split in
+            iseq [
+              idtac;
+              idtac;
+              smt;
+              smt;
+              smt;
+            ];
+            norm [delta_only [`%Mklocal_state_predicate?.pred; `%db_session_invariant]; iota];
+            smt();
+            let t = mkpair (quote (Some curr_db)) (quote tr_ev) in//(fresh_uvar (Some (`trace))) in
+            grewrite (quote (get_state #db #(local_state_db row_t) prin sess_id tr_ev)) t;
+            norm [iota];
+            norm [delta_only [`%Mklocal_state_update_predicate?.update_pred; `%db_session_update_invariant]; iota];
+            smt ();
+            let _ = tcut (quote (squash (is_most_recent_state_for #db #(local_state_db row_t) prin sess_id (Some curr_db) tr_ev))) in
+            smt();
+
+            let u_f_type = fresh_uvar (Some (`Type)) in
+            let u_f = fresh_uvar (Some (`(traceful (`#u_f_type)))) in
+            let t1 = `traceful_is_most_recent_state_for_later in
+            let t2 = mk_app t1 [
+              (quote db, Q_Implicit);
+              (quote (local_state_db row_t), Q_Implicit);
+              (quote prin, Q_Explicit);
+              (quote sess_id, Q_Explicit);
+              (quote (Some curr_db), Q_Explicit);
+              (u_f_type, Q_Implicit);
+              (u_f, Q_Explicit);
+              ((quote tr_row_set), Q_Explicit);
+            ] in
+            let _ = pose_lemma t2 in
+            let u_f_result = fresh_uvar (Some u_f_type) in
+            grewrite (mk_e_app u_f [(quote tr_row_set)]) (mkpair u_f_result (quote tr_ev));
+            later();
+            let b = get_assumption () in
+            revert();
+            grewrite_eq b;
+            norm [iota];
+            exact (intro ());
+
+            split();
+            smt();
+
+            let u_f_type = fresh_uvar (Some (`Type)) in
+            let u_f = fresh_uvar (Some (`(traceful (`#u_f_type)))) in
+            let u_tr_in = fresh_uvar (Some (`trace)) in
+            let t1 = `traceful_is_most_recent_state_for_later in
+            let t2 = mk_app t1 [
+              (quote db, Q_Implicit);
+              (quote (local_state_db row_t), Q_Implicit);
+              (quote prin, Q_Explicit);
+              (quote sess_id, Q_Explicit);
+              (quote (Some curr_db), Q_Explicit);
+              (u_f_type, Q_Implicit);
+              (u_f, Q_Explicit);
+              (u_tr_in, Q_Explicit);
+            ] in
+            let _ = pose_lemma t2 in
+            let u_f_result = fresh_uvar (Some u_f_type) in
+            grewrite (mk_e_app u_f [u_tr_in]) (mkpair u_f_result (quote tr_row_set));
+            later();
+            let b = get_assumption () in
+            revert();
+            grewrite_eq b;
+            norm [iota];
+            exact (intro ());
+
+            split();
+            smt();
+            grewrite (quote tr') (quote tr);
+            smt();
+            smt();
+            ()
+          );
+          focus (fun () ->
+            dump "";
+            revert ();
+            let _ = grewrite_eq (nth_var (-2)) in
+            norm [iota];
+            exact (intro ())
+          );
+          ()
+        );
+        assert(tr_db_set == tr_out)
+      )
+    )
   )
 #pop-options
 
