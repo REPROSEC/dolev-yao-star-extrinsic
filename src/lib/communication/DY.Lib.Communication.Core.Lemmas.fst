@@ -40,7 +40,7 @@ let enable_core_comm_layer_lemmas preds =
 
 (**** Initialization Satisfies the Trace Invariants ****)
 
-#push-options "--z3rlimit 20"
+#push-options "--ifuel 2 --z3rlimit 25"
 val initialize_communication_core_proof:
   {|invs:protocol_invariants|} ->
   tr:trace ->
