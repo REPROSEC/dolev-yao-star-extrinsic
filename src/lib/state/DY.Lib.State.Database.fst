@@ -1111,7 +1111,6 @@ let add_row_invariant #invs #row_t #db_t db_pred prin sess_id row tr =
             ()
           );
           focus (fun () ->
-            dump "";
             revert ();
             let _ = grewrite_eq (nth_var (-2)) in
             norm [iota];
