@@ -17,7 +17,7 @@ module DY.Core.Bytes.Type
 /// (e.g. the plaintext if the bytes is an encryption with the correct key).
 /// This allows us to reason with F*'s logical equality (`==`).
 
-type bytes =
+type bytes:eqtype =
   // Public values (strings, numbers, ...)
   | Literal: FStar.Seq.seq FStar.UInt8.t -> bytes
   // Randomly generated numbers. `time` is used to ensure two random numbers are distinct.

@@ -37,7 +37,7 @@ type principal = string
 
 /// Type for session identifiers
 
-type state_id = { the_id: nat; }
+type state_id:eqtype = { the_id: nat; }
 
 /// a type macro for timestamps (indices on the trace)
 
