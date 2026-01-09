@@ -467,7 +467,7 @@ val set_state_invariant:
     has_local_state_update_predicate supred
   )
   (ensures (
-    let ((), tr_out) = set_state prin sess_id content tr in
+    let (_, tr_out) = set_state prin sess_id content tr in
     trace_invariant tr_out
   ))
   [SMTPat (set_state prin sess_id content tr);

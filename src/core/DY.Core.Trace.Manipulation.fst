@@ -467,7 +467,7 @@ val new_session_id_is_most_recent_state_for:
   Lemma
   (ensures (
     let (sess_id, tr_out) = new_session_id prin tr in
-    is_most_recent_state_for prin sess_id None tr
+    is_most_recent_state_for prin sess_id None tr_out
   ))
   [SMTPat (new_session_id prin tr)]
 let new_session_id_is_most_recent_state_for prin tr =
