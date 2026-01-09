@@ -227,9 +227,9 @@ let send_request_proof #invs #a #config #crpreds tr comm_keys_ids  client server
 #push-options "--z3rlimit 1000"
 val receive_request_proof:
   {|invs:protocol_invariants|} ->
-  tr:trace ->
   a:Type -> {|comm_layer_reqres_config a|} ->
   {|crpreds:comm_reqres_preds a|} ->
+  tr:trace ->
   comm_keys_ids:communication_keys_sess_ids ->
   server:principal -> msg_id:timestamp ->
   Lemma
@@ -253,7 +253,7 @@ val receive_request_proof:
   [SMTPat (trace_invariant tr);
   SMTPat (reqres_comm_layer_lemmas_enabled a);
   SMTPat (receive_request #a comm_keys_ids server msg_id tr)]
-let receive_request_proof #invs tr a #config #crpreds  comm_keys_ids server msg_id =
+let receive_request_proof #invs a #config #crpreds tr comm_keys_ids server msg_id =
   reveal_opaque (`%receive_request) (receive_request #a);
   enable_core_comm_layer_lemmas (comm_core_higher_layer_event_preds_reqres a);
   match receive_request #a comm_keys_ids server msg_id tr with

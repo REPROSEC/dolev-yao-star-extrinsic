@@ -337,7 +337,7 @@ val response_message_properties_send_response:
     event_triggered tr client (CommClientReceiveResponse client req_meta_data.server req_meta_data.request response req_meta_data.key <: communication_reqres_event a)
   )
   (ensures
-    (crpreds.send_request_pred tr client req_meta_data.server req_meta_data.request (get_response_label tr req_meta_data) \/ 
+    (crpreds.send_response_pred tr req_meta_data.server req_meta_data.request response (get_response_label tr req_meta_data) \/ 
       is_corrupt tr (principal_label client) \/ is_corrupt tr (principal_label req_meta_data.server))
   )
 let response_message_properties_send_response #invs #a #config #crpreds tr client response req_meta_data =
@@ -357,7 +357,7 @@ val response_message_properties_send_response':
     event_triggered tr client (CommClientReceiveResponse client req_meta_data.server req_meta_data.request response req_meta_data.key <: communication_reqres_event a)
   )
   (ensures
-    (crpreds.send_request_pred tr client req_meta_data.server req_meta_data.request (get_response_label tr req_meta_data) \/
+    (crpreds.send_response_pred tr req_meta_data.server req_meta_data.request response (get_response_label tr req_meta_data) \/
       (is_publishable tr req_meta_data.key /\ is_well_formed a (is_publishable tr) response))
   )
 let response_message_properties_send_response' #invs #a #config #crpreds tr client response req_meta_data =
