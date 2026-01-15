@@ -1,0 +1,8 @@
+@startuml Confidential and Authenticated Message
+
+participant "<math>\text{Alice }\hat{k}_A|k_A</math>" as a
+participant "<math>k_B|\hat{k}_B\text{ Bob}</math>" as b
+
+a -> b: <math>sig_{\hat{k}_A}({\text{sender;  receiver; } enc_{k_B}^a(\text{payload})})</math>
+
+@enduml

@@ -1,0 +1,10 @@
+@startuml Request-response Pairs
+
+participant "<math>\text{Alice }\hat{k}_A|k_A</math>" as a
+participant "<math>k_B|\hat{k}_B\text{ Bob}</math>" as b
+
+a -> b: <math>enc_{k_B}^a(\text{request; key})</math>
+
+a <- b: <math>enc_{\text{key}}^s(\text{response})</math>
+
+@enduml
