@@ -171,6 +171,9 @@ class comm_reqres_preds (a:Type) {| comm_layer_reqres_config a |} = {
     )
 }
 
+/// Shortcut
+let comm_reqres_pred (#a:Type) {| comm_layer_reqres_config a |} {|crespred:comm_reqres_preds a|} = crespred
+
 (*let default_comm_reqres_higher_layer_event_preds (a:Type) {| comm_layer_reqres_config a |} : comm_reqres_preds a = {
   send_request = (fun tr client server request key_label -> True);
   send_request_later = (fun tr1 tr2 client server request key_label -> ());
