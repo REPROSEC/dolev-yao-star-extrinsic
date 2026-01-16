@@ -141,6 +141,7 @@ let has_communication_layer_reqres_state_predicate #invs a #config =
 (*** Event Predicates ***)
 
 class comm_reqres_preds (a:Type) {| comm_layer_reqres_config a |} = {
+  // TODO rename to request_pred
   send_request_pred: tr:trace -> client:principal -> server:principal -> request:a -> key_label:label -> prop;
   send_request_pred_later:
     tr1:trace -> tr2:trace ->
@@ -155,6 +156,7 @@ class comm_reqres_preds (a:Type) {| comm_layer_reqres_config a |} = {
       send_request_pred tr2 client server request key_label
     )
   ;
+  // TODO rename to response_pred
   send_response_pred: tr:trace -> server:principal -> request:a -> response:a -> key_label:label -> prop;
   send_response_pred_later:
     tr1:trace -> tr2:trace ->
@@ -170,16 +172,6 @@ class comm_reqres_preds (a:Type) {| comm_layer_reqres_config a |} = {
       send_response_pred tr2 server request response key_label
     )
 }
-
-/// Shortcut
-let comm_reqres_pred (#a:Type) {| comm_layer_reqres_config a |} {|crespred:comm_reqres_preds a|} = crespred
-
-(*let default_comm_reqres_higher_layer_event_preds (a:Type) {| comm_layer_reqres_config a |} : comm_reqres_preds a = {
-  send_request = (fun tr client server request key_label -> True);
-  send_request_later = (fun tr1 tr2 client server request key_label -> ());
-  send_response = (fun tr server request response key_label -> True);
-  send_response_later = (fun tr1 tr2 server request response key_label -> ())
-}*)
 
 #push-options "--ifuel 1 --fuel 0"
 let event_predicate_communication_layer_reqres
