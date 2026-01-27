@@ -354,6 +354,26 @@ val response_message_properties_send_event:
 let response_message_properties_send_event #invs #a #config #crpreds tr client response req_meta_data =
   response_message_properties #invs #a #config #crpreds tr client response req_meta_data
 
+val response_message_properties_send_event':
+  {|protocol_invariants|} ->
+  #a:Type -> {|comm_layer_reqres_config a|} ->
+  {|crpreds:comm_reqres_preds a|} ->
+  tr:trace ->
+  client:principal -> response:a -> req_meta_data:comm_meta_data a ->
+  Lemma
+  (requires
+    trace_invariant tr /\
+    has_communication_layer_reqres_predicates a /\
+    event_triggered tr client (CommClientSendRequest client req_meta_data.server req_meta_data.request req_meta_data.key <: communication_reqres_event a) /\
+    event_triggered tr client (CommClientReceiveResponse client req_meta_data.server req_meta_data.request response req_meta_data.key <: communication_reqres_event a)
+  )
+  (ensures
+    event_triggered tr req_meta_data.server (CommServerSendResponse req_meta_data.server req_meta_data.request response req_meta_data.key <: communication_reqres_event a) \/
+      (is_publishable tr req_meta_data.key /\ is_well_formed a (is_publishable tr) response)
+  )
+let response_message_properties_send_event' #invs #a #config #crpreds tr client response req_meta_data =
+  response_message_properties #invs #a #config #crpreds tr client response req_meta_data
+
 val response_message_properties_send_request:
   {|protocol_invariants|} ->
   #a:Type -> {|comm_layer_reqres_config a|} ->
