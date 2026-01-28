@@ -223,6 +223,24 @@ let send_request_proof #invs #a #config #crpreds tr comm_keys_ids  client server
   )
 #pop-options
 
+val send_request_parameter_equality:
+  #a:eqtype -> {|comm_layer_reqres_config a|} ->
+  tr:trace ->
+  com_keys_ids:communication_keys_sess_ids ->
+  client:principal -> server:principal -> request:a ->
+  Lemma
+  (ensures (
+    match send_request com_keys_ids client server request tr with
+    | (None, _) -> True
+    | (Some (_, cmeta_data), _) -> (
+      server == cmeta_data.server /\
+      request == cmeta_data.request
+    )
+  ))
+let send_request_parameter_equality #a #config tr com_keys_ids client server request =
+  reveal_opaque (`%send_request) (send_request #a);
+  ()
+
 
 #push-options "--z3rlimit 1000"
 val receive_request_proof:
