@@ -57,10 +57,10 @@ instance event_communication_core_event (a:Type) {|config:comm_layer_core_config
 
 [@@ "opaque_to_smt"]
 val encrypt_message:
-  #a:Type -> {|comm_layer_core_config a|} ->
+  #a:Type0 -> {|comm_layer_core_config a|} ->
   bytes -> bytes -> a -> bytes
 let encrypt_message #a pk_receiver nonce payload =
-  pke_enc pk_receiver nonce (serialize a payload)
+  pke_enc pk_receiver nonce (serialize (encryption_input a) (Unsigned payload))
 
 [@@ "opaque_to_smt"]
 val send_confidential:
@@ -82,7 +82,10 @@ val decrypt_message:
   bytes -> bytes -> option a
 let decrypt_message #a sk_receiver msg_encrypted =
   let? plaintext = pke_dec sk_receiver msg_encrypted in
-  parse #bytes a plaintext
+  let? payload = parse (encryption_input a) plaintext in
+  guard (Unsigned? payload);?
+  let Unsigned payload = payload in
+  Some payload
 
 [@@ "opaque_to_smt"]
 val receive_confidential:
@@ -193,7 +196,7 @@ val encrypt_and_sign_message:
   #a:Type0 -> {|comm_layer_core_config a|} ->
   principal -> principal -> a -> bytes -> bytes -> bytes -> bytes -> bytes
 let encrypt_and_sign_message #a sender receiver payload pk_receiver sk_sender enc_nonce sign_nonce =
-  let enc_payload = encrypt_message #a pk_receiver enc_nonce payload in
+  let enc_payload = pke_enc pk_receiver enc_nonce (serialize (encryption_input a) (Signed payload)) in
   sign_message #a sender receiver (Inr (enc_payload, pk_receiver)) sk_sender sign_nonce
 
 // We do not encrypt the sender and receiver because, in real-world settings,
@@ -211,7 +214,6 @@ let send_confidential_authenticated #a comm_keys_ids sender receiver payload =
   let*? sk_sender = get_private_key sender comm_keys_ids.private_keys (LongTermSigKey (comm_layer_sign_tag a)) in
   let* enc_nonce = mk_rand PkeNonce (long_term_key_label sender) 32 in
   let* sign_nonce = mk_rand SigNonce (long_term_key_label sender) 32 in
-  trigger_event sender (CommConfSendMsg sender receiver payload <: communication_core_event a);*
   trigger_event sender (CommConfAuthSendMsg sender receiver payload <: communication_core_event a);*
   let msg_encrypted_signed_bytes = encrypt_and_sign_message sender receiver payload pk_receiver sk_sender enc_nonce sign_nonce in
   let* msg_id = send_msg msg_encrypted_signed_bytes in
@@ -223,7 +225,10 @@ val verify_and_decrypt_message:
   principal -> bytes -> bytes -> bytes -> option (communication_message a)
 let verify_and_decrypt_message #a receiver sk_receiver vk_sender msg_encrypted_signed =
   let? Inr payload_enc = verify_message #a receiver msg_encrypted_signed (Some sk_receiver) vk_sender in
-  let? payload:a = decrypt_message #a sk_receiver payload_enc in
+  let? plaintext = pke_dec sk_receiver payload_enc in
+  let? payload = parse #bytes (encryption_input a) plaintext in
+  guard (Signed? payload);?
+  let Signed payload = payload in
   let? sender = get_sender #a msg_encrypted_signed in
   Some {sender; receiver; payload}
 
@@ -238,8 +243,7 @@ let receive_confidential_authenticated #a comm_keys_ids receiver msg_id =
   let*? sk_receiver = get_private_key receiver comm_keys_ids.private_keys (LongTermPkeKey (comm_layer_pkenc_tag a)) in
   let*? sender = return (get_sender #a msg_encrypted_signed) in
   let*? vk_sender = get_public_key receiver comm_keys_ids.pki (LongTermSigKey (comm_layer_sign_tag a)) sender in 
-  let*? cm:communication_message a = return (verify_and_decrypt_message #a receiver sk_receiver vk_sender msg_encrypted_signed) in 
-  trigger_event receiver (CommConfReceiveMsg receiver cm.payload <: communication_core_event a);*
+  let*? cm:communication_message a = return (verify_and_decrypt_message #a receiver sk_receiver vk_sender msg_encrypted_signed) in
   trigger_event receiver (CommConfAuthReceiveMsg sender receiver cm.payload <: communication_core_event a);*
   return (Some cm)
 

@@ -28,6 +28,19 @@ type communication_message (a:Type) = {
 }
 
 [@@with_bytes bytes]
+type encryption_input (a:Type) {|config:comm_layer_core_config a|} =
+  | Unsigned: [@@@ with_parser #bytes config.core_ps_a] payload:a -> encryption_input a
+  | Signed: [@@@ with_parser #bytes config.core_ps_a] payload:a -> encryption_input a
+
+#push-options "--ifuel 1 --fuel 0"
+%splice [ps_encryption_input] (gen_parser (`encryption_input))
+%splice [ps_encryption_input_is_well_formed] (gen_is_well_formed_lemma (`encryption_input))
+#pop-options
+
+instance parseable_serializeable_bytes_encryption_input (#a:Type) {|config:comm_layer_core_config a|}: parseable_serializeable bytes (encryption_input a)
+  = mk_parseable_serializeable (ps_encryption_input a)
+
+[@@with_bytes bytes]
 type signature_input (a:Type) {|config:comm_layer_core_config a|} = 
   | Plain: sender:principal -> receiver:principal -> [@@@ with_parser #bytes config.core_ps_a] payload:a -> signature_input a
   | Encrypted: sender:principal -> receiver:principal -> payload:bytes -> pk:bytes -> signature_input a

@@ -17,16 +17,17 @@ open DY.Lib.Communication.Core
 
 (*** PkEnc Predicates ***)
 
-#push-options "--ifuel 1"
+#push-options "--ifuel 2"
 val pke_crypto_predicates_communication_layer_core: {|cusages:crypto_usages|} -> a:Type0 -> {|comm_layer_core_config a|} -> pke_crypto_predicate
 let pke_crypto_predicates_communication_layer_core #cusages a #config  = {
   pred = (fun tr sk_usage pk msg ->
     (exists sender receiver.
-      sk_usage == long_term_key_type_to_usage (LongTermPkeKey (comm_layer_pkenc_tag a))  receiver /\
+      sk_usage == long_term_key_type_to_usage (LongTermPkeKey (comm_layer_pkenc_tag a)) receiver /\
       (get_label tr msg) `can_flow tr` (comm_label sender receiver) /\
-      parse_and_pred 
-        (fun msg_parsed -> event_triggered tr sender (CommConfSendMsg sender receiver msg_parsed <: communication_core_event a)) 
-        msg      
+      (match parse (encryption_input a) msg with
+      | Some (Unsigned payload) -> event_triggered tr sender (CommConfSendMsg sender receiver payload <: communication_core_event a) 
+      | Some (Signed payload) -> event_triggered tr sender (CommConfAuthSendMsg sender receiver payload <: communication_core_event a)
+      | None -> False)
     )
     );
   pred_later = (fun tr1 tr2 sk_usage pk msg -> ());
@@ -57,9 +58,9 @@ let sign_crypto_predicate_communication_layer_core #cusages a #config = {
       sk_usage == long_term_key_type_to_usage (LongTermSigKey (comm_layer_sign_tag a)) sender /\
       (exists plain_payload nonce.
         payload == pke_enc pk_receiver nonce plain_payload /\
-        (match parse a plain_payload with
-        | None -> False
-        | Some plain_payload_parsed -> event_triggered tr sender (CommConfAuthSendMsg sender receiver plain_payload_parsed <: communication_core_event a))
+        (match parse (encryption_input a) plain_payload with
+        | Some (Signed plain_payload_parsed) -> event_triggered tr sender (CommConfAuthSendMsg sender receiver plain_payload_parsed <: communication_core_event a)
+        | _ -> False)
       )
     )
     | None -> False)
@@ -186,6 +187,10 @@ let event_predicate_communication_layer_core
       (
         event_triggered tr sender (CommConfAuthSendMsg sender receiver payload <: communication_core_event a) \/
         is_corrupt tr (long_term_key_label sender)
+      ) /\
+      (
+        exists sender. event_triggered tr sender (CommConfAuthSendMsg sender receiver payload <: communication_core_event a) \/
+        is_well_formed a (is_publishable tr) payload
       )
     )
     )

@@ -140,3 +140,42 @@ let confauth_message_properties #invs #a tr higher_layer_preds sender receiver p
     ()
   )
   and _. ()
+
+val confauth_message_properties':
+  {|protocol_invariants|} ->
+  #a:Type -> {|comm_layer_core_config a|} ->
+  tr:trace ->
+  higher_layer_preds:comm_core_higher_layer_event_preds a ->
+  sender:principal -> receiver:principal -> payload:a ->
+  Lemma
+  (requires
+    trace_invariant tr /\
+    has_communication_layer_core_predicates higher_layer_preds /\
+    event_triggered tr receiver (CommConfAuthReceiveMsg sender receiver payload <: communication_core_event a)
+  )
+  (ensures
+    is_well_formed a (is_knowable_by (principal_label receiver) tr) payload /\
+    (exists sender'. higher_layer_preds.send_conf_auth tr sender' receiver payload \/
+    is_well_formed a (is_publishable tr) payload)
+  )
+let confauth_message_properties' #invs #a tr higher_layer_preds sender receiver payload =
+  let send_event sender':communication_core_event a = CommConfAuthSendMsg sender' receiver payload in
+  let i = find_event_triggered_at_timestamp tr receiver (CommConfAuthReceiveMsg sender receiver payload <: communication_core_event a) in
+  let tr_i = prefix tr i in
+  eliminate (exists sender'. event_triggered tr_i sender' (send_event sender')) \/ is_well_formed a (is_publishable tr_i) payload
+  returns
+    is_well_formed a (is_knowable_by (principal_label receiver) tr) payload /\
+    (exists sender'. higher_layer_preds.send_conf_auth tr sender' receiver payload \/
+    is_well_formed a (is_publishable tr) payload)
+  with _. (
+    eliminate exists sender'. event_triggered tr_i sender' (send_event sender')
+    returns _
+    with _. (
+      let j = find_event_triggered_at_timestamp tr sender' (send_event sender') in
+      find_event_triggered_at_timestamp_later tr_i tr sender' (send_event sender');
+      higher_layer_preds.send_conf_auth_later (prefix tr j) tr sender' receiver payload;
+      ()
+    )
+  )
+  and _. ()
+  
