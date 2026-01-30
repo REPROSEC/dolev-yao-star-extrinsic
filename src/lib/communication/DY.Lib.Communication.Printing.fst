@@ -26,9 +26,15 @@ let comm_message_to_string #core_type #core_config #reqres_type #reqres_config m
     )
     | Some (ResponseMessage _) -> Some "Error: ResponseMessage cannot be inside a PkeEnc encryption"
     | None -> (
-      let? b_parsed = parse core_type msg in
-      Some (Printf.sprintf "pk_enc (pk = %s, msg = (%s))"
-              (bytes_to_string pk) (msg_to_string b_parsed))
+      // Confidential message send with the communication layer
+      let? enc_input = parse (encryption_input core_type) msg in
+      match enc_input with
+      | Unsigned payload -> (
+        let? b_parsed = parse core_type msg in
+        Some (Printf.sprintf "pk_enc (pk = %s, msg = (%s))"
+                (bytes_to_string pk) (msg_to_string b_parsed))
+      )
+      | Signed _ _ _ -> Some "Error: Signed encryption_input cannot be inside a PkeEnc encryption outside a signature"
     )
   )
   | _ -> (
@@ -40,14 +46,19 @@ let comm_message_to_string #core_type #core_config #reqres_type #reqres_config m
           match si with
           | Plain sender receiver payload -> (
             sender, receiver, msg_to_string payload)
-          | Encrypted sender receiver payload _ -> sender, receiver, (
+          | Encrypted payload _ -> (
             match payload with
-            | PkeEnc pk nonce msg -> (
-              match parse core_type msg with
-              | None -> "Error: pk_enc message could not be parsed"
-              | Some msg_parsed -> Printf.sprintf "pk_enc (pk = %s, msg = (%s))"
-                (bytes_to_string pk) (msg_to_string msg_parsed))
-            | _ -> "Error: com_send_byte message does not contain a PkeEnc encrypted message"
+            | PkeEnc pk nonce payload_plain -> (
+              match parse (encryption_input core_type) payload_plain with
+              | Some (Signed sender receiver payload) -> (sender, receiver, (
+                match parse core_type msg with
+                | None -> "Error: Signed encryption_input message could not be parsed"
+                | Some msg_parsed -> Printf.sprintf "pk_enc (pk = %s, msg = (%s))"
+                  (bytes_to_string pk) (msg_to_string msg_parsed))
+              )
+              | _ -> ("Error: Signed encryption_input does not contain a Signed message", "","")
+            )
+            | _ -> ("Error: Encrypted signature_input does not contain a PkeEnc encrypted message", "", "")
           )
         ) in
         Some (Printf.sprintf "msg = (<BREAK>\tsender = %s,<BREAK>\treceiver = %s,<BREAK>\tpayload = (%s<BREAK>\t)<BREAK>),<BREAK>signature = sig(sk_{%s}, msg)" sender receiver payload sender)

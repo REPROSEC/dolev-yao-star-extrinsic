@@ -119,7 +119,7 @@ val confauth_message_properties:
     event_triggered tr receiver (CommConfAuthReceiveMsg sender receiver payload <: communication_core_event a)
   )
   (ensures
-    is_well_formed a (is_knowable_by (principal_label receiver) tr) payload /\
+    is_well_formed a (is_knowable_by (comm_label sender receiver) tr) payload /\
     (higher_layer_preds.send_conf_auth tr sender receiver payload \/
     is_corrupt tr (long_term_key_label sender))
   )
@@ -129,7 +129,7 @@ let confauth_message_properties #invs #a tr higher_layer_preds sender receiver p
   let tr_i = prefix tr i in
   eliminate event_triggered tr_i sender send_event \/ is_corrupt tr_i (long_term_key_label sender)
   returns
-    is_well_formed a (is_knowable_by (principal_label receiver) tr) payload /\
+    is_well_formed a (is_knowable_by (comm_label sender receiver) tr) payload /\
     (higher_layer_preds.send_conf_auth tr sender receiver payload \/
     is_corrupt tr (long_term_key_label sender))
   with _. (
@@ -154,28 +154,24 @@ val confauth_message_properties':
     event_triggered tr receiver (CommConfAuthReceiveMsg sender receiver payload <: communication_core_event a)
   )
   (ensures
-    is_well_formed a (is_knowable_by (principal_label receiver) tr) payload /\
-    (exists sender'. higher_layer_preds.send_conf_auth tr sender' receiver payload \/
+    is_well_formed a (is_knowable_by (comm_label sender receiver) tr) payload /\
+    (higher_layer_preds.send_conf_auth tr sender receiver payload \/
     is_well_formed a (is_publishable tr) payload)
   )
 let confauth_message_properties' #invs #a tr higher_layer_preds sender receiver payload =
-  let send_event sender':communication_core_event a = CommConfAuthSendMsg sender' receiver payload in
+  let send_event:communication_core_event a = CommConfAuthSendMsg sender receiver payload in
   let i = find_event_triggered_at_timestamp tr receiver (CommConfAuthReceiveMsg sender receiver payload <: communication_core_event a) in
   let tr_i = prefix tr i in
-  eliminate (exists sender'. event_triggered tr_i sender' (send_event sender')) \/ is_well_formed a (is_publishable tr_i) payload
+  eliminate event_triggered tr_i sender send_event \/ is_well_formed a (is_publishable tr_i) payload
   returns
-    is_well_formed a (is_knowable_by (principal_label receiver) tr) payload /\
-    (exists sender'. higher_layer_preds.send_conf_auth tr sender' receiver payload \/
+    is_well_formed a (is_knowable_by (comm_label sender receiver) tr) payload /\
+    (higher_layer_preds.send_conf_auth tr sender receiver payload \/
     is_well_formed a (is_publishable tr) payload)
   with _. (
-    eliminate exists sender'. event_triggered tr_i sender' (send_event sender')
-    returns _
-    with _. (
-      let j = find_event_triggered_at_timestamp tr sender' (send_event sender') in
-      find_event_triggered_at_timestamp_later tr_i tr sender' (send_event sender');
-      higher_layer_preds.send_conf_auth_later (prefix tr j) tr sender' receiver payload;
-      ()
-    )
+    let j = find_event_triggered_at_timestamp tr sender send_event in
+    find_event_triggered_at_timestamp_later tr_i tr sender send_event;
+    higher_layer_preds.send_conf_auth_later (prefix tr j) tr sender receiver payload;
+    ()
   )
   and _. ()
   

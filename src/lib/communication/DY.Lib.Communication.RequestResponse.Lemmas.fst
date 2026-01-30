@@ -501,7 +501,7 @@ let decode_response_proof #invs #a tr client server response_bytes key =
   )
 #pop-options
 
-#restart-solver
+#push-options "--z3rlimit 10"
 val comm_client_send_request_injective:
   {|protocol_invariants|} ->
   #a:Type -> {| comm_layer_reqres_config a |} ->
@@ -521,6 +521,7 @@ val comm_client_send_request_injective:
     request == request'
   )
 let comm_client_send_request_injective #invs #a #config #crpreds tr client client' server request request' key = ()
+#pop-options
 
 #push-options "--z3rlimit 75"
 val request_response_property:
