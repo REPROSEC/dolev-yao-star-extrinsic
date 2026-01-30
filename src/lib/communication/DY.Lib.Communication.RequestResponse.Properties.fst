@@ -112,6 +112,7 @@ let send_request_event_properties #invs #a #config #crpreds tr client req_meta_d
   crpreds.send_request_pred_later (prefix tr j) tr client req_meta_data.server req_meta_data.request key_label;
   ()
 
+#push-options "--z3rlimit 20"
 val request_message_properties:
   {|protocol_invariants|} ->
   #a:Type -> {|comm_layer_reqres_config a|} ->
@@ -160,6 +161,7 @@ let request_message_properties #invs #a #config #crpreds tr req_meta_data =
       ()
     )
   and _. ()
+#pop-options
 
 val request_message_properties_request:
   {|protocol_invariants|} ->

@@ -418,7 +418,6 @@ let compute_response_message_proof #cinvs #a tr server req_meta_data nonce reque
   ()
 
 #push-options "--z3rlimit 10"
-#restart-solver
 val send_response_proof:
   {|protocol_invariants|} ->
   #a:eqtype -> {|comm_layer_reqres_config a|} ->
