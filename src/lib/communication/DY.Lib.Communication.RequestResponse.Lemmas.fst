@@ -523,7 +523,7 @@ val comm_client_send_request_injective:
 let comm_client_send_request_injective #invs #a #config #crpreds tr client client' server request request' key = ()
 #pop-options
 
-#push-options "--z3rlimit 75"
+#push-options "--z3rlimit 100"
 val request_response_property:
   {|protocol_invariants|} ->
   #a:Type -> {|comm_layer_reqres_config a|} ->

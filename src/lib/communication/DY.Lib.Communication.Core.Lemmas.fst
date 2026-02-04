@@ -207,7 +207,7 @@ val receive_confidential_proof:
     | (Some payload, tr_out) ->
       trace_invariant tr_out /\
       event_triggered tr_out receiver (CommConfReceiveMsg receiver payload <: communication_core_event a) /\
-      is_well_formed a (is_knowable_by (principal_label receiver) tr) payload
+      is_well_formed a (is_knowable_by (principal_label receiver) tr_out) payload
   ))
   [SMTPat (trace_invariant tr);
    SMTPat (receive_confidential #a comm_keys_ids receiver msg_id tr);
