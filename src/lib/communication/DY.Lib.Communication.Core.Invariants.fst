@@ -96,6 +96,7 @@ let has_communication_layer_core_crypto_predicates #cinvs a #config =
 
 (*** Event Predicates ***)
 
+// TODO: Change this to a typeclass with the name comm_core_preds
 noeq
 type comm_core_higher_layer_event_preds (a:Type) {|comm_layer_core_config a|} = {
   send_conf: tr:trace -> sender:principal -> receiver:principal -> payload:a -> prop;
