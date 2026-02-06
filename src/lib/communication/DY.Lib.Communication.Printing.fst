@@ -12,29 +12,31 @@ open DY.Lib.Communication.RequestResponse
 
 val comm_message_to_string:
   #core_type:Type0 -> {|comm_layer_core_config core_type|} ->
-  #reqres_type:Type -> {|comm_layer_reqres_config reqres_type|} -> 
-  (core_type -> string) -> (reqres_type -> string) -> bytes ->
+  #reqres_type:Type0 -> {|comm_layer_reqres_config reqres_type|} -> 
+  (core_type -> string) -> (reqres_type -> string) -> (bytes -> string) -> bytes ->
   option string
-let comm_message_to_string #core_type #core_config #reqres_type #reqres_config msg_to_string reqres_payload_to_string b =
+let comm_message_to_string #core_type #core_config #reqres_type #reqres_config msg_to_string reqres_payload_to_string other_messages_to_string b =
   match b with
   | PkeEnc pk nonce msg -> (
-    match parse comm_message_t msg with
-    | Some (SigMessage _) -> Some "Error: SigMessage cannot be inside a PkeEnc encryption"
-    | Some (RequestMessage {request; key}) -> (
-      let? request_parsed = parse reqres_type request in 
-      Some (reqres_payload_to_string request_parsed)
-    )
-    | Some (ResponseMessage _) -> Some "Error: ResponseMessage cannot be inside a PkeEnc encryption"
-    | None -> (
-      // Confidential message send with the communication layer
-      let? enc_input = parse (encryption_input core_type) msg in
-      match enc_input with
-      | Unsigned payload -> (
-        let? b_parsed = parse core_type msg in
-        Some (Printf.sprintf "pk_enc (pk = %s, msg = (%s))"
-                (bytes_to_string pk) (msg_to_string b_parsed))
+    match parse (encryption_input comm_message_t) #(parseable_serializeable_bytes_encryption_input #comm_message_t #(comm_layer_tag_core_config_reqres reqres_type)) msg with
+    | Some (Unsigned payload) -> (
+      match payload with
+      | SigMessage _ -> Some "Error: SigMessage cannot be inside a PkeEnc encryption"
+      | RequestMessage {request; key} -> (
+        let? request_parsed = parse reqres_type request in 
+        Some (reqres_payload_to_string request_parsed)
       )
-      | Signed _ _ _ -> Some "Error: Signed encryption_input cannot be inside a PkeEnc encryption outside a signature"
+      | ResponseMessage _ -> Some "Error: ResponseMessage cannot be inside a PkeEnc encryption"
+    )
+    | Some (Signed _ _ _) -> Some "Error: Signed encryption_input cannot be inside a PkeEnc encryption outside a signature"
+    | None -> (
+      match parse (encryption_input core_type) msg with
+      | Some (Unsigned payload) -> (
+        Some (Printf.sprintf "pk_enc (pk = %s, msg = (%s))"
+          (bytes_to_string pk) (msg_to_string payload))
+      )
+      | Some (Signed _ _ _) -> Some "Error: Signed encryption_input cannot be inside a PkeEnc encryption outside a signature"
+      | None -> Some (other_messages_to_string b)
     )
   )
   | _ -> (
@@ -51,14 +53,12 @@ let comm_message_to_string #core_type #core_config #reqres_type #reqres_config m
             | PkeEnc pk nonce payload_plain -> (
               match parse (encryption_input core_type) payload_plain with
               | Some (Signed sender receiver payload) -> (sender, receiver, (
-                match parse core_type msg with
-                | None -> "Error: Signed encryption_input message could not be parsed"
-                | Some msg_parsed -> Printf.sprintf "pk_enc (pk = %s, msg = (%s))"
-                  (bytes_to_string pk) (msg_to_string msg_parsed))
+                Printf.sprintf "pk_enc (pk = %s, msg = (%s))"
+                  (bytes_to_string pk) (msg_to_string payload))
               )
-              | _ -> ("Error: Signed encryption_input does not contain a Signed message", "","")
+              | _ -> ("Error: Signed encryption_input does not contain a Signed message -- " ^ (bytes_to_string payload_plain), "","")
             )
-            | _ -> ("Error: Encrypted signature_input does not contain a PkeEnc encrypted message", "", "")
+            | _ -> ("Error: Encrypted signature_input does not contain a PkeEnc encrypted message -- " ^ (bytes_to_string payload), "", "")
           )
         ) in
         Some (Printf.sprintf "msg = (<BREAK>\tsender = %s,<BREAK>\treceiver = %s,<BREAK>\tpayload = (%s<BREAK>\t)<BREAK>),<BREAK>signature = sig(sk_{%s}, msg)" sender receiver payload sender)
@@ -74,10 +74,7 @@ let comm_message_to_string #core_type #core_config #reqres_type #reqres_config m
       )
       | _ -> Some "Error: response_envelope does not contain an AEAD ciphertext"
     )
-    | None -> (
-      let? b_parsed = parse core_type b in
-      Some (msg_to_string b_parsed)
-    )
+    | None -> Some (other_messages_to_string b)
   )
 
 val com_core_event_to_string:
