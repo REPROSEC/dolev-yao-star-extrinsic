@@ -194,7 +194,7 @@ let event_predicate_communication_layer_reqres
       key `has_usage tr` (AeadKey (comm_layer_aead_tag a) empty) /\
       (
         (exists client. event_triggered tr client (CommClientSendRequest client server request key <: communication_reqres_event a)) \/
-        is_publishable tr key
+        (is_publishable tr key /\ is_well_formed a (is_publishable tr) request)
       )
     )
     | CommServerSendResponse server request response key -> (
