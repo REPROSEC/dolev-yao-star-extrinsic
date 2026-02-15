@@ -223,7 +223,7 @@ let send_request_proof #invs #a #config #crpreds tr comm_keys_ids  client server
   )
 #pop-options
 
-val send_request_parameter_equality:
+val send_request_properties:
   #a:eqtype -> {|comm_layer_reqres_config a|} ->
   tr:trace ->
   com_keys_ids:communication_keys_sess_ids ->
@@ -232,12 +232,13 @@ val send_request_parameter_equality:
   (ensures (
     match send_request com_keys_ids client server request tr with
     | (None, _) -> True
-    | (Some (_, cmeta_data), _) -> (
-      server == cmeta_data.server /\
-      request == cmeta_data.request
+    | (Some (_, req_meta_data), tr_out) -> (
+      event_triggered tr_out client (CommClientSendRequest client server request req_meta_data.key <: communication_reqres_event a) /\
+      server == req_meta_data.server /\
+      request == req_meta_data.request
     )
   ))
-let send_request_parameter_equality #a #config tr com_keys_ids client server request =
+let send_request_properties #a #config tr com_keys_ids client server request =
   reveal_opaque (`%send_request) (send_request #a);
   ()
 
