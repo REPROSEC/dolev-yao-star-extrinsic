@@ -91,9 +91,9 @@ let com_core_event_to_string #a payload_to_string =
     | CommConfReceiveMsg receiver payload ->
       Some (Printf.sprintf "CommConfReceiveMsg receiver = %s, payload = (%s)"
         receiver (payload_to_string payload))
-    | CommAuthSendMsg sender payload ->
-      Some (Printf.sprintf "CommAuthSendMsg sender = %s, payload = (%s)"
-        sender (payload_to_string payload))
+    | CommAuthSendMsg sender receiver payload ->
+      Some (Printf.sprintf "CommAuthSendMsg sender = %s, receiver = %s, payload = (%s)"
+        sender receiver (payload_to_string payload))
     | CommAuthReceiveMsg sender receiver payload -> 
       Some (Printf.sprintf "CommAuthReceiveMsg sender = %s, receiver = %s, payload = (%s)"
         sender receiver (payload_to_string payload))
