@@ -112,6 +112,12 @@ let com_core_event_to_string #a payload_to_string =
         sender receiver (payload_to_string payload))
   )))
 
+val sender_authentication_to_string: sender_authentication -> string
+let sender_authentication_to_string sa =
+  match sa with
+  | Authenticated -> "Authenticated"
+  | Unauthenticated -> "Unauthenticated"
+
 val com_reqres_event_to_string:
   #a:Type0 -> {|comm_layer_reqres_config a|} ->
   (a -> string) -> 
@@ -121,8 +127,8 @@ let com_reqres_event_to_string #a payload_to_string =
     let? cre = parse (communication_reqres_event a) b in
     match cre with
     | CommClientSendRequest authenticated client server request key -> (
-      Some (Printf.sprintf "CommClientSendRequest authenticated = %b, client = %s, server = %s, request = (%s)"
-        authenticated client server (payload_to_string request))
+      Some (Printf.sprintf "CommClientSendRequest authenticated = %s, client = %s, server = %s, request = (%s)"
+        (sender_authentication_to_string authenticated) client server (payload_to_string request))
     )
     | CommServerReceiveRequest client server request key -> (
       Some (Printf.sprintf "CommServerReceiveRequest client = %s, server = %s, request = (%s), key = %s"
@@ -132,9 +138,9 @@ let com_reqres_event_to_string #a payload_to_string =
       Some (Printf.sprintf "CommServerSendResponse client = %s, server = %s, request = %s, response = (%s), key = %s"
         (option_to_string (fun s -> s) client) server (payload_to_string request) (payload_to_string response) (bytes_to_string key))
     )
-    | CommClientReceiveResponse authenticated client server request response key -> (
-      Some (Printf.sprintf "CommClientReceiveResponse authenticated = %b, client = %s, server = %s, response = (%s), key = %s" 
-        authenticated client server (payload_to_string response) (bytes_to_string key))
+    | CommClientReceiveResponse client response req_meta_data -> (
+      Some (Printf.sprintf "CommClientReceiveResponse client = %s, response = (%s), req_meta_data" 
+        client (payload_to_string response))
     )
   )))
 
