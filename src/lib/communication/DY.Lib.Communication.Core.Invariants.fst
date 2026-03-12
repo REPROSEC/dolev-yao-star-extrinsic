@@ -51,7 +51,7 @@ let sign_crypto_predicate_communication_layer_core #cusages a #config = {
     | Some (Plain sender receiver payload) -> (
       sk_usage == long_term_key_type_to_usage (LongTermSigKey (comm_layer_sign_tag a)) sender /\
       get_label tr (serialize a payload) `can_flow tr` public /\
-      event_triggered tr sender (CommAuthSendMsg sender payload <: communication_core_event a)
+      event_triggered tr sender (CommAuthSendMsg sender receiver payload <: communication_core_event a)
     )
     | Some (Encrypted payload pk_receiver) -> (
       get_label tr payload `can_flow tr` public /\
@@ -111,17 +111,17 @@ type comm_core_higher_layer_event_preds (a:Type) {|comm_layer_core_config a|} = 
     )
     (ensures send_conf tr2 sender receiver payload)
   ;
-  send_auth: tr:trace -> sender:principal -> payload:a -> prop;
+  send_auth: tr:trace -> sender:principal -> receiver:principal -> payload:a -> prop;
   send_auth_later:
     tr1:trace -> tr2:trace ->
-    sender:principal -> payload:a ->
+    sender:principal -> receiver:principal -> payload:a ->
     Lemma
     (requires
-      send_auth tr1 sender payload /\
+      send_auth tr1 sender receiver payload /\
       is_well_formed a (bytes_well_formed tr1) payload /\
       tr1 <$ tr2
     )
-    (ensures send_auth tr2 sender payload)
+    (ensures send_auth tr2 sender receiver payload)
   ;
   send_conf_auth: tr:trace -> sender:principal -> receiver:principal -> payload:a -> prop;
   send_conf_auth_later:
@@ -139,8 +139,8 @@ type comm_core_higher_layer_event_preds (a:Type) {|comm_layer_core_config a|} = 
 let default_comm_core_higher_layer_event_preds (a:Type) {|comm_layer_core_config a|} : comm_core_higher_layer_event_preds a = {
   send_conf = (fun tr sender receiver payload -> False);
   send_conf_later = (fun tr1 tr2 sender receiver payload -> ());
-  send_auth = (fun tr sender payload -> False);
-  send_auth_later = (fun tr1 tr2 sender payload -> ());
+  send_auth = (fun tr sender receiver payload -> False);
+  send_auth_later = (fun tr1 tr2 sender receiver payload -> ());
   send_conf_auth = (fun tr sender receiver payload -> False);
   send_conf_auth_later = (fun tr1 tr2 sender receiver payload -> ())
 }
@@ -161,13 +161,13 @@ let event_predicate_communication_layer_core
       (exists sender. event_triggered tr sender (CommConfSendMsg sender receiver payload <: communication_core_event a)) \/
       is_well_formed a (is_publishable tr) payload
     )
-    | CommAuthSendMsg sender payload -> (
-      higher_layer_preds.send_auth tr sender payload
+    | CommAuthSendMsg sender receiver payload -> (
+      higher_layer_preds.send_auth tr sender receiver payload
     )
     | CommAuthReceiveMsg sender receiver payload -> (
       is_well_formed a (is_publishable tr) payload /\
       (
-        event_triggered tr sender (CommAuthSendMsg sender payload <: communication_core_event a) \/
+        event_triggered tr sender (CommAuthSendMsg sender receiver payload <: communication_core_event a) \/
         is_corrupt tr (long_term_key_label sender)
       )
     )

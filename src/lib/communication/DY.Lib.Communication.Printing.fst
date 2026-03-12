@@ -77,6 +77,13 @@ let comm_message_to_string #core_type #core_config #reqres_type #reqres_config m
     | None -> Some (other_messages_to_string b)
   )
 
+// TODO: This should be moved to the printing library
+val option_to_string: (#a:Type0) -> (a -> string) -> option a -> string
+let option_to_string #a to_string opt =
+  match opt with
+  | Some x -> Printf.sprintf "Some (%s)" (to_string x)
+  | None -> "None"
+
 val com_core_event_to_string:
   #a:Type0 -> {|comm_layer_core_config a|} ->
   (a -> string) ->
@@ -91,9 +98,9 @@ let com_core_event_to_string #a payload_to_string =
     | CommConfReceiveMsg receiver payload ->
       Some (Printf.sprintf "CommConfReceiveMsg receiver = %s, payload = (%s)"
         receiver (payload_to_string payload))
-    | CommAuthSendMsg sender payload ->
-      Some (Printf.sprintf "CommAuthSendMsg sender = %s, payload = (%s)"
-        sender (payload_to_string payload))
+    | CommAuthSendMsg sender receiver payload ->
+      Some (Printf.sprintf "CommAuthSendMsg sender = %s, receiver = %s, payload = (%s)"
+        sender receiver (payload_to_string payload))
     | CommAuthReceiveMsg sender receiver payload -> 
       Some (Printf.sprintf "CommAuthReceiveMsg sender = %s, receiver = %s, payload = (%s)"
         sender receiver (payload_to_string payload))
@@ -113,21 +120,21 @@ let com_reqres_event_to_string #a payload_to_string =
   ((event_communication_reqres_event #a).tag, (fun b -> (
     let? cre = parse (communication_reqres_event a) b in
     match cre with
-    | CommClientSendRequest client server request key -> (
-      Some (Printf.sprintf "CommClientSendRequest client = %s, server = %s, request = (%s)"
-        client server (payload_to_string request))
+    | CommClientSendRequest authenticated client server request key -> (
+      Some (Printf.sprintf "CommClientSendRequest authenticated = %b, client = %s, server = %s, request = (%s)"
+        authenticated client server (payload_to_string request))
     )
-    | CommServerReceiveRequest server request key -> (
-      Some (Printf.sprintf "CommServerReceiveRequest server = %s, request = (%s), key = %s"
-        server (payload_to_string request) (bytes_to_string key))
+    | CommServerReceiveRequest client server request key -> (
+      Some (Printf.sprintf "CommServerReceiveRequest client = %s, server = %s, request = (%s), key = %s"
+        (option_to_string (fun s -> s) client) server (payload_to_string request) (bytes_to_string key))
     )
-    | CommServerSendResponse server request response key -> (
-      Some (Printf.sprintf "CommServerSendResponse server = %s, request = %s, response = (%s), key = %s"
-        server (payload_to_string request) (payload_to_string response) (bytes_to_string key))
+    | CommServerSendResponse client server request response key -> (
+      Some (Printf.sprintf "CommServerSendResponse client = %s, server = %s, request = %s, response = (%s), key = %s"
+        (option_to_string (fun s -> s) client) server (payload_to_string request) (payload_to_string response) (bytes_to_string key))
     )
-    | CommClientReceiveResponse client server request response key -> (
-      Some (Printf.sprintf "CommClientReceiveResponse client = %s, server = %s, response = (%s), key = %s" 
-        client server (payload_to_string response) (bytes_to_string key))
+    | CommClientReceiveResponse authenticated client server request response key -> (
+      Some (Printf.sprintf "CommClientReceiveResponse authenticated = %b, client = %s, server = %s, response = (%s), key = %s" 
+        authenticated client server (payload_to_string response) (bytes_to_string key))
     )
   )))
 

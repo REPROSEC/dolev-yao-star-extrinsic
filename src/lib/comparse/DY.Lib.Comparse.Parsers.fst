@@ -58,3 +58,68 @@ let ps_state_id #bytes #bl =
   mk_isomorphism state_id ps_nat
     (fun the_id -> { the_id; })
     (fun { the_id; } -> the_id)
+
+(*** Parser for integers ***)
+
+[@@is_parser; is_parser_for (`%int)]
+val ps_int: #bytes:Type0 -> {|bytes_like bytes|} -> parser_serializer bytes int
+let ps_int #bytes #bl =
+  mk_isomorphism int
+  (bind #bytes #bl ps_nat (fun x -> refine ps_nat (fun y -> x = 0 || y = 0)))
+    (fun i -> match i with
+      | (|0, 0|) -> 0
+      | (|m, 0|) -> m
+      | (|0, n|) -> -n
+    )
+    (fun i -> if i >= 0 then (|i, 0|) else (|0, -i|))
+
+val ps_int_is_well_formed:
+  #bytes:Type0 -> {|bytes_like bytes|} ->
+  pre:bytes_compatible_pre bytes -> i:int ->
+  Lemma (is_well_formed_prefix ps_int pre i)
+  [SMTPat (is_well_formed_prefix ps_int pre i)]
+let ps_int_is_well_formed #bytes #bl pre i = ()
+
+(*** Parser for booleans ***)
+
+[@@is_parser; is_parser_for (`%bool)]
+val ps_bool: #bytes:Type0 -> {|bytes_like bytes|} -> parser_serializer bytes bool
+let ps_bool #bytes #bl =
+  mk_isomorphism #bytes #bl bool (refine ps_nat (fun n -> n = 0 || n = 1))
+    (fun n -> n = 1)
+    (fun b -> if b then 1 else 0)
+
+val ps_bool_is_well_formed:
+  #bytes:Type0 -> {|bytes_like bytes|} ->
+  pre:bytes_compatible_pre bytes -> b:bool ->
+  Lemma (is_well_formed_prefix ps_bool pre b)
+  [SMTPat (is_well_formed_prefix ps_bool pre b)]
+let ps_bool_is_well_formed #bytes #bl pre b = ()
+
+(*** Parser for options ***)
+
+[@@is_parser; is_parser_for (`%FStar.Pervasives.Native.option)]
+val ps_option:
+  #bytes:Type0 ->
+  {|bytes_like bytes|} ->
+  #a:Type0 ->
+  ps_a: parser_serializer bytes a ->
+  parser_serializer bytes (option a)
+let ps_option #bytes #bl #a ps_a =
+  let tmp: parser_serializer bytes (b:bool & (if b then a else unit)) =
+    bind #bytes #bl #bool #(fun b -> if b then a else unit) (ps_bool #bytes #bl)
+      (fun b -> if b then ps_a else ps_unit)
+  in
+  mk_isomorphism #bytes #bl (option a) tmp
+    (fun (|b, x|) -> if b then Some x else None)
+    (fun o -> match o with | None -> (|false, ()|) | Some x -> (|true, x|))
+
+val ps_option_is_well_formed:
+  #bytes:Type0 -> {|bytes_like bytes|} ->
+  #a:Type -> ps_a:parser_serializer bytes a ->
+  pre:bytes_compatible_pre bytes -> x:option a ->
+  Lemma
+    (is_well_formed_prefix (ps_option ps_a) pre x <==>
+      (match x with | None -> True | Some y -> is_well_formed_prefix ps_a pre y))
+  [SMTPat (is_well_formed_prefix (ps_option ps_a) pre x)]
+let ps_option_is_well_formed #bytes #bl #a ps_a pre x = ()

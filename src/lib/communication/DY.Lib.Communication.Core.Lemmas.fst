@@ -232,10 +232,10 @@ let receive_confidential_proof #invs #a tr higher_layer_preds comm_keys_ids rece
 
 val comm_auth_send_event_triggered:
   #a:Type0 -> {|comm_layer_core_config a|} ->
-  trace -> principal -> a ->
+  trace -> principal -> principal -> a ->
   prop
-let comm_auth_send_event_triggered #a tr sender payload =
-  event_triggered tr sender (CommAuthSendMsg sender payload <: communication_core_event a)
+let comm_auth_send_event_triggered #a tr sender receiver payload =
+  event_triggered tr sender (CommAuthSendMsg sender receiver payload <: communication_core_event a)
 
 val comm_conf_auth_send_event_triggered:
   #a:Type0 -> {|comm_layer_core_config a|} ->
@@ -261,7 +261,7 @@ val sign_message_proof:
       match input with
       | Inl payload -> (
         is_well_formed a (is_publishable tr) payload /\
-        comm_auth_send_event_triggered #a tr sender payload
+        comm_auth_send_event_triggered #a tr sender receiver payload
       )
       | Inr (payload, pk) -> (
         is_publishable tr payload /\
@@ -319,7 +319,7 @@ val send_authenticated_proof:
     trace_invariant tr /\
     has_private_keys_invariant /\
     has_communication_layer_core_predicates higher_layer_preds /\
-    higher_layer_preds.send_auth tr sender payload /\
+    higher_layer_preds.send_auth tr sender receiver payload /\
     is_well_formed a (is_publishable tr) payload
   )
   (ensures (
@@ -336,9 +336,9 @@ let send_authenticated_proof #invs #a tr higher_layer_preds comm_keys_ids sender
   | (Some _, tr_out) -> (
     let (Some sk_sender, tr') = get_private_key sender comm_keys_ids.private_keys (LongTermSigKey (comm_layer_sign_tag a)) tr in
     let (nonce,  tr') = mk_rand SigNonce (long_term_key_label sender) 32 tr' in
-    higher_layer_preds.send_auth_later tr tr' sender payload;
-    let ((), tr') = trigger_event sender (CommAuthSendMsg sender payload <: communication_core_event a) tr' in
-    assert(comm_auth_send_event_triggered tr' sender payload);
+    higher_layer_preds.send_auth_later tr tr' sender receiver payload;
+    let ((), tr') = trigger_event sender (CommAuthSendMsg sender receiver payload <: communication_core_event a) tr' in
+    assert(comm_auth_send_event_triggered tr' sender receiver payload);
     sign_message_proof #invs.crypto_invs #a tr' sender receiver (Inl payload) sk_sender nonce;
     let msg_signed = sign_message #a sender receiver (Inl payload) sk_sender nonce in
     let (msg_id, tr') = send_msg msg_signed tr' in
@@ -375,7 +375,7 @@ val verify_message_proof:
           (
             sender == sender' /\
             receiver == receiver' /\
-            comm_auth_send_event_triggered tr sender (Inl?.v payload) \/ 
+            comm_auth_send_event_triggered tr sender receiver (Inl?.v payload) \/ 
             is_corrupt tr (long_term_key_label sender)
           )
         )

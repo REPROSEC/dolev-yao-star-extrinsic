@@ -29,18 +29,18 @@ let aead_crypto_predicate_communication_layer_reqres #cusages a #config = {
   pred = (fun tr key_usage key nonce msg ad ->
       (match parse authenticated_data ad with
       | None -> False
-      | Some {server} -> (exists request.
+      | Some {client; server} -> (exists request.
         match parse a msg with
         | None -> False
         | Some response ->
-          event_triggered tr server (CommServerSendResponse server request response key <: communication_reqres_event a)
+          event_triggered tr server (CommServerSendResponse client server request response key <: communication_reqres_event a)
       )
     )
   );
   pred_later = (fun tr1 tr2 key_usage key nonce msg ad -> (
     match parse authenticated_data ad with
     | None -> assert(False)
-    | Some {server} -> ()
+    | Some {client; server} -> ()
   ))
 }
 #pop-options
@@ -93,10 +93,10 @@ let state_predicate_communication_layer_reqres {|crypto_invariants|} (a:Type) {|
       is_secret (comm_label client server) tr key /\
       key `has_usage tr` (AeadKey (comm_layer_aead_tag a) empty)
     )
-    | ServerReceiveRequest {request; key} -> (
+    | ServerReceiveRequest {client; request; key} -> (
       let server = prin in
       is_knowable_by (principal_label server) tr key /\
-      is_well_formed a (is_knowable_by (principal_label server) tr) request /\
+      is_well_formed a (is_knowable_by (get_label tr key) tr) request /\
       key `has_usage tr` (AeadKey (comm_layer_aead_tag a) empty)
     )
     | ClientReceiveResponse {server; response; key} -> (
@@ -156,6 +156,20 @@ class comm_reqres_preds (a:Type) {| comm_layer_reqres_config a |} = {
       send_request_pred tr2 client server request key_label
     )
   ;
+  authenticated_request_pred: tr:trace -> client:principal -> server:principal -> request:a -> key_label:label -> prop;
+  authenticated_request_pred_later:
+    tr1:trace -> tr2:trace ->
+    client:principal -> server:principal -> request:a -> key_label:label ->
+    Lemma
+    (requires
+      authenticated_request_pred tr1 client server request key_label /\
+      is_well_formed a (bytes_well_formed tr1) request /\
+      tr1 <$ tr2
+    )
+    (ensures
+      authenticated_request_pred tr2 client server request key_label
+    )
+  ;
   // TODO rename to response_pred
   send_response_pred: tr:trace -> server:principal -> request:a -> response:a -> key_label:label -> prop;
   send_response_pred_later:
@@ -181,35 +195,40 @@ let event_predicate_communication_layer_reqres
   event_predicate (communication_reqres_event a) =
   fun tr prin e ->
     (match e with
-    | CommClientSendRequest client server request key -> (
+    | CommClientSendRequest authenticated client server request key -> (
       rand_just_generated tr key /\
       is_well_formed a (is_knowable_by (get_label tr key) tr) request /\
       is_secret (comm_label client server) tr key /\
       key `has_usage tr` (AeadKey (comm_layer_aead_tag a) empty) /\
       crpreds.send_request_pred tr client server request (get_label tr key)
     )
-    | CommServerReceiveRequest server request key -> (
+    | CommServerReceiveRequest client server request key -> (
       is_knowable_by (principal_label server) tr key /\
       is_well_formed a (is_knowable_by (get_label tr key) tr) request /\
       key `has_usage tr` (AeadKey (comm_layer_aead_tag a) empty) /\
-      (
-        (exists client. event_triggered tr client (CommClientSendRequest client server request key <: communication_reqres_event a)) \/
-        (is_publishable tr key /\ is_well_formed a (is_publishable tr) request)
+      (match client with
+      | None -> (
+        (exists client. event_triggered tr client (CommClientSendRequest Unauthenticated client server request key <: communication_reqres_event a)) \/
+          (is_publishable tr key /\ is_well_formed a (is_publishable tr) request)
       )
+      | Some client -> (
+        event_triggered tr client (CommClientSendRequest Authenticated client server request key <: communication_reqres_event a) \/
+          is_corrupt tr (long_term_key_label client)
+      ))
     )
-    | CommServerSendResponse server request response key -> (
-      event_triggered tr server (CommServerReceiveRequest server request key <: communication_reqres_event a) /\
+    | CommServerSendResponse client server request response key -> (
+      event_triggered tr server (CommServerReceiveRequest client server request key <: communication_reqres_event a) /\
       is_well_formed a (bytes_well_formed tr) request /\
       is_well_formed a (bytes_well_formed tr) response /\
       bytes_well_formed tr key /\
       crpreds.send_response_pred tr server request response (get_label tr key)
     )
-    | CommClientReceiveResponse client server request response key -> (
-      is_well_formed a (is_knowable_by (get_label tr key) tr) response /\
-      is_secret (comm_label client server) tr key /\
-      event_triggered tr client (CommClientSendRequest client server request key <: communication_reqres_event a) /\
-      (event_triggered tr server (CommServerSendResponse server request response key <: communication_reqres_event a) \/
-      (is_publishable tr key /\ is_well_formed a (is_publishable tr) response))
+    | CommClientReceiveResponse client response req_meta_data -> (
+      is_well_formed a (is_knowable_by (comm_label client req_meta_data.server) tr) response /\
+      is_secret (comm_label client req_meta_data.server) tr req_meta_data.key /\
+      event_triggered tr client (CommClientSendRequest (request_authenticated req_meta_data) client req_meta_data.server req_meta_data.request req_meta_data.key <: communication_reqres_event a) /\
+      (event_triggered tr req_meta_data.server (CommServerSendResponse req_meta_data.client req_meta_data.server req_meta_data.request response req_meta_data.key <: communication_reqres_event a) \/
+      is_corrupt tr (principal_label client) \/ is_corrupt tr (principal_label req_meta_data.server))
     )
     )
 #pop-options
@@ -225,12 +244,19 @@ let comm_core_higher_layer_event_preds_reqres #cinvs a #config = {
   send_conf = (fun tr client server (com_msg_t:comm_message_t) ->
     match com_msg_t with
     | RequestMessage {request; key} -> (
-      parse_and_pred (fun request_parsed -> event_triggered tr client (CommClientSendRequest client server request_parsed key <: communication_reqres_event a)) request
+      parse_and_pred (fun request_parsed -> event_triggered tr client (CommClientSendRequest Unauthenticated client server request_parsed key <: communication_reqres_event a)) request
     )
     | _ -> False
   );
-  send_conf_later = (fun tr1 tr2 client server msg -> ()
-  )
+  send_conf_later = (fun tr1 tr2 client server msg -> ());
+  send_conf_auth = (fun tr client server (com_msg_t:comm_message_t) ->
+    match com_msg_t with
+    | RequestMessage {request; key} -> (
+      parse_and_pred (fun request_parsed -> event_triggered tr client (CommClientSendRequest Authenticated client server request_parsed key <: communication_reqres_event a)) request
+    )
+    | _ -> False
+  );
+  send_conf_auth_later = (fun tr1 tr2 client server msg -> ());
 }
 #pop-options
 

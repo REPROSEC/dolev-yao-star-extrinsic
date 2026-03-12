@@ -93,6 +93,8 @@ type response_envelope = {
 
 [@@with_bytes bytes]
 type authenticated_data = {
+  [@@@ with_parser #bytes (ps_option ps_principal)]
+  client:option principal;
   server:principal
 }
 

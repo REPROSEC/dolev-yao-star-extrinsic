@@ -34,7 +34,7 @@ let comm_label sender receiver = join (principal_label sender) (principal_label 
 type communication_core_event (a:Type) {|config:comm_layer_core_config a|} =
   | CommConfSendMsg: sender:principal -> receiver:principal -> [@@@ with_parser #bytes config.core_ps_a] payload:a -> communication_core_event a
   | CommConfReceiveMsg: receiver:principal -> [@@@ with_parser #bytes config.core_ps_a] payload:a -> communication_core_event a
-  | CommAuthSendMsg: sender:principal -> [@@@ with_parser #bytes config.core_ps_a] payload:a -> communication_core_event a
+  | CommAuthSendMsg: sender:principal -> receiver:principal -> [@@@ with_parser #bytes config.core_ps_a] payload:a -> communication_core_event a
   | CommAuthReceiveMsg: sender:principal -> receiver:principal -> [@@@ with_parser #bytes config.core_ps_a] payload:a -> communication_core_event a
   | CommConfAuthSendMsg: sender:principal -> receiver:principal -> [@@@ with_parser #bytes config.core_ps_a] payload:a -> communication_core_event a
   | CommConfAuthReceiveMsg: sender:principal -> receiver:principal -> [@@@ with_parser #bytes config.core_ps_a] payload:a -> communication_core_event a
@@ -129,7 +129,7 @@ val send_authenticated:
 let send_authenticated #a comm_keys_ids sender receiver payload =
   let*? sk_sender = get_private_key sender comm_keys_ids.private_keys (LongTermSigKey (comm_layer_sign_tag a)) in
   let* nonce = mk_rand SigNonce (long_term_key_label sender) 32 in
-  trigger_event sender (CommAuthSendMsg sender payload <: communication_core_event a);*
+  trigger_event sender (CommAuthSendMsg sender receiver payload <: communication_core_event a);*
   let msg_signed = sign_message sender receiver (Inl payload) sk_sender nonce in
   let* msg_id = send_msg msg_signed in
   return (Some msg_id)

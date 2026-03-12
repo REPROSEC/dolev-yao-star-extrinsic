@@ -27,19 +27,19 @@ val server_authentication:
   #a:Type -> {| comm_layer_reqres_config a |} ->
   {|comm_reqres_preds a|} ->
   tr:trace -> i:timestamp ->
-  client:principal -> server:principal -> request:a -> response:a -> key:bytes ->
+  authenticated:bool -> client:principal -> server:principal -> request:a -> response:a -> key:bytes ->
   Lemma
   (requires
     trace_invariant tr /\
     has_communication_layer_reqres_event_predicates a /\
-    event_triggered_at tr i client (CommClientReceiveResponse client server request response key <: communication_reqres_event a)
+    event_triggered_at tr i client (CommClientReceiveResponse authenticated client server request response key <: communication_reqres_event a)
   )
   (ensures
-    (exists request. event_triggered (prefix tr i) server (CommServerSendResponse server request response key <: communication_reqres_event a)) \/
+    (exists request. event_triggered (prefix tr i) server (CommServerSendResponse (if authenticated then Some client else None) server request response key <: communication_reqres_event a)) \/
     is_corrupt (prefix tr i) (principal_label client) \/
     is_corrupt (prefix tr i) (principal_label server)
   )
-let server_authentication #invs #a #config #crpreds tr i client server request response key = ()
+let server_authentication #invs #a #config #crpreds tr i authenticated client server request response key = ()
 
 
 (*** Secrecy Security Property ***)
@@ -79,7 +79,7 @@ val derive_comm_client_state_invariant:
   (requires
     trace_invariant tr /\
     has_communication_layer_reqres_predicates a /\
-    event_triggered tr client (CommClientSendRequest client req_meta_data.server req_meta_data.request req_meta_data.key <: communication_reqres_event a)
+    event_triggered tr client (CommClientSendRequest (Some? req_meta_data.client) client req_meta_data.server req_meta_data.request req_meta_data.key <: communication_reqres_event a)
   )
   (ensures
     comm_client_state_invariant tr a client req_meta_data
@@ -96,7 +96,7 @@ val send_request_event_properties:
   (requires
     trace_invariant tr /\
     has_communication_layer_reqres_predicates a /\
-    event_triggered tr client (CommClientSendRequest client req_meta_data.server req_meta_data.request req_meta_data.key <: communication_reqres_event a)
+    event_triggered tr client (CommClientSendRequest (Some? req_meta_data.client) client req_meta_data.server req_meta_data.request req_meta_data.key <: communication_reqres_event a)
   )
   (ensures
     is_well_formed a (is_knowable_by (get_label tr req_meta_data.key) tr) req_meta_data.request /\
@@ -105,7 +105,7 @@ val send_request_event_properties:
     crpreds.send_request_pred tr client req_meta_data.server req_meta_data.request (get_label tr req_meta_data.key)
   )
 let send_request_event_properties #invs #a #config #crpreds tr client req_meta_data =
-  let send_event:communication_reqres_event a = CommClientSendRequest client req_meta_data.server req_meta_data.request req_meta_data.key in
+  let send_event:communication_reqres_event a = CommClientSendRequest (Some? req_meta_data.client) client req_meta_data.server req_meta_data.request req_meta_data.key in
   let j = find_event_triggered_at_timestamp tr client send_event in
   let key_label = get_label tr req_meta_data.key in
   get_response_label_eq_key_label tr req_meta_data;
