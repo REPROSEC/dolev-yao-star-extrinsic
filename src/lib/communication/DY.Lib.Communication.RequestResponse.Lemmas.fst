@@ -120,7 +120,7 @@ let comm_client_state_invariant #cinvs tr a #ps prin req_meta_data =
 /// To enable these lemmas for an analysis, which requires specifying which
 /// predicates they shouild be used for, one can use the line
 /// `enable_reqres_comm_layer_lemmas preds`, where `preds` is the relevant
-/// `comm_reqres_higher_layer_event_preds` for the protocol.
+/// `comm_reqres_preds` for the protocol.
 /// See https://github.com/FStarLang/FStar/wiki/Quantifiers-and-patterns
 /// for more information on this technique.
 
