@@ -156,20 +156,6 @@ class comm_reqres_preds (a:Type) {| comm_layer_reqres_config a |} = {
       send_request_pred tr2 client server request key_label
     )
   ;
-  authenticated_request_pred: tr:trace -> client:principal -> server:principal -> request:a -> key_label:label -> prop;
-  authenticated_request_pred_later:
-    tr1:trace -> tr2:trace ->
-    client:principal -> server:principal -> request:a -> key_label:label ->
-    Lemma
-    (requires
-      authenticated_request_pred tr1 client server request key_label /\
-      is_well_formed a (bytes_well_formed tr1) request /\
-      tr1 <$ tr2
-    )
-    (ensures
-      authenticated_request_pred tr2 client server request key_label
-    )
-  ;
   // TODO rename to response_pred
   send_response_pred: tr:trace -> server:principal -> request:a -> response:a -> key_label:label -> prop;
   send_response_pred_later:
