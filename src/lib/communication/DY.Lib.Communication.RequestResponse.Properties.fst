@@ -24,7 +24,7 @@ open DY.Lib.Communication.RequestResponse.Lemmas
 
 val server_authentication:
   {|protocol_invariants|} ->
-  #a:Type -> {| comm_layer_reqres_config a |} ->
+  #a:eqtype -> {| comm_layer_reqres_config a |} ->
   {|comm_reqres_preds a|} ->
   tr:trace -> i:timestamp ->
   authenticated:sender_authentication -> client:principal -> response:a -> req_meta_data:comm_meta_data a ->
@@ -46,9 +46,10 @@ let server_authentication #invs #a #config #crpreds tr i authenticated client re
 
 val key_secrecy_client:
   {|protocol_invariants|} ->
-  #a:Type -> {|comm_layer_reqres_config a|} ->
+  #a:eqtype -> {|comm_layer_reqres_config a|} ->
   tr:trace ->
-  client:principal -> server:principal ->
+  authenticated:sender_authentication ->
+  client:principal -> client_opt:option principal -> server:principal ->
   key:bytes -> request:a -> response:a ->
   Lemma
   (requires
@@ -56,14 +57,14 @@ val key_secrecy_client:
     has_communication_layer_reqres_state_predicate a /\
     attacker_knows tr key /\
     (
-      (exists sid. state_was_set tr client sid (ClientSendRequest {server; request; key} <: communication_states a)) \/
+      (exists sid. state_was_set tr client sid (ClientSendRequest {authenticated; client=client_opt; server; request; key} <: communication_states a)) \/
       (exists sid. state_was_set tr client sid (ClientReceiveResponse {server; response; key} <: communication_states a))
     )
   )
   (ensures
     is_corrupt tr (principal_label client) \/ is_corrupt tr (principal_label server)
   )
-let key_secrecy_client #tag #invs tr client server key request response =
+let key_secrecy_client #tag #invs tr authenticated client client_opt server key request response =
   attacker_only_knows_publishable_values tr key;
   ()
 
@@ -71,7 +72,7 @@ let key_secrecy_client #tag #invs tr client server key request response =
 
 val send_request_event_properties:
   {|protocol_invariants|} ->
-  #a:Type -> {|comm_layer_reqres_config a|} ->
+  #a:eqtype -> {|comm_layer_reqres_config a|} ->
   {|crpreds:comm_reqres_preds a|} ->
   tr:trace -> authenticated:sender_authentication ->
   client:principal ->
@@ -98,7 +99,7 @@ let send_request_event_properties #invs #a #config #crpreds tr authenticated cli
 
 val derive_comm_client_state_invariant:
   {|protocol_invariants|} ->
-  #a:Type -> {|comm_layer_reqres_config a|} ->
+  #a:eqtype -> {|comm_layer_reqres_config a|} ->
   {|comm_reqres_preds a|} ->
   tr:trace ->
   authenticated:sender_authentication ->
@@ -117,7 +118,7 @@ let derive_comm_client_state_invariant #invs #a #config #crpreds tr authenticate
 #push-options "--z3rlimit 20"
 val request_message_unauthenticated_properties:
   {|protocol_invariants|} ->
-  #a:Type -> {|comm_layer_reqres_config a|} ->
+  #a:eqtype -> {|comm_layer_reqres_config a|} ->
   {|crpreds:comm_reqres_preds a|} ->
   tr:trace ->
   req_meta_data:comm_meta_data a ->
@@ -168,7 +169,7 @@ let request_message_unauthenticated_properties #invs #a #config #crpreds tr req_
 
 val request_message_unauthenticated_properties_request:
   {|protocol_invariants|} ->
-  #a:Type -> {|comm_layer_reqres_config a|} ->
+  #a:eqtype -> {|comm_layer_reqres_config a|} ->
   {|crpreds:comm_reqres_preds a|} ->
   tr:trace ->
   req_meta_data:comm_meta_data a ->
@@ -187,7 +188,7 @@ let request_message_unauthenticated_properties_request #invs #a #config #crpreds
 
 val request_message_unauthenticated_properties_request':
   {|protocol_invariants|} ->
-  #a:Type -> {|comm_layer_reqres_config a|} ->
+  #a:eqtype -> {|comm_layer_reqres_config a|} ->
   {|crpreds:comm_reqres_preds a|} ->
   tr:trace ->
   req_meta_data:comm_meta_data a ->
@@ -206,7 +207,7 @@ let request_message_unauthenticated_properties_request' #invs #a #config #crpred
 
 val request_message_unauthenticated_properties_key:
   {|protocol_invariants|} ->
-  #a:Type -> {|comm_layer_reqres_config a|} ->
+  #a:eqtype -> {|comm_layer_reqres_config a|} ->
   {|crpreds:comm_reqres_preds a|} ->
   tr:trace ->
   req_meta_data:comm_meta_data a ->
@@ -225,7 +226,7 @@ let request_message_unauthenticated_properties_key #invs #a #config #crpreds tr 
 
 val request_message_unauthenticated_properties_send_request:
   {|protocol_invariants|} ->
-  #a:Type -> {|comm_layer_reqres_config a|} ->
+  #a:eqtype -> {|comm_layer_reqres_config a|} ->
   {|crpreds:comm_reqres_preds a|} ->
   tr:trace ->
   req_meta_data:comm_meta_data a ->
@@ -247,7 +248,7 @@ let request_message_unauthenticated_properties_send_request #invs #a #config #cr
 #push-options "--z3rlimit 20"
 val request_message_authenticated_properties:
   {|protocol_invariants|} ->
-  #a:Type -> {|comm_layer_reqres_config a|} ->
+  #a:eqtype -> {|comm_layer_reqres_config a|} ->
   {|crpreds:comm_reqres_preds a|} ->
   tr:trace ->
   client:principal ->
@@ -296,7 +297,7 @@ let request_message_authenticated_properties #invs #a #config #crpreds tr client
 
 val send_response_event_properties:
   {|protocol_invariants|} ->
-  #a:Type -> {|comm_layer_reqres_config a|} ->
+  #a:eqtype -> {|comm_layer_reqres_config a|} ->
   {|crpreds:comm_reqres_preds a|} ->
   tr:trace -> client:principal ->
   req_meta_data:comm_meta_data a ->
@@ -324,7 +325,7 @@ let send_response_event_properties #invs #a #config #crpreds tr client req_meta_
 
 val response_message_properties:
   {|protocol_invariants|} ->
-  #a:Type -> {|comm_layer_reqres_config a|} ->
+  #a:eqtype -> {|comm_layer_reqres_config a|} ->
   {|crpreds:comm_reqres_preds a|} ->
   tr:trace ->
   client:principal -> response:a -> req_meta_data:comm_meta_data a ->
@@ -377,7 +378,7 @@ let response_message_properties #invs #a #config #crpreds tr client response req
 
 val response_message_properties_payload:
   {|protocol_invariants|} ->
-  #a:Type -> {|comm_layer_reqres_config a|} ->
+  #a:eqtype -> {|comm_layer_reqres_config a|} ->
   {|crpreds:comm_reqres_preds a|} ->
   tr:trace ->
   client:principal -> response:a -> req_meta_data:comm_meta_data a ->
@@ -396,7 +397,7 @@ let response_message_properties_payload #invs #a #config #crpreds tr client resp
 
 val response_message_properties_send_event:
   {|protocol_invariants|} ->
-  #a:Type -> {|comm_layer_reqres_config a|} ->
+  #a:eqtype -> {|comm_layer_reqres_config a|} ->
   {|crpreds:comm_reqres_preds a|} ->
   tr:trace ->
   client:principal -> response:a -> req_meta_data:comm_meta_data a ->
@@ -416,7 +417,7 @@ let response_message_properties_send_event #invs #a #config #crpreds tr client r
 
 val response_message_properties_send_event':
   {|protocol_invariants|} ->
-  #a:Type -> {|comm_layer_reqres_config a|} ->
+  #a:eqtype -> {|comm_layer_reqres_config a|} ->
   {|crpreds:comm_reqres_preds a|} ->
   tr:trace ->
   client:principal -> response:a -> req_meta_data:comm_meta_data a ->
@@ -436,7 +437,7 @@ let response_message_properties_send_event' #invs #a #config #crpreds tr client 
 
 val response_message_properties_send_request:
   {|protocol_invariants|} ->
-  #a:Type -> {|comm_layer_reqres_config a|} ->
+  #a:eqtype -> {|comm_layer_reqres_config a|} ->
   {|crpreds:comm_reqres_preds a|} ->
   tr:trace ->
   client:principal -> response:a -> req_meta_data:comm_meta_data a ->
@@ -455,7 +456,7 @@ let response_message_properties_send_request #invs #a #config #crpreds tr client
 
 val response_message_properties_send_response:
   {|protocol_invariants|} ->
-  #a:Type -> {|comm_layer_reqres_config a|} ->
+  #a:eqtype -> {|comm_layer_reqres_config a|} ->
   {|crpreds:comm_reqres_preds a|} ->
   tr:trace ->
   client:principal -> response:a -> req_meta_data:comm_meta_data a ->
@@ -475,7 +476,7 @@ let response_message_properties_send_response #invs #a #config #crpreds tr clien
 
 val response_message_properties_send_response':
   {|protocol_invariants|} ->
-  #a:Type -> {|comm_layer_reqres_config a|} ->
+  #a:eqtype -> {|comm_layer_reqres_config a|} ->
   {|crpreds:comm_reqres_preds a|} ->
   tr:trace ->
   client:principal -> response:a -> req_meta_data:comm_meta_data a ->

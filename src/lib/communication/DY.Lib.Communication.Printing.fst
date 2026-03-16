@@ -12,7 +12,7 @@ open DY.Lib.Communication.RequestResponse
 
 val comm_message_to_string:
   #core_type:Type0 -> {|comm_layer_core_config core_type|} ->
-  #reqres_type:Type0 -> {|comm_layer_reqres_config reqres_type|} -> 
+  #reqres_type:eqtype -> {|comm_layer_reqres_config reqres_type|} -> 
   (core_type -> string) -> (reqres_type -> string) -> (bytes -> string) -> bytes ->
   option string
 let comm_message_to_string #core_type #core_config #reqres_type #reqres_config msg_to_string reqres_payload_to_string other_messages_to_string b =
@@ -119,7 +119,7 @@ let sender_authentication_to_string sa =
   | Unauthenticated -> "Unauthenticated"
 
 val com_reqres_event_to_string:
-  #a:Type0 -> {|comm_layer_reqres_config a|} ->
+  #a:eqtype -> {|comm_layer_reqres_config a|} ->
   (a -> string) -> 
   (string & (bytes -> option string))
 let com_reqres_event_to_string #a payload_to_string =
@@ -146,14 +146,14 @@ let com_reqres_event_to_string #a payload_to_string =
 
 val com_event_to_string:
   #core_type:Type0 -> {|comm_layer_core_config core_type|} ->
-  #reqres_type:Type0 -> {|comm_layer_reqres_config reqres_type|} ->
+  #reqres_type:eqtype -> {|comm_layer_reqres_config reqres_type|} ->
   (core_type -> string) -> (reqres_type -> string) ->
   list (string & (bytes -> option string))
 let com_event_to_string #core_type #reqres_type core_payload_to_string reqres_payload_to_string =
   [com_core_event_to_string core_payload_to_string;
     com_reqres_event_to_string reqres_payload_to_string]
 
-val com_state_to_string: (#a:Type0) -> {|comm_layer_reqres_config a|} -> (a -> string) -> (string & (bytes -> option string))
+val com_state_to_string: (#a:eqtype) -> {|comm_layer_reqres_config a|} -> (a -> string) -> (string & (bytes -> option string))
 let com_state_to_string #a payload_to_string =
   ((local_state_communication_layer_session a).tag, (fun b -> (
     let? cs = parse (communication_states a) b in

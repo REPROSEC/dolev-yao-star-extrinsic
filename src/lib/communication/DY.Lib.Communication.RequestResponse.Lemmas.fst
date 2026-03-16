@@ -24,7 +24,7 @@ open DY.Lib.Communication.RequestResponse.Invariants
 
 val get_response_label_eq_key_label:
   {|cinvs:crypto_invariants|} ->
-  #a:Type0 -> {|conf:comm_layer_reqres_config a|} -> tr:trace ->
+  #a:eqtype -> {|conf:comm_layer_reqres_config a|} -> tr:trace ->
   req_meta_data:comm_meta_data a ->
   Lemma
   (requires
@@ -39,7 +39,7 @@ let get_response_label_eq_key_label #cinvs #a #_ tr req_meta_data =
   reveal_opaque (`%get_response_label) (get_response_label)
 
 val get_response_label_later:
-  #a:Type0 -> {|comm_layer_reqres_config a|} -> 
+  #a:eqtype -> {|comm_layer_reqres_config a|} -> 
   tr1:trace -> tr2:trace ->
   req_meta_data:comm_meta_data a ->
   Lemma
@@ -58,7 +58,7 @@ let get_response_label_later #a tr1 tr2 req_meta_data =
 
 val is_comm_response_payload:
   {|crypto_invariants|} ->
-  #a:Type0 -> {|comm_layer_reqres_config a|} ->
+  #a:eqtype -> {|comm_layer_reqres_config a|} ->
   trace -> principal -> comm_meta_data a -> a -> prop
 let is_comm_response_payload #cusg #a #ps tr server req_meta_data payload =
   is_well_formed a (is_knowable_by (get_response_label tr req_meta_data) tr) payload
@@ -66,7 +66,7 @@ let is_comm_response_payload #cusg #a #ps tr server req_meta_data payload =
 val comm_meta_data_knowable: 
   {|crypto_invariants|} ->
   trace ->
-  a:Type -> {|comm_layer_reqres_config a|} ->
+  a:eqtype -> {|comm_layer_reqres_config a|} ->
   principal -> comm_meta_data a ->
   prop
 let comm_meta_data_knowable #cinvs tr a #ps prin req_meta_data =
@@ -80,13 +80,13 @@ instance parseable_serializeable_bytes_state_id: parseable_serializeable bytes s
 instance parseable_serializeable_bytes_principal: parseable_serializeable bytes principal
   = mk_parseable_serializeable ps_principal
 
-instance parseable_serializeable_bytes_option (a:Type0) {|ps_a:parser_serializer bytes a|}: parseable_serializeable bytes (option a)
+instance parseable_serializeable_bytes_option (a:eqtype) {|ps_a:parser_serializer bytes a|}: parseable_serializeable bytes (option a)
   = mk_parseable_serializeable (ps_option ps_a)
 
 val comm_meta_data_knowable_proof: 
   {|crypto_invariants|} ->
   tr:trace ->
-  a:Type -> {|comm_layer_reqres_config a|} ->
+  a:eqtype -> {|comm_layer_reqres_config a|} ->
   st_t:Type0 -> {|ps:parseable_serializeable bytes st_t|} ->
   sess_id:state_id -> st:st_t -> {|local_state st_t|} ->
   prin:principal -> req_meta_data:comm_meta_data a ->
@@ -114,7 +114,7 @@ val comm_client_state_invariant:
   {|crypto_invariants|} ->
   trace ->
   sender_authentication ->
-  a:Type -> {|comm_layer_reqres_config a|} ->
+  a:eqtype -> {|comm_layer_reqres_config a|} ->
   principal -> comm_meta_data a ->
   prop
 let comm_client_state_invariant #cinvs tr authenticated a #ps prin req_meta_data =
@@ -133,12 +133,12 @@ let comm_client_state_invariant #cinvs tr authenticated a #ps prin req_meta_data
 
 [@@"opaque_to_smt"]
 val reqres_comm_layer_lemmas_enabled:
-  a:Type0 -> {| comm_layer_reqres_config a |} ->
+  a:eqtype -> {| comm_layer_reqres_config a |} ->
   {|comm_reqres_preds a|} -> prop
 let reqres_comm_layer_lemmas_enabled a #config #crpreds = True
 
 val enable_reqres_comm_layer_lemmas:
-  a:Type0 -> {|comm_layer_reqres_config a|} ->
+  a:eqtype -> {|comm_layer_reqres_config a|} ->
   {|comm_reqres_preds a|} ->
   Lemma (reqres_comm_layer_lemmas_enabled a)
 let enable_reqres_comm_layer_lemmas a #config #crpreds =
@@ -149,7 +149,7 @@ let enable_reqres_comm_layer_lemmas a #config #crpreds =
 val initialize_communication_reqres_proof:
   {|invs:protocol_invariants|} ->
   tr:trace ->
-  a:Type -> {|comm_layer_reqres_config a|} ->
+  a:eqtype -> {|comm_layer_reqres_config a|} ->
   sender:principal -> receiver:principal ->
   Lemma
   (requires
@@ -164,7 +164,7 @@ val initialize_communication_reqres_proof:
     trace_invariant tr_out
   ))
   [SMTPat (trace_invariant #invs tr);
-   SMTPat (initialize_communication_reqres a sender receiver tr);
+  SMTPat (initialize_communication_reqres a sender receiver tr);
   ]
 let initialize_communication_reqres_proof tr a sender receiver =
   reveal_opaque (`%initialize_communication_reqres) (initialize_communication_reqres a sender receiver)
@@ -175,7 +175,7 @@ let initialize_communication_reqres_proof tr a sender receiver =
 
 val helper_lemma_request_knowable:
   {|protocol_invariants|} ->
-  #a:Type0 -> {|comm_layer_reqres_config a|} ->
+  #a:eqtype -> {|comm_layer_reqres_config a|} ->
   tr:trace ->
   client:principal -> server:principal ->
   request:a -> key:bytes ->
@@ -192,7 +192,7 @@ let helper_lemma_request_knowable #invs #a #config tr client server request key 
 #push-options "--z3rlimit 50"
 val send_request_unauthenticated_proof:
   {|protocol_invariants|} ->
-  #a:Type0 -> {|comm_layer_reqres_config a|} ->
+  #a:eqtype -> {|comm_layer_reqres_config a|} ->
   {|crpreds:comm_reqres_preds a|} ->
   tr:trace ->
   comm_keys_ids:communication_keys_sess_ids ->
@@ -228,8 +228,8 @@ let send_request_unauthenticated_proof #invs #a #config #crpreds tr comm_keys_id
   assert(trace_invariant tr_ev);
 
   let (sid, tr_sess) = new_session_id client tr_ev in
-  assert((state_predicate_communication_layer_reqres a).pred tr_sess client sid (ClientSendRequest {server; request; key} <: communication_states a));
-  let ((), tr_st) = set_state client sid (ClientSendRequest {server; request; key} <: communication_states a) tr_sess in
+  assert((state_predicate_communication_layer_reqres a).pred tr_sess client sid (ClientSendRequest {authenticated=Unauthenticated; client=None; server; request; key} <: communication_states a));
+  let ((), tr_st) = set_state client sid (ClientSendRequest {authenticated=Unauthenticated; client=None; server; request; key} <: communication_states a) tr_sess in
   assert(trace_invariant tr_st);
 
   let request_bytes = serialize a request in
@@ -247,7 +247,7 @@ let send_request_unauthenticated_proof #invs #a #config #crpreds tr comm_keys_id
 #push-options "--z3rlimit 75"
 val send_request_authenticated_proof:
   {|protocol_invariants|} ->
-  #a:Type0 -> {|comm_layer_reqres_config a|} ->
+  #a:eqtype -> {|comm_layer_reqres_config a|} ->
   {|crpreds:comm_reqres_preds a|} ->
   tr:trace ->
   comm_keys_ids:communication_keys_sess_ids ->
@@ -284,7 +284,7 @@ let send_request_authenticated_proof #invs #a #config #crpreds tr comm_keys_ids 
 
   let request_bytes = serialize a request in
   let (sid, tr_sess) = new_session_id client tr_ev in
-  let ((), tr_st) = set_state client sid (ClientSendRequest {server; request; key} <: communication_states a) tr_sess in
+  let ((), tr_st) = set_state client sid (ClientSendRequest {authenticated=Authenticated; client=Some client; server; request; key} <: communication_states a) tr_sess in
   assert(trace_invariant tr_st);
   
   let req_payload:comm_message_t = RequestMessage {request=request_bytes; key} in
@@ -301,7 +301,7 @@ let send_request_authenticated_proof #invs #a #config #crpreds tr comm_keys_ids 
 #push-options "--ifuel 1"
 val send_request_proof:
   {|protocol_invariants|} ->
-  #a:Type0 -> {|comm_layer_reqres_config a|} ->
+  #a:eqtype -> {|comm_layer_reqres_config a|} ->
   {|crpreds:comm_reqres_preds a|} ->
   tr:trace ->
   authenticated:sender_authentication ->
@@ -358,11 +358,56 @@ let send_request_properties #a #config tr authenticated com_keys_ids client serv
   ()
 #pop-options
 
-#restart-solver
-#push-options "--z3rlimit 75"
+val helper_lemma_authenticated_request_property:
+  {|protocol_invariants|} ->
+  #a:eqtype -> {|comm_layer_reqres_config a|} ->
+  {|crpreds:comm_reqres_preds a|} ->
+  tr:trace ->
+  client:principal -> server:principal ->
+  payload:comm_message_t -> req_msg:request_message -> request:a ->
+  Lemma
+  (requires
+    trace_invariant tr /\
+    has_communication_layer_reqres_predicates a /\
+    RequestMessage req_msg == payload /\
+    Some request == parse a req_msg.request /\
+    event_triggered tr server (CommConfAuthReceiveMsg client server payload <: communication_core_event comm_message_t #(comm_layer_tag_core_config_reqres a))
+  )
+  (ensures
+    is_well_formed a (is_knowable_by (get_label tr req_msg.key) tr) request /\
+    req_msg.key `has_usage tr` (AeadKey (comm_layer_aead_tag a) empty) /\ (
+      event_triggered tr client (CommClientSendRequest Authenticated client server request req_msg.key <: communication_reqres_event a) \/
+          is_corrupt tr (long_term_key_label client)
+    )
+  )
+let helper_lemma_authenticated_request_property #invs #a #config #crpreds tr client server payload req_msg request =
+  let req_send_event:communication_reqres_event a = CommClientSendRequest Authenticated client server request req_msg.key in
+
+  confauth_message_properties' tr (comm_core_higher_layer_event_preds_reqres a) client server payload;
+  
+  // Properties that can be proved uniformly in both the honest and corrupt case
+  eliminate event_triggered tr client req_send_event \/ is_well_formed (comm_message_t) (is_publishable tr) payload
+  returns (
+    is_well_formed a (is_knowable_by (get_label tr req_msg.key) tr) request /\
+    req_msg.key `has_usage tr` (AeadKey (comm_layer_aead_tag a) empty)
+  )
+  with _. (
+    let i = find_event_triggered_at_timestamp tr client req_send_event in
+    assert(event_predicate_communication_layer_reqres a (prefix tr i) client req_send_event);
+    ()
+  )
+  and _. (has_usage_publishable tr req_msg.key (AeadKey (comm_layer_aead_tag a) empty);
+    parse_wf_lemma a (is_publishable tr) req_msg.request;
+    ()
+  );
+  
+  confauth_message_properties tr (comm_core_higher_layer_event_preds_reqres a) client server payload;
+  ()
+
+#push-options "--z3rlimit 120"
 val receive_request_authenticated_proof:
   {|invs:protocol_invariants|} ->
-  a:Type -> {|comm_layer_reqres_config a|} ->
+  a:eqtype -> {|comm_layer_reqres_config a|} ->
   {|crpreds:comm_reqres_preds a|} ->
   tr:trace ->
   comm_keys_ids:communication_keys_sess_ids ->
@@ -406,27 +451,8 @@ let receive_request_authenticated_proof #invs a #config #crpreds tr comm_keys_id
       match x_pr with
       | None -> assert(tr_pr == tr_out)
       | Some request ->
-        let req_send_event:communication_reqres_event a = CommClientSendRequest Authenticated cm.sender server request req_msg.key in
+        helper_lemma_authenticated_request_property tr_pr cm.sender server cm.payload req_msg request;
 
-        confauth_message_properties' tr_pr (comm_core_higher_layer_event_preds_reqres a) cm.sender server cm.payload;
-        
-        // Properties that can be proved uniformly in both the honest and corrupt case
-        eliminate event_triggered tr_pr cm.sender req_send_event \/ is_well_formed (comm_message_t) (is_publishable tr_pr) cm.payload
-        returns (
-          is_well_formed a (is_knowable_by (get_label tr_pr req_msg.key) tr_pr) request /\
-          req_msg.key `has_usage tr_pr` (AeadKey (comm_layer_aead_tag a) empty)
-        )
-        with _. (
-          let i = find_event_triggered_at_timestamp tr_pr cm.sender req_send_event in
-          assert(event_predicate_communication_layer_reqres a (prefix tr_pr i) cm.sender req_send_event);
-          ()
-        )
-        and _. (has_usage_publishable tr_pr req_msg.key (AeadKey (comm_layer_aead_tag a) empty);
-          parse_wf_lemma a (is_publishable tr_pr) req_msg.request;
-          ()
-        );
-        
-        confauth_message_properties tr_pr (comm_core_higher_layer_event_preds_reqres a) cm.sender server cm.payload;
         assert((event_predicate_communication_layer_reqres a) tr_pr server (CommServerReceiveRequest (Some cm.sender) server request req_msg.key <: communication_reqres_event a)) by (
           let open FStar.Tactics in
           norm [delta_only [`%event_predicate_communication_layer_reqres]; iota];
@@ -449,7 +475,7 @@ let receive_request_authenticated_proof #invs a #config #crpreds tr comm_keys_id
 #push-options "--z3rlimit 20"
 val helper_lemma_request_properties:
   {|protocol_invariants|} ->
-  a:Type -> {|comm_layer_reqres_config a|} ->
+  a:eqtype -> {|comm_layer_reqres_config a|} ->
   {|crpreds:comm_reqres_preds a|} ->
   tr:trace -> server:principal ->
   req_msg_t:comm_message_t ->
@@ -497,10 +523,11 @@ let helper_lemma_request_properties #invs a #config #crpreds tr server req_msg_t
   )
 #pop-options
 
+#restart-solver
 #push-options "--z3rlimit 150"
 val receive_request_unauthenticated_proof:
   {|invs:protocol_invariants|} ->
-  a:Type -> {|comm_layer_reqres_config a|} ->
+  a:eqtype -> {|comm_layer_reqres_config a|} ->
   {|crpreds:comm_reqres_preds a|} ->
   tr:trace ->
   comm_keys_ids:communication_keys_sess_ids ->
@@ -567,7 +594,7 @@ let receive_request_unauthenticated_proof #invs a #config #crpreds tr comm_keys_
 #push-options "--ifuel 1"
 val receive_request_proof:
   {|invs:protocol_invariants|} ->
-  a:Type -> {|comm_layer_reqres_config a|} ->
+  a:eqtype -> {|comm_layer_reqres_config a|} ->
   {|crpreds:comm_reqres_preds a|} ->
   tr:trace ->
   authenticated:sender_authentication ->
@@ -605,7 +632,7 @@ let receive_request_proof #invs a #config #crpreds tr authenticated comm_keys_id
 
 val mk_comm_layer_response_nonce_proof:
   {|protocol_invariants|} ->
-  #a:Type -> {|comm_layer_reqres_config a|} ->
+  #a:eqtype -> {|comm_layer_reqres_config a|} ->
   tr:trace ->
   req_meta_data:comm_meta_data a -> usg:usage ->
   Lemma
@@ -633,7 +660,7 @@ let mk_comm_layer_response_nonce_proof #invs #a tr req_meta_data usg =
 
 val mk_comm_layer_response_nonce_labeled_proof:
   {|protocol_invariants|} ->
-  #a:Type -> {|comm_layer_reqres_config a|} ->
+  #a:eqtype -> {|comm_layer_reqres_config a|} ->
   tr:trace ->
   req_meta_data:comm_meta_data a -> usg:usage -> lab:label ->
   Lemma
@@ -662,7 +689,7 @@ let mk_comm_layer_response_nonce_labeled_proof #invs #a tr req_meta_data usg lab
 #push-options "--ifuel 1 --z3rlimit 20"
 val compute_response_message_proof:
   {|crypto_invariants|} ->
-  #a:Type0 -> {|comm_layer_reqres_config a|} ->
+  #a:eqtype -> {|comm_layer_reqres_config a|} ->
   tr:trace ->
   server:principal ->
   req_meta_data:comm_meta_data a -> nonce:bytes -> request:a -> response:a ->
@@ -742,7 +769,7 @@ let send_response_proof #invs #a #config #crpreds tr server req_meta_data respon
 #push-options "--ifuel 1 --z3rlimit 50"
 val decode_response_proof:
   {|crypto_invariants|} ->
-  #a:Type -> {|comm_layer_reqres_config a|} ->
+  #a:eqtype -> {|comm_layer_reqres_config a|} ->
   tr:trace ->
   client:principal ->
   response_bytes:bytes -> req_meta_data:comm_meta_data a ->
@@ -781,7 +808,7 @@ let decode_response_proof #invs #a tr client response_bytes req_meta_data =
 #push-options "--z3rlimit 10"
 val comm_client_send_request_injective:
   {|protocol_invariants|} ->
-  #a:Type -> {| comm_layer_reqres_config a |} ->
+  #a:eqtype -> {| comm_layer_reqres_config a |} ->
   {|crpreds:comm_reqres_preds a|} ->
   tr:trace -> authenticated:sender_authentication ->
   client:principal -> client':principal -> server:principal ->
@@ -803,7 +830,7 @@ let comm_client_send_request_injective #invs #a #config #crpreds tr authenticate
 #push-options "--z3rlimit 100"
 val request_response_property:
   {|protocol_invariants|} ->
-  #a:Type -> {|comm_layer_reqres_config a|} ->
+  #a:eqtype -> {|comm_layer_reqres_config a|} ->
   {|comm_reqres_preds a|} ->
   tr:trace ->
   client:principal -> response:a ->
@@ -877,16 +904,14 @@ let request_response_property #invs #a #config #crpreds tr client response req_m
 #push-options "--z3rlimit 200"
 val receive_response_proof:
   {|protocol_invariants|} ->
-  #a:Type -> {|comm_layer_reqres_config a|} ->
+  #a:eqtype -> {|comm_layer_reqres_config a|} ->
   {|crpreds:comm_reqres_preds a|} ->
   tr:trace ->
   client:principal -> req_meta_data:comm_meta_data a -> msg_id:timestamp ->
   Lemma
   (requires
     trace_invariant tr /\
-    has_communication_layer_reqres_predicates a /\
-    // TODO shouldn't this be put into the state invariant?
-    event_triggered tr client (CommClientSendRequest (request_authenticated req_meta_data) client req_meta_data.server req_meta_data.request req_meta_data.key <: communication_reqres_event a)
+    has_communication_layer_reqres_predicates a
   )
   (ensures (
     match receive_response client req_meta_data msg_id tr with
@@ -905,7 +930,8 @@ let receive_response_proof #invs #a #crpreds tr client req_meta_data msg_id =
   | (None, tr_out) -> ()
   | (Some (response, _), tr_out) -> (
     let (Some state, tr'):(option (communication_states a) & trace) = get_state client req_meta_data.sid tr in
-    let ClientSendRequest csr = state in
+    let ClientSendRequest csr = state in    
+    assert(event_triggered tr client (CommClientSendRequest (request_authenticated req_meta_data) client req_meta_data.server req_meta_data.request req_meta_data.key <: communication_reqres_event a));
     let server = csr.server in
     let key = csr.key in
     let (Some resp_msg_bytes, tr') = recv_msg msg_id tr' in

@@ -16,16 +16,16 @@ open DY.Lib.Communication.Core
 
 (*** Layer Setup ***)
 
-instance comm_layer_tag_core_config_reqres (a:Type) {|config:comm_layer_reqres_config a|}: comm_layer_core_config comm_message_t = {
+instance comm_layer_tag_core_config_reqres (a:eqtype) {|config:comm_layer_reqres_config a|}: comm_layer_core_config comm_message_t = {
   core_tag = config.reqres_tag ^ ".CoreConfig.ReqRes";
   core_ps_a = ps_comm_message_t;
 }
 
-val comm_layer_aead_tag: a:Type -> {|comm_layer_reqres_config a|} -> string
+val comm_layer_aead_tag: a:eqtype -> {|comm_layer_reqres_config a|} -> string
 let comm_layer_aead_tag a #config = config.reqres_tag ^ ".Aead.Key"
 
 [@@with_bytes bytes]
-type comm_meta_data (a:Type) {|config:comm_layer_reqres_config a|} = {
+type comm_meta_data (a:eqtype) {|config:comm_layer_reqres_config a|} = {
   key:bytes;
   [@@@ with_parser #bytes (ps_option #bytes ps_principal)]
   client:option principal;
@@ -38,68 +38,15 @@ type comm_meta_data (a:Type) {|config:comm_layer_reqres_config a|} = {
 %splice [ps_comm_meta_data] (gen_parser (`comm_meta_data))
 %splice [ps_comm_meta_data_is_well_formed] (gen_is_well_formed_lemma (`comm_meta_data))
 
-instance parseable_serializeable_bytes_comm_meta_data (a:Type) {|comm_layer_reqres_config a|}: parseable_serializeable bytes (comm_meta_data a)
+instance parseable_serializeable_bytes_comm_meta_data (a:eqtype) {|comm_layer_reqres_config a|}: parseable_serializeable bytes (comm_meta_data a)
   = mk_parseable_serializeable (ps_comm_meta_data a)
 
 [@@"opaque_to_smt"]
-val get_response_label: tr:trace -> #a:Type0 -> {|comm_layer_reqres_config a|} -> comm_meta_data a -> label
+val get_response_label: tr:trace -> #a:eqtype -> {|comm_layer_reqres_config a|} -> comm_meta_data a -> label
 let get_response_label tr #a #ps req_meta_data = get_label #default_crypto_usages tr req_meta_data.key
 
 
 (*** States ***)
-
-[@@with_bytes bytes]
-type client_send_request (a:Type) {|config:comm_layer_reqres_config a|}  = {
-  server:principal;
-  [@@@ with_parser #bytes config.reqres_ps_a]
-  request:a;
-  key:bytes
-}
-
-%splice [ps_client_send_request] (gen_parser (`client_send_request))
-%splice [ps_client_send_request_is_well_formed] (gen_is_well_formed_lemma (`client_send_request))
-
-[@@with_bytes bytes]
-type server_receive_request (a:Type) {|config:comm_layer_reqres_config a|}  = {
-  [@@@ with_parser #bytes (ps_option #bytes ps_principal)]
-  client:option principal;
-  [@@@ with_parser #bytes config.reqres_ps_a]
-  request:a;
-  key:bytes
-}
-
-%splice [ps_server_receive_request] (gen_parser (`server_receive_request))
-%splice [ps_server_receive_request_is_well_formed] (gen_is_well_formed_lemma (`server_receive_request))
-
-[@@with_bytes bytes]
-type client_receive_response (a:Type) {|config:comm_layer_reqres_config a|}  = {
-  server:principal;
-  [@@@ with_parser #bytes config.reqres_ps_a]
-  response:a;
-  key:bytes
-}
-
-%splice [ps_client_receive_response] (gen_parser (`client_receive_response))
-%splice [ps_client_receive_response_is_well_formed] (gen_is_well_formed_lemma (`client_receive_response))
-
-[@@with_bytes bytes]
-type communication_states (a:Type) {|c:comm_layer_reqres_config a|}  =
-  | ClientSendRequest: client_send_request a -> communication_states a
-  | ServerReceiveRequest: server_receive_request a -> communication_states a
-  | ClientReceiveResponse: client_receive_response a -> communication_states a
-
-#push-options "--ifuel 1"
-%splice [ps_communication_states] (gen_parser (`communication_states))
-%splice [ps_communication_states_is_well_formed] (gen_is_well_formed_lemma (`communication_states))
-#pop-options
-
-instance parseable_serializeable_bytes_communication_states (a:Type) {|comm_layer_reqres_config a|}: parseable_serializeable bytes (communication_states a)
-  = mk_parseable_serializeable (ps_communication_states a)
-
-instance local_state_communication_layer_session (a:Type) {|config:comm_layer_reqres_config a|}: local_state (communication_states a) = {
-  tag = config.reqres_tag ^ ".State";
-  format = parseable_serializeable_bytes_communication_states a;
-}
 
 [@@with_bytes bytes]
 type sender_authentication = 
@@ -111,14 +58,70 @@ type sender_authentication =
 %splice [ps_sender_authentication_is_well_formed] (gen_is_well_formed_lemma (`sender_authentication))
 #pop-options
 
-val request_authenticated: #a:Type -> {|comm_layer_reqres_config a|} -> comm_meta_data a -> sender_authentication
+val request_authenticated: #a:eqtype -> {|comm_layer_reqres_config a|} -> comm_meta_data a -> sender_authentication
 let request_authenticated #a #config req_meta_data =
   match req_meta_data.client with
   | None -> Unauthenticated
   | Some _ -> Authenticated
 
 [@@with_bytes bytes]
-type communication_reqres_event (a:Type) {|config:comm_layer_reqres_config a|} =
+type client_send_request (a:eqtype) {|config:comm_layer_reqres_config a|}  = {
+  authenticated:sender_authentication;
+  [@@@ with_parser #bytes (ps_option #bytes ps_principal)]
+  client:option principal;
+  server:principal;
+  [@@@ with_parser #bytes config.reqres_ps_a]
+  request:a;
+  key:bytes
+}
+
+%splice [ps_client_send_request] (gen_parser (`client_send_request))
+%splice [ps_client_send_request_is_well_formed] (gen_is_well_formed_lemma (`client_send_request))
+
+[@@with_bytes bytes]
+type server_receive_request (a:eqtype) {|config:comm_layer_reqres_config a|}  = {
+  [@@@ with_parser #bytes (ps_option #bytes ps_principal)]
+  client:option principal;
+  [@@@ with_parser #bytes config.reqres_ps_a]
+  request:a;
+  key:bytes
+}
+
+%splice [ps_server_receive_request] (gen_parser (`server_receive_request))
+%splice [ps_server_receive_request_is_well_formed] (gen_is_well_formed_lemma (`server_receive_request))
+
+[@@with_bytes bytes]
+type client_receive_response (a:eqtype) {|config:comm_layer_reqres_config a|}  = {
+  server:principal;
+  [@@@ with_parser #bytes config.reqres_ps_a]
+  response:a;
+  key:bytes
+}
+
+%splice [ps_client_receive_response] (gen_parser (`client_receive_response))
+%splice [ps_client_receive_response_is_well_formed] (gen_is_well_formed_lemma (`client_receive_response))
+
+[@@with_bytes bytes]
+type communication_states (a:eqtype) {|c:comm_layer_reqres_config a|}  =
+  | ClientSendRequest: client_send_request a -> communication_states a
+  | ServerReceiveRequest: server_receive_request a -> communication_states a
+  | ClientReceiveResponse: client_receive_response a -> communication_states a
+
+#push-options "--ifuel 1"
+%splice [ps_communication_states] (gen_parser (`communication_states))
+%splice [ps_communication_states_is_well_formed] (gen_is_well_formed_lemma (`communication_states))
+#pop-options
+
+instance parseable_serializeable_bytes_communication_states (a:eqtype) {|comm_layer_reqres_config a|}: parseable_serializeable bytes (communication_states a)
+  = mk_parseable_serializeable (ps_communication_states a)
+
+instance local_state_communication_layer_session (a:eqtype) {|config:comm_layer_reqres_config a|}: local_state (communication_states a) = {
+  tag = config.reqres_tag ^ ".State";
+  format = parseable_serializeable_bytes_communication_states a;
+}
+
+[@@with_bytes bytes]
+type communication_reqres_event (a:eqtype) {|config:comm_layer_reqres_config a|} =
   | CommClientSendRequest: [@@@ with_parser #bytes ps_sender_authentication] authenticated:sender_authentication -> client:principal -> server:principal -> [@@@ with_parser #bytes config.reqres_ps_a] request:a -> key:bytes -> communication_reqres_event a
   | CommServerReceiveRequest: [@@@ with_parser #bytes (ps_option ps_principal)] client:option principal -> server:principal -> [@@@ with_parser #bytes config.reqres_ps_a] request:a -> key:bytes -> communication_reqres_event a
   | CommServerSendResponse: [@@@ with_parser #bytes (ps_option ps_principal)] client:option principal -> server:principal -> [@@@ with_parser #bytes config.reqres_ps_a] request:a -> [@@@ with_parser #bytes config.reqres_ps_a] response:a -> key:bytes -> communication_reqres_event a
@@ -129,7 +132,7 @@ type communication_reqres_event (a:Type) {|config:comm_layer_reqres_config a|} =
 %splice [ps_communication_reqres_event_is_well_formed] (gen_is_well_formed_lemma (`communication_reqres_event))
 #pop-options
 
-instance event_communication_reqres_event (#a:Type) {|config:comm_layer_reqres_config a|}: event (communication_reqres_event a) = {
+instance event_communication_reqres_event (#a:eqtype) {|config:comm_layer_reqres_config a|}: event (communication_reqres_event a) = {
   tag = config.reqres_tag ^ ".Event";
   format = mk_parseable_serializeable (ps_communication_reqres_event a);
 }
@@ -140,7 +143,7 @@ instance event_communication_reqres_event (#a:Type) {|config:comm_layer_reqres_c
 #push-options "--ifuel 1"
 [@@ "opaque_to_smt"]
 val send_request:
-  #a:Type0 -> {|comm_layer_reqres_config a|} ->
+  #a:eqtype -> {|comm_layer_reqres_config a|} ->
   authenticated:sender_authentication ->
   communication_keys_sess_ids ->
   principal -> principal -> a ->
@@ -149,15 +152,16 @@ let send_request #a #config authenticated comm_keys_ids client server request =
   let* key = mk_rand (AeadKey (comm_layer_aead_tag a) empty) (comm_label client server) 32 in
   trigger_event client (CommClientSendRequest authenticated client server request key <: communication_reqres_event a);*
   let payload_bytes:bytes = serialize a request in
-  let* sid = new_session_id client in
-  set_state client sid (ClientSendRequest {server; request; key} <: communication_states a);*
   let req_payload:comm_message_t = RequestMessage {request=payload_bytes; key} in
+  let* sid = new_session_id client in
   match authenticated with
   | Authenticated ->
+    set_state client sid (ClientSendRequest {authenticated; client=Some client; server; request; key} <: communication_states a);*
     let*? msg_id = send_confidential_authenticated #comm_message_t #(comm_layer_tag_core_config_reqres a) comm_keys_ids client server req_payload in
     let req_meta_data:comm_meta_data a = {key; client=Some client; server; sid; request} in
     return (Some (msg_id, req_meta_data))
   | Unauthenticated ->
+    set_state client sid (ClientSendRequest {authenticated; client=None; server; request; key} <: communication_states a);*
     let*? msg_id = send_confidential #comm_message_t #(comm_layer_tag_core_config_reqres a) comm_keys_ids client server req_payload in
     let req_meta_data:comm_meta_data a = {key; client=None; server; sid; request} in
     return (Some (msg_id, req_meta_data))
@@ -165,7 +169,7 @@ let send_request #a #config authenticated comm_keys_ids client server request =
 
 [@@ "opaque_to_smt"]
 val receive_request:
-  #a:Type -> {|comm_layer_reqres_config a|} ->
+  #a:eqtype -> {|comm_layer_reqres_config a|} ->
   authenticated:sender_authentication ->
   communication_keys_sess_ids ->
   principal -> timestamp ->
@@ -189,14 +193,14 @@ let receive_request #a authenticated comm_keys_ids server msg_id =
 
 
 [@@ "opaque_to_smt"]
-val mk_comm_layer_response_nonce: #a:Type -> {|comm_layer_reqres_config a|} -> comm_meta_data a -> usage -> traceful (option bytes)
+val mk_comm_layer_response_nonce: #a:eqtype -> {|comm_layer_reqres_config a|} -> comm_meta_data a -> usage -> traceful (option bytes)
 let mk_comm_layer_response_nonce #a req_meta_data usg =
   let* tr = get_trace in
   let* nonce = mk_rand usg (get_response_label tr req_meta_data) 32 in
   return (Some nonce)
 
 [@@ "opaque_to_smt"]
-val mk_comm_layer_response_nonce_labeled: #a:Type -> {|comm_layer_reqres_config a|} -> comm_meta_data a -> usage -> label -> traceful (option bytes)
+val mk_comm_layer_response_nonce_labeled: #a:eqtype -> {|comm_layer_reqres_config a|} -> comm_meta_data a -> usage -> label -> traceful (option bytes)
 let mk_comm_layer_response_nonce_labeled #a req_meta_data usg lab =
   let* tr = get_trace in
   let lab_join = join lab (get_response_label tr req_meta_data) in
@@ -205,7 +209,7 @@ let mk_comm_layer_response_nonce_labeled #a req_meta_data usg lab =
 
 [@@ "opaque_to_smt"]
 val compute_response_message:
-  #a:Type -> {|comm_layer_reqres_config a|} ->
+  #a:eqtype -> {|comm_layer_reqres_config a|} ->
   principal -> comm_meta_data a -> bytes -> a -> bytes
 let compute_response_message #a server req_meta_data nonce response =
   let res_bytes = serialize a response in
@@ -232,7 +236,7 @@ let send_response #a server req_meta_data response =
 
 [@@ "opaque_to_smt"]
 val decode_response_message:
-  #a:Type -> {|comm_layer_reqres_config a|} ->
+  #a:eqtype -> {|comm_layer_reqres_config a|} ->
   principal -> bytes -> bytes -> comm_meta_data a -> option a
 let decode_response_message #a server key msg_bytes req_meta_data =
   let? resp_env_t:comm_message_t = parse comm_message_t msg_bytes in
@@ -246,7 +250,7 @@ let decode_response_message #a server key msg_bytes req_meta_data =
 
 [@@ "opaque_to_smt"]
 val receive_response:
-  #a:Type -> {|comm_layer_reqres_config a|} ->
+  #a:eqtype -> {|comm_layer_reqres_config a|} ->
   principal -> comm_meta_data a -> timestamp ->
   traceful (option (a & comm_meta_data a))
 let receive_response #a client req_meta_data msg_id =
@@ -255,8 +259,10 @@ let receive_response #a client req_meta_data msg_id =
   let ClientSendRequest csr = state in
   let*? resp_msg_bytes = recv_msg msg_id in
   let*? payload = return (decode_response_message csr.server csr.key resp_msg_bytes req_meta_data) in
+  guard_tr (csr.client = req_meta_data.client);*?
   guard_tr (csr.server = req_meta_data.server);*?
   guard_tr (csr.key = req_meta_data.key);*?
+  guard_tr (csr.request = req_meta_data.request);*?
   guard_tr (match req_meta_data.client with
     | None -> true
     | Some client' ->  client = client');*?
@@ -268,5 +274,5 @@ let receive_response #a client req_meta_data msg_id =
 (**** Layer Initialization ****)
 
 [@@ "opaque_to_smt"]
-val initialize_communication_reqres: a:Type -> {|comm_layer_reqres_config a|} -> principal -> principal -> traceful (option (communication_keys_sess_ids & communication_keys_sess_ids))
+val initialize_communication_reqres: a:eqtype -> {|comm_layer_reqres_config a|} -> principal -> principal -> traceful (option (communication_keys_sess_ids & communication_keys_sess_ids))
 let initialize_communication_reqres a client server = initialize_communication_core comm_message_t #(comm_layer_tag_core_config_reqres a) client server
