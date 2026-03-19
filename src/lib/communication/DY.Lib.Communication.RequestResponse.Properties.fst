@@ -97,7 +97,7 @@ let send_request_event_properties #invs #a #config #crpreds tr authenticated cli
   crpreds.send_request_pred_later (prefix tr j) tr client req_meta_data.server req_meta_data.request key_label;
   ()
 
-val derive_comm_client_state_invariant:
+val derive_comm_meta_data_knowable:
   {|protocol_invariants|} ->
   #a:eqtype -> {|comm_layer_reqres_config a|} ->
   {|comm_reqres_preds a|} ->
@@ -111,9 +111,9 @@ val derive_comm_client_state_invariant:
     event_triggered tr client (CommClientSendRequest authenticated client req_meta_data.server req_meta_data.request req_meta_data.key <: communication_reqres_event a)
   )
   (ensures
-    comm_client_state_invariant tr authenticated a client req_meta_data
+    comm_meta_data_knowable tr a client req_meta_data
   )
-let derive_comm_client_state_invariant #invs #a #config #crpreds tr authenticated req_meta_data client = ()
+let derive_comm_meta_data_knowable #invs #a #config #crpreds tr authenticated req_meta_data client = ()
 
 #push-options "--z3rlimit 20"
 val request_message_unauthenticated_properties:

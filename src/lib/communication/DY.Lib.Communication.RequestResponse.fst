@@ -249,6 +249,7 @@ let decode_response_message #a server key msg_bytes req_meta_data =
   Some resp
 
 [@@ "opaque_to_smt"]
+// TODO: This function should probably not return comm_meta_data since it is unchanged
 val receive_response:
   #a:eqtype -> {|comm_layer_reqres_config a|} ->
   principal -> comm_meta_data a -> timestamp ->
