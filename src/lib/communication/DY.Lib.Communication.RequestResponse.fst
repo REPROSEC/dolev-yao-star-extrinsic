@@ -140,15 +140,17 @@ instance event_communication_reqres_event (#a:eqtype) {|config:comm_layer_reqres
 
 (*** API ***)
 
+// This method is only for internal purposes.
+// Do not use this method directly, use send_request or 
+// send_request_authenticated instead.
 #push-options "--ifuel 1"
-[@@ "opaque_to_smt"]
-val send_request:
+val _send_request:
   #a:eqtype -> {|comm_layer_reqres_config a|} ->
   authenticated:sender_authentication ->
   communication_keys_sess_ids ->
   principal -> principal -> a ->
   traceful (option (timestamp & comm_meta_data a))
-let send_request #a #config authenticated comm_keys_ids client server request =
+let _send_request #a #config authenticated comm_keys_ids client server request =
   let* key = mk_rand (AeadKey (comm_layer_aead_tag a) empty) (comm_label client server) 32 in
   trigger_event client (CommClientSendRequest authenticated client server request key <: communication_reqres_event a);*
   let payload_bytes:bytes = serialize a request in
@@ -168,20 +170,32 @@ let send_request #a #config authenticated comm_keys_ids client server request =
 #pop-options
 
 [@@ "opaque_to_smt"]
-val receive_request:
+val send_request:
+  #a:eqtype -> {|comm_layer_reqres_config a|} ->
+  communication_keys_sess_ids ->
+  principal -> principal -> a ->
+  traceful (option (timestamp & comm_meta_data a))
+let send_request #a #config comm_keys_ids client server request = _send_request #a #config Unauthenticated comm_keys_ids client server request
+
+[@@ "opaque_to_smt"]
+val send_request_authenticated:
+  #a:eqtype -> {|comm_layer_reqres_config a|} ->
+  communication_keys_sess_ids ->
+  principal -> principal -> a ->
+  traceful (option (timestamp & comm_meta_data a))
+let send_request_authenticated #a #config comm_keys_ids client server request = _send_request #a #config Authenticated comm_keys_ids client server request
+
+// This method is only for internal purposes.
+// Do not use this method directly, use receive_request or 
+// receive_request_authenticated instead.
+#push-options "--ifuel 1"
+val _receive_request:
   #a:eqtype -> {|comm_layer_reqres_config a|} ->
   authenticated:sender_authentication ->
   communication_keys_sess_ids ->
-  principal -> timestamp ->
+  principal -> comm_message_t -> option principal ->
   traceful (option (a & comm_meta_data a))
-let receive_request #a authenticated comm_keys_ids server msg_id =
-  let*? (req_msg_t, client):(comm_message_t & option principal) = if authenticated = Authenticated then
-    let*? cm = receive_confidential_authenticated #comm_message_t #(comm_layer_tag_core_config_reqres a) comm_keys_ids server msg_id in
-    return (Some (cm.payload, Some cm.sender))
-  else
-    let*? payload = receive_confidential #comm_message_t #(comm_layer_tag_core_config_reqres a) comm_keys_ids server msg_id in
-    return (Some (payload, None))
-  in
+let _receive_request #a authenticated comm_keys_ids server req_msg_t client =
   guard_tr (RequestMessage? req_msg_t);*?
   let RequestMessage req_msg = req_msg_t in
   let*? request = return (parse a req_msg.request) in
@@ -190,7 +204,56 @@ let receive_request #a authenticated comm_keys_ids server msg_id =
   set_state server sid (ServerReceiveRequest {client; request; key=req_msg.key} <: communication_states a);*
   let req_meta_data:comm_meta_data a = {key=req_msg.key; client; server; sid; request} in
   return (Some (request, req_meta_data))
+#pop-options
 
+[@@ "opaque_to_smt"]
+val receive_request:
+  #a:eqtype -> {|comm_layer_reqres_config a|} ->
+  communication_keys_sess_ids ->
+  principal -> timestamp ->
+  traceful (option (a & comm_meta_data a))
+let receive_request #a comm_keys_ids server msg_id = 
+  let*? req_msg_t = receive_confidential #comm_message_t #(comm_layer_tag_core_config_reqres a) comm_keys_ids server msg_id in
+  _receive_request #a Unauthenticated comm_keys_ids server req_msg_t None
+
+/// ************** comm_meta_data refinement for authenticated requests **************
+let refinement_condition_comm_meta_data_authenticated (a:eqtype) {|comm_layer_reqres_config a|} (req_meta_data:comm_meta_data a) : bool = Some? req_meta_data.client
+type comm_meta_data_authenticated (a:eqtype) {|comm_layer_reqres_config a|} = req_meta_data:comm_meta_data a{refinement_condition_comm_meta_data_authenticated a req_meta_data} 
+
+let ps_comm_meta_data_authenticated (a:eqtype) {|comm_layer_reqres_config a|}:parser_serializer bytes (comm_meta_data_authenticated a) =
+  let ps = ps_comm_meta_data a in
+
+  assert_norm(refined (comm_meta_data a) (refinement_condition_comm_meta_data_authenticated a) == comm_meta_data_authenticated a);
+  let ps':parser_serializer bytes (comm_meta_data_authenticated a) = refine ps (refinement_condition_comm_meta_data_authenticated a) in
+  ps'
+
+val ps_comm_meta_data_authenticated_is_well_formed: #a:eqtype -> {|config:comm_layer_reqres_config a|} ->
+  pre:bytes_compatible_pre bytes -> x:comm_meta_data_authenticated a ->
+  Lemma
+  (ensures
+    is_well_formed_prefix (ps_comm_meta_data_authenticated a) pre x <==>
+    (let { key = key ; client = client ; server = server ; sid = sid ; request = request } = x in
+      is_well_formed_prefix ps_bytes pre key /\
+      is_well_formed_prefix (ps_option ps_principal) pre client /\
+      is_well_formed_prefix ps_principal pre server /\
+      (is_well_formed_prefix ps_state_id pre sid /\
+      is_well_formed_prefix config.reqres_ps_a pre request)))
+  [SMTPat (is_well_formed_prefix (ps_comm_meta_data_authenticated a) pre x)]
+let ps_comm_meta_data_authenticated_is_well_formed #a {|config:comm_layer_reqres_config a|} pre x =
+  ps_comm_meta_data_is_well_formed a pre x
+/// **********************************************************************************
+
+[@@ "opaque_to_smt"]
+val receive_request_authenticated:
+  #a:eqtype -> {|comm_layer_reqres_config a|} ->
+  communication_keys_sess_ids ->
+  principal -> timestamp ->
+  traceful (option (a & comm_meta_data_authenticated a))
+let receive_request_authenticated #a #config comm_keys_ids server msg_id =
+  let*? cm = receive_confidential_authenticated #comm_message_t #(comm_layer_tag_core_config_reqres a) comm_keys_ids server msg_id in
+  let*? (msg, req_meta_data) = _receive_request #a Authenticated comm_keys_ids server cm.payload (Some cm.sender) in
+  let req_meta_data_auth:comm_meta_data_authenticated a = {req_meta_data with client = Some cm.sender} in
+  return (Some (msg, req_meta_data_auth))
 
 [@@ "opaque_to_smt"]
 val mk_comm_layer_response_nonce: #a:eqtype -> {|comm_layer_reqres_config a|} -> comm_meta_data a -> usage -> traceful (option bytes)
