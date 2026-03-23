@@ -191,7 +191,6 @@ val send_request_proof:
   Lemma
   (requires
     trace_invariant tr /\
-    has_private_keys_invariant /\
     has_pki_invariant /\
     has_pki_state_update_invariant /\
     has_communication_layer_reqres_predicates a /\
@@ -204,8 +203,9 @@ val send_request_proof:
     | (Some (_, req_meta_data), tr_out) -> (
       trace_invariant tr_out /\
       event_triggered tr_out client (CommClientSendRequest Unauthenticated client server request req_meta_data.key <: communication_reqres_event a) /\
-      request == req_meta_data.request /\
-      server == req_meta_data.server
+      req_meta_data.client == None /\
+      server == req_meta_data.server /\
+      request == req_meta_data.request
     )
   ))
 let send_request_proof #invs #a #config #crpreds tr comm_keys_ids  client server request =
@@ -247,9 +247,9 @@ val send_request_properties:
     | (None, _) -> True
     | (Some (_, req_meta_data), tr_out) -> (
       event_triggered tr_out client (CommClientSendRequest Unauthenticated client server request req_meta_data.key <: communication_reqres_event a) /\
+      req_meta_data.client == None /\
       server == req_meta_data.server /\
-      request == req_meta_data.request /\
-      req_meta_data.client == None
+      request == req_meta_data.request
     )
   ))
 let send_request_properties #a #config tr com_keys_ids client server request =
@@ -279,6 +279,28 @@ val helper_lemma_authenticated_request_knowable:
   )
 let helper_lemma_authenticated_request_knowable #invs #a #config tr client server request key = ()
 
+#push-options "--z3rlimit 30"
+val send_request_authenticated_properties:
+  #a:eqtype -> {|comm_layer_reqres_config a|} ->
+  tr:trace ->
+  comm_keys_ids:communication_keys_sess_ids ->
+  client:principal -> server:principal -> request:a ->
+  Lemma
+  (ensures (
+    match send_request_authenticated comm_keys_ids client server request tr with
+    | (None, _) -> True
+    | (Some (_, req_meta_data), tr_out) -> (
+      event_triggered tr_out client (CommClientSendRequest Authenticated client server request req_meta_data.key <: communication_reqres_event a) /\
+      req_meta_data.client == Some client /\
+      server == req_meta_data.server /\
+      request == req_meta_data.request
+    )
+  ))
+let send_request_authenticated_properties #a #config tr comm_keys_ids client server request =
+  reveal_opaque (`%send_request_authenticated) (send_request_authenticated #a);
+  ()
+#pop-options
+
 #push-options "--z3rlimit 50"
 val send_request_authenticated_proof:
   {|protocol_invariants|} ->
@@ -303,8 +325,9 @@ val send_request_authenticated_proof:
     | (Some (_, req_meta_data), tr_out) -> (
       trace_invariant tr_out /\
       event_triggered tr_out client (CommClientSendRequest Authenticated client server request req_meta_data.key <: communication_reqres_event a) /\
-      request == req_meta_data.request /\
-      server == req_meta_data.server
+      req_meta_data.client == Some client /\
+      server == req_meta_data.server /\
+      request == req_meta_data.request
     )
   ))
 let send_request_authenticated_proof #invs #a #config #crpreds tr comm_keys_ids client server request =
@@ -331,28 +354,8 @@ let send_request_authenticated_proof #invs #a #config #crpreds tr comm_keys_ids 
   assert(trace_invariant tr_snd);
   
   assert(tr_out == tr_snd);
-  ()
-#pop-options
 
-#push-options "--z3rlimit 20"
-val send_request_authenticated_properties:
-  #a:eqtype -> {|comm_layer_reqres_config a|} ->
-  tr:trace ->
-  com_keys_ids:communication_keys_sess_ids ->
-  client:principal -> server:principal -> request:a ->
-  Lemma
-  (ensures (
-    match send_request_authenticated com_keys_ids client server request tr with
-    | (None, _) -> True
-    | (Some (_, req_meta_data), tr_out) -> (
-      event_triggered tr_out client (CommClientSendRequest Authenticated client server request req_meta_data.key <: communication_reqres_event a) /\
-      server == req_meta_data.server /\
-      request == req_meta_data.request /\
-      req_meta_data.client == Some client
-    )
-  ))
-let send_request_authenticated_properties #a #config tr com_keys_ids client server request =
-  reveal_opaque (`%send_request_authenticated) (send_request_authenticated #a);
+  send_request_authenticated_properties tr comm_keys_ids client server request;
   ()
 #pop-options
 
@@ -433,8 +436,9 @@ val receive_request_proof:
     | (Some (payload, req_meta_data), tr_out) -> (
       trace_invariant tr_out /\
       event_triggered tr_out server (CommServerReceiveRequest req_meta_data.client server payload req_meta_data.key <: communication_reqres_event a) /\
-      payload == req_meta_data.request /\
-      server == req_meta_data.server
+      req_meta_data.client == None /\
+      server == req_meta_data.server /\
+      payload == req_meta_data.request
     )
   ))
 let receive_request_proof #invs a #config #crpreds tr comm_keys_ids server msg_id =
@@ -488,10 +492,11 @@ val receive_request_properties:
   (ensures (
     match receive_request #a #config comm_keys_ids server msg_id tr with
     | (None, _) -> True
-    | (Some (_, req_meta_data), tr_out) -> (
+    | (Some (payload, req_meta_data), tr_out) -> (
       event_triggered tr_out server (CommServerReceiveRequest None server req_meta_data.request req_meta_data.key <: communication_reqres_event a) /\
+      req_meta_data.client == None /\
       server == req_meta_data.server /\
-      req_meta_data.client == None
+      payload == req_meta_data.request
     )
   ))
 let receive_request_properties a #config tr comm_keys_ids server msg_id =
@@ -589,8 +594,8 @@ val receive_request_authenticated_proof:
     | (Some (payload, req_meta_data), tr_out) -> (
       trace_invariant tr_out /\
       event_triggered tr_out server (CommServerReceiveRequest req_meta_data.client server payload req_meta_data.key <: communication_reqres_event a) /\
-      payload == req_meta_data.request /\
-      server == req_meta_data.server
+      server == req_meta_data.server /\
+      payload == req_meta_data.request
     )
   ))
 let receive_request_authenticated_proof #invs a #config #crpreds tr comm_keys_ids server msg_id =
@@ -645,10 +650,10 @@ val receive_request_authenticated_properties:
   (ensures (
     match receive_request_authenticated comm_keys_ids server msg_id tr with
     | (None, _) -> True
-    | (Some (_, req_meta_data), tr_out) -> (
+    | (Some (payload, req_meta_data), tr_out) -> (
       event_triggered tr_out server (CommServerReceiveRequest req_meta_data.client server req_meta_data.request req_meta_data.key <: communication_reqres_event a) /\
-      req_meta_data.server == server /\
-      Some? req_meta_data.client
+      server == req_meta_data.server /\
+      payload == req_meta_data.request
     )
   ))
 let receive_request_authenticated_properties #a #config tr comm_keys_ids server msg_id =
