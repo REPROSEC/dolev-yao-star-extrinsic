@@ -161,19 +161,19 @@ class comm_reqres_preds (a:eqtype) {| comm_layer_reqres_config a |} = {
     )
   ;
   // TODO rename to response_pred
-  send_response_pred: tr:trace -> server:principal -> request:a -> response:a -> key_label:label -> prop;
+  send_response_pred: tr:trace -> client:option principal -> server:principal -> request:a -> response:a -> key_label:label -> prop;
   send_response_pred_later:
     tr1:trace -> tr2:trace ->
-    server:principal -> request:a -> response:a -> key_label:label ->
+    client:option principal -> server:principal -> request:a -> response:a -> key_label:label ->
     Lemma
     (requires
-      send_response_pred tr1 server request response key_label /\
+      send_response_pred tr1 client server request response key_label /\
       is_well_formed a (bytes_well_formed tr1) request /\
       is_well_formed a (bytes_well_formed tr1) response /\
       tr1 <$ tr2
     )
     (ensures
-      send_response_pred tr2 server request response key_label
+      send_response_pred tr2 client server request response key_label
     )
 }
 
@@ -211,7 +211,7 @@ let event_predicate_communication_layer_reqres
       is_well_formed a (bytes_well_formed tr) request /\
       is_well_formed a (bytes_well_formed tr) response /\
       bytes_well_formed tr key /\
-      crpreds.send_response_pred tr server request response (get_label tr key)
+      crpreds.send_response_pred tr client server request response (get_label tr key)
     )
     | CommClientReceiveResponse client response req_meta_data -> (
       is_well_formed a (is_knowable_by (comm_label client req_meta_data.server) tr) response /\

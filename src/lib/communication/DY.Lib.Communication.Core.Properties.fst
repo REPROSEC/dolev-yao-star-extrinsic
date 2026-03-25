@@ -81,14 +81,50 @@ val sender_authentication:
     event_triggered (prefix tr i) sender (CommAuthSendMsg sender receiver payload <: communication_core_event a) \/
     is_corrupt (prefix tr i) (long_term_key_label sender)
   )
-let sender_authentication #tag #invs #a tr i higher_layer_preds sender receiver secret = ()
+let sender_authentication #invs #a tr i higher_layer_preds sender receiver payload = ()
+
+val authenticated_message_properties:
+  {|protocol_invariants|} ->
+  #a:Type0 -> {|comm_layer_core_config a|} ->
+  tr:trace ->
+  higher_layer_preds:comm_core_higher_layer_event_preds a ->
+  sender:principal -> receiver:principal ->
+  payload:a ->
+  Lemma
+  (requires
+    trace_invariant tr /\
+    has_communication_layer_core_predicates higher_layer_preds /\
+    event_triggered tr receiver (CommAuthReceiveMsg sender receiver payload <: communication_core_event a)
+  )
+  (ensures
+    is_well_formed a (is_publishable tr) payload /\
+    (higher_layer_preds.send_auth tr sender receiver payload \/
+    is_corrupt tr (long_term_key_label sender))
+  )
+let authenticated_message_properties #invs #a tr higher_layer_preds sender receiver payload =
+  let send_event:communication_core_event a = CommAuthSendMsg sender receiver payload in
+  let i = find_event_triggered_at_timestamp tr receiver (CommAuthReceiveMsg sender receiver payload <: communication_core_event a) in
+  let tr_i = prefix tr i in
+  eliminate event_triggered tr_i sender send_event \/ is_corrupt tr_i (long_term_key_label sender)
+  returns
+    is_well_formed a (is_publishable tr) payload /\
+    (higher_layer_preds.send_auth tr sender receiver payload \/
+    is_corrupt tr (long_term_key_label sender))
+  with _. (
+    let j = find_event_triggered_at_timestamp tr sender send_event in
+    find_event_triggered_at_timestamp_later tr_i tr sender send_event;
+    
+    higher_layer_preds.send_auth_later (prefix tr j) tr sender receiver payload;
+    ()
+  )
+  and _. ()
 
 
 (*** Confidential and Authenticated Messages Properties ***)
 
 val sender_confauth_authentication:
   {|protocol_invariants|} ->
-  #a:Type -> {|comm_layer_core_config a|} ->
+  #a:Type0 -> {|comm_layer_core_config a|} ->
   tr:trace -> i:timestamp ->
   higher_layer_preds:comm_core_higher_layer_event_preds a ->
   sender:principal -> receiver:principal ->

@@ -699,6 +699,7 @@ val mk_comm_layer_response_nonce_proof:
     | (None, tr_out) -> trace_invariant tr_out
     | (Some nonce, tr_out) -> (
       trace_invariant tr_out /\
+      rand_just_generated tr_out nonce /\
       is_secret (get_response_label tr_out req_meta_data) tr_out nonce /\
       is_knowable_by (get_response_label tr_out req_meta_data) tr_out nonce
     )
@@ -727,6 +728,7 @@ val mk_comm_layer_response_nonce_labeled_proof:
     | (None, tr_out) -> trace_invariant tr_out
     | (Some nonce, tr_out) -> (
       trace_invariant tr_out /\
+      rand_just_generated tr_out nonce /\
       is_secret (join (get_response_label tr_out req_meta_data) lab) tr_out nonce /\
       is_knowable_by (join (get_response_label tr_out req_meta_data) lab) tr_out nonce
     )
@@ -785,7 +787,7 @@ val send_response_proof:
     trace_invariant tr /\
     has_communication_layer_reqres_predicates a /\
     event_triggered tr server (CommServerReceiveRequest req_meta_data.client server req_meta_data.request req_meta_data.key <: communication_reqres_event a) /\
-    crpreds.send_response_pred tr server req_meta_data.request response (get_response_label tr req_meta_data) /\
+    crpreds.send_response_pred tr req_meta_data.client server req_meta_data.request response (get_response_label tr req_meta_data) /\
     is_well_formed a (is_knowable_by (get_response_label tr req_meta_data) tr) response
   )
   (ensures (

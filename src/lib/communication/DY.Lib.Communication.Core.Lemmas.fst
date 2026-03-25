@@ -474,8 +474,7 @@ val receive_authenticated_proof:
     | (None, tr_out) -> trace_invariant tr_out
     | (Some cm, tr_out) -> (
       trace_invariant tr_out /\
-      event_triggered tr_out receiver (CommAuthReceiveMsg cm.sender receiver cm.payload <: communication_core_event a) /\
-      is_well_formed a (is_publishable tr) cm.payload
+      event_triggered tr_out receiver (CommAuthReceiveMsg cm.sender receiver cm.payload <: communication_core_event a)
     )
   ))
   [SMTPat (trace_invariant #invs tr);

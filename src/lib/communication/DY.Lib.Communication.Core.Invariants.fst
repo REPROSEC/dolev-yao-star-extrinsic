@@ -162,6 +162,7 @@ let event_predicate_communication_layer_core
       is_well_formed a (is_publishable tr) payload
     )
     | CommAuthSendMsg sender receiver payload -> (
+      is_well_formed a (is_publishable tr) payload /\
       higher_layer_preds.send_auth tr sender receiver payload
     )
     | CommAuthReceiveMsg sender receiver payload -> (
