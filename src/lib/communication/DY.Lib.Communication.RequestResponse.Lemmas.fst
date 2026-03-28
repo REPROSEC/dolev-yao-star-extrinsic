@@ -975,7 +975,8 @@ val receive_response_proof:
     | (None, tr_out) -> trace_invariant tr_out
     | (Some (payload, _), tr_out) -> (
       trace_invariant tr_out /\
-      event_triggered tr_out client (CommClientReceiveResponse client payload req_meta_data <: communication_reqres_event a)
+      event_triggered tr_out client (CommClientReceiveResponse client payload req_meta_data <: communication_reqres_event a) /\
+      event_triggered tr client (CommClientSendRequest (request_authenticated req_meta_data) client req_meta_data.server req_meta_data.request req_meta_data.key <: communication_reqres_event a)
     )
   ))
   [SMTPat (trace_invariant tr);

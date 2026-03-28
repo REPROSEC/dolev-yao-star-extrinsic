@@ -69,6 +69,8 @@ let key_secrecy_client #tag #invs tr client client_opt server key request respon
 
 (*** Properties ***)
 
+(**** Client Side Lemmas ****)
+
 val send_request_event_properties:
   {|protocol_invariants|} ->
   #a:eqtype -> {|comm_layer_reqres_config a|} ->
@@ -103,7 +105,7 @@ let send_request_event_properties #invs #a #config #crpreds tr client req_meta_d
     ()
   )
 
-val derive_comm_meta_data_knowable:
+val derive_comm_meta_data_knowable_client:
   {|protocol_invariants|} ->
   #a:eqtype -> {|comm_layer_reqres_config a|} ->
   {|comm_reqres_preds a|} ->
@@ -118,7 +120,26 @@ val derive_comm_meta_data_knowable:
   (ensures
     comm_meta_data_knowable tr a client req_meta_data
   )
-let derive_comm_meta_data_knowable #invs #a #config #crpreds tr req_meta_data client = ()
+let derive_comm_meta_data_knowable_client #invs #a #config #crpreds tr req_meta_data client = ()
+
+(**** Server Side Lemmas ****)
+
+val derive_comm_meta_data_knowable_server:
+  {|protocol_invariants|} ->
+  #a:eqtype -> {|comm_layer_reqres_config a|} ->
+  {|comm_reqres_preds a|} ->
+  tr:trace ->
+  req_meta_data:comm_meta_data a -> server:principal ->
+  Lemma
+  (requires
+    trace_invariant tr /\
+    has_communication_layer_reqres_predicates a /\
+    event_triggered tr server (CommServerReceiveRequest req_meta_data.client server req_meta_data.request req_meta_data.key <: communication_reqres_event a)
+  )
+  (ensures
+    comm_meta_data_knowable tr a server req_meta_data
+  )
+let derive_comm_meta_data_knowable_server #invs #a #config #crpreds tr req_meta_data server = ()
 
 #push-options "--z3rlimit 20"
 val request_message_properties:
@@ -229,6 +250,25 @@ val request_message_properties_key:
 let request_message_properties_key #invs #a #config #crpreds tr req_meta_data =
   request_message_properties #invs #a #config #crpreds tr req_meta_data
 
+val request_message_properties_key_well_formed:
+  {|protocol_invariants|} ->
+  #a:eqtype -> {|comm_layer_reqres_config a|} ->
+  {|crpreds:comm_reqres_preds a|} ->
+  tr:trace ->
+  req_meta_data:comm_meta_data a ->
+  Lemma
+  (requires
+    trace_invariant tr /\
+    has_communication_layer_reqres_predicates a /\
+    req_meta_data.client == None /\
+    event_triggered tr req_meta_data.server (CommServerReceiveRequest req_meta_data.client req_meta_data.server req_meta_data.request req_meta_data.key <: communication_reqres_event a)
+  )
+  (ensures
+    bytes_well_formed tr req_meta_data.key
+  )
+let request_message_properties_key_well_formed #invs #a #config #crpreds tr req_meta_data =
+  request_message_properties #invs #a #config #crpreds tr req_meta_data
+
 val request_message_properties_send_request:
   {|protocol_invariants|} ->
   #a:eqtype -> {|comm_layer_reqres_config a|} ->
@@ -325,6 +365,9 @@ let send_response_event_properties #invs #a #config #crpreds tr client req_meta_
   get_response_label_eq_key_label tr req_meta_data;
   crpreds.send_response_pred_later (prefix tr j) tr req_meta_data.client req_meta_data.server req_meta_data.request response key_label;
   ()
+
+
+(**** Client Side Lemmas ****)
 
 val response_message_properties:
   {|protocol_invariants|} ->
