@@ -312,7 +312,7 @@ val request_message_authenticated_properties:
     ((
       crpreds.send_request_pred tr (Some?.v req_meta_data.client) server req_meta_data.request (get_response_label tr req_meta_data) /\
       comm_label (Some?.v req_meta_data.client) server == get_response_label tr req_meta_data
-    ) \/ is_corrupt tr (long_term_key_label (Some?.v req_meta_data.client)))
+    ) \/ (is_corrupt tr (long_term_key_label (Some?.v req_meta_data.client)) /\ is_publishable tr req_meta_data.key /\ is_well_formed a (is_publishable tr) req_meta_data.request))
   )
 let request_message_authenticated_properties #invs #a #config #crpreds tr server req_meta_data =
   let Some client = req_meta_data.client in
@@ -328,7 +328,7 @@ let request_message_authenticated_properties #invs #a #config #crpreds tr server
     (
       crpreds.send_request_pred tr client server req_meta_data.request key_label /\
       comm_label client server == get_response_label tr req_meta_data
-    ) \/ is_corrupt tr (long_term_key_label client)
+    ) \/ (is_corrupt tr (long_term_key_label client) /\ is_publishable tr req_meta_data.key /\ is_well_formed a (is_publishable tr) req_meta_data.request)
   with _.
     let j = find_event_triggered_at_timestamp tr client send_event in
     find_event_triggered_at_timestamp_later tr_i tr client send_event;

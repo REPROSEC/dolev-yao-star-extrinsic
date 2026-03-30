@@ -203,7 +203,7 @@ let event_predicate_communication_layer_reqres
       )
       | Some client -> (
         event_triggered tr client (CommClientSendRequest Authenticated client server request key <: communication_reqres_event a) \/
-          is_corrupt tr (long_term_key_label client)
+          (is_corrupt tr (long_term_key_label client) /\ is_publishable tr key /\ is_well_formed a (is_publishable tr) request)
       ))
     )
     | CommServerSendResponse client server request response key -> (

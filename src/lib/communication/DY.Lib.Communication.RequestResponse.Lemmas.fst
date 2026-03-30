@@ -545,13 +545,13 @@ val helper_lemma_authenticated_request_property:
     is_well_formed a (is_knowable_by (get_label tr req_msg.key) tr) request /\
     req_msg.key `has_usage tr` (AeadKey (comm_layer_aead_tag a) empty) /\ (
       event_triggered tr client (CommClientSendRequest Authenticated client server request req_msg.key <: communication_reqres_event a) \/
-          is_corrupt tr (long_term_key_label client)
+        (is_corrupt tr (long_term_key_label client) /\ is_publishable tr req_msg.key /\ is_publishable tr req_msg.request)
     )
   )
 let helper_lemma_authenticated_request_property #invs #a #config #crpreds tr client server payload req_msg request =
   let req_send_event:communication_reqres_event a = CommClientSendRequest Authenticated client server request req_msg.key in
 
-  confauth_message_properties' tr (comm_core_higher_layer_event_preds_reqres a) client server payload;
+  confauth_message_properties tr (comm_core_higher_layer_event_preds_reqres a) client server payload;
   
   // Properties that can be proved uniformly in both the honest and corrupt case
   eliminate event_triggered tr client req_send_event \/ is_well_formed (comm_message_t) (is_publishable tr) payload
