@@ -29,7 +29,7 @@ type communication_message (a:Type) = {
 
 [@@with_bytes bytes]
 type encryption_input (a:Type) {|config:comm_layer_core_config a|} =
-  | Unsigned: [@@@ with_parser #bytes config.core_ps_a] payload:a -> encryption_input a
+  | Unsigned: sender:principal -> receiver:principal -> [@@@ with_parser #bytes config.core_ps_a] payload:a -> encryption_input a
   | Signed: sender:principal -> receiver:principal -> [@@@ with_parser #bytes config.core_ps_a] payload:a -> encryption_input a
 
 #push-options "--ifuel 1 --fuel 0"

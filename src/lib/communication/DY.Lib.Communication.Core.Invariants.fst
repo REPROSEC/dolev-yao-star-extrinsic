@@ -21,12 +21,14 @@ open DY.Lib.Communication.Core
 val pke_crypto_predicates_communication_layer_core: {|cusages:crypto_usages|} -> a:Type0 -> {|comm_layer_core_config a|} -> pke_crypto_predicate
 let pke_crypto_predicates_communication_layer_core #cusages a #config  = {
   pred = (fun tr sk_usage pk msg ->
-    (exists sender receiver.
-      sk_usage == long_term_key_type_to_usage (LongTermPkeKey (comm_layer_pkenc_tag a)) receiver /\
-      (get_label tr msg) `can_flow tr` (comm_label sender receiver) /\
+    (
       (match parse (encryption_input a) msg with
-      | Some (Unsigned payload) -> event_triggered tr sender (CommConfSendMsg sender receiver payload <: communication_core_event a) 
-      | Some (Signed sender receiver payload) -> event_triggered tr sender (CommConfAuthSendMsg sender receiver payload <: communication_core_event a)
+      | Some (Unsigned  sender receiver payload) -> event_triggered tr sender (CommConfSendMsg sender receiver payload <: communication_core_event a) /\
+        sk_usage == long_term_key_type_to_usage (LongTermPkeKey (comm_layer_pkenc_tag a)) receiver /\
+        (get_label tr msg) `can_flow tr` (comm_label sender receiver)
+      | Some (Signed sender receiver payload) -> event_triggered tr sender (CommConfAuthSendMsg sender receiver payload <: communication_core_event a) /\
+        sk_usage == long_term_key_type_to_usage (LongTermPkeKey (comm_layer_pkenc_tag a)) receiver /\
+        (get_label tr msg) `can_flow tr` (comm_label sender receiver)
       | None -> False)
     )
     );
@@ -157,8 +159,8 @@ let event_predicate_communication_layer_core
       is_well_formed a (is_knowable_by (comm_label sender receiver) tr) payload /\
       higher_layer_preds.send_conf tr sender receiver payload
     )
-    | CommConfReceiveMsg receiver payload -> (
-      (exists sender. event_triggered tr sender (CommConfSendMsg sender receiver payload <: communication_core_event a)) \/
+    | CommConfReceiveMsg sender receiver payload -> (
+      event_triggered tr sender (CommConfSendMsg sender receiver payload <: communication_core_event a) \/
       is_well_formed a (is_publishable tr) payload
     )
     | CommAuthSendMsg sender receiver payload -> (

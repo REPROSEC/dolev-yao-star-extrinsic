@@ -28,37 +28,34 @@ val conf_message_properties:
   tr:trace ->
   higher_layer_preds:comm_core_higher_layer_event_preds a ->
   receiver:principal ->
-  payload:a ->
+  cm:communication_message a ->
   Lemma
   (requires
     trace_invariant tr /\
     has_communication_layer_core_predicates higher_layer_preds /\
-    event_triggered tr receiver (CommConfReceiveMsg receiver payload <: communication_core_event a)
+    event_triggered tr receiver (CommConfReceiveMsg cm.sender receiver cm.payload <: communication_core_event a)
   )
   (ensures
-    is_well_formed a (is_knowable_by (principal_label receiver) tr) payload /\
-    ((exists sender. higher_layer_preds.send_conf tr sender receiver payload) \/
-    is_well_formed a (is_publishable tr) payload)
+    is_well_formed a (is_knowable_by (principal_label receiver) tr) cm.payload /\
+    (higher_layer_preds.send_conf tr cm.sender receiver cm.payload \/
+    is_well_formed a (is_publishable tr) cm.payload)
   )
-let conf_message_properties #invs #a tr higher_layer_preds receiver payload =
-  let send_event sender:communication_core_event a = CommConfSendMsg sender receiver payload in
-  let i = find_event_triggered_at_timestamp tr receiver (CommConfReceiveMsg receiver payload <: communication_core_event a) in
+let conf_message_properties #invs #a tr higher_layer_preds receiver cm =
+  let send_event sender:communication_core_event a = CommConfSendMsg sender receiver cm.payload in
+  let i = find_event_triggered_at_timestamp tr receiver (CommConfReceiveMsg cm.sender receiver cm.payload <: communication_core_event a) in
   let tr_i = prefix tr i in
-  eliminate (exists sender. event_triggered tr_i sender (send_event sender)) \/
-            is_well_formed a (is_publishable tr_i) payload
+  eliminate event_triggered tr_i cm.sender (send_event cm.sender) \/
+            is_well_formed a (is_publishable tr_i) cm.payload
   returns
-    is_well_formed a (is_knowable_by (principal_label receiver) tr) payload /\
-    ((exists sender. higher_layer_preds.send_conf tr sender receiver payload) \/
-    is_well_formed a (is_publishable tr) payload)
-  with _. eliminate exists sender. event_triggered (prefix tr i) sender (send_event sender)
-    returns _
-    with _. (
-      let j = find_event_triggered_at_timestamp tr sender (send_event sender) in
-      find_event_triggered_at_timestamp_later tr_i tr sender (send_event sender);
+    is_well_formed a (is_knowable_by (principal_label receiver) tr) cm.payload /\
+    (higher_layer_preds.send_conf tr cm.sender receiver cm.payload \/
+    is_well_formed a (is_publishable tr) cm.payload)
+  with _. 
+    let j = find_event_triggered_at_timestamp tr cm.sender (send_event cm.sender) in
+    find_event_triggered_at_timestamp_later tr_i tr cm.sender (send_event cm.sender);
 
-      higher_layer_preds.send_conf_later (prefix tr j) tr sender receiver payload;
-      ()
-    )
+    higher_layer_preds.send_conf_later (prefix tr j) tr cm.sender receiver cm.payload;
+    ()
   and _. ()
 
 

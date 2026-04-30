@@ -19,7 +19,7 @@ let comm_message_to_string #core_type #core_config #reqres_type #reqres_config m
   match b with
   | PkeEnc pk nonce msg -> (
     match parse (encryption_input comm_message_t) #(parseable_serializeable_bytes_encryption_input #comm_message_t #(comm_layer_tag_core_config_reqres reqres_type)) msg with
-    | Some (Unsigned payload) -> (
+    | Some (Unsigned sender receiver payload) -> (
       match payload with
       | SigMessage _ -> Some "Error: SigMessage cannot be inside a PkeEnc encryption"
       | RequestMessage {request; key} -> (
@@ -31,7 +31,7 @@ let comm_message_to_string #core_type #core_config #reqres_type #reqres_config m
     | Some (Signed _ _ _) -> Some "Error: Signed encryption_input cannot be inside a PkeEnc encryption outside a signature"
     | None -> (
       match parse (encryption_input core_type) msg with
-      | Some (Unsigned payload) -> (
+      | Some (Unsigned sender receiver payload) -> (
         Some (Printf.sprintf "pk_enc (pk = %s, msg = (%s))"
           (bytes_to_string pk) (msg_to_string payload))
       )
@@ -95,9 +95,9 @@ let com_core_event_to_string #a payload_to_string =
     | CommConfSendMsg sender receiver payload ->
       Some (Printf.sprintf "CommConfSendMsg sender = %s, receiver = %s, payload = (%s)"
         sender receiver (payload_to_string payload))
-    | CommConfReceiveMsg receiver payload ->
-      Some (Printf.sprintf "CommConfReceiveMsg receiver = %s, payload = (%s)"
-        receiver (payload_to_string payload))
+    | CommConfReceiveMsg sender receiver payload ->
+      Some (Printf.sprintf "CommConfReceiveMsg sender = %s, receiver = %s, payload = (%s)"
+        sender receiver (payload_to_string payload))
     | CommAuthSendMsg sender receiver payload ->
       Some (Printf.sprintf "CommAuthSendMsg sender = %s, receiver = %s, payload = (%s)"
         sender receiver (payload_to_string payload))

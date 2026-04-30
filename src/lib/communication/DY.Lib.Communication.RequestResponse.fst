@@ -28,6 +28,7 @@ let comm_layer_aead_tag a #config = config.reqres_tag ^ ".Aead.Key"
 type comm_meta_data (a:eqtype) {|config:comm_layer_reqres_config a|} = {
   key:bytes;
   [@@@ with_parser #bytes (ps_option #bytes ps_principal)]
+  // TODO maybe change this to just principal (could create problems on the receive response side?)
   client:option principal;
   server:principal;
   sid:state_id;
@@ -213,8 +214,8 @@ val receive_request:
   principal -> timestamp ->
   traceful (option (a & comm_meta_data a))
 let receive_request #a comm_keys_ids server msg_id = 
-  let*? req_msg_t = receive_confidential #comm_message_t #(comm_layer_tag_core_config_reqres a) comm_keys_ids server msg_id in
-  _receive_request #a Unauthenticated comm_keys_ids server req_msg_t None
+  let*? cm = receive_confidential #comm_message_t #(comm_layer_tag_core_config_reqres a) comm_keys_ids server msg_id in
+  _receive_request #a Unauthenticated comm_keys_ids server cm.payload None
 
 /// ************** comm_meta_data refinement for authenticated requests **************
 let refinement_condition_comm_meta_data_authenticated (a:eqtype) {|comm_layer_reqres_config a|} (req_meta_data:comm_meta_data a) : bool = Some? req_meta_data.client

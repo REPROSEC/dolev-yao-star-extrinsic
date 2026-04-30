@@ -369,15 +369,15 @@ val helper_lemma_request_properties:
   a:eqtype -> {|comm_layer_reqres_config a|} ->
   {|crpreds:comm_reqres_preds a|} ->
   tr:trace -> server:principal ->
-  req_msg_t:comm_message_t ->
+  cm:communication_message comm_message_t ->
   request:a -> req_msg:request_message ->
   Lemma
   (requires
     trace_invariant tr /\
     has_communication_layer_reqres_predicates a /\
-    RequestMessage req_msg == req_msg_t /\
+    RequestMessage req_msg == cm.payload /\
     Some request == parse a req_msg.request /\
-    event_triggered tr server (CommConfReceiveMsg server req_msg_t <: communication_core_event comm_message_t #(comm_layer_tag_core_config_reqres a))
+    event_triggered tr server (CommConfReceiveMsg cm.sender server cm.payload <: communication_core_event comm_message_t #(comm_layer_tag_core_config_reqres a))
   )
   (ensures
     is_knowable_by (principal_label server) tr req_msg.key /\
@@ -387,10 +387,10 @@ val helper_lemma_request_properties:
         (is_publishable tr req_msg.request /\ is_publishable tr req_msg.key)
     )
   )
-let helper_lemma_request_properties #invs a #config #crpreds tr server req_msg_t request req_msg =
-  let req_send_event client:communication_reqres_event a = CommClientSendRequest Unauthenticated client server request req_msg.key in
+let helper_lemma_request_properties #invs a #config #crpreds tr server cm request req_msg =
+  let req_send_event client:communication_reqres_event a = CommClientSendRequest Unauthenticated cm.sender server request req_msg.key in
 
-  conf_message_properties tr (comm_core_higher_layer_event_preds_reqres a) server req_msg_t;
+  conf_message_properties tr (comm_core_higher_layer_event_preds_reqres a) server cm;
 
   // Properties that can be proved uniformly in both the honest and corrupt case
   eliminate (exists client. event_triggered tr client (req_send_event client)) \/
@@ -450,19 +450,19 @@ let receive_request_proof #invs a #config #crpreds tr comm_keys_ids server msg_i
   assert(trace_invariant tr_recv);
   match x_recv with
   | None -> assert(tr_recv == tr_out)
-  | Some req_msg_t ->
-    let (x_gd, tr_gd) = guard_tr (RequestMessage? req_msg_t) tr_recv in
+  | Some cm ->
+    let (x_gd, tr_gd) = guard_tr (RequestMessage? cm.payload) tr_recv in
     assert(trace_invariant tr_gd);
     match x_gd with
     | None -> assert(tr_gd == tr_out)
     | Some () ->
-      let RequestMessage req_msg = req_msg_t in
+      let RequestMessage req_msg = cm.payload in
       let (x_pr, tr_pr) = return (parse a req_msg.request) tr_gd in
       assert(trace_invariant tr_pr);
       match x_pr with
       | None -> assert(tr_pr == tr_out)
       | Some request ->
-        helper_lemma_request_properties a tr_pr server req_msg_t request req_msg;
+        helper_lemma_request_properties a tr_pr server cm request req_msg;
         
         assert((event_predicate_communication_layer_reqres a) tr_pr server (CommServerReceiveRequest None server request req_msg.key <: communication_reqres_event a)) by (
           let open FStar.Tactics in
@@ -504,7 +504,7 @@ let receive_request_properties a #config tr comm_keys_ids server msg_id =
   let (x_payload, tr_payload) = receive_confidential #comm_message_t #(comm_layer_tag_core_config_reqres a) comm_keys_ids server msg_id tr in
   let (x_recv, tr_recv):(option (comm_message_t & option principal) & trace) = match x_payload with
     | None -> (None, tr_payload)
-    | Some payload -> (Some (payload, None), tr_payload) in
+    | Some cm -> (Some (cm.payload, None), tr_payload) in
   match x_recv with
   | None -> ()
   | Some (req_msg_t, client) ->
