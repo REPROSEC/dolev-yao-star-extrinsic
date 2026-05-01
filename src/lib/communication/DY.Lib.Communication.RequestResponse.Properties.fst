@@ -453,12 +453,12 @@ val response_message_properties_send_event:
   )
   (ensures
     event_triggered tr req_meta_data.server (CommServerSendResponse req_meta_data.client req_meta_data.server req_meta_data.request response req_meta_data.key <: communication_reqres_event a) \/
-      is_corrupt tr (principal_label client) \/ is_corrupt tr (principal_label req_meta_data.server)
+      (is_publishable tr req_meta_data.key /\ is_well_formed a (is_publishable tr) response /\ (is_corrupt tr (principal_label client) \/ is_corrupt tr (principal_label req_meta_data.server)))
   )
 let response_message_properties_send_event #invs #a #config #crpreds tr client response req_meta_data =
   response_message_properties #invs #a #config #crpreds tr client response req_meta_data
 
-val response_message_properties_send_event':
+(*val response_message_properties_send_event':
   {|protocol_invariants|} ->
   #a:eqtype -> {|comm_layer_reqres_config a|} ->
   {|crpreds:comm_reqres_preds a|} ->
@@ -475,7 +475,7 @@ val response_message_properties_send_event':
       (is_publishable tr req_meta_data.key /\ is_well_formed a (is_publishable tr) response)
   )
 let response_message_properties_send_event' #invs #a #config #crpreds tr client response req_meta_data =
-  response_message_properties #invs #a #config #crpreds tr client response req_meta_data
+  response_message_properties #invs #a #config #crpreds tr client response req_meta_data*)
 
 val response_message_properties_send_request:
   {|protocol_invariants|} ->
