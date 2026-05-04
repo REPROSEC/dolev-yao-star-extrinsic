@@ -138,7 +138,7 @@ val sender_confauth_authentication:
   )
 let sender_confauth_authentication #tag #invs #a tr i higher_layer_preds sender receiver secret = ()
 
-val confauth_message_properties:
+val conf_auth_message_properties:
   {|protocol_invariants|} ->
   #a:Type -> {|comm_layer_core_config a|} ->
   tr:trace ->
@@ -156,7 +156,7 @@ val confauth_message_properties:
     (higher_layer_preds.send_conf_auth tr sender receiver payload \/
       (is_corrupt tr (long_term_key_label sender) /\ is_well_formed a (is_publishable tr) payload))
   )
-let confauth_message_properties #invs #a tr higher_layer_preds sender receiver payload =
+let conf_auth_message_properties #invs #a tr higher_layer_preds sender receiver payload =
   let send_event:communication_core_event a = CommConfAuthSendMsg sender receiver payload in
   let i = find_event_triggered_at_timestamp tr receiver (CommConfAuthReceiveMsg sender receiver payload <: communication_core_event a) in
   let tr_i = prefix tr i in

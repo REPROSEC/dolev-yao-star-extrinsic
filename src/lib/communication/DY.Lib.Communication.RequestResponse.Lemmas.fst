@@ -551,7 +551,7 @@ val helper_lemma_authenticated_request_property:
 let helper_lemma_authenticated_request_property #invs #a #config #crpreds tr client server payload req_msg request =
   let req_send_event:communication_reqres_event a = CommClientSendRequest Authenticated client server request req_msg.key in
 
-  confauth_message_properties tr (comm_core_higher_layer_event_preds_reqres a) client server payload;
+  conf_auth_message_properties tr (comm_core_higher_layer_event_preds_reqres a) client server payload;
   
   // Properties that can be proved uniformly in both the honest and corrupt case
   eliminate event_triggered tr client req_send_event \/ is_well_formed (comm_message_t) (is_publishable tr) payload
@@ -569,7 +569,7 @@ let helper_lemma_authenticated_request_property #invs #a #config #crpreds tr cli
     ()
   );
   
-  confauth_message_properties tr (comm_core_higher_layer_event_preds_reqres a) client server payload;
+  conf_auth_message_properties tr (comm_core_higher_layer_event_preds_reqres a) client server payload;
   ()
 
 #push-options "--z3rlimit 50"
