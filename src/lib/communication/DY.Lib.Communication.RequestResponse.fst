@@ -257,6 +257,7 @@ let receive_request_authenticated #a #config comm_keys_ids server msg_id =
   return (Some (msg, req_meta_data_auth))
 
 [@@ "opaque_to_smt"]
+// TODO make only traceful
 val mk_comm_layer_response_nonce: #a:eqtype -> {|comm_layer_reqres_config a|} -> comm_meta_data a -> usage -> traceful (option bytes)
 let mk_comm_layer_response_nonce #a req_meta_data usg =
   let* tr = get_trace in
@@ -264,6 +265,7 @@ let mk_comm_layer_response_nonce #a req_meta_data usg =
   return (Some nonce)
 
 [@@ "opaque_to_smt"]
+// TODO make only traceful
 val mk_comm_layer_response_nonce_labeled: #a:eqtype -> {|comm_layer_reqres_config a|} -> comm_meta_data a -> usage -> label -> traceful (option bytes)
 let mk_comm_layer_response_nonce_labeled #a req_meta_data usg lab =
   let* tr = get_trace in
