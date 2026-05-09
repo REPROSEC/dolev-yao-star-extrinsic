@@ -1,0 +1,59 @@
+BAN modified version of CCITT X.509 (3)
+
+Author(s): Michael Burrows and Martin Abadi and Roger Needham 1989
+Last modified January 16, 2003
+
+Summary: Modified version of the three messages protocol in the recommendations
+of the CCITT for the CCITT.X.509 standard (CCITT X.509 (3)). The identity of B
+has been added to the signature in message 3 to prevent the parallel session
+attack from [BAN89]. With this modification, timestamps become redundant and
+are removed.
+
+Protocol specification (in common syntax):
+
+ A, B :    principal
+ Na, Nb :  nonce
+ Ya, Yb :  userdata
+ Xa, Xb :  userdata
+ PK, SK :  principal -> key (keypair)
+
+ 1.   A -> B :   A, {Na, B, Xa, {Ya}PK(B)}SK(A)
+ 2.   B -> A :   B, {Nb, A, Na, Xb, {Yb}PK(A)}SK(B)
+ 3.   A -> B :   A, {B, Nb}SK(A)
+
+Description of the protocol rules:
+
+Compared to CCITT X.509 (3), the identity of B has been added to the signature
+in message 3. This prevents the parallel session attack from [BAN89] on the
+CCITT X.509 (3) protocol, which can occur when B does not check the timestamps.
+With this modification, the timestamps become redundant and can be removed.
+
+In message 1, A sends its identity, a fresh nonce Na, public data Xa, and the
+confidential payload Ya encrypted under B's public key, all signed under A's
+private key.
+
+In message 2, B responds with its identity, a fresh nonce Nb, a challenge Na
+for A, public data Xb, and the confidential payload Yb encrypted under A's
+public key, all signed under B's private key.
+
+In message 3, A closes the handshake by signing B's identity and nonce Nb,
+proving it participated in this specific session with B.
+
+Requirements:
+
+The protocol must ensure the confidentiality of Ya and Yb: if A and B follow
+the protocol, then an attacker should not be able to obtain Ya or Yb.
+
+The protocol must ensure the recipient B of message 1 that the data Xa and Ya
+originate from A (authentication of A to B).
+
+The protocol must ensure the recipient A of message 2 that the data Xb and Yb
+originate from B (authentication of B to A).
+
+References:
+
+[BAN89], [CCI87].
+
+See also:
+
+CCITT X.509 (1), CCITT X.509 (1c), CCITT X.509 (3).

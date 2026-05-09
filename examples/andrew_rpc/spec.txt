@@ -1,0 +1,58 @@
+Lowe modified BAN concrete Andrew Secure RPC
+
+Author(s): Gavin Lowe 1996
+Last modified November 14, 2002
+
+Summary: A modified version of the BAN concrete Andrew Secure RPC protocol
+preventing a parallel session attack. Establishes a fresh shared symmetric key
+K'ab. Symmetric key cryptography.
+
+Protocol specification (in common syntax):
+
+ A, B :      principal
+ Kab, K'ab : symkey
+ Na, Nb :    nonce
+
+ 1.   A -> B :   A, Na
+ 2.   B -> A :   {Na, K'ab, B}Kab
+ 3.   A -> B :   {Na}K'ab
+ 4.   B -> A :   Nb
+
+Description of the protocol rules:
+
+This protocol establishes the fresh shared symmetric key K'ab between A and B.
+
+We assume that initially, the symmetric key Kab is known only to A and B
+(pre-shared long-term key).
+
+In message 1, A sends its identity and a fresh nonce Na to B.
+
+In message 2, B generates a fresh session key K'ab and returns it to A,
+encrypted under the pre-shared key Kab, together with Na (for freshness
+binding) and B's identity (added by Lowe to prevent a parallel session attack
+present in the original BAN concrete Andrew Secure RPC).
+
+In message 3, A confirms receipt and acceptance of K'ab by encrypting Na
+under the fresh key K'ab. This proves to B that A has obtained K'ab.
+
+In message 4, B sends a fresh nonce Nb in the clear, to be used in a future
+session. (Note: Nb is not used for authentication within this session.)
+
+Requirements:
+
+The protocol must guarantee the secrecy of the new shared key K'ab: in every
+session, the value of K'ab must be known only by the participants playing the
+roles of A and B.
+
+The protocol must guarantee the authenticity of K'ab: in every session, on
+reception of message 3, B must be ensured that the key K'ab was accepted by A
+in the same session with the same nonce Na.
+
+References:
+
+[Low96].
+
+See also:
+
+Andrew Secure RPC, BAN modified Andrew Secure RPC, BAN concrete Andrew Secure
+RPC.

@@ -1,0 +1,57 @@
+CCITT X.509 (1c)
+
+Author(s): M. Abadi and R. Needham 1996
+Last modified November 11, 2002
+
+Summary: Correction of the CCITT X.509 (1) one message protocol. The fix signs
+the confidential payload Ya before encrypting it, closing an authentication
+flaw in the original.
+
+Protocol specification (in common syntax):
+
+ A, B :    principal
+ Na :      nonce
+ Ta :      timestamp
+ Ya :      userdata
+ Xa :      userdata
+ PK, SK :  principal -> key (keypair)
+ h :       userdata -> userdata (one-way)
+
+ 1.   A -> B :   A, {Ta, Na, B, Xa, {Ya, {h(Ya)}SK(A)}PK(B)}SK(A)
+
+Description of the protocol rules:
+
+This is a corrected version of CCITT X.509 (1). The original protocol sends
+{Ya}PK(B) without any inner authentication, allowing an attacker to substitute
+a different value for Ya under the outer signature. The fix proposed in [AN96]
+is to sign a hash of Ya with SK(A) before encrypting it, making the inner
+payload {Ya, {h(Ya)}SK(A)}PK(B).
+
+The full message structure is:
+  - Outer layer: A signs (Ta, Na, B, Xa, inner_ciphertext) with SK(A).
+  - Inner layer: A encrypts (Ya, sign(h(Ya), SK(A))) under B's public key PK(B).
+
+Ta is a timestamp used for replay prevention. Na is a nonce. Xa is public data
+transmitted by A. Ya is confidential data whose privacy and authenticity must
+be guaranteed.
+
+Note on DY* modeling: The DY* framework operates in a symbolic model without
+a notion of real time. The timestamp Ta should be modeled as a public byte
+string (e.g., a nonce or constant) with no freshness guarantee beyond what the
+symbolic attacker model provides.
+
+Requirements:
+
+The protocol must ensure the confidentiality of Ya: if A and B follow the
+protocol, then an attacker should not be able to obtain Ya.
+
+The protocol must ensure the recipient B that the data Xa and Ya originate
+from A (authentication of A to B).
+
+References:
+
+[AN96], [CCI87].
+
+See also:
+
+CCITT X.509 (1), CCITT X.509 (3).
