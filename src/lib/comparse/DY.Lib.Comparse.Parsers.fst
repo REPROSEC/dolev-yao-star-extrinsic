@@ -44,6 +44,14 @@ val ps_principal: #bytes:Type0 -> {|bytes_like bytes|} -> parser_serializer byte
 let ps_principal #bytes #bl =
   mk_trivial_isomorphism ps_string
 
+val ps_principal_is_well_formed:
+  #bytes:Type0 -> {|bytes_like bytes|} ->
+  pre:bytes_compatible_pre bytes -> p:principal ->
+  Lemma (is_well_formed_prefix ps_principal pre p)
+  [SMTPat (is_well_formed_prefix ps_principal pre p)]
+let ps_principal_is_well_formed #bytes #bl pre p =
+  ps_string_is_well_formed pre p
+
 (*** Parser for nats ***)
 
 [@@is_parser; is_parser_for (`%nat)]
@@ -58,3 +66,9 @@ let ps_state_id #bytes #bl =
   mk_isomorphism state_id ps_nat
     (fun the_id -> { the_id; })
     (fun { the_id; } -> the_id)
+
+(*** Parser for timestamp ***)
+
+[@@is_parser; is_parser_for (`%timestamp)]
+val ps_timestamp: #bytes:Type0 -> {|bytes_like bytes|} -> parser_serializer bytes timestamp
+let ps_timestamp #bytes #bl = ps_nat
