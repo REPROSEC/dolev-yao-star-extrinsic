@@ -21,6 +21,10 @@ instance parseable_serializeable_bytes_reveal_general_event_format: parseable_se
 
 instance reveal_to_bytes_label_event : event reveal_to_bytes_label_event_format = mk_event_instance "GeneralReveal"
 
+val bytes_well_formed_at_timestamp : trace -> timestamp -> bytes -> prop
+let bytes_well_formed_at_timestamp tr ts b =
+  ts <= trace_length tr /\ bytes_well_formed (prefix tr ts) b
+
 noeq
 type reveal_to_bytes_label_event_predicate {|crypto_invariants|} =
   {
@@ -31,15 +35,19 @@ type reveal_to_bytes_label_event_predicate {|crypto_invariants|} =
       (requires pred tr prin ev)
       (ensures (
         is_knowable_by (principal_label prin) tr ev.bytes_label /\
-        exists b.
+        bytes_well_formed_at_timestamp tr ev.point ev.bytes_label /\
+        (exists b.
           (
-            rand_generated_at tr ev.point b /\
             (
-              is_knowable_by (principal_label prin) tr b \/
-              rand_just_generated tr b
-            )
-          ) \/
-          is_publishable tr b
+              rand_generated_at tr ev.point b /\
+              (
+                is_knowable_by (principal_label prin) tr b \/
+                rand_just_generated tr b
+              )
+            ) \/
+            is_publishable tr b
+          )
+        )
       ));
 
   }
@@ -48,15 +56,19 @@ let default_reveal_event_predicate (#crypto_invs:crypto_invariants) : reveal_to_
   = {
   pred = (fun tr prin a ->
     is_knowable_by (principal_label prin) tr a.bytes_label /\
-    exists (b:bytes).
+    bytes_well_formed_at_timestamp tr a.point a.bytes_label /\
+    (exists (b:bytes).
       (
-        rand_generated_at tr a.point b /\
         (
-          is_knowable_by (principal_label prin) tr b \/
-          rand_just_generated tr b
-        )
-      ) \/
-      is_publishable tr b
+          rand_generated_at tr a.point b /\
+          (
+            is_knowable_by (principal_label prin) tr b \/
+            rand_just_generated tr b
+          )
+        ) \/
+        is_publishable tr b
+      )
+    )
   );
   pred_knowable = fun tr prin a -> ()
 }

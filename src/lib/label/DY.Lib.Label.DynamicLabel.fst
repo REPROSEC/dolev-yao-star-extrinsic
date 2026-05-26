@@ -72,6 +72,34 @@ val is_corrupt_reveal_principal_label :
 let is_corrupt_reveal_principal_label tr ts =
   ()
 
+// corruption
+val dynamic_corruption :
+  {| pi: protocol_invariants |} ->
+  {| cusages: crypto_usages |} ->
+  tr:trace ->
+  generator:principal ->
+  issued_to:principal ->
+  secret:bytes{Rand? secret} ->
+  ts:timestamp{Rand?.time secret = ts} ->
+  Lemma
+  (requires
+    trace_invariant tr /\
+    is_secret (reveal_principal_label ts) tr secret /\
+    reveal_event_triggered tr generator generator ts /\
+    reveal_event_triggered tr generator issued_to ts /\
+    (forall p1 p2. reveal_event_triggered tr p1 p2 ts ==>
+      p1 == generator /\ (p2 == generator \/ p2 == issued_to)
+    ) /\
+    attacker_knows tr secret
+  )
+  (ensures
+    attacker_knows tr secret ∧ is_secret (reveal_principal_label ts) tr secret ==>
+      ∃ prin revealed_to.
+      reveal_event_triggered tr prin revealed_to ts ∧ is_corrupt tr (principal_label revealed_to)
+  )
+let dynamic_corruption tr generator issued_to secret ts =
+  attacker_only_knows_publishable_values tr secret
+
 // not sure if this is useful, can't see how you can enforce this forall clause.
 val certain_corruption :
   {| pi: protocol_invariants |} ->
@@ -87,13 +115,13 @@ val certain_corruption :
     is_secret (reveal_principal_label ts) tr secret /\
     reveal_event_triggered tr generator generator ts /\
     reveal_event_triggered tr generator issued_to ts /\
-    (forall p1 p2. reveal_event_triggered tr p1 p2 ts ==> 
+    (forall p1 p2. reveal_event_triggered tr p1 p2 ts ==>
       p1 == generator /\ (p2 == generator \/ p2 == issued_to)
     ) /\
-    attacker_knows tr secret 
+    attacker_knows tr secret
   )
-  (ensures 
-    is_corrupt tr (principal_label generator) \/ 
+  (ensures
+    is_corrupt tr (principal_label generator) \/
     is_corrupt tr (principal_label issued_to)
   )
 let certain_corruption #cu tr generator issued_to secret ts =
@@ -108,5 +136,5 @@ val mk_rand_dynamic_label :
 let mk_rand_dynamic_label usg len generator =
   let* time = get_time in
   add_entry (RandGen usg (reveal_principal_label time) len);*
-  trigger_reveal_event generator generator time;* 
+  trigger_reveal_event generator generator time;*
   return (Rand len time)
