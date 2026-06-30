@@ -400,7 +400,9 @@ let rec get_label #cusages tr b =
   | Sign sk nonce msg ->
     get_label tr msg
   | Hash msg ->
-    get_label tr msg
+    // get_label tr msg
+    // CHANGE HASH TO BECOME PUBLIC //
+    public
   | DhPub sk ->
     public
   | Dh sk1 (DhPub sk2) ->
@@ -454,7 +456,8 @@ let rec get_label_later #cusgs tr1 tr2 b =
   | Sign sk nonce msg ->
     get_label_later tr1 tr2 msg
   | Hash msg ->
-    get_label_later tr1 tr2 msg
+    // get_label_later tr1 tr2 msg
+    ()
   | DhPub sk -> ()
   | Dh sk1 (DhPub sk2) ->
     get_label_later tr1 tr2 sk1;
@@ -541,7 +544,7 @@ let has_usage_publishable #cusgs tr msg usg =
 [@@"opaque_to_smt"]
 val extract_preserves_well_formedness:
   (bytes -> GTot (option bytes)) ->
-  bytes -> 
+  bytes ->
   prop
 let extract_preserves_well_formedness extract msg =
   forall tr.
@@ -2296,7 +2299,7 @@ val get_label_hash:
   {|crypto_usages|} ->
   tr:trace ->
   msg:bytes ->
-  Lemma (get_label tr (hash msg) == get_label tr msg)
+  Lemma (get_label tr (hash msg) == public)
   [SMTPat (get_label tr (hash msg))]
 let get_label_hash #cusages tr msg =
   normalize_term_spec hash;
@@ -2397,7 +2400,7 @@ let bytes_well_formed_dh_pk tr sk =
   normalize_term_spec bytes_well_formed
 
 /// User lemma (dh well-formedness)
-
+#push-options "--z3rlimit 25"
 val bytes_well_formed_dh:
   tr:trace ->
   sk:bytes -> pk:bytes ->
@@ -2408,6 +2411,7 @@ let bytes_well_formed_dh tr sk pk =
   reveal_opaque (`%dh_pk) (dh_pk);
   reveal_opaque (`%dh) (dh);
   normalize_term_spec bytes_well_formed
+#pop-options
 
 /// User lemma (dh_pk preserves bytes invariant)
 
@@ -2463,7 +2467,7 @@ let has_dh_usage_dh_pk tr sk usg =
   reveal_opaque (`%extract_dh_sk) (extract_dh_sk)
 
 /// User lemma (dh bytes invariant)
-
+#push-options "--z3rlimit 25"
 val bytes_invariant_dh:
   {|crypto_invariants|} -> tr:trace ->
   sk:bytes -> sk_usg:usage -> pk:bytes ->
@@ -2481,6 +2485,7 @@ let bytes_invariant_dh tr sk sk_usg pk =
   reveal_opaque (`%dh_pk) (dh_pk);
   reveal_opaque (`%dh) (dh);
   normalize_term_spec bytes_invariant
+#pop-options
 
 /// User lemma (dh bytes label)
 
