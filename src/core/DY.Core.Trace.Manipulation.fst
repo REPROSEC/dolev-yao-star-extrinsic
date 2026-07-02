@@ -122,7 +122,11 @@ val add_entry_entry_exists:
     let ((), tr_out) = add_entry e tr in
     entry_exists tr_out e
   ))
-let add_entry_entry_exists e tr = ()
+let add_entry_entry_exists e tr =
+  let tr_out = Snoc tr e in
+  introduce exists i. entry_at tr_out i e
+  with (last_timestamp tr_out)
+  and (get_entry_at_last_timestamp_is_last tr_out)
 
 /// Adding a trace entry preserves the trace invariant
 /// when the trace entry satisfy the invariant.

@@ -2945,6 +2945,7 @@ let kem_encap_preserves_publishability #ci tr pk nonce =
 
 /// Lemma for attacker knowledge theorem.
 
+#push-options "--split_queries always --z3rlimit 25"
 val kem_decap_preserves_publishability:
   {|crypto_invariants|} -> tr:trace ->
   sk:bytes -> encap:bytes ->
@@ -2970,6 +2971,7 @@ let kem_decap_preserves_publishability #ci tr sk encap =
     )
     else ()
   | _ -> ()
+#pop-options
 
 /// User lemma (kem_pk well-formedness)
 

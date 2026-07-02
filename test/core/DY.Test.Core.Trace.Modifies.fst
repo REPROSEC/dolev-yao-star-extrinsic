@@ -131,6 +131,7 @@ let branch_unmodified_test_2 prin =
   return (Some (new_sid1, new_sid2))
 
 
+#push-options "--ifuel 1 --z3rlimit 25"
 val branch_unmodified_proof_2 :
   prin:principal -> sid:state_id ->
   content_opt:option bytes -> tr_in:trace ->
@@ -154,3 +155,4 @@ let branch_unmodified_proof_2 prin sid content_opt tr_in =
               is_most_recent_state_for prin sid content_opt tr_out
     with _. traceful_is_most_recent_state_for_later prin sid content_opt (branch_unmodified_test_2 prin) tr_in
   end
+#pop-options
